@@ -26,6 +26,7 @@ INPUT_FILES = {
     "market_history_features": PROJECT_ROOT / "outputs" / "reports" / "market_history_features.json",
     "macro_regime_history": PROJECT_ROOT / "outputs" / "reports" / "macro_regime_history.json",
 }
+OPTIONAL_INPUT_KEYS = {"market_history_features", "macro_regime_history"}
 
 JSON_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "reports" / "llm_context_pack.json"
 MD_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "reports" / "llm_context_pack.md"
@@ -49,18 +50,8 @@ def main() -> None:
             "macro_regime_history": macro_regime_history,
         }
     )
-    if missing:
-        print(
-            json.dumps(
-                {
-                    "status": "input_missing",
-                    "missing_or_invalid_inputs": missing,
-                    "hint": "Run the corresponding report scripts before generating the LLM context pack.",
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
+    missing_optional = [item for item in missing if item.get("key") in OPTIONAL_INPUT_KEYS]
+    missing_required = [item for item in missing if item.get("key") not in OPTIONAL_INPUT_KEYS]
 
     context_pack = build_llm_context_pack(
         portfolio_snapshot=portfolio_snapshot,
@@ -79,22 +70,28 @@ def main() -> None:
     )
     MD_OUTPUT_PATH.write_text(markdown, encoding="utf-8-sig")
 
-    print(
-        json.dumps(
-            {
-                "status": "ok",
-                "generated_at": context_pack.get("generated_at"),
-                "source_file_count": len(context_pack.get("source_files", [])),
-                "data_limitation_count": len(context_pack.get("data_limitations", [])),
-                "output_files": [
-                    str(JSON_OUTPUT_PATH),
-                    str(MD_OUTPUT_PATH),
-                ],
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    if missing_required:
+        status = "input_missing"
+    elif missing_optional:
+        status = "ok_with_limitations"
+    else:
+        status = "ok"
+
+    summary = {
+        "status": status,
+        "generated_at": context_pack.get("generated_at"),
+        "source_file_count": len(context_pack.get("source_files", [])),
+        "data_limitation_count": len(context_pack.get("data_limitations", [])),
+        "missing_required_inputs": missing_required,
+        "missing_optional_inputs": missing_optional,
+        "output_files": [
+            str(JSON_OUTPUT_PATH),
+            str(MD_OUTPUT_PATH),
+        ],
+    }
+    if missing_required:
+        summary["hint"] = "Run the corresponding required report scripts before relying on this context pack."
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 
 def _missing_inputs(payloads: dict[str, dict]) -> list[dict]:

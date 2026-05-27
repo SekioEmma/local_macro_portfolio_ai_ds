@@ -189,6 +189,7 @@ def get_market_data_package(
         )
         for key in INFLATION_INDICATOR_KEYS
     }
+    inflation_indicators.update(_build_inflation_derived_metrics(inflation_indicators, generated_at))
 
     oil_and_energy = {
         key: _fred_package_item(
@@ -570,7 +571,355 @@ def _build_treasury_derived_metrics(treasury_yields: dict[str, dict], timestamp:
             source_item=source_item,
             timestamp=timestamp,
         )
+        for window_observation_count in (5, 10):
+            result[f"{prefix}_above_5pct_days_{window_observation_count}d"] = (
+                _above_5pct_days_item(
+                    key=f"{prefix}_above_5pct_days_{window_observation_count}d",
+                    source_item=source_item,
+                    history=history,
+                    window_observation_count=window_observation_count,
+                    timestamp=timestamp,
+                )
+            )
+            result[f"{prefix}_{window_observation_count}d_avg"] = _threshold_average_item(
+                key=f"{prefix}_{window_observation_count}d_avg",
+                source_item=source_item,
+                history=history,
+                window_observation_count=window_observation_count,
+                timestamp=timestamp,
+            )
+        result[f"{prefix}_5pct_breakout_confirmed"] = _breakout_confirmed_item(
+            key=f"{prefix}_5pct_breakout_confirmed",
+            source_item=source_item,
+            history=history,
+            timestamp=timestamp,
+        )
     return result
+
+
+def _build_inflation_derived_metrics(inflation_indicators: dict[str, dict], timestamp: str) -> dict[str, dict]:
+    result = {}
+    for prefix, source_key in (
+        ("headline_cpi", "headline_cpi"),
+        ("core_cpi", "core_cpi"),
+        ("headline_pce", "headline_pce"),
+        ("core_pce", "core_pce"),
+        ("ppi_all_commodities", "ppi_all_commodities"),
+    ):
+        source_item = inflation_indicators.get(source_key, {})
+        series_id = str(source_item.get("series_id") or "").strip()
+        history = _fred_history(series_id, limit=30) if series_id else []
+        result[f"{prefix}_mom_pct"] = _inflation_change_item(
+            key=f"{prefix}_mom_pct",
+            source_item=source_item,
+            history=history,
+            months_back=1,
+            calculation="(latest_index / prior_month_index - 1) * 100",
+            timestamp=timestamp,
+        )
+        result[f"{prefix}_yoy_pct"] = _inflation_change_item(
+            key=f"{prefix}_yoy_pct",
+            source_item=source_item,
+            history=history,
+            months_back=12,
+            calculation="(latest_index / same_month_prior_year_index - 1) * 100",
+            timestamp=timestamp,
+        )
+    return result
+
+
+def _latest_available_observations(history: list[dict], count: int) -> list[dict]:
+    observations = [
+        item
+        for item in history
+        if isinstance(item.get("date"), date) and _to_float_or_none(item.get("value")) is not None
+    ]
+    observations.sort(key=lambda item: item["date"], reverse=True)
+    return observations[:count]
+
+
+def _above_5pct_days_item(
+    *,
+    key: str,
+    source_item: dict,
+    history: list[dict],
+    window_observation_count: int,
+    timestamp: str,
+) -> dict:
+    calculation = (
+        f"count of latest {window_observation_count} available FRED daily observations "
+        "with value >= 5.0"
+    )
+    if source_item.get("status") != "ok":
+        return _source_error_derived_item(
+            key,
+            source_item,
+            "Cannot calculate threshold count because source data is unavailable.",
+            timestamp,
+            unit="observations",
+            window_observation_count=0,
+            calculation=calculation,
+        )
+
+    window = _latest_available_observations(history, window_observation_count)
+    if len(window) < window_observation_count:
+        return _derived_package_error(
+            key,
+            source_item,
+            f"Only {len(window)} valid daily observations available; {window_observation_count} required.",
+            timestamp,
+            unit="observations",
+            window_observation_count=len(window),
+            calculation=calculation,
+            interpretation_hint="Insufficient history to count recent daily observations at or above 5%.",
+        )
+
+    above_count = sum(1 for item in window if item["value"] >= 5.0)
+    return _package_item(
+        key=key,
+        name=f"{source_item.get('name') or source_item.get('series_id')} Above 5% Count",
+        value=above_count,
+        unit="observations",
+        observation_date=window[0]["date"].isoformat(),
+        source=source_item.get("source"),
+        source_tier=source_item.get("source_tier"),
+        freshness=source_item.get("freshness"),
+        status="ok",
+        error=None,
+        interpretation_hint=(
+            "Counts latest available FRED daily observations at or above 5%; "
+            "not calendar days and not intraday highs."
+        ),
+        risk_relevance="Distinguishes a single daily threshold print from repeated observations near 5%.",
+        timestamp=timestamp,
+        series_id=source_item.get("series_id"),
+        source_series=source_item.get("source"),
+        derived_from=source_item.get("source"),
+        calculation=calculation,
+        window_observation_count=window_observation_count,
+        intraday_high_available=False,
+    )
+
+
+def _threshold_average_item(
+    *,
+    key: str,
+    source_item: dict,
+    history: list[dict],
+    window_observation_count: int,
+    timestamp: str,
+) -> dict:
+    calculation = f"average of latest {window_observation_count} available FRED daily observations"
+    if source_item.get("status") != "ok":
+        return _source_error_derived_item(
+            key,
+            source_item,
+            "Cannot calculate threshold average because source data is unavailable.",
+            timestamp,
+            unit=source_item.get("unit") or "percent",
+            window_observation_count=0,
+            calculation=calculation,
+        )
+
+    window = _latest_available_observations(history, window_observation_count)
+    if len(window) < window_observation_count:
+        return _derived_package_error(
+            key,
+            source_item,
+            f"Only {len(window)} valid daily observations available; {window_observation_count} required.",
+            timestamp,
+            unit=source_item.get("unit") or "percent",
+            window_observation_count=len(window),
+            calculation=calculation,
+            interpretation_hint="Insufficient history to calculate the recent available-observation average.",
+        )
+
+    avg_value = sum(float(item["value"]) for item in window) / window_observation_count
+    return _package_item(
+        key=key,
+        name=f"{source_item.get('name') or source_item.get('series_id')} {window_observation_count} Observation Avg",
+        value=round(avg_value, 4),
+        unit=source_item.get("unit") or "percent",
+        observation_date=window[0]["date"].isoformat(),
+        source=source_item.get("source"),
+        source_tier=source_item.get("source_tier"),
+        freshness=source_item.get("freshness"),
+        status="ok",
+        error=None,
+        interpretation_hint=(
+            f"Average of latest {window_observation_count} available FRED daily observations; "
+            "not a calendar-day or intraday measure."
+        ),
+        risk_relevance="Helps judge whether the 5% threshold is repeated in recent daily observations.",
+        timestamp=timestamp,
+        series_id=source_item.get("series_id"),
+        source_series=source_item.get("source"),
+        derived_from=source_item.get("source"),
+        calculation=calculation,
+        window_observation_count=window_observation_count,
+        intraday_high_available=False,
+    )
+
+
+def _breakout_confirmed_item(
+    *,
+    key: str,
+    source_item: dict,
+    history: list[dict],
+    timestamp: str,
+) -> dict:
+    calculation = "above_5pct_days_5d >= 3 and 5d_avg >= 5.0"
+    if source_item.get("status") != "ok":
+        return _source_error_derived_item(
+            key,
+            source_item,
+            "Cannot calculate breakout confirmation because source data is unavailable.",
+            timestamp,
+            unit="boolean",
+            window_observation_count=0,
+            calculation=calculation,
+        )
+
+    window = _latest_available_observations(history, 5)
+    if len(window) < 5:
+        return _derived_package_error(
+            key,
+            source_item,
+            f"Only {len(window)} valid daily observations available; 5 required.",
+            timestamp,
+            unit="boolean",
+            window_observation_count=len(window),
+            calculation=calculation,
+            interpretation_hint="Insufficient history to confirm the 5% threshold under the project rule.",
+        )
+
+    above_count = sum(1 for item in window if item["value"] >= 5.0)
+    avg_value = sum(float(item["value"]) for item in window) / 5
+    confirmed = above_count >= 3 and avg_value >= 5.0
+    return _package_item(
+        key=key,
+        name=f"{source_item.get('name') or source_item.get('series_id')} 5% Breakout Confirmed",
+        value=confirmed,
+        unit="boolean",
+        observation_date=window[0]["date"].isoformat(),
+        source=source_item.get("source"),
+        source_tier=source_item.get("source_tier"),
+        freshness=source_item.get("freshness"),
+        status="ok",
+        error=None,
+        interpretation_hint=(
+            "True only when at least 3 of the latest 5 available FRED daily observations are "
+            "at or above 5% and the 5-observation average is at or above 5%."
+        ),
+        risk_relevance="Defines when the memo may describe the 5% threshold as confirmed under project rules.",
+        timestamp=timestamp,
+        series_id=source_item.get("series_id"),
+        source_series=source_item.get("source"),
+        derived_from=source_item.get("source"),
+        calculation=calculation,
+        window_observation_count=5,
+        above_5pct_days_5d=above_count,
+        five_observation_average=round(avg_value, 4),
+        intraday_high_available=False,
+    )
+
+
+def _inflation_change_item(
+    *,
+    key: str,
+    source_item: dict,
+    history: list[dict],
+    months_back: int,
+    calculation: str,
+    timestamp: str,
+) -> dict:
+    if source_item.get("status") != "ok":
+        return _source_error_derived_item(
+            key,
+            source_item,
+            "Cannot calculate inflation change because source index data is unavailable.",
+            timestamp,
+            unit="percent",
+            calculation=calculation,
+        )
+
+    latest_value = _to_float_or_none(source_item.get("value"))
+    latest_date = _parse_date(source_item.get("observation_date"))
+    if latest_value is None or latest_date is None:
+        return _derived_package_error(
+            key,
+            source_item,
+            "Latest inflation index observation unavailable for percent-change calculation.",
+            timestamp,
+            unit="percent",
+            calculation=calculation,
+            status="error",
+            freshness="unknown",
+            interpretation_hint="Cannot calculate inflation change because the latest index value/date is unavailable.",
+        )
+
+    comparison = _monthly_comparison_observation(history, latest_date, months_back)
+    comparison_value = _to_float_or_none(comparison.get("value")) if isinstance(comparison, dict) else None
+    if comparison_value is None or comparison_value == 0:
+        comparison_label = "prior month" if months_back == 1 else "same month prior year"
+        return _derived_package_error(
+            key,
+            source_item,
+            f"No valid {comparison_label} inflation index observation found.",
+            timestamp,
+            unit="percent",
+            calculation=calculation,
+            status="insufficient_history",
+            freshness="insufficient_history",
+            interpretation_hint="Derived from index levels; not a consensus-surprise measure.",
+        )
+
+    change_pct = (latest_value / comparison_value - 1.0) * 100
+    return _package_item(
+        key=key,
+        name=f"{source_item.get('name') or source_item.get('series_id')} {'MoM' if months_back == 1 else 'YoY'}",
+        value=round(change_pct, 4),
+        unit="percent",
+        observation_date=source_item.get("observation_date"),
+        source=source_item.get("source"),
+        source_tier=source_item.get("source_tier"),
+        freshness=source_item.get("freshness"),
+        status="ok",
+        error=None,
+        interpretation_hint="Derived from index levels; not a consensus-surprise measure.",
+        risk_relevance="Provides trend context without treating index levels as consensus surprises.",
+        timestamp=timestamp,
+        series_id=source_item.get("series_id"),
+        source_series=source_item.get("source"),
+        derived_from=source_item.get("source"),
+        calculation=calculation,
+        comparison_observation_date=(
+            comparison["date"].isoformat() if isinstance(comparison.get("date"), date) else None
+        ),
+        comparison_value=comparison_value,
+    )
+
+
+def _monthly_comparison_observation(
+    history: list[dict],
+    latest_date: date,
+    months_back: int,
+) -> dict | None:
+    target = _add_months(latest_date, -months_back)
+    for item in history:
+        observed_at = item.get("date")
+        if not isinstance(observed_at, date):
+            continue
+        if observed_at.year == target.year and observed_at.month == target.month:
+            return item
+    return None
+
+
+def _add_months(value: date, months: int) -> date:
+    month_index = value.year * 12 + value.month - 1 + months
+    year = month_index // 12
+    month = month_index % 12 + 1
+    return date(year, month, 1)
 
 
 def _recent_high_item(
@@ -829,17 +1178,19 @@ def _derived_package_error(
     error: str,
     timestamp: str,
     *,
+    unit: Any | None = None,
     window_days: int | None = None,
     calculation: str | None = None,
     status: str = "insufficient_history",
     freshness: str = "insufficient_history",
     interpretation_hint: str | None = None,
+    **extra: Any,
 ) -> dict:
     return _package_item(
         key=key,
         name=key,
         value=None,
-        unit=None,
+        unit=unit,
         observation_date=source_item.get("observation_date"),
         source=source_item.get("source"),
         source_tier=source_item.get("source_tier"),
@@ -854,6 +1205,7 @@ def _derived_package_error(
         derived_from=source_item.get("source"),
         window_days=window_days,
         calculation=calculation,
+        **extra,
     )
 
 
@@ -863,15 +1215,17 @@ def _source_error_derived_item(
     interpretation_hint: str,
     timestamp: str,
     *,
+    unit: Any | None = None,
     window_days: int | None = None,
     calculation: str | None = None,
+    **extra: Any,
 ) -> dict:
     source_error = str(source_item.get("error") or "Source data unavailable.")
     return _package_item(
         key=key,
         name=key,
         value=None,
-        unit=None,
+        unit=unit,
         observation_date=source_item.get("observation_date"),
         source=source_item.get("source"),
         source_tier=source_item.get("source_tier"),
@@ -886,6 +1240,7 @@ def _source_error_derived_item(
         derived_from=source_item.get("source"),
         window_days=window_days,
         calculation=calculation,
+        **extra,
     )
 
 

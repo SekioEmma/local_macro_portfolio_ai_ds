@@ -72,6 +72,9 @@ def build_deepseek_prompt_package(
             "数据证据表必须包含列：指标、数值、单位、observation_date、source、freshness/status、用途/解释。",
             "数据证据表只列本题实际使用的关键数据，不要机械列出所有字段；如果某项数据 stale，必须在表格或 data limitations 中标注，不得写成实时当前值。",
             "数据证据表中的数值、单位、observation_date 和 source 必须从 data_package 或 portfolio_facts 原样引用；如果不确定，不要列该数值。",
+            "正文中用于推理的所有市场指标数值，必须先出现在数据证据表；正文不要引用未列入证据表的市场数值。",
+            "如果正文提 VIX、high_yield_spread、DGS30/DGS10/WTI/Brent、breakeven、real_yield、CPI/PCE/PPI 或其 MoM/YoY 派生值，证据表必须列出对应指标、数值、observation_date、source 和 freshness/status。",
+            "证据表仍然只列本题实际使用字段，不机械列全量数据；但凡正文用了某个市场数值，就必须纳入证据表。",
             "除非用户明确询问现货价格，不要在证据表中列黄金现货价格；讨论黄金时优先使用实际利率、通胀预期、美元/流动性机制和当前 gold 相对目标偏离。",
             "先给核心结论。",
             "然后给推理链条。",
@@ -83,6 +86,12 @@ def build_deepseek_prompt_package(
             "自然回应用户真正担忧。",
             "对正常回调、危机、横盘消化、长期修复能力这类问题，要分层说明，而不是只给标签。",
             "如果 financial_conditions 提供数据，必须在市场判断中引用至少部分 observation_date、source、freshness 或“基于本地 context 提供的最新观察日期”。",
+        ],
+        "evidence_table_binding_rules": [
+            "正文引用 VIX=某值时，证据表必须列 VIX。",
+            "正文引用 high_yield_spread=某值时，证据表必须列 high_yield_spread。",
+            "正文引用 DGS30/DGS10/WTI/breakeven/real_yield/CPI/PCE/PPI 任一具体数值时，证据表必须先列对应字段。",
+            "如果证据表没有列某个市场指标数值，正文只能定性说明其缺失或不用该数值推理。",
         ],
         "conditional_reasoning_rules": [
             "当用户问题包含“如果 / 假设 / 要是 / 若 / 在……情况下”等条件句时，必须区分三层：假设情景成立时的机制、当前数据包中哪些指标支持或不支持该情景、当前数据包缺少哪些数据而不能确认什么。",
@@ -100,10 +109,22 @@ def build_deepseek_prompt_package(
         "rates_inflation_oil_rules": [
             "可以讨论 10Y / 30Y 是否接近 5%，但必须说明数据来自 FRED 日度观察，不代表盘中高点。",
             "如果用户说前几天收益率高于 5%，而 data package 只有 FRED daily，必须回答：当前数据包只能验证日度观察值和近期高点，不能验证盘中高点。",
+            "标题可以写“30年期美债5%关口”，但正文必须解释这是 FRED 日度观察值和阈值观察，不是盘中高点，也不等于确认突破。",
+            "只有当 dgs10_5pct_breakout_confirmed 或 dgs30_5pct_breakout_confirmed 为 true 时，才能写“按本项目定义，5%阈值已满足确认条件”。",
+            "如果 breakout_confirmed=false 或缺失，不得写“站稳”“确认突破”“持续处于”“事实上的利率压力信号”“高压区已经确认”“长端利率持续处于5%以上”。",
+            "如果只有单日 DGS30/DGS10 高于 5%，只能写“FRED 日度观察值高于5%”“近期曾高于5%”“最近 N 个可用日度观察中有 X 天高于5%”或“5日/10日均值为 X”。",
+            "如果 breakout_confirmed=false，只能写“接近/处于5%附近或单日高于5%的压力区间”，不得写成确认突破。",
             "可以讨论 CPI/PCE/PPI，但不能说超预期，除非 context 中提供 consensus / expected data。",
+            "如果 CPI/PCE/PPI 只有 index level，不得说“温和偏高”“明显降温”“没有降温”“未降温”“超预期”“低于预期”。",
+            "如果 CPI/PCE/PPI 的 MoM/YoY 派生字段可用，可以基于同比/环比讨论趋势，但仍不能说 consensus surprise；没有 consensus_cpi/consensus_ppi 时，永远不能说“超预期/低于预期”。",
             "可以讨论 WTI/Brent 对通胀和利率的潜在传导，但不能机械等同于通胀失控。",
+            "如果某指标 freshness=stale，只能写“截至 observation_date 的数据曾显示”“作为近期/历史代理变量”或“需要后续更新验证”；不得写“当前正在”“短期正在飙升”“形成实时共振”，也不得把 stale oil data 当作当前实时油价。",
             "可以讨论油价、通胀、利率对标普、纳指、黄金、短债的条件化影响。",
             "涉及名义收益率、实际利率、通胀预期和黄金时，必须使用关系：名义收益率 ≈ 实际利率 + 通胀预期 + 期限溢价。",
+            "如果没有变化分解，不得写“主要由实际利率驱动”或“主要力量是实际利率”；只能写“实际利率处于高位，是重要解释变量”，并说明数据不足以精确分解 DGS30 上行来源。",
+            "同样不得写“主要由实际利率支撑”“主要由实际利率解释”“实际利率是主因”“当前数据正是这种情景”。只能说 real_yield_10y 处于高位，可能构成重要解释变量或压力来源之一。",
+            "注意期限不一致：DGS30 是 30Y nominal yield，DFII10/T10YIE 是 10Y 口径，不能机械相减或直接解释全部 30Y。",
+            "不得写“债券市场相信油价是暂时冲击”“市场相信长期通胀预期稳固”这类心理归因；可以写“当前 breakeven 数据未显示同步明显上行，因此暂不能确认通胀预期失控”。",
             "不得写油价上涨会直接推升实际利率；不得写通胀预期上升必然导致黄金上涨或必然导致黄金下跌；不得把盈亏平衡通胀率上升等同于实际利率上升。",
             "应写：如果名义收益率上升快于通胀预期，实际利率上升，黄金可能承压；如果通胀预期上升快于名义收益率，实际利率可能下降，黄金可能获得支撑。",
             "黄金受实际利率、美元、通胀预期、信用压力和流动性共同影响，不能单因果判断。",
@@ -144,14 +165,13 @@ def build_deepseek_prompt_package(
                 "行动建议",
                 "立即调整",
             "不要使用“越跌越买”这类原话，即使只是解释或概括。",
-            "不要使用“买入”来描述后续现金流；改说“按既有规则执行”“逐步接近目标权重”或“继续观察”。",
+            "不要使用“买入”来描述后续现金流；不要写“后续现金流会逐步回归”“应让现金流流向”“后续会买入”“自动加仓”。",
             "不要把原有定投计划解释成新的追加买入、加速买入或择时动作。",
             ],
             "preferred": [
-                "如果既有定投规则继续执行，低配资产会在后续现金流中逐步接近目标权重。",
-                "这是原有计划的执行效果，不是基于单次市场判断追加操作。",
-                "组合含义应落在观察方向、后续定投评估、阈值复核、年末复核和再平衡评估。",
-                "可以说“低配资产会在后续现金流中逐步接近目标权重”，但必须同时说明这是既有规则的机械执行效果。",
+                "在组合观察层面，应在更新持仓后检查各资产相对目标权重的偏离，并把结果纳入既有定投评估和年末再平衡评估；当前数据包本身不生成新的买卖动作。",
+                "组合含义应落在观察方向、风险暴露、更新持仓后复核、既有定投评估、阈值复核、年末复核和再平衡评估。",
+                "只能描述风险暴露和复核方向，不能把原有计划写成新的执行动作。",
             ],
         },
         "output_style": [
@@ -172,6 +192,11 @@ def build_deepseek_prompt_package(
             "是否把本地快照当实时账户？",
             "是否说反了高配/低配方向？",
             "是否把持仓快照日期、市场观察日期或报告日期混在一起？",
+            "正文中的市场数值是否都已经先列入数据证据表？",
+            "是否在 breakout_confirmed=false/缺失时写了站稳、确认突破或持续处于5%以上？",
+            "是否把 stale oil data 写成当前正在飙升或实时共振？",
+            "是否在没有变化分解时写了主要由实际利率驱动、支撑、解释或“实际利率是主因”？",
+            "是否把 CPI/PCE/PPI index level 写成降温、偏高或超预期？",
             "只输出最终答案，不输出自检过程。",
         ],
     }
@@ -411,6 +436,7 @@ def _package_item_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
         "derived_from",
         "source_series",
         "window_days",
+        "window_observation_count",
         "high_date",
         "intraday_high_available",
         "calculation",
@@ -418,6 +444,10 @@ def _package_item_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
         "change_pct",
         "old_value",
         "old_observation_date",
+        "comparison_observation_date",
+        "comparison_value",
+        "above_5pct_days_5d",
+        "five_observation_average",
     )
     return {key: item.get(key) for key in keys if key in item}
 
@@ -604,6 +634,20 @@ def _provided_market_data_terms(
     for key in ("dgs10_distance_to_5pct", "dgs30_distance_to_5pct", "dgs10_above_5pct", "dgs30_above_5pct"):
         if package_available.get(key):
             terms.extend([key, "5%", "5 percent", "5%阈值"])
+    for key in (
+        "dgs10_above_5pct_days_5d",
+        "dgs10_above_5pct_days_10d",
+        "dgs10_5d_avg",
+        "dgs10_10d_avg",
+        "dgs10_5pct_breakout_confirmed",
+        "dgs30_above_5pct_days_5d",
+        "dgs30_above_5pct_days_10d",
+        "dgs30_5d_avg",
+        "dgs30_10d_avg",
+        "dgs30_5pct_breakout_confirmed",
+    ):
+        if package_available.get(key):
+            terms.extend([key, "5日均值", "10日均值", "最近可用日度观察", "breakout_confirmed"])
     if package_available.get("headline_cpi"):
         terms.extend(["CPI", "headline CPI", "CPIAUCSL"])
     if package_available.get("core_cpi"):
@@ -614,6 +658,20 @@ def _provided_market_data_terms(
         terms.extend(["core PCE", "PCEPILFE"])
     if package_available.get("ppi_all_commodities"):
         terms.extend(["PPIACO", "PPI", "all commodities PPI"])
+    for key in (
+        "headline_cpi_mom_pct",
+        "headline_cpi_yoy_pct",
+        "core_cpi_mom_pct",
+        "core_cpi_yoy_pct",
+        "headline_pce_mom_pct",
+        "headline_pce_yoy_pct",
+        "core_pce_mom_pct",
+        "core_pce_yoy_pct",
+        "ppi_all_commodities_mom_pct",
+        "ppi_all_commodities_yoy_pct",
+    ):
+        if package_available.get(key):
+            terms.extend([key, "MoM", "YoY", "month-over-month", "year-over-year", "环比", "同比"])
     if package_available.get("wti_oil"):
         terms.extend(["WTI", "oil", "原油", "DCOILWTICO"])
     if package_available.get("brent_oil"):
@@ -663,10 +721,14 @@ def _market_data_value_record(item: dict[str, Any]) -> dict[str, Any]:
         "freshness": item.get("freshness"),
         "status": item.get("status"),
         "error": item.get("error"),
+        "source_tier": item.get("source_tier"),
+        "interpretation_hint": item.get("interpretation_hint"),
         "high_date": item.get("high_date"),
         "window_days": item.get("window_days"),
+        "window_observation_count": item.get("window_observation_count"),
         "derived_from": item.get("derived_from"),
         "calculation": item.get("calculation"),
+        "comparison_observation_date": item.get("comparison_observation_date"),
     }
 
 
