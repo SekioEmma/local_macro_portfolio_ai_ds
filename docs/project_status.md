@@ -1,14 +1,20 @@
 # Local Macro Portfolio AI DS - Project Status
 
-## Stage 8.0: Clean DS-first Project
+## Stage 8.2: DS-first Observation and Validator Repair
 
-Status: initial clean extraction.
+Status: clean extraction complete; Stage 8.2 observation is active.
 
 Scope:
 - Keep the DeepSeek V4 Pro analyst memo provider.
 - Keep deterministic market data checks, daily report generation, LLM context pack generation, and portfolio snapshot generation.
 - Keep public/auditable market data package boundaries for rates, inflation, oil, financial conditions, unavailable valuation, unavailable FedWatch, and unavailable market breadth.
 - Keep privacy boundaries for local holdings, API keys, private data, and generated outputs.
+
+Current 8.2 focus:
+- Real holdings are configured only in the local ignored holdings file; no private holdings content belongs in Git.
+- DeepSeek analyst memo outputs remain local ignored artifacts under `outputs/`.
+- The memo validator is being tuned for evidence-table boundary handling without weakening hard flags for fabricated market data.
+- Continue observation with a small number of real memo summaries; only repair code for fact errors, privacy risks, hard flags, or workflow defects.
 
 Removed from this clean repo:
 - local qwen/Ollama Q&A entrypoint
@@ -22,7 +28,7 @@ Removed from this clean repo:
 Current boundaries:
 - API keys are environment-only.
 - `data/holdings/current_holdings.csv` is ignored and not committed.
-- generated `outputs/` files are ignored and not committed.
+- generated `outputs/` files are ignored and not committed, except placeholder `.gitkeep` files.
 - `data/private/` is ignored and not committed.
 - The project is not an automated trading system and does not output buy/sell instructions.
 

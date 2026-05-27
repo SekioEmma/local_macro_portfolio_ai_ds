@@ -48,12 +48,23 @@ The `market_data_package` is designed for DeepSeek Pro analyst memo context. Eac
 | dgs30_distance_to_5pct | latest DGS30 - 5.0 | percentage_points | Positive means above 5%; negative means below 5%. |
 | dgs10_above_5pct | latest DGS10 >= 5.0 | boolean | Daily observation threshold only. |
 | dgs30_above_5pct | latest DGS30 >= 5.0 | boolean | Daily observation threshold only. |
+| dgs10_above_5pct_days_5d | count of latest 5 available DGS10 observations >= 5.0 | count | Daily observations only; not intraday confirmation. |
+| dgs30_above_5pct_days_5d | count of latest 5 available DGS30 observations >= 5.0 | count | Daily observations only; not intraday confirmation. |
+| dgs10_5d_avg | average of latest 5 available DGS10 observations | percent | Daily average; not intraday high. |
+| dgs30_5d_avg | average of latest 5 available DGS30 observations | percent | Daily average; not intraday high. |
+| dgs10_5pct_breakout_confirmed | derived threshold confirmation | boolean | True only under the project threshold rule; false means do not write confirmed breakout. |
+| dgs30_5pct_breakout_confirmed | derived threshold confirmation | boolean | True only under the project threshold rule; false means do not write confirmed breakout. |
 | headline_cpi | CPIAUCSL | index | Monthly index; no consensus surprise data. |
 | core_cpi | CPILFESL | index | Monthly index; no consensus surprise data. |
 | headline_pce | PCEPI | index | Monthly index; no consensus surprise data. |
 | core_pce | PCEPILFE | index | Monthly index; no consensus surprise data. |
 | ppi_all_commodities | PPIACO | index | All commodities PPI, not final demand PPI. |
 | ppi_final_demand | research_needed | index | Do not guess the series id. |
+| headline_cpi_mom_pct / headline_cpi_yoy_pct | derived from CPIAUCSL | percent | Allows MoM/YoY inflation discussion; not consensus surprise. |
+| core_cpi_mom_pct / core_cpi_yoy_pct | derived from CPILFESL | percent | Allows MoM/YoY inflation discussion; not consensus surprise. |
+| headline_pce_mom_pct / headline_pce_yoy_pct | derived from PCEPI | percent | Allows MoM/YoY inflation discussion; not consensus surprise. |
+| core_pce_mom_pct / core_pce_yoy_pct | derived from PCEPILFE | percent | Allows MoM/YoY inflation discussion; not consensus surprise. |
+| ppi_all_commodities_mom_pct / ppi_all_commodities_yoy_pct | derived from PPIACO | percent | All commodities PPI change only; not final demand PPI and not consensus surprise. |
 | wti_oil | DCOILWTICO | USD per barrel | Daily WTI oil price. |
 | brent_oil | DCOILBRENTEU | USD per barrel | Daily Brent oil price. |
 | wti_oil_30d_change | derived from DCOILWTICO | percent | Uses nearest available daily observation around 30 days ago. |
@@ -95,3 +106,7 @@ The following fields are included as structured limitations when no stable confi
 - Real yield affects growth equity and gold through discount-rate and opportunity-cost channels.
 - Missing valuation data must not be inferred by the model.
 - Missing FedWatch probability must not be inferred by the model.
+- Evidence tables should include exact `metric_key` values for market metrics used in the memo.
+- FRED DGS fields are daily constant maturity yields; they cannot be used as real intraday highs.
+- If oil data is stale, describe it as data available as of its observation date and do not call it current real-time oil pressure.
+- Missing consensus CPI/PPI, valuation, FedWatch, market breadth, mega-cap concentration, and intraday Treasury data must be stated as boundaries rather than inferred.

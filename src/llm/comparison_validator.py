@@ -209,6 +209,10 @@ def _unsupported_market_data_claims(text: str, facts: dict[str, Any]) -> list[st
     )
     filtered = []
     for sentence in _sentences(text):
+        if _is_evidence_table_row_with_provided_metric_key(sentence, facts):
+            continue
+        if _is_intraday_boundary_statement(sentence):
+            continue
         if _is_dgs_threshold_topic_only(sentence):
             continue
         if not _requires_context_backed_dgs_check(sentence):
@@ -221,6 +225,12 @@ def _unsupported_market_data_claims(text: str, facts: dict[str, Any]) -> list[st
     for hit in hits:
         sentence = _sentence_containing(text, hit)
         window = _surrounding_text(text, hit, 100)
+        if sentence and _is_evidence_table_row_with_provided_metric_key(sentence, facts):
+            continue
+        if sentence and _is_intraday_boundary_statement(sentence):
+            continue
+        if _is_intraday_boundary_statement(window):
+            continue
         if _raw_provided_metric_key_fragment(hit, facts):
             continue
         if _is_dgs_threshold_topic_only(sentence or window):
@@ -252,6 +262,63 @@ def _raw_provided_metric_key_fragment(hit: str, facts: dict[str, Any]) -> bool:
     return any(str(key).lower().startswith(normalized_hit) for key in values)
 
 
+def _is_evidence_table_row_with_provided_metric_key(text: str, facts: dict[str, Any]) -> bool:
+    return (
+        _provided_metric_key_in_markdown_table_row(text, facts) is not None
+        and not _evidence_table_row_has_blocked_claim(text)
+    )
+
+
+def _provided_metric_key_in_markdown_table_row(text: str, facts: dict[str, Any]) -> str | None:
+    cells = _markdown_table_cells(text)
+    if not cells:
+        return None
+    values = facts.get("provided_market_data_values")
+    if not isinstance(values, dict):
+        return None
+    provided_keys = {str(key).strip().lower(): str(key) for key in values.keys() if str(key).strip()}
+    for cell in cells:
+        normalized_cell = cell.strip().strip("`").strip().lower()
+        if normalized_cell in provided_keys:
+            return provided_keys[normalized_cell]
+    return None
+
+
+def _markdown_table_cells(text: str) -> list[str]:
+    stripped = text.strip()
+    if not stripped.startswith("|") or stripped.count("|") < 3:
+        return []
+    return [cell.strip() for cell in stripped.strip("|").split("|")]
+
+
+def _evidence_table_row_has_blocked_claim(text: str) -> bool:
+    if re.search(r"(?:FedWatch|降息概率|加息概率)[^\n|]{0,40}\d+(?:\.\d+)?\s*%", text, re.IGNORECASE):
+        return True
+    if re.search(
+        r"(?:forward\s*PE|PE|CAPE|市盈率|估值倍数|valuation percentile|估值百分位)[^\n|]{0,40}\d",
+        text,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(r"(?:Reuters|FactSet|Bloomberg|Goldman|Wind)", text, re.IGNORECASE):
+        return True
+    if _inflation_surprise_claim_without_boundary(text):
+        return True
+    if re.search(r"(?:final demand PPI|PPI final demand|最终需求\s*PPI)", text, re.IGNORECASE) and not re.search(
+        r"(?:非|不是|不等于|并非|not)[^\n|]{0,16}(?:final demand PPI|PPI final demand|最终需求\s*PPI)",
+        text,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
+        r"(?:market breadth|市场广度|mega[- ]cap concentration|巨头集中度|equal[- ]weight|cap[- ]weight|等权|市值加权)",
+        text,
+        re.IGNORECASE,
+    ):
+        return True
+    return _intraday_high_numeric_claim(text)
+
+
 def _claim_has_boundary_context(text: str, hit: str) -> bool:
     for sentence in _sentences(text):
         if hit not in sentence:
@@ -265,6 +332,39 @@ def _claim_has_boundary_context(text: str, hit: str) -> bool:
         if re.search(re.escape(hit) + r"[^\n。；]{0,40}(?:不能确认|无法确认|无法验证|未经核实|not confirmed)", sentence, re.IGNORECASE):
             return True
     return False
+
+
+def _is_intraday_boundary_statement(text: str) -> bool:
+    if not text:
+        return False
+    if re.search(r"(?:Reuters|FactSet|Bloomberg|FedWatch|Goldman|Wind)", text, re.IGNORECASE):
+        return False
+    if not re.search(r"(?:盘中|intraday)", text, re.IGNORECASE):
+        return False
+    if not re.search(r"(?:DGS10|DGS30|FRED|Treasury|美债|国债|constant maturity|日度|daily)", text, re.IGNORECASE):
+        return False
+    if re.search(r"\d+(?:\.\d+)?\s*(?:%|％|bp|bps|基点|点)", text):
+        return False
+    boundary_pattern = (
+        r"(?:不是|非|不能替代|不等于|不代表|无法|不能|未提供|不可用|not|cannot|can't)"
+        r"[^\n。；]{0,12}(?:盘中高点|intraday high|intraday highs)"
+    )
+    if re.search(boundary_pattern, text, re.IGNORECASE):
+        return True
+    if re.search(r"(?:intraday high not available|no intraday high|not intraday high)", text, re.IGNORECASE):
+        return True
+    return False
+
+
+def _intraday_high_numeric_claim(text: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:盘中|intraday)[^\n。；|]{0,30}(?:最高|高点|high|为|达到|站上)?"
+            r"[^\n。；|]{0,20}\d+(?:\.\d+)?\s*(?:%|％|bp|bps|基点)",
+            text,
+            re.IGNORECASE,
+        )
+    )
 
 
 def _is_dgs_threshold_topic_only(text: str) -> bool:
@@ -284,6 +384,10 @@ def _is_dgs_threshold_topic_only(text: str) -> bool:
 def _provided_market_data_claim(text: str, facts: dict[str, Any]) -> bool:
     terms = facts.get("provided_market_data_terms")
     if not isinstance(terms, list):
+        return False
+    if _provided_real_yield_claim(text, facts):
+        return True
+    if _looks_like_real_yield_claim(text):
         return False
     if _requires_context_backed_dgs_check(text):
         return _context_backed_dgs_claim(text, facts)
@@ -307,6 +411,28 @@ def _provided_market_data_claim(text: str, facts: dict[str, Any]) -> bool:
     ):
         return True
     return False
+
+
+def _provided_real_yield_claim(text: str, facts: dict[str, Any]) -> bool:
+    if not _looks_like_real_yield_claim(text):
+        return False
+    if re.search(r"(?:Reuters|FactSet|Bloomberg|FedWatch|Goldman|Wind)", text, re.IGNORECASE):
+        return False
+    values = facts.get("provided_market_data_values")
+    if not isinstance(values, dict):
+        return False
+    item = values.get("real_yield_10y")
+    return isinstance(item, dict) and item.get("status") == "ok" and item.get("value") is not None
+
+
+def _looks_like_real_yield_claim(text: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:real[_\s-]*yield(?:_10y)?|real_yield_10y|实际利率|实际收益率|10年期实际利率)",
+            text,
+            re.IGNORECASE,
+        )
+    )
 
 
 def _is_observation_date_reference(text: str) -> bool:
@@ -350,7 +476,7 @@ def _provided_rates_inflation_oil_claim(text: str, terms: list[Any]) -> bool:
 
 
 def _looks_like_dgs_value_claim(text: str) -> bool:
-    if re.search(r"(?:实际收益率|实际利率|real\s*yield)", text, re.IGNORECASE):
+    if _looks_like_real_yield_claim(text):
         return False
     if re.search(r"(?:10Y\s*-\s*2Y|10Y-2Y|10年\s*-\s*2年|收益率曲线|利差)", text, re.IGNORECASE):
         return False
@@ -358,7 +484,7 @@ def _looks_like_dgs_value_claim(text: str) -> bool:
 
 
 def _requires_context_backed_dgs_check(text: str) -> bool:
-    if re.search(r"(?:实际收益率|实际利率|real\s*yield)", text, re.IGNORECASE):
+    if _looks_like_real_yield_claim(text):
         return False
     if re.search(r"(?:breakeven|盈亏平衡|通胀预期|T10YIE)", text, re.IGNORECASE):
         return False
@@ -510,6 +636,8 @@ def _unsupported_unprovided_phrase_claims(text: str, facts: dict[str, Any]) -> l
     if not isinstance(values, dict):
         values = {}
     for sentence in _sentences(text):
+        if _is_evidence_table_row_with_provided_metric_key(sentence, facts):
+            continue
         if _has_boundary_marker(sentence):
             continue
         if re.search(r"(?:CPI|PPI)[^\n。；]{0,20}(?:超预期|surprise|consensus|expected)", sentence, re.IGNORECASE):
@@ -522,8 +650,8 @@ def _unsupported_unprovided_phrase_claims(text: str, facts: dict[str, Any]) -> l
             if not isinstance(item, dict) or item.get("status") != "ok" or item.get("value") is None:
                 unsupported.append(sentence[:120])
             continue
-        if re.search(r"(?:盘中|intraday)[^\n。；]{0,30}(?:最高|高点|high|为|达到|站上)[^\n。；]{0,20}\d+(?:\.\d+)?\s*%", sentence, re.IGNORECASE):
-                unsupported.append(sentence[:120])
+        if _intraday_high_numeric_claim(sentence):
+            unsupported.append(sentence[:120])
     return unsupported
 
 
@@ -534,6 +662,8 @@ def _dgs_breakout_confirmation_conflicts(text: str, facts: dict[str, Any]) -> li
         r"按本项目定义[^\n。；]{0,24}确认|breakout_confirmed[^\n。；]{0,12}true)"
     )
     for sentence in _sentences(text):
+        if _dgs_false_breakout_boundary(sentence, facts):
+            continue
         if _has_boundary_marker(sentence) or _is_dgs_threshold_topic_only(sentence):
             continue
         if not re.search(conflict_pattern, sentence, re.IGNORECASE):
@@ -555,6 +685,8 @@ def _dgs_5pct_wording_without_confirmation(text: str, facts: dict[str, Any]) -> 
         r"长端利率持续处于\s*5\s*[%％]?\s*以上)"
     )
     for sentence in _sentences(text):
+        if _dgs_false_breakout_boundary(sentence, facts):
+            continue
         if _has_boundary_marker(sentence) or _is_dgs_threshold_topic_only(sentence):
             continue
         if not re.search(DGS_CONTEXT_LABEL_PATTERN, sentence, re.IGNORECASE):
@@ -590,11 +722,54 @@ def _dgs_breakout_confirmed(target: str, facts: dict[str, Any]) -> bool:
     return isinstance(item, dict) and item.get("value") is True and item.get("status") == "ok"
 
 
+def _dgs_false_breakout_boundary(text: str, facts: dict[str, Any]) -> bool:
+    match = re.search(r"(dgs(?:10|30)_5pct_breakout_confirmed)", text, re.IGNORECASE)
+    if not match:
+        return False
+    key = match.group(1).lower()
+    values = facts.get("provided_market_data_values")
+    if not isinstance(values, dict):
+        return False
+    item = values.get(key)
+    if not isinstance(item, dict) or item.get("value") is not False:
+        return False
+    if not re.search(
+        r"(?:false|False|否|未达确认条件|未达到确认条件|未满足确认条件|尚未达到确认条件|not confirmed|未确认突破)",
+        text,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        r"(?:但|但是|却|however|but)[^\n。；|]{0,40}"
+        r"(?:确认突破|已确认突破|站稳|持续站上|高压区已经确认|已满足确认条件|满足确认条件|"
+        r"breakout_confirmed[^\n。；|]{0,12}true)",
+        text,
+        re.IGNORECASE,
+    ):
+        return False
+    positive_text = re.sub(
+        r"(?:未确认突破|未达确认条件|未达到确认条件|未满足确认条件|尚未达到确认条件)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if re.search(
+        r"(?:确认突破|已确认突破|站稳|持续站上|高压区已经确认|已满足确认条件|满足确认条件|"
+        r"breakout_confirmed[^\n。；|]{0,12}true)",
+        positive_text,
+        re.IGNORECASE,
+    ):
+        return False
+    return True
+
+
 def _unsupported_inflation_trend_or_surprise(text: str, facts: dict[str, Any]) -> list[str]:
     unsupported = []
     trend_pattern = r"(?:温和偏高|明显降温|没有明显降温|没有降温|未明显降温|未降温|降温|偏高)"
     surprise_pattern = r"(?:超预期|低于预期|高于预期|surprise|consensus|expected)"
     for sentence in _sentences(text):
+        if _is_evidence_table_row_with_provided_metric_key(sentence, facts):
+            continue
         if _inflation_boundary_sentence(sentence):
             continue
         if re.search(r"(?:如果|假如|若|假设|if)", sentence, re.IGNORECASE) and not re.search(
@@ -612,11 +787,38 @@ def _unsupported_inflation_trend_or_surprise(text: str, facts: dict[str, Any]) -
 
 
 def _inflation_boundary_sentence(sentence: str) -> bool:
+    if _inflation_surprise_denial(sentence):
+        return True
     return bool(
         re.search(
             r"(?:不能|不得|不要|不可|不应|无法|不能确认|缺少|缺失|未提供|没有提供|not provided|not available)"
             r"[^\n。；]{0,40}(?:CPI|PCE|PPI|超预期|低于预期|高于预期|降温|偏高|surprise|consensus)",
             sentence,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _inflation_surprise_claim_without_boundary(text: str) -> bool:
+    if not re.search(r"(?:CPI|PCE|PPI|PPIACO)", text, re.IGNORECASE):
+        return False
+    if not re.search(
+        r"(?:超预期|低于预期|高于预期|beat expectations|miss expectations|surprise|consensus|expected)",
+        text,
+        re.IGNORECASE,
+    ):
+        return False
+    return not _inflation_surprise_denial(text)
+
+
+def _inflation_surprise_denial(text: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:非超预期|不能写超预期|不代表超预期|不代表低于预期|不能判断超预期或低于预期|"
+            r"不能判断[^\n。；|]{0,20}(?:超预期|低于预期|高于预期)|"
+            r"not a consensus[- ]surprise|no consensus|not a surprise|"
+            r"cannot determine[^\n。；|]{0,20}(?:surprise|expected|expectations))",
+            text,
             re.IGNORECASE,
         )
     )
