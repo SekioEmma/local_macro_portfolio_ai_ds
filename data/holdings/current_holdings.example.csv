@@ -1,0 +1,6 @@
+asset_name,fund_code,asset_class,current_value,cost_basis,profit_loss,currency,updated_at,notes
+Example S&P 500 fund,SP500_EXAMPLE,sp500,1000,1000,0,CNY,2026-01-01,placeholder only
+Example Nasdaq 100 fund,NASDAQ100_EXAMPLE,nasdaq100,400,400,0,CNY,2026-01-01,placeholder only
+Example short bond fund,SHORT_BOND_EXAMPLE,short_bond,400,400,0,CNY,2026-01-01,placeholder only
+Example gold fund,GOLD_EXAMPLE,gold,200,200,0,CNY,2026-01-01,placeholder only
+Example cash reserve,CASH_EXAMPLE,cash,100,100,0,CNY,2026-01-01,placeholder only

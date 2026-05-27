@@ -1,0 +1,45 @@
+user:
+  stage: personal_research
+  monthly_budget_min: 0
+  monthly_budget_max: 0
+  platform:
+    - local_manual_snapshot
+
+target_allocation:
+  sp500: 0.50
+  nasdaq100: 0.20
+  short_bond: 0.20
+  gold: 0.10
+
+known_funds:
+  "SP500_EXAMPLE":
+    name: Example S&P 500 fund
+    asset_class: sp500
+  "NASDAQ100_EXAMPLE":
+    name: Example Nasdaq 100 fund
+    asset_class: nasdaq100
+  "SHORT_BOND_EXAMPLE":
+    name: Example short bond fund
+    asset_class: short_bond
+  "GOLD_EXAMPLE":
+    name: Example gold fund
+    asset_class: gold
+
+build_phase:
+  daily_plan:
+    "SP500_EXAMPLE": 0
+    "NASDAQ100_EXAMPLE": 0
+    "SHORT_BOND_EXAMPLE": 0
+    "GOLD_EXAMPLE": 0
+
+rebalance:
+  deviation_threshold: 0.05
+  year_end_review: true
+  prefer_new_cash: true
+  avoid_frequent_selling: true
+
+constraints:
+  no_leverage: true
+  avoid_frequent_trading: true
+  no_short_term_prediction: true
+  no_auto_trading: true
