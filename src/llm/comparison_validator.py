@@ -34,6 +34,7 @@ TRADE_LIKE_PATTERNS = [
     r"清仓",
     r"越跌越买",
     r"等跌再买",
+    r"补仓",
     r"立即调整",
     r"加速买入",
     r"增配(?:标普|纳指|纳斯达克|短债|债券|黄金|sp500|nasdaq|gold|bond)",
@@ -124,6 +125,7 @@ def validate_comparison_answer(answer_text: str, validator_facts: dict[str, Any]
         "missing_data_boundary_absent": _missing_data_boundary_absent(answer_text, facts),
         "dgs_breakout_confirmation_conflict": _dgs_breakout_confirmation_conflicts(answer_text, facts),
         "unsupported_inflation_trend_or_surprise": _unsupported_inflation_trend_or_surprise(answer_text, facts),
+        "stale_data_used_as_current": _stale_data_used_as_current(answer_text, facts),
     }
     soft_flags = {
         "too_template_like": _too_template_like(answer_text),
@@ -136,7 +138,6 @@ def validate_comparison_answer(answer_text: str, validator_facts: dict[str, Any]
         "unsupported_market_psychology_inference": _unsupported_market_psychology_inference(answer_text),
         "dgs_5pct_wording_without_confirmation": _dgs_5pct_wording_without_confirmation(answer_text, facts),
         "current_vs_target_allocation_confusion": _current_vs_target_allocation_confusion(answer_text, facts),
-        "stale_data_used_as_current": _stale_data_used_as_current(answer_text, facts),
     }
     return {
         "hard_flags": hard_flags,
@@ -658,7 +659,7 @@ def _unsupported_unprovided_phrase_claims(text: str, facts: dict[str, Any]) -> l
 def _dgs_breakout_confirmation_conflicts(text: str, facts: dict[str, Any]) -> list[str]:
     conflicts = []
     conflict_pattern = (
-        r"(?:确认突破|高压区已经确认|5\s*[%％]?\s*阈值已满足确认条件|"
+        r"(?:确认突破|confirmed\s+breakout|高压区已经确认|5\s*[%％]?\s*阈值已满足确认条件|"
         r"按本项目定义[^\n。；]{0,24}确认|breakout_confirmed[^\n。；]{0,12}true)"
     )
     for sentence in _sentences(text):
@@ -681,7 +682,7 @@ def _dgs_breakout_confirmation_conflicts(text: str, facts: dict[str, Any]) -> li
 def _dgs_5pct_wording_without_confirmation(text: str, facts: dict[str, Any]) -> list[str]:
     flagged = []
     strong_pattern = (
-        r"(?:站稳|确认突破|持续处于|事实上的利率压力信号|高压区已经确认|"
+        r"(?:站稳|确认突破|confirmed\s+breakout|持续处于|事实上的利率压力信号|高压区已经确认|"
         r"长端利率持续处于\s*5\s*[%％]?\s*以上)"
     )
     for sentence in _sentences(text):
@@ -766,7 +767,10 @@ def _dgs_false_breakout_boundary(text: str, facts: dict[str, Any]) -> bool:
 def _unsupported_inflation_trend_or_surprise(text: str, facts: dict[str, Any]) -> list[str]:
     unsupported = []
     trend_pattern = r"(?:温和偏高|明显降温|没有明显降温|没有降温|未明显降温|未降温|降温|偏高)"
-    surprise_pattern = r"(?:超预期|低于预期|高于预期|surprise|consensus|expected)"
+    surprise_pattern = (
+        r"(?:超预期|低于预期|高于预期|beat expectations|miss expectations|"
+        r"surprise|consensus|expected|expectations)"
+    )
     for sentence in _sentences(text):
         if _is_evidence_table_row_with_provided_metric_key(sentence, facts):
             continue
@@ -1020,7 +1024,7 @@ def _cash_reserve_misuse(text: str) -> bool:
     for sentence in _sentences(text):
         if not re.search(r"cash reserve|现金准备金|余额宝", sentence, re.IGNORECASE):
             continue
-        if not re.search(r"待配置资产|闲置资金|应投入|应立即投入|加仓资金", sentence):
+        if not re.search(r"待配置资产|闲置资金|应投入|应立即投入|加仓资金|补仓", sentence):
             continue
         if re.search(r"不(?:是|等于|参与|应|可|该)|不是|不等于|不参与|非待配置|not", sentence, re.IGNORECASE):
             continue
@@ -1125,6 +1129,8 @@ def _missing_data_boundary_absent(text: str, facts: dict[str, Any]) -> bool:
         terms = ["PE", "forward PE", "CAPE", "估值", "FedWatch", "信用利差", "VIX", "Reuters", "FactSet", "Bloomberg"]
     relevant_sentences = []
     for sentence in _sentences(text):
+        if _is_evidence_table_row_with_provided_metric_key(sentence, facts):
+            continue
         matched_terms = _matched_missing_terms(sentence, terms)
         if not matched_terms:
             continue
@@ -1160,8 +1166,22 @@ def _matched_missing_terms(sentence: str, terms: list[Any]) -> list[str]:
     return [
         str(term)
         for term in terms
-        if str(term) and re.search(re.escape(str(term)), sentence, re.IGNORECASE)
+        if str(term) and _missing_term_matches(sentence, str(term))
     ]
+
+
+def _missing_term_matches(sentence: str, term: str) -> bool:
+    if re.fullmatch(r"[A-Za-z]{1,4}", term):
+        return bool(re.search(rf"(?<![A-Za-z]){re.escape(term)}(?![A-Za-z])", sentence, re.IGNORECASE))
+    if re.fullmatch(r"[A-Za-z][A-Za-z\s/-]{1,32}", term):
+        return bool(
+            re.search(
+                rf"(?<![A-Za-z]){re.escape(term)}(?![A-Za-z])",
+                sentence,
+                re.IGNORECASE,
+            )
+        )
+    return bool(re.search(re.escape(term), sentence, re.IGNORECASE))
 
 
 def _only_broad_analytical_terms(terms: list[str]) -> bool:
@@ -1197,6 +1217,8 @@ def _too_template_like(text: str) -> bool:
 
 def _evidence_table_absent(text: str) -> bool:
     if re.search(r"数据证据表|证据表|指标\s*\|\s*数值|指标\s+数值", text):
+        return False
+    if re.search(r"metric_key", text, re.IGNORECASE) and re.search(r"observation_date", text, re.IGNORECASE):
         return False
     return not (
         re.search(r"observation_date|source|freshness|status", text, re.IGNORECASE)
@@ -1265,7 +1287,7 @@ def _stale_data_used_as_current(text: str, facts: dict[str, Any]) -> bool:
     values = facts.get("provided_market_data_values")
     if not isinstance(values, dict):
         return False
-    risky_current_pattern = r"(?:当前|正在|目前|实时|当前最新|形成共振|飙升中|短期飙升|仍在|today|right now)"
+    risky_current_pattern = r"(?:当前|正在|目前|实时|当前最新|形成共振|飙升中|短期飙升|仍在|today|right now|current|currently)"
     stale_safe_pattern = (
         r"(?:截至|观察日|observation_date|stale|需要(?:后续)?更新验证|近期代理|历史代理|"
         r"曾显示|如果后续更新|若后续更新|缺少[^\n。；]{0,24}实时油价|缺乏[^\n。；]{0,24}实时油价|"
