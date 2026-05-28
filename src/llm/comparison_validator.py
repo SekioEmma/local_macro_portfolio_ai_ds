@@ -251,7 +251,13 @@ def _unsupported_market_data_claims(text: str, facts: dict[str, Any]) -> list[st
             continue
         filtered.append(hit)
     filtered.extend(_unsupported_unprovided_phrase_claims(text, facts))
-    return sorted(set(filtered))
+    return sorted(
+        {
+            claim
+            for claim in filtered
+            if not _provided_market_data_claim(claim, facts)
+        }
+    )
 
 
 def _raw_provided_metric_key_fragment(hit: str, facts: dict[str, Any]) -> bool:

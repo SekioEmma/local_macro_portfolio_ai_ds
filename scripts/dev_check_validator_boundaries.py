@@ -77,6 +77,42 @@ SYNTHETIC_FACTS = {
             "status": "ok",
             "error": None,
         },
+        "nominal_yield_10y": {
+            "value": 4.5,
+            "unit": "percent",
+            "source": "FRED:DGS10",
+            "observation_date": "2026-05-26",
+            "freshness": "fresh",
+            "status": "ok",
+            "error": None,
+        },
+        "nominal_yield_30y": {
+            "value": 5.03,
+            "unit": "percent",
+            "source": "FRED:DGS30",
+            "observation_date": "2026-05-26",
+            "freshness": "fresh",
+            "status": "ok",
+            "error": None,
+        },
+        "dgs30_5d_avg": {
+            "value": 5.098,
+            "unit": "percent",
+            "source": "FRED:DGS30",
+            "observation_date": "2026-05-26",
+            "freshness": "fresh",
+            "status": "ok",
+            "error": None,
+        },
+        "dgs30_5pct_breakout_confirmed": {
+            "value": True,
+            "unit": "boolean",
+            "source": "FRED:DGS30",
+            "observation_date": "2026-05-26",
+            "freshness": "fresh",
+            "status": "ok",
+            "error": None,
+        },
         "headline_cpi_yoy_pct": {
             "value": 3.78,
             "unit": "percent",
@@ -118,6 +154,14 @@ ALLOWED_CASES = {
     ),
     "DGS daily non-intraday boundary": "FRED DGS10/DGS30 为日度 constant maturity yield，不是盘中高点。",
     "stale WTI safe boundary": "截至 observation_date 的 WTI 数据曾显示能源价格压力；由于 freshness=stale，不能确认当前实时油价。",
+    "DGS30 latest and 5d average supported": (
+        "首先，根据FRED的日度观察数据（非盘中高点），30年期美债收益率 latest daily observation 为5.03%，"
+        "其5日观察均值为5.098%"
+    ),
+    "DGS10 false breakout boundary supported": (
+        "必须指出，这并非基于盘中高点，且 10年期美债收益率（4.5%）尚未触发该确认"
+        "（dgs10_5pct_breakout_confirmed 为 false），反映长端利率压力在久期最远端更为突出"
+    ),
 }
 
 
@@ -151,7 +195,7 @@ def main() -> int:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
-    print("validator boundary check passed: allowed=6 blocked=8")
+    print("validator boundary check passed: allowed=8 blocked=8")
     return 0
 
 
