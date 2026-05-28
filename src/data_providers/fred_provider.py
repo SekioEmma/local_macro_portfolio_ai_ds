@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 
@@ -190,6 +191,8 @@ def _load_dotenv_if_available() -> None:
     except ImportError:
         return
 
+    project_root = Path(__file__).resolve().parents[2]
+    load_dotenv(project_root / ".env")
     load_dotenv()
 
 

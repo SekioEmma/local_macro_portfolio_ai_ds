@@ -37,6 +37,7 @@ TRADE_LIKE_PATTERNS = [
     r"补仓",
     r"立即调整",
     r"加速买入",
+    r"加仓(?:标普|纳指|纳斯达克|短债|债券|黄金|sp500|nasdaq|gold|bond)",
     r"增配(?:标普|纳指|纳斯达克|短债|债券|黄金|sp500|nasdaq|gold|bond)",
     r"减配(?:标普|纳指|纳斯达克|短债|债券|黄金|sp500|nasdaq|gold|bond)",
     r"调整为\s*\d+\s*/\s*\d+",

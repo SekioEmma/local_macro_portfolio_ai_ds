@@ -19,13 +19,17 @@ DEFAULT_PROFILE_PATH = PROJECT_ROOT / "configs" / "user_profile.yaml"
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "reports" / "portfolio_snapshot.json"
 
 
-def main() -> None:
+def main() -> int:
     holdings_path, holdings_source = _select_holdings_file()
-    snapshot = generate_portfolio_snapshot(
-        holdings_path=str(holdings_path),
-        profile_path=str(DEFAULT_PROFILE_PATH),
-        trading_days=21,
-    )
+    try:
+        snapshot = generate_portfolio_snapshot(
+            holdings_path=str(holdings_path),
+            profile_path=str(DEFAULT_PROFILE_PATH),
+            trading_days=21,
+        )
+    except ValueError as exc:
+        _print_holdings_validation_error(exc, holdings_path)
+        return 1
     snapshot["holdings_source"] = holdings_source
 
     formatted_json = json.dumps(snapshot, ensure_ascii=False, indent=2)
@@ -33,6 +37,7 @@ def main() -> None:
 
     DEFAULT_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     DEFAULT_OUTPUT_PATH.write_text("\ufeff" + formatted_json + "\n", encoding="utf-8")
+    return 0
 
 
 def _select_holdings_file() -> tuple[Path, dict]:
@@ -66,5 +71,27 @@ def _select_holdings_file() -> tuple[Path, dict]:
     }
 
 
+def _print_holdings_validation_error(exc: ValueError, holdings_path: Path) -> None:
+    summary = {
+        "status": "input_error",
+        "input": str(holdings_path),
+        "error": _sanitize_validation_message(str(exc)),
+        "template_path": str(EXAMPLE_HOLDINGS_PATH),
+        "hint": (
+            "Check required columns and numeric money fields. "
+            "Do not commit data/holdings/current_holdings.csv."
+        ),
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2), file=sys.stderr)
+
+
+def _sanitize_validation_message(message: str) -> str:
+    for field in ("current_value", "cost_basis", "profit_loss"):
+        marker = f"has invalid {field}: "
+        if marker in message:
+            return message.split(marker, 1)[0] + marker + "<redacted>."
+    return message
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
