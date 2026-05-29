@@ -104,6 +104,7 @@ def build_deepseek_prompt_package(
             "若正文引用 DGS rolling average、recent high、threshold count、breakout confirmation 等派生指标，证据表必须以独立行列出 exact metric_key；如证据表没有 exact metric_key，正文不得引用该指标具体数值。",
             "如果可用且正文会使用，DGS 派生指标优先列入证据表：dgs10_5d_avg、dgs10_10d_avg、dgs10_30d_high、dgs10_60d_high、dgs10_5pct_breakout_confirmed、dgs30_5d_avg、dgs30_10d_avg、dgs30_30d_high、dgs30_60d_high、dgs30_5pct_breakout_confirmed。",
             "DGS10/DGS30 日度 rolling average、recent high 和 threshold 指标必须写明来自 FRED daily observation，不是 intraday high。",
+            "若正文引用 wti_oil、brent_oil、wti_oil_30d_change、brent_oil_30d_change 的具体数值，证据表必须以独立行列出 exact metric_key；如证据表没有 exact metric_key，正文不得引用该油价指标具体数值。",
             "如果证据表没有列某个市场指标数值，正文只能定性说明其缺失或不用该数值推理。",
         ],
         "conditional_reasoning_rules": [
@@ -134,6 +135,7 @@ def build_deepseek_prompt_package(
             "如果 CPI/PCE/PPI 只有 index level，不得说“温和偏高”“明显降温”“没有降温”“未降温”“超预期”“低于预期”。",
             "如果 CPI/PCE/PPI 的 MoM/YoY 派生字段可用，可以基于同比/环比讨论趋势，但仍不能说 consensus surprise；没有 consensus_cpi/consensus_ppi 时，永远不能说“超预期/低于预期”。",
             "可以讨论 WTI/Brent 对通胀和利率的潜在传导，但不能机械等同于通胀失控。",
+            "若正文写 WTI、Brent、wti_oil_30d_change 或 brent_oil_30d_change 的具体价格、百分比变化或数值，证据表必须先列出对应 exact metric_key（wti_oil / brent_oil / wti_oil_30d_change / brent_oil_30d_change）。",
             "若 oil freshness=stale，必须使用固定表述：“截至 observation_date 的 WTI/Brent 数据曾显示能源价格压力；由于 freshness=stale，不能确认当前实时油价或当前能源压力。”",
             "如果某指标 freshness=stale，只能写“截至 observation_date 的数据曾显示”“作为近期/历史代理变量”或“需要后续更新验证”；不得写“当前正在”“短期正在飙升”“形成实时共振”，也不得把 stale oil data 当作当前实时油价。",
             "涉及实际利率时必须写“10年期实际利率 real_yield_10y”，不得写成“10年期通胀挂钩国债收益率”。",

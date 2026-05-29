@@ -46,6 +46,9 @@ SYNTHETIC_FACTS = {
         "headline_cpi_yoy_pct",
         "dgs10_5pct_breakout_confirmed",
         "wti_oil",
+        "brent_oil",
+        "wti_oil_30d_change",
+        "brent_oil_30d_change",
         "DGS10",
         "FRED",
         "WTI",
@@ -151,6 +154,33 @@ SYNTHETIC_FACTS = {
             "status": "ok",
             "error": None,
         },
+        "brent_oil": {
+            "value": 118.75,
+            "unit": "USD per barrel",
+            "source": "FRED:DCOILBRENTEU",
+            "observation_date": "2026-05-18",
+            "freshness": "stale",
+            "status": "ok",
+            "error": None,
+        },
+        "wti_oil_30d_change": {
+            "value": 6.2,
+            "unit": "percent",
+            "source": "FRED:DCOILWTICO",
+            "observation_date": "2026-05-18",
+            "freshness": "stale",
+            "status": "ok",
+            "error": None,
+        },
+        "brent_oil_30d_change": {
+            "value": 4.8,
+            "unit": "percent",
+            "source": "FRED:DCOILBRENTEU",
+            "observation_date": "2026-05-18",
+            "freshness": "stale",
+            "status": "ok",
+            "error": None,
+        },
     },
 }
 
@@ -214,6 +244,21 @@ REGRESSION_CASES = {
     "DGS10 rolling averages with exact evidence keys": ALLOWED_CASES[
         "DGS10 rolling averages with exact evidence keys"
     ],
+    "oil metrics missing exact evidence keys": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| headline_cpi_yoy_pct | CPI同比 | 3.78 | percent | 2026-04-01 | FRED:CPIAUCSL | normal_lag | CPI同比数据 |\n\n"
+        "WTI为112.25美元/桶，Brent为118.75美元/桶，wti_oil_30d_change为6.2%，brent_oil_30d_change为4.8%。"
+    ),
+    "oil metrics with exact evidence keys": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| wti_oil | WTI | 112.25 | USD per barrel | 2026-05-18 | FRED:DCOILWTICO | stale | 截至 observation_date 的 WTI 数据，非实时油价 |\n"
+        "| brent_oil | Brent | 118.75 | USD per barrel | 2026-05-18 | FRED:DCOILBRENTEU | stale | 截至 observation_date 的 Brent 数据，非实时油价 |\n"
+        "| wti_oil_30d_change | WTI 30d change | 6.2 | percent | 2026-05-18 | FRED:DCOILWTICO | stale | 30d change，非实时油价 |\n"
+        "| brent_oil_30d_change | Brent 30d change | 4.8 | percent | 2026-05-18 | FRED:DCOILBRENTEU | stale | 30d change，非实时油价 |\n\n"
+        "截至 observation_date 的 WTI 为112.25美元/桶，Brent为118.75美元/桶；wti_oil_30d_change为6.2%，brent_oil_30d_change为4.8%，这些都是 stale 历史代理变量，不代表当前实时油价。"
+    ),
 }
 
 
@@ -252,6 +297,28 @@ def main() -> int:
         failures.append("regression case raised unsupported_market_data_claim with exact DGS10 rolling keys")
     if exact_keys_soft.get("body_metric_not_in_evidence_table"):
         failures.append("regression case raised body_metric_not_in_evidence_table with exact DGS10 rolling keys")
+
+    missing_oil_result = validate_comparison_answer(
+        REGRESSION_CASES["oil metrics missing exact evidence keys"],
+        SYNTHETIC_FACTS,
+    )
+    missing_oil_flags = missing_oil_result.get("soft_flags", {})
+    if not (
+        missing_oil_result.get("hard_flags", {}).get("unsupported_market_data_claim")
+        or missing_oil_flags.get("body_metric_not_in_evidence_table")
+    ):
+        failures.append("regression case did not flag oil metrics missing exact metric_key evidence rows")
+
+    exact_oil_result = validate_comparison_answer(
+        REGRESSION_CASES["oil metrics with exact evidence keys"],
+        SYNTHETIC_FACTS,
+    )
+    exact_oil_hard = exact_oil_result.get("hard_flags", {})
+    exact_oil_soft = exact_oil_result.get("soft_flags", {})
+    if exact_oil_hard.get("unsupported_market_data_claim"):
+        failures.append("regression case raised unsupported_market_data_claim with exact oil metric keys")
+    if exact_oil_soft.get("body_metric_not_in_evidence_table"):
+        failures.append("regression case raised body_metric_not_in_evidence_table with exact oil metric keys")
 
     if failures:
         print("validator boundary check failed", file=sys.stderr)
