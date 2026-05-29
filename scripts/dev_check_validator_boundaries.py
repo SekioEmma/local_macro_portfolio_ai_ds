@@ -49,10 +49,12 @@ SYNTHETIC_FACTS = {
         "brent_oil",
         "wti_oil_30d_change",
         "brent_oil_30d_change",
+        "ppi_all_commodities_yoy_pct",
         "DGS10",
         "FRED",
         "WTI",
         "CPI",
+        "PPIACO",
     ],
     "provided_market_data_values": {
         "real_yield_10y": {
@@ -181,6 +183,15 @@ SYNTHETIC_FACTS = {
             "status": "ok",
             "error": None,
         },
+        "ppi_all_commodities_yoy_pct": {
+            "value": 9.82,
+            "unit": "percent",
+            "source": "FRED:PPIACO",
+            "observation_date": "2026-04-01",
+            "freshness": "normal_lag",
+            "status": "ok",
+            "error": None,
+        },
     },
 }
 
@@ -274,6 +285,20 @@ REGRESSION_CASES = {
         "截至 observation_date 的 Brent 为118.75美元/桶，brent_oil_30d_change为4.8%，这是 stale 历史代理变量，不代表当前实时油价。"
     ),
     "real yield primary driver wording": "黄金压力主要由实际利率决定，主要压力来自实际利率。",
+    "PPI YoY missing exact evidence key": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| ppi_all_commodities | PPIACO index | 265.1 | index | 2026-04-01 | FRED:PPIACO | normal_lag | PPI all commodities index; not final demand PPI |\n\n"
+        "PPI: PPIACO同比涨幅为9.82%，它不等同于最终需求PPI，不能直接解释为全面下游通胀压力。"
+    ),
+    "PPI YoY with exact evidence key": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| ppi_all_commodities_yoy_pct | PPIACO YoY | 9.82 | percent | 2026-04-01 | FRED:PPIACO | normal_lag | PPI all commodities YoY; not final demand PPI |\n\n"
+        "PPI: PPIACO同比涨幅为9.82%，但它不等同于最终需求PPI，不能直接解释为全面下游通胀压力。"
+    ),
+    "allocation attribution unsupported": "当前短债高配主要原因是权益市值收缩。",
+    "allocation attribution boundary": "当前数据包只能确认相对目标配置的方向和幅度；偏离成因可能来自建仓进度、价格变动、现金流和既有DCA路径等多因素，当前 context 不支持归因分解。",
 }
 
 
@@ -363,6 +388,42 @@ def main() -> int:
     )
     if not real_yield_driver_result.get("soft_flags", {}).get("unsupported_real_yield_primary_driver_claim"):
         failures.append("regression case did not soft-flag real_yield primary-driver wording")
+
+    ppi_missing_result = validate_comparison_answer(
+        REGRESSION_CASES["PPI YoY missing exact evidence key"],
+        SYNTHETIC_FACTS,
+    )
+    ppi_missing_soft = ppi_missing_result.get("soft_flags", {})
+    if not (
+        ppi_missing_result.get("hard_flags", {}).get("unsupported_market_data_claim")
+        or ppi_missing_soft.get("body_metric_not_in_evidence_table")
+    ):
+        failures.append("regression case did not flag PPI YoY missing exact metric_key evidence row")
+
+    ppi_exact_result = validate_comparison_answer(
+        REGRESSION_CASES["PPI YoY with exact evidence key"],
+        SYNTHETIC_FACTS,
+    )
+    ppi_exact_hard = ppi_exact_result.get("hard_flags", {})
+    ppi_exact_soft = ppi_exact_result.get("soft_flags", {})
+    if ppi_exact_hard.get("unsupported_market_data_claim"):
+        failures.append("regression case raised unsupported_market_data_claim with exact PPI YoY metric key")
+    if ppi_exact_soft.get("body_metric_not_in_evidence_table"):
+        failures.append("regression case raised body_metric_not_in_evidence_table with exact PPI YoY metric key")
+
+    allocation_bad_result = validate_comparison_answer(
+        REGRESSION_CASES["allocation attribution unsupported"],
+        SYNTHETIC_FACTS,
+    )
+    if not allocation_bad_result.get("soft_flags", {}).get("current_vs_target_allocation_confusion"):
+        failures.append("regression case did not soft-flag unsupported allocation attribution")
+
+    allocation_boundary_result = validate_comparison_answer(
+        REGRESSION_CASES["allocation attribution boundary"],
+        SYNTHETIC_FACTS,
+    )
+    if allocation_boundary_result.get("soft_flags", {}).get("current_vs_target_allocation_confusion"):
+        failures.append("regression case soft-flagged allocation attribution boundary wording")
 
     if failures:
         print("validator boundary check failed", file=sys.stderr)

@@ -106,6 +106,7 @@ def build_deepseek_prompt_package(
             "DGS10/DGS30 日度 rolling average、recent high 和 threshold 指标必须写明来自 FRED daily observation，不是 intraday high。",
             "若正文引用 wti_oil、brent_oil、wti_oil_30d_change、brent_oil_30d_change 的具体数值，证据表必须以独立行列出 exact metric_key；如证据表没有 exact metric_key，正文不得引用该油价指标具体数值。",
             "WTI 与 Brent 不得混用标签：正文引用 Brent 数值或 Brent 30日变动时，证据表必须列 brent_oil 和 brent_oil_30d_change；正文引用 WTI 数值或 WTI 30日变动时，证据表必须列 wti_oil 和 wti_oil_30d_change；不得在 WTI 标签下写 Brent 数值，也不得在 Brent 标签下写 WTI 数值。",
+            "若正文引用 ppi_all_commodities_yoy_pct、ppi_all_commodities_mom_pct 或 PPIACO YoY/MoM 的具体数值，证据表必须以独立行列出 exact metric_key；如证据表没有 exact metric_key，正文不得写具体 PPI 变化率。",
             "如果证据表没有列某个市场指标数值，正文只能定性说明其缺失或不用该数值推理。",
         ],
         "conditional_reasoning_rules": [
@@ -135,6 +136,7 @@ def build_deepseek_prompt_package(
             "可以讨论 CPI/PCE/PPI，但不能说超预期，除非 context 中提供 consensus / expected data。",
             "如果 CPI/PCE/PPI 只有 index level，不得说“温和偏高”“明显降温”“没有降温”“未降温”“超预期”“低于预期”。",
             "如果 CPI/PCE/PPI 的 MoM/YoY 派生字段可用，可以基于同比/环比讨论趋势，但仍不能说 consensus surprise；没有 consensus_cpi/consensus_ppi 时，永远不能说“超预期/低于预期”。",
+            "若正文写 PPIACO YoY/MoM、ppi_all_commodities_yoy_pct 或 ppi_all_commodities_mom_pct 的具体变化率，证据表必须先列出对应 exact metric_key；PPIACO 只能作为 all commodities PPI，必须说明它不是 PPI final demand，不能解释为最终需求PPI或全面下游通胀压力。",
             "可以讨论 WTI/Brent 对通胀和利率的潜在传导，但不能机械等同于通胀失控。",
             "若正文写 WTI、Brent、wti_oil_30d_change 或 brent_oil_30d_change 的具体价格、百分比变化或数值，证据表必须先列出对应 exact metric_key（wti_oil / brent_oil / wti_oil_30d_change / brent_oil_30d_change）。",
             "不得写“WTI: Brent报...”或“Brent: WTI报...”这类标签混用句；如果讨论 Brent，就使用 Brent 标签和 brent_oil / brent_oil_30d_change；如果讨论 WTI，就使用 WTI 标签和 wti_oil / wti_oil_30d_change。",
@@ -175,6 +177,8 @@ def build_deepseek_prompt_package(
             "不得把长期目标中的权益权重写成当前权益高配。",
             "如果说权益是组合收益主引擎，必须明确这是长期目标配置逻辑，不等于当前快照高配。",
             "如果说当前组合方向，必须使用本地快照方向：sp500 当前相对目标低配、nasdaq100 当前相对目标低配、short_bond 当前相对目标高配、gold 当前相对目标高配。",
+            "可以写当前快照显示 sp500/nasdaq100 低配、short_bond/gold 高配；不得写偏离主要由市场价格下跌、权益市值收缩、利率重定价自然造成。",
+            "除非 context 提供 performance attribution、transaction history 或 cashflow decomposition，否则不能判断偏离成因；推荐表述：当前数据包只能确认相对目标配置的方向和幅度；偏离成因可能来自建仓进度、价格变动、现金流和既有DCA路径等多因素，当前 context 不支持归因分解。",
         ],
         "dca_wording_rules": {
             "avoid": [
