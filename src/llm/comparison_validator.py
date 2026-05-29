@@ -222,6 +222,8 @@ def _unsupported_market_data_claims(text: str, facts: dict[str, Any]) -> list[st
         if _has_boundary_marker(sentence):
             continue
         if not _context_backed_dgs_claim(sentence, facts):
+            if _context_backed_dgs_derived_claim(sentence, facts, text):
+                continue
             filtered.append(sentence[:120])
 
     for hit in hits:
@@ -244,6 +246,8 @@ def _unsupported_market_data_claims(text: str, facts: dict[str, Any]) -> list[st
         if _is_observation_date_reference(window):
             continue
         if _context_backed_dgs_claim(sentence or window, facts):
+            continue
+        if _context_backed_dgs_derived_claim(sentence or window, facts, text):
             continue
         if sentence and _provided_market_data_claim(sentence, facts):
             continue
@@ -540,6 +544,61 @@ def _context_backed_dgs_claim(text: str, facts: dict[str, Any]) -> bool:
         _dgs_text_matches_context(segment, values, value_key, distance_key)
         for segment, value_key, distance_key in relevant_checks
     )
+
+
+def _context_backed_dgs_derived_claim(text: str, facts: dict[str, Any], full_text: str) -> bool:
+    if not re.search(r"(?:DGS10|DGS30|10Y|30Y|10\s*年期|30\s*年期)", text, re.IGNORECASE):
+        return False
+
+    values = facts.get("provided_market_data_values")
+    if not isinstance(values, dict):
+        return False
+
+    keys = _dgs_derived_keys_mentioned(text)
+    if not keys:
+        return False
+
+    evidence_table, _body = _split_evidence_table(full_text)
+    if not evidence_table:
+        return False
+    for key in keys:
+        if key not in evidence_table:
+            return False
+
+    numbers = _numbers_in_text(text)
+    if not numbers:
+        return False
+
+    for key in keys:
+        item = values.get(key)
+        if not isinstance(item, dict) or item.get("status") != "ok":
+            return False
+        value = _float_or_none(item.get("value"))
+        if value is None:
+            return False
+        if not any(_close_enough(number, value, tolerance=0.015) for number in numbers):
+            return False
+    return True
+
+
+def _dgs_derived_keys_mentioned(text: str) -> list[str]:
+    targets = []
+    if re.search(r"(?:DGS10|10Y|10\s*年期)", text, re.IGNORECASE):
+        targets.append("dgs10")
+    if re.search(r"(?:DGS30|30Y|30\s*年期)", text, re.IGNORECASE):
+        targets.append("dgs30")
+    if not targets:
+        return []
+
+    windows = []
+    if re.search(r"(?:5\s*日均值|5\s*日|5d|5\s*observation|5\s*day)", text, re.IGNORECASE):
+        windows.append("5d")
+    if re.search(r"(?:10\s*日均值|10\s*日|10d|10\s*observation|10\s*day)", text, re.IGNORECASE):
+        windows.append("10d")
+    if not windows:
+        return []
+
+    return [f"{target}_{window}_avg" for target in targets for window in windows]
 
 
 def _dgs_breakout_statement(text: str) -> bool:

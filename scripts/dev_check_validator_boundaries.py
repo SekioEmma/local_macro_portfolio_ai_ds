@@ -41,6 +41,8 @@ SYNTHETIC_FACTS = {
     "provided_market_data_terms": [
         "real_yield_10y",
         "dgs10_30d_high",
+        "dgs10_5d_avg",
+        "dgs10_10d_avg",
         "headline_cpi_yoy_pct",
         "dgs10_5pct_breakout_confirmed",
         "wti_oil",
@@ -64,6 +66,24 @@ SYNTHETIC_FACTS = {
             "unit": "percent",
             "source": "FRED:DGS10",
             "observation_date": "2026-05-22",
+            "freshness": "fresh",
+            "status": "ok",
+            "error": None,
+        },
+        "dgs10_5d_avg": {
+            "value": 4.54,
+            "unit": "percent",
+            "source": "FRED:DGS10",
+            "observation_date": "2026-05-26",
+            "freshness": "fresh",
+            "status": "ok",
+            "error": None,
+        },
+        "dgs10_10d_avg": {
+            "value": 4.55,
+            "unit": "percent",
+            "source": "FRED:DGS10",
+            "observation_date": "2026-05-26",
             "freshness": "fresh",
             "status": "ok",
             "error": None,
@@ -162,6 +182,13 @@ ALLOWED_CASES = {
         "必须指出，这并非基于盘中高点，且 10年期美债收益率（4.5%）尚未触发该确认"
         "（dgs10_5pct_breakout_confirmed 为 false），反映长端利率压力在久期最远端更为突出"
     ),
+    "DGS10 rolling averages with exact evidence keys": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| dgs10_5d_avg | DGS10 5日均值 | 4.54 | percent | 2026-05-26 | FRED:DGS10 | fresh | FRED daily observation rolling average; not intraday high |\n"
+        "| dgs10_10d_avg | DGS10 10日均值 | 4.55 | percent | 2026-05-26 | FRED:DGS10 | fresh | FRED daily observation rolling average; not intraday high |\n\n"
+        "DGS10的5日均值为4.54%，10日均值为4.55%，这些来自 FRED daily observation rolling averages，不是盘中高点。"
+    ),
 }
 
 
@@ -177,6 +204,19 @@ BLOCKED_CASES = {
 }
 
 
+REGRESSION_CASES = {
+    "DGS10 rolling averages missing exact evidence keys": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| nominal_yield_10y | DGS10 | 4.50 | percent | 2026-05-26 | FRED:DGS10 | fresh | FRED daily observation; not intraday high |\n\n"
+        "DGS10的5日均值为4.54%，10日均值为4.55%，仍距阈值有一段距离。"
+    ),
+    "DGS10 rolling averages with exact evidence keys": ALLOWED_CASES[
+        "DGS10 rolling averages with exact evidence keys"
+    ],
+}
+
+
 def main() -> int:
     failures = []
     for name, answer_text in ALLOWED_CASES.items():
@@ -189,13 +229,40 @@ def main() -> int:
         if not result.get("has_hard_flag"):
             failures.append(f"blocked case did not raise hard flag: {name}")
 
+    missing_keys_result = validate_comparison_answer(
+        REGRESSION_CASES["DGS10 rolling averages missing exact evidence keys"],
+        SYNTHETIC_FACTS,
+    )
+    missing_keys_flags = missing_keys_result.get("soft_flags", {})
+    if not (
+        missing_keys_result.get("hard_flags", {}).get("unsupported_market_data_claim")
+        or missing_keys_flags.get("body_metric_not_in_evidence_table")
+    ):
+        failures.append(
+            "regression case did not flag DGS10 rolling averages missing exact metric_key evidence rows"
+        )
+
+    exact_keys_result = validate_comparison_answer(
+        REGRESSION_CASES["DGS10 rolling averages with exact evidence keys"],
+        SYNTHETIC_FACTS,
+    )
+    exact_keys_hard = exact_keys_result.get("hard_flags", {})
+    exact_keys_soft = exact_keys_result.get("soft_flags", {})
+    if exact_keys_hard.get("unsupported_market_data_claim"):
+        failures.append("regression case raised unsupported_market_data_claim with exact DGS10 rolling keys")
+    if exact_keys_soft.get("body_metric_not_in_evidence_table"):
+        failures.append("regression case raised body_metric_not_in_evidence_table with exact DGS10 rolling keys")
+
     if failures:
         print("validator boundary check failed", file=sys.stderr)
         for failure in failures:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
-    print("validator boundary check passed: allowed=8 blocked=8")
+    print(
+        f"validator boundary check passed: allowed={len(ALLOWED_CASES)} "
+        f"blocked={len(BLOCKED_CASES)} regression={len(REGRESSION_CASES)}"
+    )
     return 0
 
 

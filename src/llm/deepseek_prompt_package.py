@@ -101,6 +101,9 @@ def build_deepseek_prompt_package(
             "正文引用 high_yield_spread=某值时，证据表必须列 high_yield_spread。",
             "正文引用 DGS30/DGS10/WTI/breakeven/real_yield/CPI/PCE/PPI 任一具体数值时，证据表必须先列对应字段。",
             "若正文使用以下指标，证据表必须以独立行列出 exact metric_key：high_yield_spread、vix、real_yield_10y、breakeven_inflation_10y、nominal_yield_10y、dgs10_30d_high、dgs10_60d_high、nominal_yield_30y、dgs30_5d_avg、dgs30_5pct_breakout_confirmed、headline_cpi_yoy_pct、core_cpi_yoy_pct、ppi_all_commodities_yoy_pct、wti_oil、wti_oil_30d_change、brent_oil、brent_oil_30d_change。",
+            "若正文引用 DGS rolling average、recent high、threshold count、breakout confirmation 等派生指标，证据表必须以独立行列出 exact metric_key；如证据表没有 exact metric_key，正文不得引用该指标具体数值。",
+            "如果可用且正文会使用，DGS 派生指标优先列入证据表：dgs10_5d_avg、dgs10_10d_avg、dgs10_30d_high、dgs10_60d_high、dgs10_5pct_breakout_confirmed、dgs30_5d_avg、dgs30_10d_avg、dgs30_30d_high、dgs30_60d_high、dgs30_5pct_breakout_confirmed。",
+            "DGS10/DGS30 日度 rolling average、recent high 和 threshold 指标必须写明来自 FRED daily observation，不是 intraday high。",
             "如果证据表没有列某个市场指标数值，正文只能定性说明其缺失或不用该数值推理。",
         ],
         "conditional_reasoning_rules": [
@@ -118,6 +121,7 @@ def build_deepseek_prompt_package(
         ],
         "rates_inflation_oil_rules": [
             "若使用滚动平均、变化幅度等衍生指标，证据表中必须单独标注指标名、计算方法、来源日期。",
+            "若正文写“DGS10的5日均值”“DGS10的10日均值”“DGS30的5日均值”“DGS30的10日均值”或类似 rolling average 数值，证据表必须先列出对应 exact metric_key（例如 dgs10_5d_avg / dgs10_10d_avg / dgs30_5d_avg / dgs30_10d_avg）。",
             "可以讨论 10Y / 30Y 是否接近 5%，但必须说明数据来自 FRED 日度观察，不代表盘中高点。",
             "如果用户说前几天收益率高于 5%，而 data package 只有 FRED daily，必须回答：当前数据包只能验证日度观察值和近期高点，不能验证盘中高点。",
             "标题可以写“30年期美债5%关口”，但正文必须解释这是 FRED 日度观察值和阈值观察，不是盘中高点，也不等于确认突破。",
@@ -137,6 +141,8 @@ def build_deepseek_prompt_package(
             "涉及名义收益率、实际利率、通胀预期和黄金时，必须使用关系：名义收益率 ≈ 实际利率 + 通胀预期 + 期限溢价。",
             "如果没有变化分解，不得写“主要由实际利率驱动”或“主要力量是实际利率”；只能写“实际利率处于高位，是重要解释变量”，并说明数据不足以精确分解 DGS30 上行来源。",
             "同样不得写“主要由实际利率支撑”“主要由实际利率解释”“实际利率是主因”“当前数据正是这种情景”。只能说 real_yield_10y 处于高位，可能构成重要解释变量或压力来源之一。",
+            "可以说 real_yield_10y 是成长股估值和黄金机会成本的重要压力变量；可以说 nominal_yield_10y、breakeven_inflation_10y、real_yield_10y 在定义上可用于拆解名义利率与通胀预期/实际利率的关系；应使用“分解上对应”“构成压力变量”“与机会成本相关”等条件性机制表述。",
+            "没有额外因果证据时，禁止写“主要由实际利率驱动”“实际利率是唯一主导因素”“名义利率上行主要由实际利率拉动”“黄金压力主要由实际利率决定”。如果讨论 real_yield，应避免强因果措辞，只能写成条件性机制。",
             "注意期限不一致：DGS30 是 30Y nominal yield，DFII10/T10YIE 是 10Y 口径，不能机械相减或直接解释全部 30Y。",
             "不得写“债券市场相信油价是暂时冲击”“市场相信长期通胀预期稳固”这类心理归因；可以写“当前 breakeven 数据未显示同步明显上行，因此暂不能确认通胀预期失控”。",
             "不得写油价上涨会直接推升实际利率；不得写通胀预期上升必然导致黄金上涨或必然导致黄金下跌；不得把盈亏平衡通胀率上升等同于实际利率上升。",
