@@ -6,7 +6,15 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from . import bls_provider, alpha_vantage_provider, fed_provider, fred_provider, treasury_provider, yfinance_provider
+from . import (
+    alpha_vantage_provider,
+    bea_provider,
+    bls_provider,
+    fed_provider,
+    fred_provider,
+    treasury_provider,
+    yfinance_provider,
+)
 
 
 MARKET_DATA_KEYS = ("sp500", "nasdaq", "nasdaq100", "gold")
@@ -374,6 +382,9 @@ def get_market_item(key: str, config: dict) -> dict:
                 item["series_id"] = result.get("series_id") or candidate.get("series_id")
             if result.get("fallback_series") or candidate.get("fallback_series"):
                 item["fallback_series"] = result.get("fallback_series") or candidate.get("fallback_series")
+            for metadata_key in ("bea_dataset", "table", "line", "frequency", "unit"):
+                if result.get(metadata_key) is not None:
+                    item[metadata_key] = result[metadata_key]
             if result.get("symbol") or candidate.get("symbol"):
                 item["symbol"] = result.get("symbol") or candidate.get("symbol")
             if result.get("observation_date"):
@@ -494,6 +505,12 @@ def _package_item_from_config(
 def _bls_config(config: dict, key: str) -> dict:
     bls_series = _optional_mapping(config, "bls_series")
     item = bls_series.get(key)
+    return item if isinstance(item, dict) else {}
+
+
+def _bea_config(config: dict, key: str) -> dict:
+    bea_series = _optional_mapping(config, "bea_series")
+    item = bea_series.get(key)
     return item if isinstance(item, dict) else {}
 
 
@@ -1365,6 +1382,14 @@ def _package_attempt(result: dict, series_id: str, item_config: dict) -> dict:
         attempt["definition_note"] = result["definition_note"]
     if result.get("unit"):
         attempt["unit"] = result["unit"]
+    if result.get("bea_dataset"):
+        attempt["bea_dataset"] = result["bea_dataset"]
+    if result.get("table"):
+        attempt["table"] = result["table"]
+    if result.get("line"):
+        attempt["line"] = result["line"]
+    if result.get("frequency"):
+        attempt["frequency"] = result["frequency"]
     return attempt
 
 
@@ -1505,8 +1530,14 @@ def _market_regime_classification_rules() -> dict[str, dict[str, Any]]:
 
 
 def _provider_candidates(key: str, config: dict) -> list[dict]:
-    if key in {"fedfunds", "pce"}:
+    if key == "fedfunds":
         return [_fred_candidate(key, config)]
+
+    if key == "pce":
+        return [
+            _fred_candidate(key, config),
+            _bea_candidate("headline_pce", config),
+        ]
 
     if key in {"cpi", "nonfarm"}:
         return [
@@ -1856,6 +1887,36 @@ def _bls_candidate(key: str, config: dict) -> dict:
     }
 
 
+def _bea_candidate(key: str, config: dict) -> dict:
+    item_config = _bea_config(config, key)
+    table = str(item_config.get("table") or "").strip()
+    line = str(item_config.get("line") or "").strip()
+    primary_source = str(item_config.get("primary_source") or "").strip()
+    if not table or not line:
+        return {
+            "provider": "config",
+            "source": "config",
+            "name": key,
+            "asset_type": "inflation",
+            "error": f"bea_series.{key}.table or line not configured",
+        }
+    return {
+        "provider": "bea",
+        "series_key": key,
+        "name": key,
+        "asset_type": "inflation",
+        "source_tier": item_config.get("source_tier") or "official_fallback",
+        "primary_source": primary_source or "FRED",
+        "fallback_used": True,
+        "fallback_reason": "primary_source_unavailable",
+        "definition_note": item_config.get("definition_note"),
+        "table": table,
+        "line": line,
+        "frequency": item_config.get("frequency"),
+        "unit": item_config.get("unit"),
+    }
+
+
 def _call_provider(candidate: dict) -> dict:
     provider = candidate["provider"]
 
@@ -1870,6 +1931,9 @@ def _call_provider(candidate: dict) -> dict:
             str(candidate["series_id"]),
             primary_source=str(candidate.get("primary_source") or ""),
         )
+
+    if provider == "bea":
+        return bea_provider.get_latest_pce_price_index(str(candidate["series_key"]))
 
     if provider == "treasury":
         return treasury_provider.get_par_yield(str(candidate["maturity"]))
@@ -2013,6 +2077,14 @@ def _official_fallback_for_fred_series(series_id: str) -> dict:
             bls_series_id,
             primary_source=f"FRED:{series_id}",
         )
+
+    bea_series_by_fred = {
+        "PCEPI": "headline_pce",
+        "PCEPILFE": "core_pce",
+    }
+    bea_series_key = bea_series_by_fred.get(series_id)
+    if bea_series_key:
+        return bea_provider.get_latest_pce_price_index(bea_series_key)
 
     maturity_by_series = {
         "DGS2": "2y",

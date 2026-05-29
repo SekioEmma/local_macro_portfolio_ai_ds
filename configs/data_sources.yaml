@@ -40,6 +40,28 @@ bls_series:
     primary_source: "FRED:PAYEMS"
     definition_note: "BLS official fallback; not FRED; Current Employment Statistics total nonfarm all employees, seasonally adjusted, thousands of persons."
 
+bea_series:
+  headline_pce:
+    bea_dataset: "NIPA"
+    table: "T20804"
+    line: "1"
+    frequency: "M"
+    unit: "index_2017_100"
+    source_tier: "official_fallback"
+    validation_status: "verified_candidate"
+    primary_source: "FRED:PCEPI"
+    definition_note: "BEA official fallback; not FRED; NIPA Table 2.8.4 line 1, Personal consumption expenditures (PCE), monthly Fisher price index, index level 2017=100."
+  core_pce:
+    bea_dataset: "NIPA"
+    table: "T20804"
+    line: "25"
+    frequency: "M"
+    unit: "index_2017_100"
+    source_tier: "official_fallback"
+    validation_status: "verified_candidate"
+    primary_source: "FRED:PCEPILFE"
+    definition_note: "BEA official fallback; not FRED; NIPA Table 2.8.4 line 25, PCE excluding food and energy, monthly Fisher price index, index level 2017=100."
+
 historical_market_assets:
   spy:
     symbol: "SPY"
