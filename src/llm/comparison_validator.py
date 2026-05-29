@@ -171,7 +171,7 @@ def _external_source_mentions(text: str, facts: dict[str, Any]) -> dict[str, lis
                 continue
             if source.lower() in allowed_sources:
                 continue
-            if _has_boundary_marker(sentence):
+            if _has_boundary_marker(sentence) or _external_source_boundary_mention(source, sentence):
                 boundary.append(source)
             elif re.search(r"报道|数据显示|根据|引用|指出|称|预测|认为|数据", sentence):
                 unsupported.append(source)
@@ -181,6 +181,18 @@ def _external_source_mentions(text: str, facts: dict[str, Any]) -> dict[str, lis
         "unsupported_mentions": sorted(set(unsupported)),
         "boundary_mentions": sorted(set(boundary)),
     }
+
+
+def _external_source_boundary_mention(source: str, sentence: str) -> bool:
+    if source.lower() == "fedwatch":
+        if re.search(
+            r"(?:缺失|无|没有|未提供|无法|不能|不可|not available|missing)[^\n。；]{0,24}FedWatch|"
+            r"FedWatch[^\n。；]{0,24}(?:缺失|无|没有|未提供|无法|不能|不可|not available|missing)",
+            sentence,
+            re.IGNORECASE,
+        ):
+            return True
+    return False
 
 
 def _unsupported_market_data_claims(text: str, facts: dict[str, Any]) -> list[str]:
@@ -216,6 +228,8 @@ def _unsupported_market_data_claims(text: str, facts: dict[str, Any]) -> list[st
         if _is_intraday_boundary_statement(sentence):
             continue
         if _is_dgs_threshold_topic_only(sentence):
+            continue
+        if _is_conditional_dgs_breakout_hypothesis(sentence):
             continue
         if not _requires_context_backed_dgs_check(sentence):
             continue
@@ -612,6 +626,15 @@ def _dgs_breakout_statement(text: str) -> bool:
     )
 
 
+def _is_conditional_dgs_breakout_hypothesis(text: str) -> bool:
+    return bool(
+        re.search(r"(?:如果|假如|若|假设|if)", text, re.IGNORECASE)
+        and re.search(DGS_CONTEXT_LABEL_PATTERN, text, re.IGNORECASE)
+        and re.search(r"(?:进入|高于|超过|above)[^\n。；]{0,16}5\s*[%％]?", text, re.IGNORECASE)
+        and re.search(r"(?:满足确认条件|确认条件|confirmed)", text, re.IGNORECASE)
+    )
+
+
 def _dgs_negative_breakout_statement(text: str) -> bool:
     return bool(
         re.search(r"(?:(?:突破确认|确认值)[^\n。；]{0,12}(?:False|false|否|未|不成立)|未确认突破)", text, re.IGNORECASE)
@@ -731,6 +754,8 @@ def _dgs_breakout_confirmation_conflicts(text: str, facts: dict[str, Any]) -> li
     for sentence in _sentences(text):
         if _dgs_false_breakout_boundary(sentence, facts):
             continue
+        if _dgs_mixed_breakout_status_boundary(sentence, facts):
+            continue
         if _has_boundary_marker(sentence) or _is_dgs_threshold_topic_only(sentence):
             continue
         if not re.search(conflict_pattern, sentence, re.IGNORECASE):
@@ -753,6 +778,8 @@ def _dgs_5pct_wording_without_confirmation(text: str, facts: dict[str, Any]) -> 
     )
     for sentence in _sentences(text):
         if _dgs_false_breakout_boundary(sentence, facts):
+            continue
+        if _dgs_mixed_breakout_status_boundary(sentence, facts):
             continue
         if _has_boundary_marker(sentence) or _is_dgs_threshold_topic_only(sentence):
             continue
@@ -828,6 +855,30 @@ def _dgs_false_breakout_boundary(text: str, facts: dict[str, Any]) -> bool:
     ):
         return False
     return True
+
+
+def _dgs_mixed_breakout_status_boundary(text: str, facts: dict[str, Any]) -> bool:
+    matches = re.findall(
+        r"(dgs(?:10|30)_5pct_breakout_confirmed)\s*=\s*(true|false)",
+        text,
+        re.IGNORECASE,
+    )
+    if len(matches) < 2:
+        return False
+    values = facts.get("provided_market_data_values")
+    if not isinstance(values, dict):
+        return False
+    seen_true = False
+    seen_false = False
+    for raw_key, raw_value in matches:
+        key = raw_key.lower()
+        expected = raw_value.lower() == "true"
+        item = values.get(key)
+        if not isinstance(item, dict) or item.get("value") is not expected or item.get("status") != "ok":
+            return False
+        seen_true = seen_true or expected
+        seen_false = seen_false or not expected
+    return seen_true and seen_false
 
 
 def _unsupported_inflation_trend_or_surprise(text: str, facts: dict[str, Any]) -> list[str]:
@@ -979,7 +1030,7 @@ def _body_metric_not_in_evidence_table(text: str, facts: dict[str, Any]) -> list
             numbers_to_check = [
                 number
                 for number in sentence_numbers
-                if not _is_threshold_reference_number(number, clean_sentence)
+                if not _is_contextual_metric_number(number, clean_sentence)
             ]
             if numbers_to_check and not all(
                 any(_close_enough(number, table_number, tolerance=_metric_number_tolerance(number)) for table_number in table_numbers)
@@ -1051,6 +1102,8 @@ def _strip_dates(text: str) -> str:
     text = re.sub(r"20\d{2}[-/年]\d{1,2}(?:[-/月]\d{1,2}日?)?", "", text)
     text = re.sub(r"20\d{2}\s*年", "", text)
     text = re.sub(r"\d{1,2}\s*月(?:份|以后|以来|之前|初|中旬|下旬|上旬)?", "", text)
+    text = re.sub(r"\d{1,2}\s*日", "", text)
+    text = re.sub(r"距今\s*约?\s*\d+(?:\.\d+)?\s*天", "", text)
     return text
 
 
@@ -1062,6 +1115,21 @@ def _is_threshold_reference_number(number: float, text: str) -> bool:
     return _close_enough(number, 5.0, tolerance=0.0001) and bool(
         re.search(r"5\s*[%％]?\s*(?:关口|阈值|附近|以上|上方)", text)
     )
+
+
+def _is_contextual_metric_number(number: float, text: str) -> bool:
+    if _is_threshold_reference_number(number, text):
+        return True
+    if re.search(r"(?:距|距离)[^\n。；]{0,24}5\s*[%％]?[^\n。；]{0,24}(?:基点|bp|bps)", text, re.IGNORECASE):
+        if 0 <= number <= 300:
+            return True
+    if re.search(r"(?:最近|过去|近)[^\n。；]{0,12}(?:日度观察|个日度观察|个交易日|天|日)", text):
+        if float(number).is_integer() and 1 <= number <= 60:
+            return True
+    if re.search(r"(?:freshness|距今|正常日度|观察日|observation_date)", text, re.IGNORECASE):
+        if float(number).is_integer() and 0 <= number <= 31:
+            return True
+    return False
 
 
 def _metric_number_tolerance(number: float) -> float:
@@ -1353,6 +1421,8 @@ def _current_vs_target_allocation_confusion(text: str, facts: dict[str, Any]) ->
     if not equity_underweight:
         return False
     for sentence in _sentences(text):
+        if _unsupported_allocation_attribution(sentence):
+            return True
         if _has_boundary_marker(sentence):
             continue
         if not re.search(r"(?:当前|本地快照|持仓快照|现在)", sentence, re.IGNORECASE):
@@ -1367,6 +1437,25 @@ def _current_vs_target_allocation_confusion(text: str, facts: dict[str, Any]) ->
         if equity_high:
             return True
     return False
+
+
+def _unsupported_allocation_attribution(sentence: str) -> bool:
+    if not re.search(
+        r"(?:组合|配置|偏离|权益|标普|纳指|sp500|nasdaq|短债|short_bond|黄金|gold|高配|低配|防御型偏斜)",
+        sentence,
+        re.IGNORECASE,
+    ):
+        return False
+    attribution_patterns = [
+        r"(?:主要原因|原因是|主要由|由[^\n。；]{0,20}造成|来自|源于|归因于|反映了)[^\n。；]{0,40}(?:权益市值收缩|市场价格下跌|价格下跌|市值收缩|利率重定价|利率压力|风险偏好收缩|宏观压力)",
+        r"(?:组合|配置|偏离|权益|短债|黄金)[^\n。；]{0,40}自然呈现[^\n。；]{0,20}(?:防御型偏斜|防御性偏斜)",
+        r"(?:防御型偏斜|防御性偏斜)[^\n。；]{0,40}(?:反映|来自|源于|由|因为|由于)[^\n。；]{0,40}(?:利率压力|风险偏好收缩|宏观压力)",
+    ]
+    if not any(re.search(pattern, sentence, re.IGNORECASE) for pattern in attribution_patterns):
+        return False
+    if re.search(r"(?:不能|无法|不支持)[^\n。；]{0,24}(?:归因|成因|分解)", sentence, re.IGNORECASE):
+        return bool(re.search(r"自然呈现|反映了|主要原因|主要由|源于|归因于|由[^\n。；]{0,20}造成", sentence, re.IGNORECASE))
+    return True
 
 
 def _stale_data_used_as_current(text: str, facts: dict[str, Any]) -> bool:
