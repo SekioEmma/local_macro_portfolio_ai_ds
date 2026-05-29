@@ -60,9 +60,13 @@ def main() -> None:
             snapshot,
             (*IMPORTANT_OPTIONAL_KEYS, *OPTIONAL_MARKET_KEYS),
         )
+        fallback_keys = _required_core_fallback_keys(snapshot)
         if optional_failures:
             snapshot["status"] = "partial"
             snapshot["error"] = "Optional market data unavailable: " + ", ".join(optional_failures)
+        elif fallback_keys:
+            snapshot["status"] = "ok_with_fallbacks"
+            snapshot["error"] = "Required core market data used provider fallbacks: " + ", ".join(fallback_keys)
         else:
             snapshot["status"] = "ok"
             snapshot["error"] = None
@@ -131,6 +135,15 @@ def _failed_optional_keys(snapshot: dict, keys: tuple[str, ...]) -> list[str]:
         if not isinstance(item, dict) or item.get("status") != "ok":
             failed.append(key)
     return failed
+
+
+def _required_core_fallback_keys(snapshot: dict) -> list[str]:
+    fallback_keys = []
+    for key in REQUIRED_CORE_KEYS:
+        item = _find_data_item(snapshot, key)
+        if isinstance(item, dict) and item.get("fallback_used") is True:
+            fallback_keys.append(key)
+    return fallback_keys
 
 
 def _find_data_item(snapshot: dict, key: str) -> dict | None:
@@ -276,6 +289,9 @@ def _status_by_keys(snapshot: dict, keys: tuple[str, ...]) -> dict:
             "source": item.get("source"),
             "value_present": item.get("value") is not None,
             "error": item.get("error"),
+            "primary_source": item.get("primary_source"),
+            "fallback_used": item.get("fallback_used"),
+            "fallback_reason": item.get("fallback_reason"),
         }
     return statuses
 

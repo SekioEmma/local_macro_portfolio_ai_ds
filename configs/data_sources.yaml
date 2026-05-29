@@ -63,6 +63,16 @@ optional_market_keys:
   - gold
 
 market_symbols:
+  sp500:
+    symbol: "^GSPC"
+    name: "S&P 500 Index"
+    provider: "yfinance"
+    asset_type: "market_index"
+  nasdaq:
+    symbol: "^IXIC"
+    name: "NASDAQ Composite Index"
+    provider: "yfinance"
+    asset_type: "market_index"
   nasdaq100:
     symbol: "^NDX"
     name: "NASDAQ 100 Index"

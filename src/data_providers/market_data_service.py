@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from . import alpha_vantage_provider, fed_provider, fred_provider, yfinance_provider
+from . import alpha_vantage_provider, fed_provider, fred_provider, treasury_provider, yfinance_provider
 
 
 MARKET_DATA_KEYS = ("sp500", "nasdaq", "nasdaq100", "gold")
@@ -336,6 +336,7 @@ def get_market_item(key: str, config: dict) -> dict:
 
     result_name = _first_candidate_name(candidates, key)
     asset_type = _first_candidate_asset_type(candidates)
+    primary_source = _candidate_source_label(candidates[0]) if candidates else None
 
     for candidate in candidates:
         call_candidate = candidate
@@ -362,9 +363,17 @@ def get_market_item(key: str, config: dict) -> dict:
                 "status": "ok",
                 "error": None,
                 "attempted_sources": attempts,
+                "primary_source": primary_source,
+                "fallback_used": bool(candidate.get("fallback_used")),
             }
+            if candidate.get("fallback_reason"):
+                item["fallback_reason"] = candidate["fallback_reason"]
+            if result.get("definition_note") or candidate.get("definition_note"):
+                item["definition_note"] = result.get("definition_note") or candidate.get("definition_note")
             if result.get("series_id") or candidate.get("series_id"):
                 item["series_id"] = result.get("series_id") or candidate.get("series_id")
+            if result.get("fallback_series") or candidate.get("fallback_series"):
+                item["fallback_series"] = result.get("fallback_series") or candidate.get("fallback_series")
             if result.get("symbol") or candidate.get("symbol"):
                 item["symbol"] = result.get("symbol") or candidate.get("symbol")
             if result.get("observation_date"):
@@ -511,8 +520,41 @@ def _fred_package_item(
         )
 
     result = fred_provider.get_fred_latest(series_id)
+    attempts = [_package_attempt(result, series_id, item_config)]
     value = _to_float_or_none(result.get("value"))
     if result.get("status") != "ok" or value is None:
+        fallback_result = _treasury_fallback_for_fred_series(series_id)
+        fallback_value = _to_float_or_none(fallback_result.get("value"))
+        if fallback_result.get("status") == "ok" and fallback_value is not None:
+            attempts.append(_package_attempt(fallback_result, series_id, item_config))
+            observation_date = fallback_result.get("observation_date")
+            return _package_item(
+                key=key,
+                name=name,
+                value=fallback_value,
+                unit=item_config.get("unit"),
+                observation_date=observation_date,
+                source=fallback_result.get("source"),
+                source_tier=fallback_result.get("source_tier") or "official_fallback",
+                freshness=_package_freshness(
+                    observation_date,
+                    expected_frequency=expected_frequency,
+                    max_stale_days=max_stale_days,
+                ),
+                status="ok",
+                error=None,
+                interpretation_hint=item_config.get("interpretation_hint"),
+                risk_relevance=item_config.get("risk_relevance"),
+                timestamp=fallback_result.get("timestamp") or timestamp,
+                attempted_sources=attempts,
+                primary_source=source,
+                fallback_used=True,
+                fallback_reason="primary_source_unavailable",
+                fallback_series=fallback_result.get("fallback_series"),
+                source_series=fallback_result.get("fallback_series"),
+                definition_note=fallback_result.get("definition_note"),
+            )
+
         return _package_item(
             key=key,
             name=name,
@@ -528,7 +570,9 @@ def _fred_package_item(
             risk_relevance=item_config.get("risk_relevance"),
             timestamp=result.get("timestamp") or timestamp,
             series_id=series_id,
-            attempted_sources=[_package_attempt(result, series_id, item_config)],
+            attempted_sources=attempts,
+            primary_source=source,
+            fallback_used=False,
         )
 
     observation_date = result.get("observation_date")
@@ -551,7 +595,9 @@ def _fred_package_item(
         risk_relevance=item_config.get("risk_relevance"),
         timestamp=result.get("timestamp") or timestamp,
         series_id=series_id,
-        attempted_sources=[_package_attempt(result, series_id, item_config)],
+        attempted_sources=attempts,
+        primary_source=source,
+        fallback_used=False,
     )
 
 
@@ -1297,15 +1343,21 @@ def _package_item(
 
 
 def _package_attempt(result: dict, series_id: str, item_config: dict) -> dict:
-    return {
+    attempt = {
         "source": result.get("source") or "FRED",
         "status": result.get("status", "error"),
         "error": result.get("error"),
         "timestamp": result.get("timestamp"),
-        "series_id": result.get("series_id") or series_id,
         "observation_date": result.get("observation_date"),
-        "source_tier": item_config.get("source_tier"),
+        "source_tier": result.get("source_tier") or item_config.get("source_tier"),
     }
+    if result.get("series_id") or result.get("source") in {None, "FRED"}:
+        attempt["series_id"] = result.get("series_id") or series_id
+    if result.get("fallback_series"):
+        attempt["fallback_series"] = result["fallback_series"]
+    if result.get("definition_note"):
+        attempt["definition_note"] = result["definition_note"]
+    return attempt
 
 
 def _fred_history(series_id: str, limit: int) -> list[dict]:
@@ -1445,8 +1497,25 @@ def _market_regime_classification_rules() -> dict[str, dict[str, Any]]:
 
 
 def _provider_candidates(key: str, config: dict) -> list[dict]:
-    if key in {"sp500", "nasdaq", "dgs10", "fedfunds", "cpi", "pce", "nonfarm"}:
+    if key in {"fedfunds", "cpi", "pce", "nonfarm"}:
         return [_fred_candidate(key, config)]
+
+    if key in {"sp500", "nasdaq"}:
+        return [
+            _fred_candidate(key, config),
+            _yfinance_candidate(
+                key,
+                config,
+                notes="Yahoo Finance market quote fallback; not official macro/statistical source.",
+                fallback_used=True,
+            ),
+        ]
+
+    if key == "dgs10":
+        return [
+            _fred_candidate(key, config),
+            _treasury_yield_candidate("DGS10", "10y"),
+        ]
 
     if key == "usd_cny":
         return [
@@ -1459,13 +1528,14 @@ def _provider_candidates(key: str, config: dict) -> list[dict]:
                 key,
                 config,
                 notes="Yahoo CNY=X is treated as USD/CNY, CNY per 1 USD.",
+                fallback_used=True,
             ),
         ]
 
     if key == "nasdaq100":
         return [
             _fred_candidate(key, config),
-            _yfinance_candidate(key, config),
+            _yfinance_candidate(key, config, fallback_used=True),
         ]
 
     if key == "gold":
@@ -1611,6 +1681,7 @@ def _fred_candidate(key: str, config: dict, notes: str | None = None) -> dict:
         "series_id": str(series_id),
         "name": series_config.get("name") or key,
         "asset_type": series_config.get("asset_type"),
+        "source_tier": "official_api",
     }
     if notes:
         candidate["notes"] = notes
@@ -1707,6 +1778,7 @@ def _yfinance_candidate(
     key: str,
     config: dict,
     notes: str | None = None,
+    fallback_used: bool = True,
 ) -> dict:
     market_symbols = _optional_mapping(config, "market_symbols")
     symbol_config = market_symbols.get(key)
@@ -1735,6 +1807,10 @@ def _yfinance_candidate(
         "symbol": str(symbol),
         "name": symbol_config.get("name") or key,
         "asset_type": symbol_config.get("asset_type"),
+        "source_tier": "unofficial_fallback",
+        "definition_note": "Yahoo Finance market quote fallback; not official macro/statistical source.",
+        "fallback_used": fallback_used,
+        "fallback_reason": "primary_source_unavailable",
     }
     if notes:
         candidate["notes"] = notes
@@ -1749,6 +1825,9 @@ def _call_provider(candidate: dict) -> dict:
 
     if provider == "yfinance":
         return yfinance_provider.get_latest_price(candidate["symbol"])
+
+    if provider == "treasury":
+        return treasury_provider.get_par_yield(str(candidate["maturity"]))
 
     if provider == "manual":
         return _get_manual_market_item(candidate["key"], candidate["path"])
@@ -1769,6 +1848,20 @@ def _call_provider(candidate: dict) -> dict:
     }
 
 
+def _treasury_yield_candidate(primary_series_id: str, maturity: str) -> dict:
+    return {
+        "provider": "treasury",
+        "maturity": maturity,
+        "name": f"U.S. Treasury {maturity} par yield",
+        "asset_type": "interest_rate",
+        "source_tier": "official_fallback",
+        "primary_source": f"FRED:{primary_series_id}",
+        "fallback_used": True,
+        "fallback_reason": "primary_source_unavailable",
+        "definition_note": treasury_provider.DEFINITION_NOTE,
+    }
+
+
 def _attempt_summary(candidate: dict, result: dict) -> dict:
     summary = {
         "source": result.get("source") or candidate.get("source") or candidate["provider"],
@@ -1779,6 +1872,16 @@ def _attempt_summary(candidate: dict, result: dict) -> dict:
 
     if candidate.get("series_id") or result.get("series_id"):
         summary["series_id"] = result.get("series_id") or candidate.get("series_id")
+    if candidate.get("primary_source") or result.get("primary_source"):
+        summary["primary_source"] = result.get("primary_source") or candidate.get("primary_source")
+    if candidate.get("fallback_used") is not None:
+        summary["fallback_used"] = bool(candidate.get("fallback_used"))
+    if candidate.get("fallback_reason") or result.get("fallback_reason"):
+        summary["fallback_reason"] = result.get("fallback_reason") or candidate.get("fallback_reason")
+    if result.get("definition_note") or candidate.get("definition_note"):
+        summary["definition_note"] = result.get("definition_note") or candidate.get("definition_note")
+    if result.get("fallback_series") or candidate.get("fallback_series"):
+        summary["fallback_series"] = result.get("fallback_series") or candidate.get("fallback_series")
     if candidate.get("symbol") or result.get("symbol"):
         summary["symbol"] = result.get("symbol") or candidate.get("symbol")
     if result.get("observation_date"):
@@ -1841,6 +1944,34 @@ def _attempt_label(attempt: dict) -> str:
     if attempt.get("symbol"):
         return f"{label} {attempt['symbol']}"
     return label
+
+
+def _candidate_source_label(candidate: dict) -> str:
+    if candidate.get("primary_source"):
+        return str(candidate["primary_source"])
+    if candidate.get("provider") == "fred" and candidate.get("series_id"):
+        return f"FRED:{candidate['series_id']}"
+    if candidate.get("provider") == "treasury":
+        return "U.S. Treasury"
+    return str(candidate.get("source") or candidate.get("provider") or "unknown")
+
+
+def _treasury_fallback_for_fred_series(series_id: str) -> dict:
+    maturity_by_series = {
+        "DGS2": "2y",
+        "DGS10": "10y",
+        "DGS30": "30y",
+    }
+    maturity = maturity_by_series.get(series_id)
+    if maturity is None:
+        return {
+            "status": "not_configured",
+            "error": f"No Treasury fallback configured for {series_id}",
+            "source": "U.S. Treasury",
+            "source_tier": "official_fallback",
+            "timestamp": _utc_now(),
+        }
+    return treasury_provider.get_par_yield(maturity)
 
 
 def _alpha_vantage_request_delay_seconds(config: dict) -> float:
