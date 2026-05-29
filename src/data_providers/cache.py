@@ -5,7 +5,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def save_json_cache(path: str, data: dict) -> None:
+def save_json_cache(
+    path: str,
+    data: dict,
+    *,
+    skip_error_snapshot: bool = False,
+) -> bool:
+    if skip_error_snapshot and data.get("status") == "error":
+        return False
+
     cache_path = Path(path)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -16,6 +24,7 @@ def save_json_cache(path: str, data: dict) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    return True
 
 
 def load_json_cache(path: str, max_age_seconds: int) -> dict | None:
@@ -29,6 +38,8 @@ def load_json_cache(path: str, max_age_seconds: int) -> dict | None:
         return None
 
     if not isinstance(payload, dict):
+        return None
+    if payload.get("status") == "error":
         return None
 
     modified_at = datetime.fromtimestamp(

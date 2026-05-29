@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -29,6 +30,11 @@ SNAPSHOT_GENERATORS = {
     PORTFOLIO_SNAPSHOT_PATH: PROJECT_ROOT / "scripts" / "run_portfolio_check.py",
     MARKET_SNAPSHOT_PATH: PROJECT_ROOT / "scripts" / "run_market_data_check.py",
     MARKET_TEMPERATURE_PATH: PROJECT_ROOT / "scripts" / "run_market_temperature_check.py",
+}
+SNAPSHOT_MAX_AGE_SECONDS = {
+    PORTFOLIO_SNAPSHOT_PATH: 24 * 60 * 60,
+    MARKET_SNAPSHOT_PATH: 24 * 60 * 60,
+    MARKET_TEMPERATURE_PATH: 24 * 60 * 60,
 }
 
 
@@ -58,7 +64,18 @@ def main() -> None:
 
 def _ensure_snapshot_files() -> None:
     for output_path, script_path in SNAPSHOT_GENERATORS.items():
-        if output_path.exists():
+        if _snapshot_is_fresh(output_path):
+            print(
+                json.dumps(
+                    {
+                        "snapshot": str(output_path.relative_to(PROJECT_ROOT)),
+                        "reused_existing_snapshot": True,
+                        "modified_time": _modified_time(output_path),
+                    },
+                    ensure_ascii=False,
+                ),
+                file=sys.stderr,
+            )
             continue
 
         subprocess.run(
@@ -68,6 +85,29 @@ def _ensure_snapshot_files() -> None:
             capture_output=True,
             text=True,
         )
+        if not _snapshot_is_fresh(output_path):
+            raise RuntimeError(
+                f"Snapshot was not refreshed within max_age_seconds: {output_path}"
+            )
+
+
+def _snapshot_is_fresh(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+
+    max_age_seconds = SNAPSHOT_MAX_AGE_SECONDS.get(path)
+    if max_age_seconds is None:
+        return True
+
+    modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+    age_seconds = (datetime.now(timezone.utc) - modified_at).total_seconds()
+    return age_seconds <= max_age_seconds
+
+
+def _modified_time(path: Path) -> str | None:
+    if not path.exists() or not path.is_file():
+        return None
+    return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -316,6 +317,7 @@ def get_market_item(key: str, config: dict) -> dict:
     generated_at = _utc_now()
     attempts: list[dict] = []
     candidates = _provider_candidates(key, config)
+    alpha_vantage_request_sent = False
 
     if not candidates:
         return _market_error(
@@ -336,8 +338,17 @@ def get_market_item(key: str, config: dict) -> dict:
     asset_type = _first_candidate_asset_type(candidates)
 
     for candidate in candidates:
-        result = _call_provider(candidate)
-        attempts.append(_attempt_summary(candidate, result))
+        call_candidate = candidate
+        if candidate.get("provider") == "alpha_vantage" and alpha_vantage_request_sent:
+            delay_seconds = _alpha_vantage_request_delay_seconds(config)
+            if delay_seconds > 0:
+                time.sleep(delay_seconds)
+                call_candidate = {**candidate, "delay_applied_seconds": delay_seconds}
+
+        result = _call_provider(call_candidate)
+        if candidate.get("provider") == "alpha_vantage" and result.get("request_sent"):
+            alpha_vantage_request_sent = True
+        attempts.append(_attempt_summary(call_candidate, result))
 
         value = _to_float_or_none(result.get("value"))
         if result.get("status") == "ok" and value is not None:
@@ -1786,6 +1797,10 @@ def _attempt_summary(candidate: dict, result: dict) -> dict:
         summary["notes"] = candidate["notes"]
     if result.get("notes"):
         summary["notes"] = result["notes"]
+    if result.get("request_sent") is not None:
+        summary["request_sent"] = bool(result.get("request_sent"))
+    if candidate.get("delay_applied_seconds") is not None:
+        summary["delay_applied_seconds"] = candidate["delay_applied_seconds"]
 
     return summary
 
@@ -1826,6 +1841,16 @@ def _attempt_label(attempt: dict) -> str:
     if attempt.get("symbol"):
         return f"{label} {attempt['symbol']}"
     return label
+
+
+def _alpha_vantage_request_delay_seconds(config: dict) -> float:
+    alpha_vantage_config = _optional_mapping(config, "alpha_vantage")
+    raw_delay = alpha_vantage_config.get("request_delay_seconds", 0)
+    try:
+        delay_seconds = float(raw_delay)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, delay_seconds)
 
 
 def _get_manual_market_item(key: str, path: str) -> dict:

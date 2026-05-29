@@ -49,6 +49,7 @@ def get_gold_spot() -> dict:
                 f"top_level_keys={_top_level_keys(payload)}; raw_preview={_raw_preview(payload)}"
             ),
             timestamp=generated_at,
+            request_sent=bool(payload_result.get("request_sent")),
         )
 
     observation_date = observation_date or _find_date_like_value(payload)
@@ -86,6 +87,7 @@ def get_gold_history_latest(interval: str = "daily") -> dict:
                 f"top_level_keys={_top_level_keys(payload)}; raw_preview={_raw_preview(payload)}"
             ),
             timestamp=generated_at,
+            request_sent=bool(payload_result.get("request_sent")),
         )
 
     observation_date, price = latest_record
@@ -124,6 +126,7 @@ def _request_alpha_vantage(function: str, params: dict, timestamp: str) -> dict:
             function=function,
             error=f"Alpha Vantage request failed: {exc}",
             timestamp=timestamp,
+            request_sent=True,
         )
 
     if response.status_code != 200:
@@ -131,6 +134,7 @@ def _request_alpha_vantage(function: str, params: dict, timestamp: str) -> dict:
             function=function,
             error=f"Alpha Vantage HTTP status {response.status_code}: {_text_preview(response.text)}",
             timestamp=timestamp,
+            request_sent=True,
         )
 
     try:
@@ -140,6 +144,7 @@ def _request_alpha_vantage(function: str, params: dict, timestamp: str) -> dict:
             function=function,
             error=f"Alpha Vantage response was not JSON: {_text_preview(response.text)}",
             timestamp=timestamp,
+            request_sent=True,
         )
 
     api_message = _alpha_vantage_api_message(payload)
@@ -148,6 +153,7 @@ def _request_alpha_vantage(function: str, params: dict, timestamp: str) -> dict:
             function=function,
             error=api_message,
             timestamp=timestamp,
+            request_sent=True,
         )
 
     return {
@@ -157,6 +163,7 @@ def _request_alpha_vantage(function: str, params: dict, timestamp: str) -> dict:
         "timestamp": timestamp,
         "status": "ok",
         "error": None,
+        "request_sent": True,
     }
 
 
@@ -354,6 +361,7 @@ def _gold_ok(
         "observation_date": observation_date,
         "status": "ok",
         "error": None,
+        "request_sent": True,
         "attempted_sources": [
             {
                 "source": SOURCE,
@@ -368,7 +376,13 @@ def _gold_ok(
     }
 
 
-def _gold_error(function: str, error: str, timestamp: str) -> dict:
+def _gold_error(
+    function: str,
+    error: str,
+    timestamp: str,
+    *,
+    request_sent: bool = False,
+) -> dict:
     return {
         "key": "gold",
         "name": "Gold price",
@@ -383,6 +397,7 @@ def _gold_error(function: str, error: str, timestamp: str) -> dict:
         "observation_date": None,
         "status": "error",
         "error": error,
+        "request_sent": request_sent,
     }
 
 

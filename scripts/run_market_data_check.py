@@ -72,7 +72,16 @@ def main() -> None:
     formatted_json = json.dumps(snapshot, ensure_ascii=False, indent=2)
     print(formatted_json)
 
-    save_json_cache(str(DEFAULT_OUTPUT_PATH), snapshot)
+    cache_saved = save_json_cache(
+        str(DEFAULT_OUTPUT_PATH),
+        snapshot,
+        skip_error_snapshot=True,
+    )
+    if not cache_saved:
+        print(
+            "Skipped cache save because market snapshot status=error.",
+            file=sys.stderr,
+        )
 
 
 def _required_core_errors(snapshot: dict) -> list[dict]:
