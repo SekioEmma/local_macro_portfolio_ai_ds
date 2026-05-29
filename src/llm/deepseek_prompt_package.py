@@ -105,6 +105,7 @@ def build_deepseek_prompt_package(
             "如果可用且正文会使用，DGS 派生指标优先列入证据表：dgs10_5d_avg、dgs10_10d_avg、dgs10_30d_high、dgs10_60d_high、dgs10_5pct_breakout_confirmed、dgs30_5d_avg、dgs30_10d_avg、dgs30_30d_high、dgs30_60d_high、dgs30_5pct_breakout_confirmed。",
             "DGS10/DGS30 日度 rolling average、recent high 和 threshold 指标必须写明来自 FRED daily observation，不是 intraday high。",
             "若正文引用 wti_oil、brent_oil、wti_oil_30d_change、brent_oil_30d_change 的具体数值，证据表必须以独立行列出 exact metric_key；如证据表没有 exact metric_key，正文不得引用该油价指标具体数值。",
+            "WTI 与 Brent 不得混用标签：正文引用 Brent 数值或 Brent 30日变动时，证据表必须列 brent_oil 和 brent_oil_30d_change；正文引用 WTI 数值或 WTI 30日变动时，证据表必须列 wti_oil 和 wti_oil_30d_change；不得在 WTI 标签下写 Brent 数值，也不得在 Brent 标签下写 WTI 数值。",
             "如果证据表没有列某个市场指标数值，正文只能定性说明其缺失或不用该数值推理。",
         ],
         "conditional_reasoning_rules": [
@@ -136,6 +137,7 @@ def build_deepseek_prompt_package(
             "如果 CPI/PCE/PPI 的 MoM/YoY 派生字段可用，可以基于同比/环比讨论趋势，但仍不能说 consensus surprise；没有 consensus_cpi/consensus_ppi 时，永远不能说“超预期/低于预期”。",
             "可以讨论 WTI/Brent 对通胀和利率的潜在传导，但不能机械等同于通胀失控。",
             "若正文写 WTI、Brent、wti_oil_30d_change 或 brent_oil_30d_change 的具体价格、百分比变化或数值，证据表必须先列出对应 exact metric_key（wti_oil / brent_oil / wti_oil_30d_change / brent_oil_30d_change）。",
+            "不得写“WTI: Brent报...”或“Brent: WTI报...”这类标签混用句；如果讨论 Brent，就使用 Brent 标签和 brent_oil / brent_oil_30d_change；如果讨论 WTI，就使用 WTI 标签和 wti_oil / wti_oil_30d_change。",
             "若 oil freshness=stale，必须使用固定表述：“截至 observation_date 的 WTI/Brent 数据曾显示能源价格压力；由于 freshness=stale，不能确认当前实时油价或当前能源压力。”",
             "如果某指标 freshness=stale，只能写“截至 observation_date 的数据曾显示”“作为近期/历史代理变量”或“需要后续更新验证”；不得写“当前正在”“短期正在飙升”“形成实时共振”，也不得把 stale oil data 当作当前实时油价。",
             "涉及实际利率时必须写“10年期实际利率 real_yield_10y”，不得写成“10年期通胀挂钩国债收益率”。",
@@ -145,6 +147,7 @@ def build_deepseek_prompt_package(
             "同样不得写“主要由实际利率支撑”“主要由实际利率解释”“实际利率是主因”“当前数据正是这种情景”。只能说 real_yield_10y 处于高位，可能构成重要解释变量或压力来源之一。",
             "可以说 real_yield_10y 是成长股估值和黄金机会成本的重要压力变量；可以说 nominal_yield_10y、breakeven_inflation_10y、real_yield_10y 在定义上可用于拆解名义利率与通胀预期/实际利率的关系；应使用“分解上对应”“构成压力变量”“与机会成本相关”等条件性机制表述。",
             "没有额外因果证据时，禁止写“主要由实际利率驱动”“实际利率是唯一主导因素”“名义利率上行主要由实际利率拉动”“黄金压力主要由实际利率决定”。如果讨论 real_yield，应避免强因果措辞，只能写成条件性机制。",
+            "同样禁止写“实际利率主导”“主要压力来自实际利率”“压力主要来自实际利率”；只能写 real_yield_10y 是压力变量之一、与折现率和黄金机会成本相关、在名义利率/通胀预期/实际利率分解中提供观察。",
             "注意期限不一致：DGS30 是 30Y nominal yield，DFII10/T10YIE 是 10Y 口径，不能机械相减或直接解释全部 30Y。",
             "不得写“债券市场相信油价是暂时冲击”“市场相信长期通胀预期稳固”这类心理归因；可以写“当前 breakeven 数据未显示同步明显上行，因此暂不能确认通胀预期失控”。",
             "不得写油价上涨会直接推升实际利率；不得写通胀预期上升必然导致黄金上涨或必然导致黄金下跌；不得把盈亏平衡通胀率上升等同于实际利率上升。",

@@ -924,7 +924,10 @@ def _unsupported_real_yield_primary_driver_claim(text: str) -> bool:
             continue
         if re.search(
             r"(?:(?:主要由|主要力量|主因|主要驱动)[^\n。；]{0,24}(?:实际利率|实际收益率|real\s*yield)|"
-            r"(?:实际利率|实际收益率|real\s*yield)[^\n。；]{0,24}(?:主要力量|主因|主要驱动))",
+            r"(?:实际利率|实际收益率|real\s*yield)[^\n。；]{0,24}(?:主要力量|主因|主要驱动|主导)|"
+            r"(?:主要压力|压力主要)[^\n。；]{0,12}(?:来自|由|源于)[^\n。；]{0,12}(?:实际利率|实际收益率|real\s*yield)|"
+            r"(?:黄金压力)[^\n。；]{0,16}(?:主要由|主要来自|决定于)[^\n。；]{0,12}(?:实际利率|实际收益率|real\s*yield)|"
+            r"(?:实际利率|实际收益率|real\s*yield)[^\n。；]{0,16}(?:决定|主导)[^\n。；]{0,16}(?:黄金压力|黄金))",
             sentence,
             re.IGNORECASE,
         ):
@@ -964,6 +967,9 @@ def _body_metric_not_in_evidence_table(text: str, facts: dict[str, Any]) -> list
         sentence_numbers = _market_metric_numbers(clean_sentence)
         if not sentence_numbers:
             continue
+        if _oil_label_mismatch(clean_sentence):
+            flagged.append(f"oil_label_mismatch: {sentence[:120]}")
+            continue
         for metric_name, labels in _market_metric_label_groups():
             if not _contains_any_label(clean_sentence, labels):
                 continue
@@ -982,6 +988,20 @@ def _body_metric_not_in_evidence_table(text: str, facts: dict[str, Any]) -> list
                 flagged.append(f"{metric_name}: {sentence[:120]}")
                 break
     return sorted(set(flagged))
+
+
+def _oil_label_mismatch(text: str) -> bool:
+    wti_label_with_brent_value = re.search(
+        r"(?:^|\b)WTI\s*[:：][^\n。；]{0,80}(?:Brent|brent_oil|brent_oil_30d_change)",
+        text,
+        re.IGNORECASE,
+    )
+    brent_label_with_wti_value = re.search(
+        r"(?:^|\b)Brent\s*[:：][^\n。；]{0,80}(?:WTI|wti_oil|wti_oil_30d_change)",
+        text,
+        re.IGNORECASE,
+    )
+    return bool(wti_label_with_brent_value or brent_label_with_wti_value)
 
 
 def _split_evidence_table(text: str) -> tuple[str, str]:

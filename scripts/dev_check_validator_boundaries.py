@@ -259,6 +259,21 @@ REGRESSION_CASES = {
         "| brent_oil_30d_change | Brent 30d change | 4.8 | percent | 2026-05-18 | FRED:DCOILBRENTEU | stale | 30d change，非实时油价 |\n\n"
         "截至 observation_date 的 WTI 为112.25美元/桶，Brent为118.75美元/桶；wti_oil_30d_change为6.2%，brent_oil_30d_change为4.8%，这些都是 stale 历史代理变量，不代表当前实时油价。"
     ),
+    "Brent under WTI label": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| brent_oil | Brent | 102.75 | USD per barrel | 2026-05-18 | FRED:DCOILBRENTEU | stale | 截至 observation_date 的 Brent 数据，非实时油价 |\n"
+        "| brent_oil_30d_change | Brent 30d change | -9.78 | percent | 2026-05-18 | FRED:DCOILBRENTEU | stale | 30d change，非实时油价 |\n\n"
+        "WTI: Brent报102.75美元/桶，30日变动达-9.78%，意味着近一个月全球油价的压力有所缓解。"
+    ),
+    "Brent exact evidence keys": (
+        "数据证据表\n"
+        "| metric_key | 指标 | 数值 | 单位 | observation_date | source | freshness/status | 用途/解释 |\n"
+        "| brent_oil | Brent | 118.75 | USD per barrel | 2026-05-18 | FRED:DCOILBRENTEU | stale | 截至 observation_date 的 Brent 数据，非实时油价 |\n"
+        "| brent_oil_30d_change | Brent 30d change | 4.8 | percent | 2026-05-18 | FRED:DCOILBRENTEU | stale | 30d change，非实时油价 |\n\n"
+        "截至 observation_date 的 Brent 为118.75美元/桶，brent_oil_30d_change为4.8%，这是 stale 历史代理变量，不代表当前实时油价。"
+    ),
+    "real yield primary driver wording": "黄金压力主要由实际利率决定，主要压力来自实际利率。",
 }
 
 
@@ -319,6 +334,35 @@ def main() -> int:
         failures.append("regression case raised unsupported_market_data_claim with exact oil metric keys")
     if exact_oil_soft.get("body_metric_not_in_evidence_table"):
         failures.append("regression case raised body_metric_not_in_evidence_table with exact oil metric keys")
+
+    brent_under_wti_result = validate_comparison_answer(
+        REGRESSION_CASES["Brent under WTI label"],
+        SYNTHETIC_FACTS,
+    )
+    brent_under_wti_soft = brent_under_wti_result.get("soft_flags", {})
+    if not (
+        brent_under_wti_result.get("hard_flags", {}).get("unsupported_market_data_claim")
+        or brent_under_wti_soft.get("body_metric_not_in_evidence_table")
+    ):
+        failures.append("regression case did not flag Brent values written under WTI label")
+
+    brent_exact_result = validate_comparison_answer(
+        REGRESSION_CASES["Brent exact evidence keys"],
+        SYNTHETIC_FACTS,
+    )
+    brent_exact_hard = brent_exact_result.get("hard_flags", {})
+    brent_exact_soft = brent_exact_result.get("soft_flags", {})
+    if brent_exact_hard.get("unsupported_market_data_claim"):
+        failures.append("regression case raised unsupported_market_data_claim with exact Brent metric keys")
+    if brent_exact_soft.get("body_metric_not_in_evidence_table"):
+        failures.append("regression case raised body_metric_not_in_evidence_table with exact Brent metric keys")
+
+    real_yield_driver_result = validate_comparison_answer(
+        REGRESSION_CASES["real yield primary driver wording"],
+        SYNTHETIC_FACTS,
+    )
+    if not real_yield_driver_result.get("soft_flags", {}).get("unsupported_real_yield_primary_driver_claim"):
+        failures.append("regression case did not soft-flag real_yield primary-driver wording")
 
     if failures:
         print("validator boundary check failed", file=sys.stderr)
