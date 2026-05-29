@@ -10,6 +10,7 @@ from . import (
     alpha_vantage_provider,
     bea_provider,
     bls_provider,
+    fedfunds_provider,
     fed_provider,
     fred_provider,
     treasury_provider,
@@ -382,7 +383,16 @@ def get_market_item(key: str, config: dict) -> dict:
                 item["series_id"] = result.get("series_id") or candidate.get("series_id")
             if result.get("fallback_series") or candidate.get("fallback_series"):
                 item["fallback_series"] = result.get("fallback_series") or candidate.get("fallback_series")
-            for metadata_key in ("bea_dataset", "table", "line", "frequency", "unit"):
+            for metadata_key in (
+                "bea_dataset",
+                "table",
+                "line",
+                "frequency",
+                "unit",
+                "source_series",
+                "rate_type",
+                "volume_in_billions",
+            ):
                 if result.get(metadata_key) is not None:
                     item[metadata_key] = result[metadata_key]
             if result.get("symbol") or candidate.get("symbol"):
@@ -1531,7 +1541,10 @@ def _market_regime_classification_rules() -> dict[str, dict[str, Any]]:
 
 def _provider_candidates(key: str, config: dict) -> list[dict]:
     if key == "fedfunds":
-        return [_fred_candidate(key, config)]
+        return [
+            _fred_candidate(key, config),
+            _fedfunds_candidate(),
+        ]
 
     if key == "pce":
         return [
@@ -1935,6 +1948,9 @@ def _call_provider(candidate: dict) -> dict:
     if provider == "bea":
         return bea_provider.get_latest_pce_price_index(str(candidate["series_key"]))
 
+    if provider == "fedfunds":
+        return fedfunds_provider.get_latest_effr()
+
     if provider == "treasury":
         return treasury_provider.get_par_yield(str(candidate["maturity"]))
 
@@ -1971,6 +1987,22 @@ def _treasury_yield_candidate(primary_series_id: str, maturity: str) -> dict:
     }
 
 
+def _fedfunds_candidate() -> dict:
+    return {
+        "provider": "fedfunds",
+        "name": "New York Fed daily EFFR",
+        "asset_type": "policy_rate",
+        "source_tier": "official_fallback",
+        "primary_source": fedfunds_provider.PRIMARY_SOURCE,
+        "fallback_used": True,
+        "fallback_reason": "primary_source_unavailable",
+        "fallback_series": fedfunds_provider.FALLBACK_SERIES,
+        "definition_note": fedfunds_provider.DEFINITION_NOTE,
+        "frequency": "daily",
+        "unit": "percent",
+    }
+
+
 def _attempt_summary(candidate: dict, result: dict) -> dict:
     summary = {
         "source": result.get("source") or candidate.get("source") or candidate["provider"],
@@ -2001,6 +2033,9 @@ def _attempt_summary(candidate: dict, result: dict) -> dict:
         summary["function"] = result.get("function") or candidate.get("function")
     if result.get("source_tier") or candidate.get("source_tier"):
         summary["source_tier"] = result.get("source_tier") or candidate.get("source_tier")
+    for metadata_key in ("frequency", "unit", "source_series"):
+        if result.get(metadata_key) or candidate.get(metadata_key):
+            summary[metadata_key] = result.get(metadata_key) or candidate.get(metadata_key)
     if candidate.get("path") or result.get("path"):
         summary["path"] = result.get("path") or candidate.get("path")
     if result.get("updated_at"):

@@ -38,10 +38,18 @@ References:
 
 ## FedFunds Research Only
 
-- `FEDFUNDS` remains FRED-only.
-- Future fallback research should look for a stable Federal Reserve or NY Fed official endpoint.
+- FRED `FEDFUNDS` is a monthly effective federal funds rate series.
+- NY Fed Markets Data API provides an official daily Effective Federal Funds Rate (`EFFR`) endpoint with `effectiveDate` and `percentRate`.
+- Phase 4 production fallback: if FRED `FEDFUNDS` is unavailable, use NY Fed daily `EFFR` only as a different-frequency official fallback.
+- Label NY Fed fallback output as `source_tier=official_fallback`, `frequency=daily`, `primary_source=FRED:FEDFUNDS`, and `fallback_series=NY Fed EFFR daily`.
+- Definition note must state: daily effective federal funds rate; not monthly FRED `FEDFUNDS` average.
 - Do not use yfinance or any non-official market source as a FedFunds replacement.
 - Do not use Treasury yields, SOFR, fed funds futures, market rates, or policy target-range values as substitutes for effective fed funds. A target range may only be modeled later as a distinct metric, not as `FEDFUNDS`.
+
+References:
+- New York Fed EFFR overview: https://www.newyorkfed.org/markets/reference-rates/effr
+- New York Fed Markets Data APIs: https://markets.newyorkfed.org/static/docs/markets-api.html
+- FRED `FEDFUNDS`: https://fred.stlouisfed.org/series/FEDFUNDS
 
 ## Treasury Reference
 
