@@ -17,6 +17,29 @@ alpha_vantage:
     symbol: "GOLD"
     interval: "daily"
 
+bls_series:
+  cpi:
+    series_id: "CUSR0000SA0"
+    name: "CPI-U All Items"
+    source_tier: "official_fallback"
+    validation_status: "verified_candidate"
+    primary_source: "FRED:CPIAUCSL"
+    definition_note: "BLS official fallback; not FRED; CPI-U all items, U.S. city average, seasonally adjusted monthly index."
+  core_cpi:
+    series_id: "CUSR0000SA0L1E"
+    name: "CPI-U All Items Less Food and Energy"
+    source_tier: "official_fallback"
+    validation_status: "verified_candidate"
+    primary_source: "FRED:CPILFESL"
+    definition_note: "BLS official fallback; not FRED; CPI-U all items less food and energy, U.S. city average, seasonally adjusted monthly index."
+  nonfarm:
+    series_id: "CES0000000001"
+    name: "All Employees, Total Nonfarm"
+    source_tier: "official_fallback"
+    validation_status: "verified_candidate"
+    primary_source: "FRED:PAYEMS"
+    definition_note: "BLS official fallback; not FRED; Current Employment Statistics total nonfarm all employees, seasonally adjusted, thousands of persons."
+
 historical_market_assets:
   spy:
     symbol: "SPY"

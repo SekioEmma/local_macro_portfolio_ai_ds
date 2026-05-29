@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from . import alpha_vantage_provider, fed_provider, fred_provider, treasury_provider, yfinance_provider
+from . import bls_provider, alpha_vantage_provider, fed_provider, fred_provider, treasury_provider, yfinance_provider
 
 
 MARKET_DATA_KEYS = ("sp500", "nasdaq", "nasdaq100", "gold")
@@ -491,6 +491,12 @@ def _package_item_from_config(
     )
 
 
+def _bls_config(config: dict, key: str) -> dict:
+    bls_series = _optional_mapping(config, "bls_series")
+    item = bls_series.get(key)
+    return item if isinstance(item, dict) else {}
+
+
 def _fred_package_item(
     *,
     key: str,
@@ -523,7 +529,7 @@ def _fred_package_item(
     attempts = [_package_attempt(result, series_id, item_config)]
     value = _to_float_or_none(result.get("value"))
     if result.get("status") != "ok" or value is None:
-        fallback_result = _treasury_fallback_for_fred_series(series_id)
+        fallback_result = _official_fallback_for_fred_series(series_id)
         fallback_value = _to_float_or_none(fallback_result.get("value"))
         if fallback_result.get("status") == "ok" and fallback_value is not None:
             attempts.append(_package_attempt(fallback_result, series_id, item_config))
@@ -1357,6 +1363,8 @@ def _package_attempt(result: dict, series_id: str, item_config: dict) -> dict:
         attempt["fallback_series"] = result["fallback_series"]
     if result.get("definition_note"):
         attempt["definition_note"] = result["definition_note"]
+    if result.get("unit"):
+        attempt["unit"] = result["unit"]
     return attempt
 
 
@@ -1497,8 +1505,14 @@ def _market_regime_classification_rules() -> dict[str, dict[str, Any]]:
 
 
 def _provider_candidates(key: str, config: dict) -> list[dict]:
-    if key in {"fedfunds", "cpi", "pce", "nonfarm"}:
+    if key in {"fedfunds", "pce"}:
         return [_fred_candidate(key, config)]
+
+    if key in {"cpi", "nonfarm"}:
+        return [
+            _fred_candidate(key, config),
+            _bls_candidate(key, config),
+        ]
 
     if key in {"sp500", "nasdaq"}:
         return [
@@ -1817,6 +1831,31 @@ def _yfinance_candidate(
     return candidate
 
 
+def _bls_candidate(key: str, config: dict) -> dict:
+    item_config = _bls_config(config, key)
+    series_id = str(item_config.get("series_id") or "").strip()
+    primary_source = str(item_config.get("primary_source") or "").strip()
+    if not series_id:
+        return {
+            "provider": "config",
+            "source": "config",
+            "name": key,
+            "asset_type": None,
+            "error": f"bls_series.{key}.series_id not configured",
+        }
+    return {
+        "provider": "bls",
+        "series_id": series_id,
+        "name": item_config.get("name") or key,
+        "asset_type": _asset_type_from_fred_series_config(key, config),
+        "source_tier": item_config.get("source_tier") or "official_fallback",
+        "primary_source": primary_source or _candidate_source_label(_fred_candidate(key, config)),
+        "fallback_used": True,
+        "fallback_reason": "primary_source_unavailable",
+        "definition_note": item_config.get("definition_note"),
+    }
+
+
 def _call_provider(candidate: dict) -> dict:
     provider = candidate["provider"]
 
@@ -1825,6 +1864,12 @@ def _call_provider(candidate: dict) -> dict:
 
     if provider == "yfinance":
         return yfinance_provider.get_latest_price(candidate["symbol"])
+
+    if provider == "bls":
+        return bls_provider.get_latest_observation(
+            str(candidate["series_id"]),
+            primary_source=str(candidate.get("primary_source") or ""),
+        )
 
     if provider == "treasury":
         return treasury_provider.get_par_yield(str(candidate["maturity"]))
@@ -1956,22 +2001,35 @@ def _candidate_source_label(candidate: dict) -> str:
     return str(candidate.get("source") or candidate.get("provider") or "unknown")
 
 
-def _treasury_fallback_for_fred_series(series_id: str) -> dict:
+def _official_fallback_for_fred_series(series_id: str) -> dict:
+    bls_series_by_fred = {
+        "CPIAUCSL": "CUSR0000SA0",
+        "CPILFESL": "CUSR0000SA0L1E",
+        "PAYEMS": "CES0000000001",
+    }
+    bls_series_id = bls_series_by_fred.get(series_id)
+    if bls_series_id:
+        return bls_provider.get_latest_observation(
+            bls_series_id,
+            primary_source=f"FRED:{series_id}",
+        )
+
     maturity_by_series = {
         "DGS2": "2y",
         "DGS10": "10y",
         "DGS30": "30y",
     }
     maturity = maturity_by_series.get(series_id)
-    if maturity is None:
-        return {
-            "status": "not_configured",
-            "error": f"No Treasury fallback configured for {series_id}",
-            "source": "U.S. Treasury",
-            "source_tier": "official_fallback",
-            "timestamp": _utc_now(),
-        }
-    return treasury_provider.get_par_yield(maturity)
+    if maturity:
+        return treasury_provider.get_par_yield(maturity)
+
+    return {
+        "status": "not_configured",
+        "error": f"No official fallback configured for {series_id}",
+        "source": "official_fallback",
+        "source_tier": "official_fallback",
+        "timestamp": _utc_now(),
+    }
 
 
 def _alpha_vantage_request_delay_seconds(config: dict) -> float:
@@ -2029,6 +2087,14 @@ def _asset_type_from_market_symbols(key: str, config: dict) -> str | None:
     symbol_config = market_symbols.get(key)
     if isinstance(symbol_config, dict) and symbol_config.get("asset_type"):
         return str(symbol_config["asset_type"])
+    return None
+
+
+def _asset_type_from_fred_series_config(key: str, config: dict) -> str | None:
+    fred_series = _optional_mapping(config, "fred_series")
+    series_config = fred_series.get(key)
+    if isinstance(series_config, dict) and series_config.get("asset_type"):
+        return str(series_config["asset_type"])
     return None
 
 
