@@ -58,6 +58,10 @@ def calculate_freshness(item: dict, metadata: dict, generated_at: str) -> dict:
     result["days_since_observation"] = days_since_observation
     result["month_gap"] = _month_gap(observed_at, generated_date)
 
+    if days_since_observation < 0:
+        result["error"] = "observation_date is after generated_at"
+        return result
+
     if max_stale_days is None:
         result["error"] = "max_stale_days missing or invalid"
         return result
