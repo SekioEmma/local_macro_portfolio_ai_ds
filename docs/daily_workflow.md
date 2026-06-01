@@ -30,6 +30,11 @@ python scripts/run_analyst_memo.py --dry-run
 
 Generated files under `outputs/reports/` and `outputs/analyst_memos/` are local artifacts and ignored by Git. Review them locally, but do not commit real generated reports.
 
+Analyst memo JSON and Markdown can contain prompts, sanitized context, market
+summaries, portfolio allocation direction, and model answers. Treat real
+`outputs/` files as private local artifacts; do not manually upload or publicly
+share them unless they have been reviewed and redacted.
+
 ## Boundaries
 
 - No automatic trading.
@@ -37,3 +42,10 @@ Generated files under `outputs/reports/` and `outputs/analyst_memos/` are local 
 - No short-term forecasts.
 - No API keys in files.
 - No qwen/Ollama local model path in this clean repo.
+- Do not send `.env`, API keys, raw `data/private/` content, or the full real
+  holdings CSV to DeepSeek.
+- DeepSeek requests may contain sanitized context, market data summaries,
+  asset-class allocation direction and deviation, target-allocation context,
+  and DCA-rule context.
+- Sanitized context is not fully anonymous: it can still reveal portfolio
+  structure, allocation drift, DCA rules, and market-analysis assumptions.
