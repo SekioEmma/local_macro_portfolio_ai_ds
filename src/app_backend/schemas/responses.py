@@ -30,3 +30,25 @@ class ProviderHealthResponse(BaseModel):
     checks: list[ProviderHealthCheck]
     next_action: str | None = None
     error_summary: str | None = None
+
+
+class DashboardModule(BaseModel):
+    key: str
+    status: str
+    label: str | None
+    summary: str | None
+    source_badge: str | None
+    updated_at: str | None
+    next_action: str | None
+    error_summary: str | None
+
+
+class DashboardSummaryResponse(BaseModel):
+    generated_at: str | None
+    overall_status: str
+    overall_risk_level: str | None
+    modules: dict[str, DashboardModule]
+    provider_health: dict
+    missing_data: list[dict]
+    data_freshness: dict
+    next_actions: list[str]
