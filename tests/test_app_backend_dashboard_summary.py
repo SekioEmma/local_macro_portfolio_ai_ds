@@ -122,6 +122,38 @@ def test_dashboard_summary_handles_invalid_report_json(monkeypatch, tmp_path):
     assert len(data["modules"]["credit_stress"]["error_summary"]) <= 200
 
 
+def test_dashboard_summary_accepts_bom_encoded_portfolio_snapshot(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    (tmp_path / "portfolio_snapshot.json").write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-01-01T00:00:00+00:00",
+                "status": "ok",
+                "holdings": [{"ticker": "RAW", "amount": 999999}],
+                "raw_extra": "must_not_leak",
+            }
+        ),
+        encoding="utf-8-sig",
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    response = TestClient(app).get("/api/dashboard/summary")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["modules"]["portfolio_deviation"]["status"] == "ok"
+    assert data["modules"]["portfolio_deviation"]["summary"] == "portfolio snapshot available"
+    assert not any(
+        item["key"] == "portfolio_snapshot" and item["status"] == "error"
+        for item in data["missing_data"]
+    )
+
+    body = json.dumps(data, sort_keys=True)
+    assert "999999" not in body
+    assert "raw_extra" not in body
+    assert "must_not_leak" not in body
+
+
 def test_dashboard_summary_does_not_read_real_outputs(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     custom_reports = tmp_path / "custom_reports"

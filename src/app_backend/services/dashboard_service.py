@@ -68,7 +68,7 @@ def _load_report(name: str, path: Path) -> ReportState:
     if not path.exists():
         return ReportState(name=name, path=path, exists=False)
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return ReportState(
             name=name,
