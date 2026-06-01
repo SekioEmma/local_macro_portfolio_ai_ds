@@ -2,3 +2,5 @@ pyyaml
 yfinance
 requests
 python-dotenv
+fastapi>=0.110,<0.200
+uvicorn[standard]>=0.29,<1.0
