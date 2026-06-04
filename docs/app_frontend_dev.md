@@ -46,6 +46,7 @@ The frontend calls only:
 - `GET /api/status`
 - `GET /api/provider-health`
 - `GET /api/dashboard/summary`
+- `GET /api/dashboard/evidence-table`
 - `GET /api/app/storage`
 - `GET /api/app/settings`
 - `PUT /api/app/settings`
@@ -75,6 +76,22 @@ Provider health `not_run_yet` means the local health-check cache has not been ge
 Data freshness is shown as a compact file/status/generated-at/stale-cache list, not as raw JSON.
 
 Sparkline placeholders are not shown in this phase. Refresh and export actions remain later-phase work unless a matching backend API exists.
+
+## Show All Data
+
+The `全量证据表` page reads `GET /api/dashboard/evidence-table`.
+
+It is a local read-only evidence table for auditing dashboard metric sources. It does not trigger refresh, provider health checks, DeepSeek, Tavily, or market pipelines.
+
+The page shows:
+
+- generated time
+- overall status
+- row count
+- filters for module, status, source badge, and AI factual-context eligibility
+- one row per dashboard key metric
+
+Rows preserve missing, stale, research-needed, insufficient-history, and not-available states with clear text. The table does not display raw JSON, holdings line items, API keys, prompts, or raw outputs.
 
 ## Read-only Boundaries
 

@@ -74,6 +74,35 @@ class DashboardSummaryResponse(BaseModel):
     next_actions: list[str]
 
 
+class DashboardEvidenceRow(BaseModel):
+    row_id: str
+    module: str
+    metric_key: str
+    display_name: str
+    value: float | str | bool | None
+    value_text: str
+    unit: str | None
+    status: str
+    source: str | None
+    source_badge: str
+    observation_date: str | None
+    generated_at: str | None
+    freshness_status: str
+    missing_reason: str | None
+    interpretation_hint: str | None
+    ai_context_allowed: bool
+
+
+class DashboardEvidenceTableResponse(BaseModel):
+    generated_at: str | None
+    overall_status: str
+    row_count: int
+    modules: list[str]
+    rows: list[DashboardEvidenceRow]
+    filters: dict[str, Any]
+    next_actions: list[str]
+
+
 class StorageStatusResponse(BaseModel):
     storage_mode: str
     database_exists: bool

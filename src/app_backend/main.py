@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app_backend.schemas.responses import (
     AppSettingsResponse,
     CreateFavoriteAnswerRequest,
     CreateRefreshRunRequest,
+    DashboardEvidenceTableResponse,
     DashboardSummaryResponse,
     FavoriteAnswer,
     ProviderHealthResponse,
@@ -44,6 +45,24 @@ def get_provider_health() -> ProviderHealthResponse:
 @app.get("/api/dashboard/summary", response_model=DashboardSummaryResponse)
 def get_dashboard_summary() -> DashboardSummaryResponse:
     return dashboard_service.build_dashboard_summary()
+
+
+@app.get(
+    "/api/dashboard/evidence-table",
+    response_model=DashboardEvidenceTableResponse,
+)
+def get_dashboard_evidence_table(
+    module: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    source_badge: str | None = Query(default=None),
+    ai_context_allowed: bool | None = Query(default=None),
+) -> DashboardEvidenceTableResponse:
+    return dashboard_service.build_dashboard_evidence_table(
+        module=module,
+        status=status,
+        source_badge=source_badge,
+        ai_context_allowed=ai_context_allowed,
+    )
 
 
 @app.get("/api/app/storage", response_model=StorageStatusResponse)

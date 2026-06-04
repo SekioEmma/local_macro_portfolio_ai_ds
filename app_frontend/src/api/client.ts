@@ -2,6 +2,7 @@ import type {
   ApiResult,
   AppSettings,
   AppSettingsResponse,
+  DashboardEvidenceTableResponse,
   DashboardSummaryResponse,
   FavoriteAnswer,
   ProviderHealthResponse,
@@ -24,6 +25,12 @@ export function fetchProviderHealth(): Promise<ApiResult<ProviderHealthResponse>
 
 export function fetchDashboardSummary(): Promise<ApiResult<DashboardSummaryResponse>> {
   return requestJson<DashboardSummaryResponse>("/api/dashboard/summary");
+}
+
+export function fetchDashboardEvidenceTable(): Promise<
+  ApiResult<DashboardEvidenceTableResponse>
+> {
+  return requestJson<DashboardEvidenceTableResponse>("/api/dashboard/evidence-table");
 }
 
 export function fetchStorageStatus(): Promise<ApiResult<StorageStatusResponse>> {

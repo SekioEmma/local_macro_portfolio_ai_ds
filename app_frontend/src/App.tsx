@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   createFavorite,
   createRefreshRun,
+  fetchDashboardEvidenceTable,
   fetchDashboardSummary,
   fetchFavorites,
   fetchProviderHealth,
@@ -15,6 +16,8 @@ import type {
   ApiResult,
   AppSettings,
   AppSettingsResponse,
+  DashboardEvidenceRow,
+  DashboardEvidenceTableResponse,
   DashboardMetric,
   DashboardModule,
   DashboardSummaryResponse,
@@ -25,7 +28,7 @@ import type {
   StorageStatusResponse
 } from "./types";
 
-type ViewKey = "dashboard" | "chat" | "account" | "diagnostics";
+type ViewKey = "dashboard" | "evidence" | "chat" | "account" | "diagnostics";
 
 const moduleLabels: Record<string, string> = {
   credit_stress: "信用压力",
@@ -38,6 +41,7 @@ const moduleLabels: Record<string, string> = {
 
 const navItems: Array<{ key: ViewKey; label: string }> = [
   { key: "dashboard", label: "市场仪表盘" },
+  { key: "evidence", label: "全量证据表" },
   { key: "chat", label: "AI 对话" },
   { key: "account", label: "账户概览" },
   { key: "diagnostics", label: "诊断" }
@@ -54,6 +58,9 @@ export default function App() {
   >({ data: null, error: null });
   const [dashboard, setDashboard] = useState<
     ApiResult<DashboardSummaryResponse>
+  >({ data: null, error: null });
+  const [evidence, setEvidence] = useState<
+    ApiResult<DashboardEvidenceTableResponse>
   >({ data: null, error: null });
   const [storage, setStorage] = useState<ApiResult<StorageStatusResponse>>({
     data: null,
@@ -79,6 +86,7 @@ export default function App() {
       fetchStatus(),
       fetchProviderHealth(),
       fetchDashboardSummary(),
+      fetchDashboardEvidenceTable(),
       fetchStorageStatus(),
       fetchSettings(),
       fetchRefreshRuns(),
@@ -89,6 +97,7 @@ export default function App() {
           statusResult,
           providerResult,
           dashboardResult,
+          evidenceResult,
           storageResult,
           settingsResult,
           refreshResult,
@@ -97,6 +106,7 @@ export default function App() {
           setStatus(statusResult);
           setProviderHealth(providerResult);
           setDashboard(dashboardResult);
+          setEvidence(evidenceResult);
           setStorage(storageResult);
           setSettings(settingsResult);
           setRefreshRuns(refreshResult);
@@ -137,6 +147,9 @@ export default function App() {
       <main className="main-panel">
         {activeView === "dashboard" && (
           <DashboardView dashboard={dashboard} isLoading={isLoading} />
+        )}
+        {activeView === "evidence" && (
+          <EvidenceTableView evidence={evidence} isLoading={isLoading} />
         )}
         {activeView === "chat" && (
           <PlaceholderView
@@ -333,6 +346,234 @@ function FreshnessList({ data }: { data: Record<string, unknown> }) {
       )}
     </ul>
   );
+}
+
+type EvidenceFilterState = {
+  module: string;
+  status: string;
+  sourceBadge: string;
+  aiContextAllowed: string;
+};
+
+const defaultEvidenceFilters: EvidenceFilterState = {
+  module: "all",
+  status: "all",
+  sourceBadge: "all",
+  aiContextAllowed: "all"
+};
+
+function EvidenceTableView({
+  evidence,
+  isLoading
+}: {
+  evidence: ApiResult<DashboardEvidenceTableResponse>;
+  isLoading: boolean;
+}) {
+  const [filters, setFilters] = useState<EvidenceFilterState>(
+    defaultEvidenceFilters
+  );
+  const data = evidence.data;
+
+  const filteredRows = useMemo(() => {
+    if (!data) return [];
+    return data.rows.filter((row) => {
+      if (filters.module !== "all" && row.module !== filters.module) return false;
+      if (filters.status !== "all" && row.status !== filters.status) return false;
+      if (
+        filters.sourceBadge !== "all" &&
+        row.source_badge !== filters.sourceBadge
+      ) {
+        return false;
+      }
+      if (filters.aiContextAllowed !== "all") {
+        return row.ai_context_allowed === (filters.aiContextAllowed === "true");
+      }
+      return true;
+    });
+  }, [data, filters]);
+
+  const available = data?.filters.available || {};
+  const moduleOptions = available.modules || data?.modules || [];
+  const statusOptions =
+    available.statuses || uniqueSorted(data?.rows.map((row) => row.status) || []);
+  const sourceOptions =
+    available.source_badges ||
+    uniqueSorted(data?.rows.map((row) => row.source_badge) || []);
+
+  if (isLoading) {
+    return <LoadingState title="全量证据表" />;
+  }
+
+  if (evidence.error || !data) {
+    return <ErrorState title="全量证据表" message={evidence.error} />;
+  }
+
+  return (
+    <section className="page-stack">
+      <header className="page-header">
+        <div>
+          <p className="eyebrow">Show All Data</p>
+          <h2>全量证据表</h2>
+          <p className="muted">
+            本地只读 evidence table，用于审计 dashboard 指标来源，不是交易建议。
+          </p>
+        </div>
+        <StatusPill status={data.overall_status} />
+      </header>
+
+      <section className="status-strip">
+        <Metric label="overall_status" value={data.overall_status} />
+        <Metric label="generated_at" value={data.generated_at || "not available"} />
+        <Metric label="row_count" value={String(data.row_count)} />
+        <Metric label="filtered_rows" value={String(filteredRows.length)} />
+      </section>
+
+      <section className="filter-bar" aria-label="evidence filters">
+        <FilterSelect
+          label="module"
+          value={filters.module}
+          options={moduleOptions}
+          onChange={(value) => setFilters({ ...filters, module: value })}
+        />
+        <FilterSelect
+          label="status"
+          value={filters.status}
+          options={statusOptions}
+          onChange={(value) => setFilters({ ...filters, status: value })}
+        />
+        <FilterSelect
+          label="source_badge"
+          value={filters.sourceBadge}
+          options={sourceOptions}
+          onChange={(value) => setFilters({ ...filters, sourceBadge: value })}
+        />
+        <label className="filter-control">
+          ai_context_allowed
+          <select
+            value={filters.aiContextAllowed}
+            onChange={(event) =>
+              setFilters({ ...filters, aiContextAllowed: event.target.value })
+            }
+          >
+            <option value="all">all</option>
+            <option value="true">可进入 AI 事实层</option>
+            <option value="false">不进入 AI 事实层</option>
+          </select>
+        </label>
+      </section>
+
+      {data.next_actions.length > 0 && (
+        <InfoPanel title="Next Actions">
+          <ul className="compact-list">
+            {data.next_actions.map((action) => (
+              <li key={action}>
+                <span>{action}</span>
+                <small>local command</small>
+              </li>
+            ))}
+          </ul>
+        </InfoPanel>
+      )}
+
+      <EvidenceTable rows={filteredRows} />
+    </section>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="filter-control">
+      {label}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="all">all</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <section className="info-panel">
+        <p className="muted">当前过滤条件下没有 evidence rows。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="table-panel" aria-label="dashboard evidence table">
+      <div className="evidence-table-wrap">
+        <table className="evidence-table">
+          <thead>
+            <tr>
+              <th>module</th>
+              <th>metric_key</th>
+              <th>display_name</th>
+              <th>value_text</th>
+              <th>status</th>
+              <th>source_badge</th>
+              <th>freshness_status</th>
+              <th>observation_date</th>
+              <th>generated_at</th>
+              <th>ai_context_allowed</th>
+              <th>missing_reason</th>
+              <th>interpretation_hint</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.row_id}>
+                <td>{row.module}</td>
+                <td>{row.metric_key}</td>
+                <td>{row.display_name}</td>
+                <td className="value-cell">{row.value_text}</td>
+                <td>
+                  <StatusPill status={row.status} />
+                </td>
+                <td>{row.source_badge}</td>
+                <td>{row.freshness_status}</td>
+                <td>{row.observation_date || "not available"}</td>
+                <td>{row.generated_at || "not available"}</td>
+                <td>
+                  {row.ai_context_allowed
+                    ? "可进入 AI 事实层"
+                    : "不进入 AI 事实层"}
+                </td>
+                <td className="long-cell" title={row.missing_reason || ""}>
+                  {row.missing_reason || ""}
+                </td>
+                <td className="long-cell" title={row.interpretation_hint || ""}>
+                  {row.interpretation_hint || ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values)).sort();
 }
 
 function DiagnosticsView({

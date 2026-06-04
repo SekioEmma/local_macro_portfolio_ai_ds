@@ -78,6 +78,43 @@ export type DashboardSummaryResponse = {
   next_actions: string[];
 };
 
+export type DashboardEvidenceRow = {
+  row_id: string;
+  module: string;
+  metric_key: string;
+  display_name: string;
+  value: number | string | boolean | null;
+  value_text: string;
+  unit: string | null;
+  status: string;
+  source: string | null;
+  source_badge: string;
+  observation_date: string | null;
+  generated_at: string | null;
+  freshness_status: string;
+  missing_reason: string | null;
+  interpretation_hint: string | null;
+  ai_context_allowed: boolean;
+};
+
+export type DashboardEvidenceTableResponse = {
+  generated_at: string | null;
+  overall_status: string;
+  row_count: number;
+  modules: string[];
+  rows: DashboardEvidenceRow[];
+  filters: {
+    available?: {
+      modules?: string[];
+      statuses?: string[];
+      source_badges?: string[];
+      ai_context_allowed?: boolean[];
+    };
+    applied?: Record<string, string | boolean | null>;
+  };
+  next_actions: string[];
+};
+
 export type StorageStatusResponse = {
   storage_mode: string;
   database_exists: boolean;

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from app_backend.schemas.responses import (
+    DashboardEvidenceRow,
+    DashboardEvidenceTableResponse,
     DashboardMetric,
     DashboardModule,
     DashboardSummaryResponse,
@@ -162,6 +164,44 @@ def build_dashboard_summary(reports_dir: Path | str | None = None) -> DashboardS
     )
 
 
+def build_dashboard_evidence_table(
+    reports_dir: Path | str | None = None,
+    module: str | None = None,
+    status: str | None = None,
+    source_badge: str | None = None,
+    ai_context_allowed: bool | None = None,
+) -> DashboardEvidenceTableResponse:
+    summary = build_dashboard_summary(reports_dir=reports_dir)
+    all_rows = _evidence_rows_from_summary(summary)
+    filtered_rows = [
+        row
+        for row in all_rows
+        if _evidence_row_matches(
+            row,
+            module=module,
+            status=status,
+            source_badge=source_badge,
+            ai_context_allowed=ai_context_allowed,
+        )
+    ]
+
+    return DashboardEvidenceTableResponse(
+        generated_at=summary.generated_at,
+        overall_status=summary.overall_status,
+        row_count=len(filtered_rows),
+        modules=list(summary.modules.keys()),
+        rows=filtered_rows,
+        filters=_evidence_filters(
+            all_rows,
+            module=module,
+            status=status,
+            source_badge=source_badge,
+            ai_context_allowed=ai_context_allowed,
+        ),
+        next_actions=summary.next_actions,
+    )
+
+
 def _load_report(name: str, path: Path) -> ReportState:
     if not path.exists():
         return ReportState(name=name, path=path, exists=False)
@@ -182,6 +222,101 @@ def _load_report(name: str, path: Path) -> ReportState:
             error_summary=f"{path.name} is not a JSON object",
         )
     return ReportState(name=name, path=path, exists=True, data=payload)
+
+
+def _evidence_rows_from_summary(
+    summary: DashboardSummaryResponse,
+) -> list[DashboardEvidenceRow]:
+    rows: list[DashboardEvidenceRow] = []
+    for module_key, module in summary.modules.items():
+        for metric in module.key_metrics:
+            rows.append(_evidence_row(module_key, metric))
+    return rows
+
+
+def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
+    return DashboardEvidenceRow(
+        row_id=f"{module_key}:{metric.metric_key}",
+        module=module_key,
+        metric_key=metric.metric_key,
+        display_name=metric.display_name,
+        value=metric.value,
+        value_text=_evidence_value_text(metric),
+        unit=metric.unit,
+        status=metric.status,
+        source=metric.source,
+        source_badge=metric.source_badge,
+        observation_date=metric.observation_date,
+        generated_at=metric.generated_at,
+        freshness_status=metric.freshness_status,
+        missing_reason=metric.missing_reason,
+        interpretation_hint=metric.interpretation_hint,
+        ai_context_allowed=_evidence_ai_context_allowed(metric),
+    )
+
+
+def _evidence_value_text(metric: DashboardMetric) -> str:
+    text = str(metric.value_text or "").strip()
+    if text and text != "--":
+        return text
+    return _missing_value_text(metric.status)
+
+
+def _evidence_ai_context_allowed(metric: DashboardMetric) -> bool:
+    if metric.status in {
+        "missing",
+        "research_needed",
+        "insufficient_history",
+        "not_available",
+        "stale",
+    }:
+        return False
+    if metric.freshness_status == "stale":
+        return False
+    if metric.source_badge == "search-derived":
+        return False
+    return bool(metric.ai_context_allowed)
+
+
+def _evidence_row_matches(
+    row: DashboardEvidenceRow,
+    module: str | None,
+    status: str | None,
+    source_badge: str | None,
+    ai_context_allowed: bool | None,
+) -> bool:
+    if module is not None and row.module != module:
+        return False
+    if status is not None and row.status != status:
+        return False
+    if source_badge is not None and row.source_badge != source_badge:
+        return False
+    if ai_context_allowed is not None and row.ai_context_allowed != ai_context_allowed:
+        return False
+    return True
+
+
+def _evidence_filters(
+    rows: list[DashboardEvidenceRow],
+    module: str | None,
+    status: str | None,
+    source_badge: str | None,
+    ai_context_allowed: bool | None,
+) -> dict[str, Any]:
+    return {
+        "available": {
+            "modules": sorted({row.module for row in rows}),
+            "statuses": sorted({row.status for row in rows}),
+            "source_badges": sorted({row.source_badge for row in rows}),
+            "ai_context_allowed": sorted({row.ai_context_allowed for row in rows}),
+        },
+        "applied": {
+            "module": module,
+            "status": status,
+            "source_badge": source_badge,
+            "ai_context_allowed": ai_context_allowed,
+        },
+    }
 
 
 def _provider_health_summary(health_path: Path) -> dict:
