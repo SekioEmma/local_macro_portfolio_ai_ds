@@ -247,6 +247,49 @@ button {
   overflow-wrap: anywhere;
 }
 
+.metric-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.metric-row {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #edf1f4;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fafcfd;
+}
+
+.metric-row > div:first-child,
+.metric-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.metric-row strong {
+  font-size: 13px;
+}
+
+.metric-row small,
+.metric-reason,
+.metric-hint {
+  color: #60758a;
+  font-size: 12px;
+}
+
+.metric-value > span {
+  font-weight: 800;
+}
+
+.metric-reason,
+.metric-hint {
+  margin: 0;
+}
+
 .compact-list {
   display: grid;
   gap: 10px;

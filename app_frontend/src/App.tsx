@@ -15,6 +15,7 @@ import type {
   ApiResult,
   AppSettings,
   AppSettingsResponse,
+  DashboardMetric,
   DashboardModule,
   DashboardSummaryResponse,
   FavoriteAnswer,
@@ -116,7 +117,7 @@ export default function App() {
           <span className="brand-mark">LM</span>
           <div>
             <h1>本地宏观组合</h1>
-            <p>Phase 2 App State</p>
+            <p>Dashboard key metrics</p>
           </div>
         </div>
         <nav className="nav-list" aria-label="主导航">
@@ -146,7 +147,7 @@ export default function App() {
         {activeView === "account" && (
           <PlaceholderView
             title="账户概览"
-            text="Account editing will be added in a later phase. Current Phase 2 only adds local app state."
+            text="Account editing will be added in a later phase. Current phase remains read-only for holdings."
           />
         )}
         {activeView === "diagnostics" && (
@@ -194,7 +195,7 @@ function DashboardView({
     <section className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Local read-only dashboard</p>
+          <p className="eyebrow">Risk monitoring and evidence panel</p>
           <h2>今日市场状态</h2>
         </div>
         <StatusPill status={data.overall_status} />
@@ -206,7 +207,7 @@ function DashboardView({
         <Metric label="更新时间" value={data.generated_at || "not available"} />
         <Metric
           label="Provider Health"
-          value={data.provider_health.overall_status || "unknown"}
+          value={providerHealthText(data.provider_health.overall_status)}
         />
       </section>
 
@@ -233,7 +234,7 @@ function DashboardView({
         </InfoPanel>
 
         <InfoPanel title="Data Freshness">
-          <pre className="json-panel">{JSON.stringify(data.data_freshness, null, 2)}</pre>
+          <FreshnessList data={data.data_freshness} />
         </InfoPanel>
       </section>
     </section>
@@ -255,6 +256,11 @@ function ModuleCard({
       </div>
       <p className="module-label">{module.label || "未标注"}</p>
       <p>{module.summary || "暂无摘要。"}</p>
+      <div className="metric-list">
+        {module.key_metrics.slice(0, 5).map((metric) => (
+          <MetricRow key={metric.metric_key} metric={metric} />
+        ))}
+      </div>
       <dl>
         <div>
           <dt>Source</dt>
@@ -270,6 +276,62 @@ function ModuleCard({
       )}
       {module.next_action && <p className="next-action">{module.next_action}</p>}
     </article>
+  );
+}
+
+function MetricRow({ metric }: { metric: DashboardMetric }) {
+  const needsExplanation = [
+    "missing",
+    "research_needed",
+    "insufficient_history",
+    "stale",
+    "not_available"
+  ].includes(metric.status);
+  return (
+    <div className="metric-row">
+      <div>
+        <strong>{metric.display_name}</strong>
+        <small>
+          {metric.source_badge} / {metric.freshness_status}
+        </small>
+      </div>
+      <div className="metric-value">
+        <span>{metric.value_text}</span>
+        <StatusPill status={metric.status} />
+      </div>
+      {needsExplanation && (
+        <p className="metric-reason">
+          {metric.missing_reason || metric.interpretation_hint || metric.status}
+        </p>
+      )}
+      {!needsExplanation && metric.interpretation_hint && (
+        <p className="metric-hint">{metric.interpretation_hint}</p>
+      )}
+    </div>
+  );
+}
+
+function FreshnessList({ data }: { data: Record<string, unknown> }) {
+  const files = data.files;
+  if (!files || typeof files !== "object") {
+    return <p className="muted">freshness unavailable</p>;
+  }
+  return (
+    <ul className="compact-list">
+      {Object.entries(files as Record<string, Record<string, unknown>>).map(
+        ([key, value]) => (
+          <li key={key}>
+            <span>{key}</span>
+            <small>
+              {String(value.status || "unknown")} /{" "}
+              {String(value.generated_at || "not available")} / stale_cache:{" "}
+              {String(Boolean(value.stale_cache))}
+              {value.next_action ? ` / ${String(value.next_action)}` : ""}
+            </small>
+          </li>
+        )
+      )}
+    </ul>
   );
 }
 
@@ -306,7 +368,7 @@ function DiagnosticsView({
     <section className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Read-only diagnostics + local app state</p>
+          <p className="eyebrow">Diagnostics and local app state</p>
           <h2>诊断</h2>
         </div>
         <button className="secondary-button" type="button" onClick={reload}>
@@ -370,8 +432,9 @@ function DiagnosticsView({
             <>
               <div className="status-row">
                 <StatusPill status={providerHealth.data.overall_status} />
-                <span>{JSON.stringify(providerHealth.data.summary)}</span>
+                <span>{providerHealthText(providerHealth.data.overall_status)}</span>
               </div>
+              <p className="muted">{JSON.stringify(providerHealth.data.summary)}</p>
               <ul className="compact-list">
                 {providerHealth.data.checks.map((check) => (
                   <li key={check.key}>
@@ -422,6 +485,13 @@ function DiagnosticsView({
       </section>
     </section>
   );
+}
+
+function providerHealthText(status: string | null | undefined) {
+  if (status === "not_run_yet") {
+    return "尚未运行健康检查";
+  }
+  return status || "unknown";
 }
 
 function SettingsForm({
@@ -583,9 +653,15 @@ function StatusPill({ status }: { status: string }) {
 
 function statusClass(status: string) {
   if (status === "ok") return "ok";
-  if (status === "error") return "error";
-  if (status === "degraded" || status === "stale") return "warn";
-  if (status === "missing" || status === "not_run_yet") return "missing";
+  if (status === "stress" || status === "error") return "error";
+  if (["watch", "pressure", "degraded", "stale"].includes(status)) return "warn";
+  if (
+    ["missing", "not_run_yet", "research_needed", "insufficient_history", "not_available"].includes(
+      status
+    )
+  ) {
+    return "missing";
+  }
   return "unknown";
 }
 

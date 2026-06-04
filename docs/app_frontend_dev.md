@@ -56,6 +56,26 @@ The frontend calls only:
 
 The app state `PUT`/`POST` endpoints write only local SQLite app metadata. They are not market refresh endpoints and do not run providers.
 
+## Dashboard Key Metrics
+
+The market dashboard reads `modules.*.key_metrics` from `GET /api/dashboard/summary`.
+Each module card shows compact metric rows with:
+
+- display name
+- value text
+- status
+- source badge
+- freshness status
+- missing or research-needed reason when applicable
+
+The UI should not show unexplained `--` for primary metrics. Missing, stale, research-needed, insufficient-history, and not-available states must be visible.
+
+Provider health `not_run_yet` means the local health-check cache has not been generated yet. It does not mean all providers are broken.
+
+Data freshness is shown as a compact file/status/generated-at/stale-cache list, not as raw JSON.
+
+Sparkline placeholders are not shown in this phase. Refresh and export actions remain later-phase work unless a matching backend API exists.
+
 ## Read-only Boundaries
 
 - No account editing.

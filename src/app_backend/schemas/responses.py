@@ -34,6 +34,23 @@ class ProviderHealthResponse(BaseModel):
     error_summary: str | None = None
 
 
+class DashboardMetric(BaseModel):
+    metric_key: str
+    display_name: str
+    value: float | str | bool | None
+    value_text: str
+    unit: str | None
+    status: str
+    source: str | None
+    source_badge: str
+    observation_date: str | None
+    generated_at: str | None
+    freshness_status: str
+    missing_reason: str | None
+    interpretation_hint: str | None
+    ai_context_allowed: bool
+
+
 class DashboardModule(BaseModel):
     key: str
     status: str
@@ -43,6 +60,7 @@ class DashboardModule(BaseModel):
     updated_at: str | None
     next_action: str | None
     error_summary: str | None
+    key_metrics: list[DashboardMetric]
 
 
 class DashboardSummaryResponse(BaseModel):

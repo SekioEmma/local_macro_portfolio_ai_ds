@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app_backend.schemas.responses import DashboardModule, DashboardSummaryResponse
+from app_backend.schemas.responses import (
+    DashboardMetric,
+    DashboardModule,
+    DashboardSummaryResponse,
+)
 from app_backend.services import provider_service
 
 
@@ -26,6 +30,100 @@ REPORT_FILES = {
     "market_temperature": "market_temperature.json",
     "portfolio_snapshot": "portfolio_snapshot.json",
     "provider_health": "provider_health_check.json",
+}
+ALLOWED_METRIC_STATUSES = {
+    "ok",
+    "watch",
+    "pressure",
+    "stress",
+    "missing",
+    "stale",
+    "unknown",
+    "research_needed",
+    "insufficient_history",
+    "not_available",
+}
+ALLOWED_SOURCE_BADGES = {
+    "official",
+    "official_fallback",
+    "unofficial_fallback",
+    "proxy",
+    "search-derived",
+    "missing",
+    "research_needed",
+    "local",
+    "derived",
+}
+METRIC_SPECS = {
+    "credit_stress": [
+        ("high_yield_spread", "High-yield spread", "percent", "percent", "missing"),
+        (
+            "investment_grade_spread",
+            "Investment-grade spread",
+            "percent",
+            "percent",
+            "research_needed",
+        ),
+        ("vix", "VIX", "index", "number", "missing"),
+        ("credit_stress_status", "Credit stress status", None, "text", "missing"),
+    ],
+    "rate_pressure": [
+        ("dgs10", "10Y Treasury yield", "percent", "percent", "missing"),
+        ("dgs30", "30Y Treasury yield", "percent", "percent", "missing"),
+        (
+            "dgs30_distance_to_5pct",
+            "30Y distance to 5%",
+            "pp",
+            "pp",
+            "missing",
+        ),
+        ("dgs10_5d_avg", "10Y 5D average", "percent", "percent", "insufficient_history"),
+        (
+            "dgs30_breakout_confirmed",
+            "30Y breakout confirmed",
+            None,
+            "bool",
+            "research_needed",
+        ),
+    ],
+    "real_yield_pressure": [
+        ("dfii10", "10Y real yield", "percent", "percent", "missing"),
+        ("t10yie", "10Y breakeven inflation", "percent", "percent", "missing"),
+        ("real_yield_pressure_status", "Real yield pressure status", None, "text", "missing"),
+    ],
+    "inflation_energy_pressure": [
+        ("core_cpi_yoy", "Core CPI YoY", "percent", "signed_percent", "missing"),
+        ("core_pce_yoy", "Core PCE YoY", "percent", "signed_percent", "missing"),
+        ("ppiaco_yoy", "PPIACO YoY", "percent", "signed_percent", "missing"),
+        ("wti_30d_change", "WTI 30D change", "percent", "signed_percent", "insufficient_history"),
+        ("brent_30d_change", "Brent 30D change", "percent", "signed_percent", "insufficient_history"),
+    ],
+    "equity_trend": [
+        ("sp500_30d_return", "S&P 500 30D return", "percent", "signed_percent", "insufficient_history"),
+        ("sp500_60d_return", "S&P 500 60D return", "percent", "signed_percent", "insufficient_history"),
+        (
+            "nasdaq100_30d_return",
+            "Nasdaq 100 30D return",
+            "percent",
+            "signed_percent",
+            "insufficient_history",
+        ),
+        (
+            "nasdaq100_60d_return",
+            "Nasdaq 100 60D return",
+            "percent",
+            "signed_percent",
+            "insufficient_history",
+        ),
+        ("nasdaq_vs_sp500_30d", "Nasdaq vs S&P 500 30D", "pp", "pp", "insufficient_history"),
+    ],
+    "portfolio_deviation": [
+        ("max_deviation_asset", "Max deviation asset", None, "text", "missing"),
+        ("max_deviation_pp", "Max deviation", "pp", "pp", "missing"),
+        ("equity_total_deviation_pp", "Equity total deviation", "pp", "pp", "missing"),
+        ("cash_reserve_status", "Cash reserve status", None, "text", "missing"),
+        ("holdings_updated_at", "Holdings updated at", None, "text", "missing"),
+    ],
 }
 
 
@@ -108,30 +206,38 @@ def _build_modules(reports: dict[str, ReportState]) -> dict[str, DashboardModule
             label="credit stress",
             reports=(market, temperature),
             signal_terms=("financial_conditions", "high_yield_spread", "credit", "vix"),
+            key_metrics=_key_metrics_for_module("credit_stress", (market, temperature)),
         ),
         "rate_pressure": _market_module(
             key="rate_pressure",
             label="rate pressure",
             reports=(market,),
             signal_terms=("dgs10", "dgs30", "treasury_yields", "10y", "30y"),
+            key_metrics=_key_metrics_for_module("rate_pressure", (market,)),
         ),
         "real_yield_pressure": _market_module(
             key="real_yield_pressure",
             label="real yield pressure",
             reports=(market,),
             signal_terms=("real_yield_10y", "dfii10", "real_yield"),
+            key_metrics=_key_metrics_for_module("real_yield_pressure", (market,)),
         ),
         "inflation_energy_pressure": _market_module(
             key="inflation_energy_pressure",
             label="inflation and energy pressure",
             reports=(market, temperature),
             signal_terms=("cpi", "pce", "ppi", "oil", "energy", "inflation"),
+            key_metrics=_key_metrics_for_module(
+                "inflation_energy_pressure",
+                (market, temperature),
+            ),
         ),
         "equity_trend": _market_module(
             key="equity_trend",
             label="equity trend",
             reports=(market, temperature),
             signal_terms=("sp500", "nasdaq", "nasdaq100", "equity_temperature", "equity"),
+            key_metrics=_key_metrics_for_module("equity_trend", (market, temperature)),
         ),
         "portfolio_deviation": _portfolio_module(portfolio),
     }
@@ -142,6 +248,7 @@ def _market_module(
     label: str,
     reports: tuple[ReportState, ...],
     signal_terms: tuple[str, ...],
+    key_metrics: list[DashboardMetric],
 ) -> DashboardModule:
     error = _first_error(reports)
     if error is not None:
@@ -152,6 +259,7 @@ def _market_module(
             summary=f"{label} report data is invalid",
             source_badge="report_error",
             error_summary=error,
+            key_metrics=key_metrics,
         )
 
     available_reports = [report for report in reports if report.data is not None]
@@ -163,6 +271,7 @@ def _market_module(
             summary=f"{label} data missing",
             source_badge="missing_report",
             next_action=_run_reports_action(),
+            key_metrics=key_metrics,
         )
 
     if any(_contains_signal(report.data, signal_terms) for report in available_reports):
@@ -174,6 +283,7 @@ def _market_module(
             summary=f"{label} compact data available",
             source_badge="cached_report",
             updated_at=_first_updated_at(available_reports),
+            key_metrics=key_metrics,
         )
 
     return _module(
@@ -184,6 +294,7 @@ def _market_module(
         source_badge="cached_report",
         updated_at=_first_updated_at(available_reports),
         next_action=_run_reports_action(),
+        key_metrics=key_metrics,
     )
 
 
@@ -196,6 +307,7 @@ def _portfolio_module(report: ReportState) -> DashboardModule:
             summary="portfolio snapshot invalid",
             source_badge="report_error",
             error_summary=report.error_summary,
+            key_metrics=_key_metrics_for_module("portfolio_deviation", (report,)),
         )
     if report.data is None:
         return _module(
@@ -205,6 +317,7 @@ def _portfolio_module(report: ReportState) -> DashboardModule:
             summary="portfolio snapshot missing",
             source_badge="missing_report",
             next_action="python scripts/run_portfolio_check.py",
+            key_metrics=_key_metrics_for_module("portfolio_deviation", (report,)),
         )
     return _module(
         key="portfolio_deviation",
@@ -215,6 +328,7 @@ def _portfolio_module(report: ReportState) -> DashboardModule:
         updated_at=_string_or_none(
             report.data.get("generated_at") or report.data.get("updated_at")
         ),
+        key_metrics=_key_metrics_for_module("portfolio_deviation", (report,)),
     )
 
 
@@ -227,6 +341,7 @@ def _module(
     updated_at: str | None = None,
     next_action: str | None = None,
     error_summary: str | None = None,
+    key_metrics: list[DashboardMetric] | None = None,
 ) -> DashboardModule:
     return DashboardModule(
         key=key,
@@ -237,7 +352,370 @@ def _module(
         updated_at=updated_at,
         next_action=next_action,
         error_summary=_safe_error_summary(error_summary),
+        key_metrics=key_metrics or [],
     )
+
+
+def _key_metrics_for_module(
+    module_key: str,
+    reports: tuple[ReportState, ...],
+) -> list[DashboardMetric]:
+    return [
+        _build_metric(module_key, reports, spec)
+        for spec in METRIC_SPECS.get(module_key, [])
+    ]
+
+
+def _build_metric(
+    module_key: str,
+    reports: tuple[ReportState, ...],
+    spec: tuple[str, str, str | None, str, str],
+) -> DashboardMetric:
+    metric_key, display_name, unit, format_kind, missing_status = spec
+    derived = _derived_metric(metric_key, reports)
+    if derived is not None:
+        return derived
+
+    found = _find_metric(metric_key, reports)
+    interpretation_hint = _interpretation_hint(metric_key)
+    if found is None:
+        return _missing_metric(
+            metric_key=metric_key,
+            display_name=display_name,
+            unit=unit,
+            status=missing_status,
+            generated_at=_first_updated_at([report for report in reports if report.data is not None]),
+            interpretation_hint=interpretation_hint,
+        )
+
+    value, payload, report = found
+    status = _metric_status(payload)
+    freshness_status = _metric_freshness(payload, report)
+    if freshness_status == "stale" and status == "ok":
+        status = "stale"
+
+    source = _metric_source(payload, report)
+    source_badge = _metric_source_badge(payload, report, module_key)
+    observation_date = _metric_observation_date(payload)
+    generated_at = _metric_generated_at(payload, report)
+    missing_reason = _string_or_none(payload.get("missing_reason")) if isinstance(payload, dict) else None
+
+    return DashboardMetric(
+        metric_key=metric_key,
+        display_name=display_name,
+        value=value,
+        value_text=_format_value(value, format_kind, status),
+        unit=unit,
+        status=status,
+        source=source,
+        source_badge=source_badge,
+        observation_date=observation_date,
+        generated_at=generated_at,
+        freshness_status=freshness_status,
+        missing_reason=missing_reason,
+        interpretation_hint=interpretation_hint,
+        ai_context_allowed=_ai_context_allowed(
+            status=status,
+            source=source,
+            source_badge=source_badge,
+            observation_date=observation_date,
+            generated_at=generated_at,
+            freshness_status=freshness_status,
+        ),
+    )
+
+
+def _derived_metric(
+    metric_key: str,
+    reports: tuple[ReportState, ...],
+) -> DashboardMetric | None:
+    if metric_key == "dgs30_distance_to_5pct":
+        found = _find_metric("dgs30", reports)
+        if found is None or not isinstance(_to_float(found[0]), float):
+            return None
+        value = round(5.0 - _to_float(found[0]), 4)
+        return _derived_metric_response(
+            metric_key,
+            "30Y distance to 5%",
+            value,
+            "pp",
+            "pp",
+            found,
+            "Distance is derived from daily DGS30; it is not intraday.",
+        )
+    if metric_key == "nasdaq_vs_sp500_30d":
+        nasdaq = _find_metric("nasdaq100_30d_return", reports)
+        sp500 = _find_metric("sp500_30d_return", reports)
+        if nasdaq is None or sp500 is None:
+            return None
+        nasdaq_value = _to_float(nasdaq[0])
+        sp500_value = _to_float(sp500[0])
+        if not isinstance(nasdaq_value, float) or not isinstance(sp500_value, float):
+            return None
+        value = round(nasdaq_value - sp500_value, 4)
+        return _derived_metric_response(
+            metric_key,
+            "Nasdaq vs S&P 500 30D",
+            value,
+            "pp",
+            "pp",
+            nasdaq,
+            "Derived spread between compact 30D return metrics.",
+        )
+    return None
+
+
+def _derived_metric_response(
+    metric_key: str,
+    display_name: str,
+    value: float,
+    unit: str,
+    format_kind: str,
+    source_metric: tuple[Any, dict[str, Any], ReportState],
+    interpretation_hint: str,
+) -> DashboardMetric:
+    _, payload, report = source_metric
+    generated_at = _metric_generated_at(payload, report)
+    observation_date = _metric_observation_date(payload)
+    return DashboardMetric(
+        metric_key=metric_key,
+        display_name=display_name,
+        value=value,
+        value_text=_format_value(value, format_kind, "ok"),
+        unit=unit,
+        status="ok",
+        source=_metric_source(payload, report),
+        source_badge="derived",
+        observation_date=observation_date,
+        generated_at=generated_at,
+        freshness_status=_metric_freshness(payload, report),
+        missing_reason=None,
+        interpretation_hint=interpretation_hint,
+        ai_context_allowed=_ai_context_allowed(
+            status="ok",
+            source=_metric_source(payload, report),
+            source_badge="derived",
+            observation_date=observation_date,
+            generated_at=generated_at,
+            freshness_status=_metric_freshness(payload, report),
+        ),
+    )
+
+
+def _missing_metric(
+    metric_key: str,
+    display_name: str,
+    unit: str | None,
+    status: str,
+    generated_at: str | None,
+    interpretation_hint: str | None = None,
+) -> DashboardMetric:
+    normalized_status = _metric_status_value(status)
+    source_badge = "research_needed" if normalized_status == "research_needed" else "missing"
+    return DashboardMetric(
+        metric_key=metric_key,
+        display_name=display_name,
+        value=None,
+        value_text=_missing_value_text(normalized_status),
+        unit=unit,
+        status=normalized_status,
+        source=None,
+        source_badge=source_badge,
+        observation_date=None,
+        generated_at=generated_at,
+        freshness_status="unknown",
+        missing_reason=_missing_value_text(normalized_status),
+        interpretation_hint=interpretation_hint,
+        ai_context_allowed=False,
+    )
+
+
+def _find_metric(
+    metric_key: str,
+    reports: tuple[ReportState, ...],
+) -> tuple[Any, dict[str, Any], ReportState] | None:
+    for report in reports:
+        if report.data is None:
+            continue
+        found = _find_metric_payload(report.data, metric_key)
+        if found is None:
+            continue
+        value, payload = found
+        return value, payload, report
+    return None
+
+
+def _find_metric_payload(value: Any, metric_key: str) -> tuple[Any, dict[str, Any]] | None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if str(key).lower() == metric_key.lower():
+                if isinstance(child, dict):
+                    child_value = _extract_metric_value(child)
+                    return child_value, child
+                return child, {"value": child}
+        for child in value.values():
+            found = _find_metric_payload(child, metric_key)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for child in value:
+            found = _find_metric_payload(child, metric_key)
+            if found is not None:
+                return found
+    return None
+
+
+def _extract_metric_value(payload: dict[str, Any]) -> Any:
+    for key in ("value", "value_text", "status", "label", "date", "updated_at"):
+        if key in payload and payload.get(key) is not None:
+            return payload.get(key)
+    return None
+
+
+def _metric_status(payload: dict[str, Any]) -> str:
+    return _metric_status_value(payload.get("status") or "ok")
+
+
+def _metric_status_value(value: Any) -> str:
+    status = str(value or "unknown").lower()
+    return status if status in ALLOWED_METRIC_STATUSES else "unknown"
+
+
+def _metric_freshness(payload: dict[str, Any], report: ReportState) -> str:
+    freshness = payload.get("freshness_status")
+    if freshness is None and isinstance(payload.get("freshness"), dict):
+        freshness = payload["freshness"].get("freshness_status")
+    if freshness is None and _contains_signal(payload, ("stale_cache",)):
+        freshness = "stale"
+    if freshness is None and report.data is not None and _contains_signal(report.data, ("stale_cache",)):
+        freshness = "stale"
+    return str(freshness or "unknown").lower()
+
+
+def _metric_source(payload: dict[str, Any], report: ReportState) -> str | None:
+    source = payload.get("source")
+    if source is None and isinstance(payload.get("metadata"), dict):
+        source = payload["metadata"].get("source")
+    if source is None and isinstance(report.data, dict):
+        source = report.data.get("source")
+    return _string_or_none(source)
+
+
+def _metric_source_badge(payload: dict[str, Any], report: ReportState, module_key: str) -> str:
+    if module_key == "portfolio_deviation":
+        return "local"
+    badge = payload.get("source_badge") or payload.get("source_tier")
+    if badge is None and isinstance(payload.get("freshness"), dict):
+        badge = payload["freshness"].get("source_tier")
+    if badge is None and isinstance(report.data, dict):
+        badge = report.data.get("source_badge") or report.data.get("source_tier")
+    badge_text = str(badge or "missing").lower()
+    if badge_text in {"official", "official_fallback", "unofficial_fallback", "proxy", "search-derived"}:
+        return badge_text
+    if badge_text == "manual":
+        return "local"
+    return badge_text if badge_text in ALLOWED_SOURCE_BADGES else "missing"
+
+
+def _metric_observation_date(payload: dict[str, Any]) -> str | None:
+    return _string_or_none(
+        payload.get("observation_date")
+        or payload.get("date")
+        or payload.get("updated_at")
+    )
+
+
+def _metric_generated_at(payload: dict[str, Any], report: ReportState) -> str | None:
+    if payload.get("generated_at") is not None:
+        return _string_or_none(payload.get("generated_at"))
+    if isinstance(report.data, dict):
+        return _string_or_none(report.data.get("generated_at") or report.data.get("updated_at"))
+    return None
+
+
+def _format_value(value: Any, format_kind: str, status: str) -> str:
+    if status in {"missing", "research_needed", "insufficient_history", "not_available"}:
+        return _missing_value_text(status)
+    if status == "stale" and value is None:
+        return "stale"
+    if format_kind == "bool":
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return "unknown"
+    if format_kind == "percent":
+        number = _to_float(value)
+        return f"{number:.2f}%" if isinstance(number, float) else str(value)
+    if format_kind == "signed_percent":
+        number = _to_float(value)
+        return f"{number:+.2f}%" if isinstance(number, float) else str(value)
+    if format_kind == "pp":
+        number = _to_float(value)
+        return f"{number:+.1f}pp" if isinstance(number, float) else str(value)
+    if value is None:
+        return "unknown"
+    return str(value)
+
+
+def _missing_value_text(status: str) -> str:
+    if status == "research_needed":
+        return "research needed"
+    if status == "insufficient_history":
+        return "insufficient history"
+    if status == "stale":
+        return "stale"
+    if status == "not_available":
+        return "not available"
+    return "missing"
+
+
+def _to_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip().replace("%", ""))
+        except ValueError:
+            return None
+    return None
+
+
+def _interpretation_hint(metric_key: str) -> str | None:
+    if metric_key in {"dgs10", "dgs30", "dgs10_5d_avg", "dgs30_distance_to_5pct"}:
+        return "FRED Treasury yield series are daily, not intraday."
+    if metric_key == "dgs30_breakout_confirmed":
+        return "Breakout confirmation requires explicit compact evidence; do not infer it."
+    if metric_key == "ppiaco_yoy":
+        return "PPIACO is not final demand PPI."
+    if metric_key == "cash_reserve_status":
+        return "Cash reserve is not part of target allocation."
+    if metric_key in {
+        "max_deviation_asset",
+        "max_deviation_pp",
+        "equity_total_deviation_pp",
+    }:
+        return "Portfolio deviation is local context and is not attributed to market factors."
+    return None
+
+
+def _ai_context_allowed(
+    status: str,
+    source: str | None,
+    source_badge: str,
+    observation_date: str | None,
+    generated_at: str | None,
+    freshness_status: str,
+) -> bool:
+    if status in {"missing", "research_needed", "insufficient_history", "not_available", "stale"}:
+        return False
+    if freshness_status == "stale":
+        return False
+    if source_badge == "search-derived":
+        return False
+    if not source and source_badge != "local":
+        return False
+    return bool(observation_date or generated_at)
 
 
 def _missing_data(reports: dict[str, ReportState]) -> list[dict]:
@@ -300,6 +778,9 @@ def _data_freshness(reports: dict[str, ReportState], provider_health: dict) -> d
                 else None
             ),
             "stale_cache": _contains_signal(report.data, ("stale_cache",)),
+            "next_action": _next_action_for_report(name)
+            if _report_status(report) in {"missing", "error", "stale"}
+            else None,
         }
     return {
         "status": _freshness_status(files),

@@ -41,6 +41,24 @@ export type DashboardModule = {
   updated_at: string | null;
   next_action: string | null;
   error_summary: string | null;
+  key_metrics: DashboardMetric[];
+};
+
+export type DashboardMetric = {
+  metric_key: string;
+  display_name: string;
+  value: number | string | boolean | null;
+  value_text: string;
+  unit: string | null;
+  status: string;
+  source: string | null;
+  source_badge: string;
+  observation_date: string | null;
+  generated_at: string | null;
+  freshness_status: string;
+  missing_reason: string | null;
+  interpretation_hint: string | null;
+  ai_context_allowed: boolean;
 };
 
 export type DashboardSummaryResponse = {
