@@ -21,4 +21,10 @@ __pycache__/
 venv/
 *.zip
 
+app_frontend/node_modules/
+app_frontend/dist/
+app_frontend/*.tsbuildinfo
+app_frontend/vite.config.d.ts
+app_frontend/vite.config.js
+
 configs/external_llm.yaml
