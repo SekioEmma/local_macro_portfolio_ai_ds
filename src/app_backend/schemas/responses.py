@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -52,3 +54,58 @@ class DashboardSummaryResponse(BaseModel):
     missing_data: list[dict]
     data_freshness: dict
     next_actions: list[str]
+
+
+class StorageStatusResponse(BaseModel):
+    storage_mode: str
+    database_exists: bool
+    schema_version: int | None
+    initialized: bool
+    error_summary: str | None
+
+
+class AppSettingsResponse(BaseModel):
+    settings: dict[str, Any]
+    updated_at: str | None
+
+
+class UpdateAppSettingsRequest(BaseModel):
+    settings: dict[str, Any]
+
+
+class RefreshRun(BaseModel):
+    id: int
+    kind: str
+    status: str
+    started_at: str
+    finished_at: str | None
+    summary: dict[str, Any]
+    error_summary: str | None
+    created_at: str
+
+
+class CreateRefreshRunRequest(BaseModel):
+    kind: str
+    status: str
+    started_at: str
+    finished_at: str | None = None
+    summary: dict[str, Any] | None = None
+    error_summary: str | None = None
+
+
+class FavoriteAnswer(BaseModel):
+    id: int
+    title: str | None
+    question: str
+    answer: str
+    model: str | None
+    context_snapshot: dict[str, Any]
+    created_at: str
+
+
+class CreateFavoriteAnswerRequest(BaseModel):
+    title: str | None = None
+    question: str
+    answer: str
+    model: str | None = None
+    context_snapshot: dict[str, Any] | None = None

@@ -1,15 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  createFavorite,
+  createRefreshRun,
   fetchDashboardSummary,
+  fetchFavorites,
   fetchProviderHealth,
-  fetchStatus
+  fetchRefreshRuns,
+  fetchSettings,
+  fetchStatus,
+  fetchStorageStatus,
+  updateSettings
 } from "./api/client";
 import type {
   ApiResult,
+  AppSettings,
+  AppSettingsResponse,
   DashboardModule,
   DashboardSummaryResponse,
+  FavoriteAnswer,
   ProviderHealthResponse,
-  StatusResponse
+  RefreshRun,
+  StatusResponse,
+  StorageStatusResponse
 } from "./types";
 
 type ViewKey = "dashboard" | "chat" | "account" | "diagnostics";
@@ -42,24 +54,59 @@ export default function App() {
   const [dashboard, setDashboard] = useState<
     ApiResult<DashboardSummaryResponse>
   >({ data: null, error: null });
+  const [storage, setStorage] = useState<ApiResult<StorageStatusResponse>>({
+    data: null,
+    error: null
+  });
+  const [settings, setSettings] = useState<ApiResult<AppSettingsResponse>>({
+    data: null,
+    error: null
+  });
+  const [refreshRuns, setRefreshRuns] = useState<ApiResult<RefreshRun[]>>({
+    data: null,
+    error: null
+  });
+  const [favorites, setFavorites] = useState<ApiResult<FavoriteAnswer[]>>({
+    data: null,
+    error: null
+  });
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    let isMounted = true;
-    Promise.all([fetchStatus(), fetchProviderHealth(), fetchDashboardSummary()])
-      .then(([statusResult, providerResult, dashboardResult]) => {
-        if (!isMounted) return;
-        setStatus(statusResult);
-        setProviderHealth(providerResult);
-        setDashboard(dashboardResult);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoading(false);
-      });
+  const loadAll = () => {
+    setIsLoading(true);
+    Promise.all([
+      fetchStatus(),
+      fetchProviderHealth(),
+      fetchDashboardSummary(),
+      fetchStorageStatus(),
+      fetchSettings(),
+      fetchRefreshRuns(),
+      fetchFavorites()
+    ])
+      .then(
+        ([
+          statusResult,
+          providerResult,
+          dashboardResult,
+          storageResult,
+          settingsResult,
+          refreshResult,
+          favoritesResult
+        ]) => {
+          setStatus(statusResult);
+          setProviderHealth(providerResult);
+          setDashboard(dashboardResult);
+          setStorage(storageResult);
+          setSettings(settingsResult);
+          setRefreshRuns(refreshResult);
+          setFavorites(favoritesResult);
+        }
+      )
+      .finally(() => setIsLoading(false));
+  };
 
-    return () => {
-      isMounted = false;
-    };
+  useEffect(() => {
+    loadAll();
   }, []);
 
   return (
@@ -69,7 +116,7 @@ export default function App() {
           <span className="brand-mark">LM</span>
           <div>
             <h1>本地宏观组合</h1>
-            <p>Phase 1 只读 Web Shell</p>
+            <p>Phase 2 App State</p>
           </div>
         </div>
         <nav className="nav-list" aria-label="主导航">
@@ -99,14 +146,22 @@ export default function App() {
         {activeView === "account" && (
           <PlaceholderView
             title="账户概览"
-            text="Account editing will be added in a later phase. Current Phase 1 is read-only."
+            text="Account editing will be added in a later phase. Current Phase 2 only adds local app state."
           />
         )}
         {activeView === "diagnostics" && (
           <DiagnosticsView
             status={status}
             providerHealth={providerHealth}
+            storage={storage}
+            settings={settings}
+            refreshRuns={refreshRuns}
+            favorites={favorites}
             isLoading={isLoading}
+            reload={loadAll}
+            setSettings={setSettings}
+            setRefreshRuns={setRefreshRuns}
+            setFavorites={setFavorites}
           />
         )}
       </main>
@@ -221,11 +276,27 @@ function ModuleCard({
 function DiagnosticsView({
   status,
   providerHealth,
-  isLoading
+  storage,
+  settings,
+  refreshRuns,
+  favorites,
+  isLoading,
+  reload,
+  setSettings,
+  setRefreshRuns,
+  setFavorites
 }: {
   status: ApiResult<StatusResponse>;
   providerHealth: ApiResult<ProviderHealthResponse>;
+  storage: ApiResult<StorageStatusResponse>;
+  settings: ApiResult<AppSettingsResponse>;
+  refreshRuns: ApiResult<RefreshRun[]>;
+  favorites: ApiResult<FavoriteAnswer[]>;
   isLoading: boolean;
+  reload: () => void;
+  setSettings: (value: ApiResult<AppSettingsResponse>) => void;
+  setRefreshRuns: (value: ApiResult<RefreshRun[]>) => void;
+  setFavorites: (value: ApiResult<FavoriteAnswer[]>) => void;
 }) {
   if (isLoading) {
     return <LoadingState title="诊断" />;
@@ -235,9 +306,12 @@ function DiagnosticsView({
     <section className="page-stack">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Read-only diagnostics</p>
+          <p className="eyebrow">Read-only diagnostics + local app state</p>
           <h2>诊断</h2>
         </div>
+        <button className="secondary-button" type="button" onClick={reload}>
+          重新读取
+        </button>
       </header>
 
       <section className="content-grid">
@@ -253,6 +327,39 @@ function DiagnosticsView({
                 </li>
               ))}
             </ul>
+          )}
+        </InfoPanel>
+
+        <InfoPanel title="Storage">
+          {storage.error || !storage.data ? (
+            <p className="error-text">{storage.error || "storage 不可用。"}</p>
+          ) : (
+            <ul className="compact-list">
+              <li>
+                <span>mode</span>
+                <small>{storage.data.storage_mode}</small>
+              </li>
+              <li>
+                <span>database</span>
+                <small>{storage.data.database_exists ? "exists" : "missing"}</small>
+              </li>
+              <li>
+                <span>schema</span>
+                <small>{storage.data.schema_version ?? "unknown"}</small>
+              </li>
+              <li>
+                <span>initialized</span>
+                <small>{storage.data.initialized ? "yes" : "no"}</small>
+              </li>
+            </ul>
+          )}
+        </InfoPanel>
+
+        <InfoPanel title="Settings">
+          {settings.error || !settings.data ? (
+            <p className="error-text">{settings.error || "settings 不可用。"}</p>
+          ) : (
+            <SettingsForm current={settings.data.settings} onSaved={setSettings} />
           )}
         </InfoPanel>
 
@@ -278,15 +385,168 @@ function DiagnosticsView({
             </>
           )}
         </InfoPanel>
+
+        <InfoPanel title="Refresh Runs">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => createRefreshRun().then((result) => {
+              if (result.error) {
+                setRefreshRuns({ data: refreshRuns.data, error: result.error });
+                return;
+              }
+              fetchRefreshRuns().then(setRefreshRuns);
+            })}
+          >
+            写入占位 refresh run
+          </button>
+          <RecordList items={refreshRuns.data || []} error={refreshRuns.error} />
+        </InfoPanel>
+
+        <InfoPanel title="Favorites">
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => createFavorite().then((result) => {
+              if (result.error) {
+                setFavorites({ data: favorites.data, error: result.error });
+                return;
+              }
+              fetchFavorites().then(setFavorites);
+            })}
+          >
+            写入占位 favorite
+          </button>
+          <RecordList items={favorites.data || []} error={favorites.error} />
+        </InfoPanel>
       </section>
     </section>
+  );
+}
+
+function SettingsForm({
+  current,
+  onSaved
+}: {
+  current: AppSettings;
+  onSaved: (value: ApiResult<AppSettingsResponse>) => void;
+}) {
+  const [draft, setDraft] = useState<AppSettings>({
+    ui_language: current.ui_language || "zh-CN",
+    default_context_mode: current.default_context_mode || "full",
+    search_enabled_by_default: Boolean(current.search_enabled_by_default),
+    save_chat_by_default: Boolean(current.save_chat_by_default),
+    show_cost_detail: current.show_cost_detail || "details_only"
+  });
+  const [message, setMessage] = useState<string | null>(null);
+
+  const save = () => {
+    updateSettings(draft).then((result) => {
+      onSaved(result);
+      setMessage(result.error ? result.error : "设置已保存。");
+    });
+  };
+
+  return (
+    <div className="settings-form">
+      <label>
+        UI language
+        <select
+          value={draft.ui_language}
+          onChange={(event) => setDraft({ ...draft, ui_language: event.target.value })}
+        >
+          <option value="zh-CN">zh-CN</option>
+        </select>
+      </label>
+      <label>
+        context mode
+        <select
+          value={draft.default_context_mode}
+          onChange={(event) =>
+            setDraft({ ...draft, default_context_mode: event.target.value })
+          }
+        >
+          <option value="full">full</option>
+          <option value="sanitized">sanitized</option>
+        </select>
+      </label>
+      <label>
+        cost detail
+        <select
+          value={draft.show_cost_detail}
+          onChange={(event) =>
+            setDraft({ ...draft, show_cost_detail: event.target.value })
+          }
+        >
+          <option value="details_only">details_only</option>
+          <option value="always">always</option>
+          <option value="hidden">hidden</option>
+        </select>
+      </label>
+      <label className="checkbox-row">
+        <input
+          checked={Boolean(draft.search_enabled_by_default)}
+          type="checkbox"
+          onChange={(event) =>
+            setDraft({ ...draft, search_enabled_by_default: event.target.checked })
+          }
+        />
+        search enabled by default
+      </label>
+      <label className="checkbox-row">
+        <input
+          checked={Boolean(draft.save_chat_by_default)}
+          type="checkbox"
+          onChange={(event) =>
+            setDraft({ ...draft, save_chat_by_default: event.target.checked })
+          }
+        />
+        save chat by default
+      </label>
+      <button className="secondary-button" type="button" onClick={save}>
+        保存设置
+      </button>
+      {message && <p className="muted">{message}</p>}
+    </div>
+  );
+}
+
+function RecordList({
+  items,
+  error
+}: {
+  items: Array<{
+    id: number;
+    kind?: string;
+    title?: string | null;
+    question?: string;
+    status?: string;
+    created_at?: string;
+  }>;
+  error: string | null;
+}) {
+  if (error) {
+    return <p className="error-text">{error}</p>;
+  }
+  if (items.length === 0) {
+    return <p className="muted">暂无记录。</p>;
+  }
+  return (
+    <ul className="compact-list">
+      {items.slice(0, 5).map((item) => (
+        <li key={String(item.id)}>
+          <span>{String(item.kind || item.title || item.question || "record")}</span>
+          <small>{String(item.status || item.created_at || "saved")}</small>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 function PlaceholderView({ title, text }: { title: string; text: string }) {
   return (
     <section className="placeholder-page">
-      <p className="eyebrow">Phase 1 placeholder</p>
+      <p className="eyebrow">Phase placeholder</p>
       <h2>{title}</h2>
       <p>{text}</p>
     </section>
@@ -334,7 +594,7 @@ function LoadingState({ title }: { title: string }) {
     <section className="placeholder-page">
       <p className="eyebrow">Loading</p>
       <h2>{title}</h2>
-      <p>正在读取本地只读 API。</p>
+      <p>正在读取本地 API。</p>
     </section>
   );
 }

@@ -3,6 +3,9 @@
 
 data/holdings/current_holdings.csv
 data/private/
+data/app_state/*.sqlite3
+data/app_state/*.sqlite3-*
+data/app_state/*.db
 data/history/**/*.raw.json
 data/manual/market_data_manual.csv
 

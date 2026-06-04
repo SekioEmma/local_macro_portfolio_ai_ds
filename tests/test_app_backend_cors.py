@@ -25,6 +25,9 @@ def test_status_cors_preflight_uses_strict_local_origin():
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+    assert "GET" in response.headers["access-control-allow-methods"]
+    assert "PUT" in response.headers["access-control-allow-methods"]
+    assert "POST" in response.headers["access-control-allow-methods"]
 
 
 def test_backend_runner_binds_localhost_only():

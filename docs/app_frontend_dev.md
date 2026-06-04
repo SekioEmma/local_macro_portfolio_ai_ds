@@ -1,6 +1,6 @@
 # App Frontend Dev
 
-This Phase 1 web shell is read-only. It calls the local FastAPI backend and does not run market pipelines, provider refreshes, DeepSeek, Tavily, account writes, or SQLite.
+This local web shell calls the FastAPI backend and does not run market pipelines, provider refreshes, DeepSeek, Tavily, or account writes. Phase 2 adds SQLite app state for settings and placeholder metadata only.
 
 ## Backend
 
@@ -46,6 +46,15 @@ The frontend calls only:
 - `GET /api/status`
 - `GET /api/provider-health`
 - `GET /api/dashboard/summary`
+- `GET /api/app/storage`
+- `GET /api/app/settings`
+- `PUT /api/app/settings`
+- `GET /api/app/refresh-runs`
+- `POST /api/app/refresh-runs`
+- `GET /api/app/favorites`
+- `POST /api/app/favorites`
+
+The app state `PUT`/`POST` endpoints write only local SQLite app metadata. They are not market refresh endpoints and do not run providers.
 
 ## Read-only Boundaries
 
@@ -57,6 +66,8 @@ The frontend calls only:
 - No DeepSeek or Tavily calls.
 - No chat history storage.
 - No complete project root display.
+- No raw prompt, raw provider response, raw output, or API key storage.
+- No holdings source migration.
 
 ## CORS
 
@@ -67,12 +78,30 @@ The backend allows only local Vite origins:
 
 Wildcard CORS is not allowed.
 
+## SQLite App State
+
+Phase 2 stores local app metadata at:
+
+```text
+data/app_state/app_state.sqlite3
+```
+
+The frontend diagnostics page can display storage status, update basic settings, and create placeholder refresh/favorite rows. It does not send real chat, holdings, model prompts, or provider responses.
+
+Reset a development database by deleting it and restarting the backend:
+
+```powershell
+Remove-Item data/app_state/app_state.sqlite3 -ErrorAction SilentlyContinue
+python scripts/run_app_backend.py
+```
+
 ## Git Hygiene
 
 Do not commit:
 
 - `app_frontend/node_modules/`
 - `app_frontend/dist/`
+- `data/app_state/*.sqlite3`
 - `outputs/`
 - `.env`
 - private holdings or `data/private/`

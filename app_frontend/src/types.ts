@@ -59,3 +59,45 @@ export type DashboardSummaryResponse = {
   data_freshness: Record<string, unknown>;
   next_actions: string[];
 };
+
+export type StorageStatusResponse = {
+  storage_mode: string;
+  database_exists: boolean;
+  schema_version: number | null;
+  initialized: boolean;
+  error_summary: string | null;
+};
+
+export type AppSettingsResponse = {
+  settings: AppSettings;
+  updated_at: string | null;
+};
+
+export type AppSettings = {
+  ui_language?: string;
+  default_context_mode?: string;
+  search_enabled_by_default?: boolean;
+  save_chat_by_default?: boolean;
+  show_cost_detail?: string;
+};
+
+export type RefreshRun = {
+  id: number;
+  kind: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  summary: Record<string, unknown>;
+  error_summary: string | null;
+  created_at: string;
+};
+
+export type FavoriteAnswer = {
+  id: number;
+  title: string | null;
+  question: string;
+  answer: string;
+  model: string | null;
+  context_snapshot: Record<string, unknown>;
+  created_at: string;
+};
