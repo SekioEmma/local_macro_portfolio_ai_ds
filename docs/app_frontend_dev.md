@@ -93,6 +93,19 @@ The page shows:
 
 Rows preserve missing, stale, research-needed, insufficient-history, and not-available states with clear text. The table does not display raw JSON, holdings line items, API keys, prompts, or raw outputs.
 
+## Show All Detail Drawer
+
+The dashboard home module cards include `Show All / 查看详情`.
+
+The detail drawer reuses:
+
+- dashboard module summary and `key_metrics` from `GET /api/dashboard/summary`
+- module-filtered rows from `GET /api/dashboard/evidence-table`
+
+The drawer shows status summary, key metrics, evidence rows, interpretation boundary, missing/research-needed rows, and AI factual-context eligibility counts. Interpretation boundary text follows `docs/dashboard_financial_spec_v1.md` and is summarized in `docs/dashboard_show_all_detail.md`.
+
+This phase does not add charts, AI Chat, search, live refresh, account editing, or trading suggestions. Any future `Open in AI Chat` action must remain disabled or explicitly marked as a later-phase action until a mock-provider chat skeleton exists.
+
 ## Read-only Boundaries
 
 - No account editing.

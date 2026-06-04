@@ -12,6 +12,7 @@ import {
   fetchStorageStatus,
   updateSettings
 } from "./api/client";
+import { ModuleDetailDrawer } from "./components/ModuleDetailDrawer";
 import type {
   ApiResult,
   AppSettings,
@@ -146,7 +147,11 @@ export default function App() {
 
       <main className="main-panel">
         {activeView === "dashboard" && (
-          <DashboardView dashboard={dashboard} isLoading={isLoading} />
+          <DashboardView
+            dashboard={dashboard}
+            evidence={evidence}
+            isLoading={isLoading}
+          />
         )}
         {activeView === "evidence" && (
           <EvidenceTableView evidence={evidence} isLoading={isLoading} />
@@ -185,16 +190,25 @@ export default function App() {
 
 function DashboardView({
   dashboard,
+  evidence,
   isLoading
 }: {
   dashboard: ApiResult<DashboardSummaryResponse>;
+  evidence: ApiResult<DashboardEvidenceTableResponse>;
   isLoading: boolean;
 }) {
+  const [selectedModuleKey, setSelectedModuleKey] = useState<string | null>(null);
   const data = dashboard.data;
   const modules = useMemo(() => {
     if (!data) return [];
     return Object.entries(data.modules);
   }, [data]);
+  const selectedModule = selectedModuleKey && data
+    ? data.modules[selectedModuleKey]
+    : null;
+  const selectedRows = evidence.data?.rows.filter(
+    (row) => row.module === selectedModuleKey
+  ) || [];
 
   if (isLoading) {
     return <LoadingState title="市场仪表盘" />;
@@ -226,7 +240,12 @@ function DashboardView({
 
       <section className="module-grid">
         {modules.map(([key, module]) => (
-          <ModuleCard key={key} moduleKey={key} module={module} />
+          <ModuleCard
+            key={key}
+            moduleKey={key}
+            module={module}
+            onShowAll={() => setSelectedModuleKey(key)}
+          />
         ))}
       </section>
 
@@ -250,16 +269,29 @@ function DashboardView({
           <FreshnessList data={data.data_freshness} />
         </InfoPanel>
       </section>
+
+      {selectedModuleKey && selectedModule && (
+        <ModuleDetailDrawer
+          moduleKey={selectedModuleKey}
+          moduleLabel={moduleLabels[selectedModuleKey] || selectedModuleKey}
+          moduleSummary={selectedModule}
+          evidenceRows={selectedRows}
+          evidenceError={evidence.error}
+          onClose={() => setSelectedModuleKey(null)}
+        />
+      )}
     </section>
   );
 }
 
 function ModuleCard({
   moduleKey,
-  module
+  module,
+  onShowAll
 }: {
   moduleKey: string;
   module: DashboardModule;
+  onShowAll: () => void;
 }) {
   return (
     <article className="module-card">
@@ -288,6 +320,9 @@ function ModuleCard({
         <p className="error-text">{module.error_summary}</p>
       )}
       {module.next_action && <p className="next-action">{module.next_action}</p>}
+      <button className="secondary-button detail-button" type="button" onClick={onShowAll}>
+        Show All / 查看详情
+      </button>
     </article>
   );
 }

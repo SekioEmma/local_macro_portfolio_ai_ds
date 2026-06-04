@@ -403,6 +403,175 @@ button {
   background: #eef4f8;
 }
 
+.secondary-button:disabled {
+  color: #7d8b98;
+  cursor: not-allowed;
+  background: #f3f6f8;
+}
+
+.detail-button {
+  margin-top: 14px;
+  width: 100%;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(19, 33, 47, 0.42);
+}
+
+.module-detail-drawer {
+  width: min(920px, 100vw);
+  height: 100vh;
+  overflow: auto;
+  background: #ffffff;
+  padding: 24px;
+  box-shadow: -10px 0 24px rgba(22, 34, 45, 0.18);
+}
+
+.drawer-header,
+.drawer-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.drawer-header h2 {
+  margin: 4px 0;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #c8d4df;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #243647;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.icon-button:hover {
+  background: #eef4f8;
+}
+
+.drawer-status-row {
+  justify-content: flex-start;
+  margin: 18px 0;
+  color: #60758a;
+  font-size: 13px;
+}
+
+.drawer-section {
+  border-top: 1px solid #edf1f4;
+  padding: 18px 0;
+}
+
+.drawer-section h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+
+.drawer-section p {
+  line-height: 1.55;
+}
+
+.drawer-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.drawer-metric {
+  border: 1px solid #edf1f4;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafcfd;
+}
+
+.drawer-value {
+  margin: 10px 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.drawer-metric dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.drawer-metric dt {
+  color: #60758a;
+  font-size: 12px;
+}
+
+.drawer-metric dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.drawer-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drawer-list li {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #edf1f4;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafcfd;
+}
+
+.drawer-list small {
+  display: block;
+  color: #60758a;
+}
+
+.drawer-list p {
+  margin: 0;
+  color: #60758a;
+}
+
+.ai-eligibility-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ai-eligibility-grid div {
+  border: 1px solid #edf1f4;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafcfd;
+}
+
+.ai-eligibility-grid span {
+  display: block;
+  color: #60758a;
+  font-size: 13px;
+}
+
+.ai-eligibility-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 24px;
+}
+
 .settings-form {
   display: grid;
   gap: 12px;
@@ -445,6 +614,16 @@ button {
   .module-grid,
   .content-grid,
   .filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .module-detail-drawer {
+    padding: 20px;
+  }
+
+  .drawer-metric-grid,
+  .drawer-metric dl,
+  .ai-eligibility-grid {
     grid-template-columns: 1fr;
   }
 
