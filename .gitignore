@@ -6,6 +6,7 @@ data/private/
 data/app_state/*.sqlite3
 data/app_state/*.sqlite3-*
 data/app_state/*.db
+data/cache/last_good/*.json
 data/history/**/*.raw.json
 data/manual/market_data_manual.csv
 

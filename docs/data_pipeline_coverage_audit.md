@@ -49,6 +49,12 @@ These generated output files must not be committed.
 - `date_missing_count`
 - `ai_context_allowed_true_count`
 - `ai_context_allowed_false_count`
+- `last_good_metric_count`
+- `last_good_usable_count`
+- `last_good_stale_count`
+- `last_good_expired_count`
+- `last_good_error_count`
+- `last_good_not_used_count`
 
 ## Provenance Completeness
 
@@ -147,6 +153,35 @@ Recommendations are conditional:
 - missing compact fields add `fill_portfolio_deviation_compact`
 - stale holdings add `update_holdings_snapshot`
 - any raw holdings leak adds `privacy_blocker`
+
+## Last-good Cache Fields
+
+The audit reads the local per-key last-good cache without writing new entries.
+
+Top-level `last_good_cache` fields:
+
+- `last_good_cache_available`: whether any cache files were found
+- `last_good_metric_count`: count of readable non-error last-good metrics
+- `last_good_usable_count`: cache entries still inside their freshness window
+- `last_good_stale_count`: cache entries past `stale_after` but not hard expired
+- `last_good_expired_count`: cache entries past the conservative expiry window
+- `last_good_error_count`: unreadable or invalid cache entries
+- `metrics_with_last_good`: metric keys with readable last-good entries
+- `metrics_missing_but_last_good_available`: current missing metrics that have last-good available
+- `last_good_not_used_count`: number of missing current metrics with last-good available
+
+Each module coverage item also includes:
+
+- `last_good_available_count`
+- `missing_but_last_good_available_count`
+
+Last-good cache availability is informational only.
+The audit does not treat last-good as the current live value and does not replace Dashboard rows with cached values.
+
+Recommendations are conditional:
+
+- corrupted last-good JSON adds `clear_or_rebuild_last_good_cache`
+- stale or expired last-good entries add `refresh_market_snapshot`
 
 ## Metadata Anomaly Types
 

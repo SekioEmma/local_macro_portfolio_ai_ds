@@ -15,10 +15,12 @@ from app_backend.schemas.responses import (
     DashboardSummaryResponse,
 )
 from app_backend.services import provider_service
+from data_quality import last_good_cache
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
+PROJECT_REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
+DEFAULT_REPORTS_DIR = PROJECT_REPORTS_DIR
 MAX_ERROR_SUMMARY_LENGTH = 200
 DASHBOARD_MODULE_KEYS = (
     "credit_stress",
@@ -262,9 +264,12 @@ def build_dashboard_evidence_table(
     status: str | None = None,
     source_badge: str | None = None,
     ai_context_allowed: bool | None = None,
+    write_last_good: bool = True,
 ) -> DashboardEvidenceTableResponse:
     summary = build_dashboard_summary(reports_dir=reports_dir)
     all_rows = _evidence_rows_from_summary(summary)
+    if write_last_good and _last_good_write_allowed(reports_dir):
+        _save_last_good_candidates(all_rows)
     filtered_rows = [
         row
         for row in all_rows
@@ -358,6 +363,22 @@ def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidence
         ),
         ai_context_allowed=ai_context_allowed,
     )
+
+
+def _last_good_write_allowed(reports_dir: Path | str | None) -> bool:
+    return reports_dir is None and Path(DEFAULT_REPORTS_DIR) == PROJECT_REPORTS_DIR
+
+
+def _save_last_good_candidates(rows: list[DashboardEvidenceRow]) -> None:
+    for row in rows:
+        if row.module == "portfolio_deviation":
+            continue
+        if not row.ai_context_allowed:
+            continue
+        try:
+            last_good_cache.save_last_good(row)
+        except (OSError, ValueError):
+            continue
 
 
 def _evidence_value_text(metric: DashboardMetric) -> str:

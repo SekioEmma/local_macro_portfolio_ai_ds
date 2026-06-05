@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
+from data_quality import last_good_cache  # noqa: E402
 
 
 STATUS_KEYS = (
@@ -40,21 +41,32 @@ BAD_AI_STATUSES = {
 BAD_AI_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
 
 
-def build_coverage_audit(reports_dir: Path | str | None = None) -> dict[str, Any]:
+def build_coverage_audit(
+    reports_dir: Path | str | None = None,
+    last_good_cache_dir: Path | str | None = None,
+) -> dict[str, Any]:
     summary = dashboard_service.build_dashboard_summary(reports_dir=reports_dir)
-    evidence = dashboard_service.build_dashboard_evidence_table(reports_dir=reports_dir)
+    evidence = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=reports_dir,
+        write_last_good=False,
+    )
     rows = evidence.rows
 
     metadata_anomalies = _metadata_anomalies(rows)
     dependency_anomalies = _dependency_anomalies(summary.modules, rows)
     portfolio_compact = _portfolio_compact_audit(rows)
+    last_good = _last_good_cache_audit(
+        rows,
+        cache_dir=_audit_last_good_cache_dir(reports_dir, last_good_cache_dir),
+    )
 
     return {
         "generated_at": summary.generated_at,
         "overall_status": summary.overall_status,
-        "coverage_summary": _coverage_summary(rows),
-        "module_coverage": _module_coverage(summary.modules, rows),
+        "coverage_summary": _coverage_summary(rows, last_good),
+        "module_coverage": _module_coverage(summary.modules, rows, last_good),
         "portfolio_compact": portfolio_compact,
+        "last_good_cache": last_good,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -64,11 +76,15 @@ def build_coverage_audit(reports_dir: Path | str | None = None) -> dict[str, Any
             metadata_anomalies,
             dependency_anomalies,
             portfolio_compact,
+            last_good,
         ),
     }
 
 
-def _coverage_summary(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
+def _coverage_summary(
+    rows: list[DashboardEvidenceRow],
+    last_good: dict[str, Any],
+) -> dict[str, int]:
     statuses = {key: 0 for key in STATUS_KEYS}
     for row in rows:
         if row.status in statuses:
@@ -111,11 +127,23 @@ def _coverage_summary(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
         ),
         "ai_context_allowed_true_count": sum(1 for row in rows if row.ai_context_allowed),
         "ai_context_allowed_false_count": sum(1 for row in rows if not row.ai_context_allowed),
+        "last_good_metric_count": last_good["last_good_metric_count"],
+        "last_good_usable_count": last_good["last_good_usable_count"],
+        "last_good_stale_count": last_good["last_good_stale_count"],
+        "last_good_expired_count": last_good["last_good_expired_count"],
+        "last_good_error_count": last_good["last_good_error_count"],
+        "last_good_not_used_count": last_good["last_good_not_used_count"],
     }
 
 
-def _module_coverage(modules: dict[str, Any], rows: list[DashboardEvidenceRow]) -> list[dict[str, Any]]:
+def _module_coverage(
+    modules: dict[str, Any],
+    rows: list[DashboardEvidenceRow],
+    last_good: dict[str, Any],
+) -> list[dict[str, Any]]:
     by_module = {module: [row for row in rows if row.module == module] for module in modules}
+    metrics_with_last_good = set(last_good["metrics_with_last_good"])
+    missing_but_last_good = set(last_good["metrics_missing_but_last_good_available"])
     coverage = []
     for module, module_rows in by_module.items():
         usable = sum(1 for row in module_rows if row.ai_context_allowed)
@@ -137,6 +165,12 @@ def _module_coverage(modules: dict[str, Any], rows: list[DashboardEvidenceRow]) 
                 "stale_count": sum(1 for row in module_rows if row.status == "stale"),
                 "usable_fact_count": usable,
                 "ai_context_allowed_count": usable,
+                "last_good_available_count": sum(
+                    1 for row in module_rows if row.metric_key in metrics_with_last_good
+                ),
+                "missing_but_last_good_available_count": sum(
+                    1 for row in module_rows if row.metric_key in missing_but_last_good
+                ),
                 "module_coverage_status": _module_coverage_status(usable, row_count),
             }
         )
@@ -235,6 +269,7 @@ def _recommendations(
     metadata_anomalies: list[dict[str, Any]],
     dependency_anomalies: list[dict[str, Any]],
     portfolio_compact: dict[str, Any] | None = None,
+    last_good: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -250,9 +285,16 @@ def _recommendations(
             recommendations.append("update_holdings_snapshot")
         if portfolio_compact.get("portfolio_has_raw_holdings_leak"):
             recommendations.append("privacy_blocker")
+    if last_good:
+        if last_good.get("last_good_error_count", 0) > 0:
+            recommendations.append("clear_or_rebuild_last_good_cache")
+        if (
+            last_good.get("last_good_stale_count", 0) > 0
+            or last_good.get("last_good_expired_count", 0) > 0
+        ):
+            recommendations.append("refresh_market_snapshot")
     recommendations.extend(
         [
-            "implement_last_good_cache",
             "implement_historical_store",
             "add_yfinance_batch_history",
             "add_official_macro_pack",
@@ -284,6 +326,57 @@ def _ai_context_allowed_by_module(rows: list[DashboardEvidenceRow]) -> dict[str,
         item = result.setdefault(row.module, {"true": 0, "false": 0})
         item["true" if row.ai_context_allowed else "false"] += 1
     return dict(sorted(result.items()))
+
+
+def _last_good_cache_audit(
+    rows: list[DashboardEvidenceRow],
+    *,
+    cache_dir: Path | str | None = None,
+) -> dict[str, Any]:
+    results = last_good_cache.list_last_good_cache(cache_dir=cache_dir)
+    statuses = {
+        "usable": 0,
+        "stale": 0,
+        "expired": 0,
+        "unavailable": 0,
+        "error": 0,
+    }
+    metrics_with_last_good: list[str] = []
+    for result in results:
+        status = result.get("status") or "error"
+        statuses[status] = statuses.get(status, 0) + 1
+        if status not in {"unavailable", "error"}:
+            metrics_with_last_good.append(str(result.get("metric_key")))
+    available_keys = set(metrics_with_last_good)
+    missing_but_last_good = sorted(
+        {
+            row.metric_key
+            for row in rows
+            if not _has_value(row) and row.metric_key in available_keys
+        }
+    )
+    return {
+        "last_good_cache_available": bool(results),
+        "last_good_metric_count": len(metrics_with_last_good),
+        "last_good_usable_count": statuses.get("usable", 0),
+        "last_good_stale_count": statuses.get("stale", 0),
+        "last_good_expired_count": statuses.get("expired", 0),
+        "last_good_error_count": statuses.get("error", 0),
+        "metrics_with_last_good": sorted(metrics_with_last_good),
+        "metrics_missing_but_last_good_available": missing_but_last_good,
+        "last_good_not_used_count": len(missing_but_last_good),
+    }
+
+
+def _audit_last_good_cache_dir(
+    reports_dir: Path | str | None,
+    last_good_cache_dir: Path | str | None,
+) -> Path | str | None:
+    if last_good_cache_dir is not None:
+        return last_good_cache_dir
+    if reports_dir is None:
+        return None
+    return Path(reports_dir) / ".last_good_cache"
 
 
 def _portfolio_compact_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -463,6 +556,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         )
     lines.extend(["", "## Portfolio Compact", ""])
     for key, value in audit["portfolio_compact"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Last-good Cache", ""])
+    for key, value in audit["last_good_cache"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:

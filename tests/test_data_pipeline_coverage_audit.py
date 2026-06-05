@@ -76,6 +76,61 @@ def test_audit_reports_portfolio_compact_coverage(monkeypatch, tmp_path):
     assert "fill_portfolio_deviation_compact" not in result["recommendations"]
 
 
+def test_audit_reports_last_good_cache_status(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    cache_dir = tmp_path / "cache"
+    reports_dir.mkdir()
+    cache_dir.mkdir()
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+    _write_json(
+        cache_dir / "dgs10.json",
+        {
+            "metric_key": "dgs10",
+            "value": 4.52,
+            "value_text": "4.52%",
+            "unit": "percent",
+            "status": "ok",
+            "source": "FRED",
+            "source_badge": "official",
+            "provider": "FRED",
+            "source_series": "DGS10",
+            "observation_date": "2026-01-01",
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "fetched_at": "2026-01-01T00:00:00+00:00",
+            "freshness_status": "fresh",
+            "ttl_policy": "daily",
+            "ttl_days": 7,
+            "stale_after": "2026-01-08T00:00:00+00:00",
+            "last_live_status": "ok",
+            "last_error": None,
+            "raw_hash": "safe-hash",
+        },
+    )
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        last_good_cache_dir=cache_dir,
+    )
+
+    assert result["coverage_summary"]["last_good_metric_count"] == 1
+    assert result["last_good_cache"]["last_good_metric_count"] == 1
+    assert result["last_good_cache"]["metrics_with_last_good"] == ["dgs10"]
+    assert result["last_good_cache"]["metrics_missing_but_last_good_available"] == ["dgs10"]
+    assert result["last_good_cache"]["last_good_not_used_count"] == 1
+    rate_pressure = next(
+        item for item in result["module_coverage"] if item["module"] == "rate_pressure"
+    )
+    assert rate_pressure["last_good_available_count"] == 1
+    assert rate_pressure["missing_but_last_good_available_count"] == 1
+
+
 def test_audit_detects_metadata_anomalies():
     rows = [
         _row(
