@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
+from data_providers import yfinance_history_provider  # noqa: E402
 from data_quality import historical_derived_metrics  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
 from data_quality import market_history_store  # noqa: E402
@@ -41,6 +42,7 @@ BAD_AI_STATUSES = {
     "stale",
 }
 BAD_AI_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
+DEFAULT_YFINANCE_HISTORY_CONFIG = PROJECT_ROOT / "configs" / "yfinance_history.yaml"
 
 
 def build_coverage_audit(
@@ -70,6 +72,10 @@ def build_coverage_audit(
         rows,
         db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
     )
+    yfinance_history = _yfinance_history_audit(
+        rows,
+        db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
+    )
 
     return {
         "generated_at": summary.generated_at,
@@ -80,6 +86,7 @@ def build_coverage_audit(
         "last_good_cache": last_good,
         "historical_store": historical_store,
         "historical_derived": historical_derived,
+        "yfinance_history": yfinance_history,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -92,6 +99,7 @@ def build_coverage_audit(
             last_good,
             historical_store,
             historical_derived,
+            yfinance_history,
         ),
     }
 
@@ -287,6 +295,7 @@ def _recommendations(
     last_good: dict[str, Any] | None = None,
     historical_store: dict[str, Any] | None = None,
     historical_derived: dict[str, Any] | None = None,
+    yfinance_history: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -314,12 +323,9 @@ def _recommendations(
         recommendations.extend(historical_store.get("recommended_history_actions", []))
     if historical_derived:
         recommendations.extend(historical_derived.get("recommended_history_actions", []))
-    recommendations.extend(
-        [
-            "add_yfinance_batch_history",
-            "add_official_macro_pack",
-        ]
-    )
+    if yfinance_history:
+        recommendations.extend(yfinance_history.get("recommendations", []))
+    recommendations.append("add_official_macro_pack")
     return sorted(set(recommendations))
 
 
@@ -484,7 +490,7 @@ def _historical_derived_audit(
     if not db_exists:
         actions.append("initialize_and_ingest_market_history")
     if any(item.status == "insufficient_history" for item in all_metrics):
-        actions.extend(["ingest_more_history", "yfinance_batch_history_provider"])
+        actions.extend(["ingest_more_history", "run_yfinance_history_ingest_live"])
     return {
         "historical_derived_available": any(item.status == "ok" for item in all_metrics),
         "derived_metric_count": len(all_metrics),
@@ -516,6 +522,131 @@ def _historical_derived_audit(
         ),
         "recommended_history_actions": sorted(set(actions)),
     }
+
+
+def _yfinance_history_audit(
+    rows: list[DashboardEvidenceRow],
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, Any]:
+    config = (
+        yfinance_history_provider.load_yfinance_history_config(DEFAULT_YFINANCE_HISTORY_CONFIG)
+        if DEFAULT_YFINANCE_HISTORY_CONFIG.exists()
+        else {}
+    )
+    yfinance_summary = _yfinance_observation_summary(db_path=db_path)
+    observations_by_metric = yfinance_summary["observations_by_metric"]
+    latest_by_metric = yfinance_summary["latest_observation_by_metric"]
+    source_badges = yfinance_summary["source_badges"]
+    observation_count = yfinance_summary["observation_count"]
+    configured_metric_keys = {item["metric_key"] for item in config.values()}
+    potentially_resolvable = _insufficient_history_potentially_resolvable_by_yfinance(
+        rows,
+        configured_metric_keys,
+    )
+    recommendations = ["keep_proxy_out_of_official_layer"]
+    if observation_count == 0:
+        recommendations.append("run_yfinance_history_ingest_live")
+    if potentially_resolvable:
+        recommendations.append("integrate_historical_derived_metrics")
+    return {
+        "yfinance_history_configured": bool(config),
+        "yfinance_enabled_symbol_count": len(config),
+        "yfinance_observation_count": observation_count,
+        "yfinance_observations_by_metric": dict(sorted(observations_by_metric.items())),
+        "yfinance_latest_observation_by_metric": dict(sorted(latest_by_metric.items())),
+        "yfinance_proxy_metric_count": sum(
+            1 for item in config.values() if item.get("source_badge") == "proxy"
+        ),
+        "yfinance_unofficial_fallback_metric_count": sum(
+            1
+            for item in config.values()
+            if item.get("source_badge") == "unofficial_fallback"
+        ),
+        "historical_store_proxy_observation_count": source_badges.get("proxy", 0),
+        "historical_store_unofficial_observation_count": source_badges.get(
+            "unofficial_fallback", 0
+        ),
+        "insufficient_history_potentially_resolvable_by_yfinance": potentially_resolvable,
+        "recommendations": sorted(set(recommendations)),
+    }
+
+
+def _yfinance_observation_summary(
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, Any]:
+    path = Path(db_path) if db_path is not None else market_history_store.get_default_market_history_db_path()
+    if not path.exists():
+        return {
+            "observation_count": 0,
+            "observations_by_metric": {},
+            "latest_observation_by_metric": {},
+            "source_badges": {},
+        }
+    try:
+        with market_history_store.connect_market_history_db(path) as connection:
+            metric_rows = connection.execute(
+                """
+                SELECT metric_key, COUNT(*) AS count, MAX(observation_date) AS latest
+                FROM market_observations
+                WHERE provider = ?
+                GROUP BY metric_key
+                ORDER BY metric_key
+                """,
+                ("yfinance",),
+            ).fetchall()
+            badge_rows = connection.execute(
+                """
+                SELECT source_badge, COUNT(*) AS count
+                FROM market_observations
+                WHERE provider = ?
+                GROUP BY source_badge
+                ORDER BY source_badge
+                """,
+                ("yfinance",),
+            ).fetchall()
+    except Exception:
+        return {
+            "observation_count": 0,
+            "observations_by_metric": {},
+            "latest_observation_by_metric": {},
+            "source_badges": {},
+        }
+    observations_by_metric = {
+        row["metric_key"]: int(row["count"]) for row in metric_rows
+    }
+    latest_by_metric = {
+        row["metric_key"]: row["latest"] for row in metric_rows if row["latest"]
+    }
+    source_badges = {row["source_badge"]: int(row["count"]) for row in badge_rows}
+    return {
+        "observation_count": sum(observations_by_metric.values()),
+        "observations_by_metric": observations_by_metric,
+        "latest_observation_by_metric": latest_by_metric,
+        "source_badges": source_badges,
+    }
+
+
+def _insufficient_history_potentially_resolvable_by_yfinance(
+    rows: list[DashboardEvidenceRow],
+    configured_metric_keys: set[str],
+) -> list[str]:
+    result: list[str] = []
+    for row in rows:
+        if row.status != "insufficient_history":
+            continue
+        spec = historical_derived_metrics.DERIVED_METRIC_SPECS.get(row.metric_key)
+        if not spec:
+            continue
+        dependencies = {
+            value
+            for key, value in spec.items()
+            if key in {"metric_key", "numerator_metric_key", "denominator_metric_key"}
+        }
+        if dependencies and dependencies.issubset(configured_metric_keys):
+            result.append(row.metric_key)
+    return sorted(set(result))
 
 
 def _portfolio_compact_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -704,6 +835,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Historical Derived Metrics", ""])
     for key, value in audit["historical_derived"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## yfinance History", ""])
+    for key, value in audit["yfinance_history"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:

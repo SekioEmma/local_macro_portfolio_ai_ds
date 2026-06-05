@@ -269,6 +269,86 @@ def test_audit_reports_historical_derived_ok_and_blocked_counts(monkeypatch, tmp
     )
 
 
+def test_audit_reports_yfinance_history_block_when_db_missing(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+
+    result = audit.build_coverage_audit(
+        reports_dir=tmp_path,
+        market_history_db_path=tmp_path / "missing" / "market_history.sqlite3",
+    )
+    yfinance_history = result["yfinance_history"]
+
+    assert yfinance_history["yfinance_history_configured"] is True
+    assert yfinance_history["yfinance_enabled_symbol_count"] == 11
+    assert yfinance_history["yfinance_observation_count"] == 0
+    assert yfinance_history["yfinance_proxy_metric_count"] == 8
+    assert yfinance_history["yfinance_unofficial_fallback_metric_count"] == 3
+    assert "run_yfinance_history_ingest_live" in yfinance_history["recommendations"]
+    assert "keep_proxy_out_of_official_layer" in yfinance_history["recommendations"]
+
+
+def test_audit_reports_yfinance_history_observation_counts(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+    _insert_market_observation(
+        db_path,
+        "sp500",
+        "2026-01-01",
+        100.0,
+        source_badge="unofficial_fallback",
+        provider="yfinance",
+        source_series="^GSPC",
+        metric_kind="index",
+        ai_context_allowed=False,
+    )
+    _insert_market_observation(
+        db_path,
+        "spy_proxy",
+        "2026-01-02",
+        101.0,
+        source_badge="proxy",
+        provider="yfinance",
+        source_series="SPY",
+        metric_kind="proxy",
+        ai_context_allowed=False,
+    )
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    yfinance_history = result["yfinance_history"]
+
+    assert yfinance_history["yfinance_observation_count"] == 2
+    assert yfinance_history["yfinance_observations_by_metric"] == {
+        "sp500": 1,
+        "spy_proxy": 1,
+    }
+    assert yfinance_history["yfinance_latest_observation_by_metric"] == {
+        "sp500": "2026-01-01",
+        "spy_proxy": "2026-01-02",
+    }
+    assert yfinance_history["historical_store_proxy_observation_count"] == 1
+    assert yfinance_history["historical_store_unofficial_observation_count"] == 1
+    assert "run_yfinance_history_ingest_live" not in yfinance_history["recommendations"]
+
+
 def test_audit_detects_metadata_anomalies():
     rows = [
         _row(
@@ -395,7 +475,18 @@ def _write_json(path, payload):
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-def _insert_market_observation(db_path, metric_key, observation_date, value):
+def _insert_market_observation(
+    db_path,
+    metric_key,
+    observation_date,
+    value,
+    *,
+    source_badge="official",
+    provider="test_source",
+    source_series=None,
+    metric_kind="raw",
+    ai_context_allowed=True,
+):
     market_history_store.upsert_market_observation(
         {
             "metric_key": metric_key,
@@ -405,14 +496,14 @@ def _insert_market_observation(db_path, metric_key, observation_date, value):
             "unit": "percent",
             "status": "ok",
             "source": "test_source",
-            "source_badge": "official",
-            "provider": "test_source",
-            "source_series": metric_key.upper(),
+            "source_badge": source_badge,
+            "provider": provider,
+            "source_series": source_series or metric_key.upper(),
             "generated_at": f"{observation_date}T00:00:00+00:00",
             "fetched_at": f"{observation_date}T00:00:00+00:00",
             "freshness_status": "fresh",
-            "ai_context_allowed": True,
-            "metric_kind": "raw",
+            "ai_context_allowed": ai_context_allowed,
+            "metric_kind": metric_kind,
             "lineage": {},
         },
         db_path=db_path,

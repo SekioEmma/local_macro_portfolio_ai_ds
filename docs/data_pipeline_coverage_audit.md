@@ -233,10 +233,38 @@ When the market history DB is absent, recommended actions include:
 When candidate windows are still insufficient, recommended actions include:
 
 - `ingest_more_history`
-- `yfinance_batch_history_provider`
+- `run_yfinance_history_ingest_live`
 
 Historical derived candidates use `source_badge=derived`.
 `insufficient_history` candidates are not eligible for AI factual context.
+
+## yfinance History Fields
+
+The audit includes a read-only `yfinance_history` block for the optional yfinance batch history ingestion path.
+It does not call yfinance, access the network, or write the market history database.
+
+Top-level `yfinance_history` fields:
+
+- `yfinance_history_configured`: whether enabled yfinance history symbols are configured
+- `yfinance_enabled_symbol_count`: enabled symbols in `configs/yfinance_history.yaml`
+- `yfinance_observation_count`: yfinance observations currently present in the market history store
+- `yfinance_observations_by_metric`: yfinance observation counts keyed by metric
+- `yfinance_latest_observation_by_metric`: latest yfinance observation date keyed by metric
+- `yfinance_proxy_metric_count`: configured ETF proxy metric count
+- `yfinance_unofficial_fallback_metric_count`: configured unofficial index fallback metric count
+- `historical_store_proxy_observation_count`: stored yfinance proxy observations
+- `historical_store_unofficial_observation_count`: stored yfinance unofficial fallback observations
+- `insufficient_history_potentially_resolvable_by_yfinance`: current insufficient-history derived metrics whose dependencies are configured for yfinance history
+- `recommendations`: yfinance-specific follow-up actions
+
+Recommendations may include:
+
+- `run_yfinance_history_ingest_live`
+- `integrate_historical_derived_metrics`
+- `keep_proxy_out_of_official_layer`
+
+yfinance observations are informational historical inputs.
+They are never treated as official facts and do not replace Dashboard current values.
 
 ## Metadata Anomaly Types
 
@@ -322,5 +350,5 @@ Pick one focused next phase at a time:
 - Per-key Last-good Cache
 - Market Historical Store Foundation
 - Historical Derived Metrics
-- yfinance batch history
+- user-run yfinance batch history ingestion
 - official macro pack

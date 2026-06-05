@@ -1,0 +1,91 @@
+yfinance_history:
+  index_unofficial_fallback:
+    - metric_key: sp500
+      symbol: "^GSPC"
+      display_name: "S&P 500 Index"
+      source_badge: unofficial_fallback
+      metric_kind: index
+      unit: index
+      enabled: true
+      interpretation_hint: "Yahoo Finance index history used as an unofficial fallback; not an official current value."
+    - metric_key: nasdaq
+      symbol: "^IXIC"
+      display_name: "Nasdaq Composite Index"
+      source_badge: unofficial_fallback
+      metric_kind: index
+      unit: index
+      enabled: true
+      interpretation_hint: "Yahoo Finance Nasdaq Composite history used as an unofficial fallback; not an official current value."
+    - metric_key: nasdaq100
+      symbol: "^NDX"
+      display_name: "Nasdaq 100 Index"
+      source_badge: unofficial_fallback
+      metric_kind: index
+      unit: index
+      enabled: true
+      interpretation_hint: "Yahoo Finance Nasdaq 100 history used as an unofficial fallback; not an official current value."
+  etf_proxy:
+    - metric_key: spy_proxy
+      symbol: SPY
+      display_name: "SPY ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for S&P 500 exposure; keep out of the official current layer."
+    - metric_key: qqq_proxy
+      symbol: QQQ
+      display_name: "QQQ ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for Nasdaq 100 exposure; keep out of the official current layer."
+    - metric_key: rsp_proxy
+      symbol: RSP
+      display_name: "RSP equal-weight ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for equal-weight S&P 500 exposure; keep out of the official current layer."
+    - metric_key: hyg_proxy
+      symbol: HYG
+      display_name: "HYG high-yield ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for high-yield credit exposure; keep out of the official current layer."
+    - metric_key: lqd_proxy
+      symbol: LQD
+      display_name: "LQD investment-grade ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for investment-grade credit exposure; keep out of the official current layer."
+    - metric_key: gld_proxy
+      symbol: GLD
+      display_name: "GLD gold ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for gold exposure; keep out of the official current layer."
+    - metric_key: shy_proxy
+      symbol: SHY
+      display_name: "SHY short Treasury ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for short Treasury exposure; keep out of the official current layer."
+    - metric_key: tlt_proxy
+      symbol: TLT
+      display_name: "TLT long Treasury ETF proxy"
+      source_badge: proxy
+      metric_kind: proxy
+      unit: price
+      enabled: true
+      interpretation_hint: "ETF proxy for long Treasury exposure; keep out of the official current layer."

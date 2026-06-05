@@ -2,6 +2,7 @@
 
 Historical derived metrics are local-only candidate calculations built from the market historical store.
 They do not call providers, DeepSeek, Tavily, search, or yfinance.
+If yfinance observations exist in the market history store, this service reads them only as local stored observations.
 
 ## Purpose
 
@@ -111,6 +112,14 @@ This phase does not:
 
 ## Future Work
 
-- yfinance batch history provider
+- user-run live yfinance ingest
 - historical derived metrics dashboard integration
 - official macro pack
+
+## yfinance History Relationship
+
+The yfinance batch history provider is an ingestion layer, not a calculation layer.
+It may add `unofficial_fallback` index history and `proxy` ETF history to `market_observations`.
+
+Historical derived metrics can later calculate candidate returns from those stored observations when the window is sufficient.
+The derived result still uses `source_badge=derived`, includes dependency keys and calculation metadata, and does not promote yfinance or proxy data into official evidence.

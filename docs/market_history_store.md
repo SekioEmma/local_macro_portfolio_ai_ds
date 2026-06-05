@@ -159,8 +159,22 @@ It must not save:
 Potential follow-up phases:
 
 - historical derived metrics from market history
-- yfinance batch history provider
+- user-run yfinance batch history ingestion
 - official macro pack
 
 Historical derived metrics are a read-only calculation layer over this store.
 They should remain separate from provider fetch logic and should not replace Dashboard current values until a dedicated integration phase.
+
+## yfinance History Boundary
+
+The yfinance batch history provider may write compact historical price observations into this store only as `source_badge=unofficial_fallback` or `source_badge=proxy`.
+It uses configured metric keys instead of raw symbols as metric identities.
+
+yfinance observations:
+
+- use `provider=yfinance`
+- use `source_series` for the symbol
+- default to `ai_context_allowed=false`
+- never become official facts
+- never save raw yfinance responses or raw DataFrames
+- do not replace Dashboard current values
