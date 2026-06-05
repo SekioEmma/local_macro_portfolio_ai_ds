@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
+from data_quality import historical_derived_metrics  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
 from data_quality import market_history_store  # noqa: E402
 
@@ -65,6 +66,10 @@ def build_coverage_audit(
         rows,
         db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
     )
+    historical_derived = _historical_derived_audit(
+        rows,
+        db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
+    )
 
     return {
         "generated_at": summary.generated_at,
@@ -74,6 +79,7 @@ def build_coverage_audit(
         "portfolio_compact": portfolio_compact,
         "last_good_cache": last_good,
         "historical_store": historical_store,
+        "historical_derived": historical_derived,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -85,6 +91,7 @@ def build_coverage_audit(
             portfolio_compact,
             last_good,
             historical_store,
+            historical_derived,
         ),
     }
 
@@ -279,6 +286,7 @@ def _recommendations(
     portfolio_compact: dict[str, Any] | None = None,
     last_good: dict[str, Any] | None = None,
     historical_store: dict[str, Any] | None = None,
+    historical_derived: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -304,6 +312,8 @@ def _recommendations(
             recommendations.append("refresh_market_snapshot")
     if historical_store:
         recommendations.extend(historical_store.get("recommended_history_actions", []))
+    if historical_derived:
+        recommendations.extend(historical_derived.get("recommended_history_actions", []))
     recommendations.extend(
         [
             "add_yfinance_batch_history",
@@ -442,6 +452,68 @@ def _historical_store_audit(
         ),
         "insufficient_history_rows_count": len(insufficient_rows),
         "metrics_insufficient_history_but_store_empty": insufficient_empty,
+        "recommended_history_actions": sorted(set(actions)),
+    }
+
+
+def _historical_derived_audit(
+    rows: list[DashboardEvidenceRow],
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, Any]:
+    db_exists = Path(db_path).exists() if db_path is not None else market_history_store.get_default_market_history_db_path().exists()
+    by_module = historical_derived_metrics.build_historical_dashboard_candidates(db_path=db_path)
+    all_metrics = [item for items in by_module.values() for item in items]
+    details = [
+        {
+            "metric_key": item.metric_key,
+            "status": item.status,
+            "dependency_keys": item.dependency_keys,
+            "history_points_used": item.history_points_used,
+            "history_points_required": item.history_points_required,
+            "missing_reason": item.missing_reason,
+        }
+        for item in all_metrics
+    ]
+    insufficient_dashboard_keys = {
+        row.metric_key for row in rows if row.status == "insufficient_history"
+    }
+    ok_derived_keys = {item.metric_key for item in all_metrics if item.status == "ok"}
+    potentially_resolvable = insufficient_dashboard_keys & ok_derived_keys
+    actions: list[str] = []
+    if not db_exists:
+        actions.append("initialize_and_ingest_market_history")
+    if any(item.status == "insufficient_history" for item in all_metrics):
+        actions.extend(["ingest_more_history", "yfinance_batch_history_provider"])
+    return {
+        "historical_derived_available": any(item.status == "ok" for item in all_metrics),
+        "derived_metric_count": len(all_metrics),
+        "derived_metric_ok_count": sum(1 for item in all_metrics if item.status == "ok"),
+        "derived_metric_insufficient_history_count": sum(
+            1 for item in all_metrics if item.status == "insufficient_history"
+        ),
+        "derived_metric_missing_dependency_count": sum(
+            1
+            for item in all_metrics
+            if item.status != "ok" and "missing" in (item.missing_reason or "")
+        ),
+        "derived_metrics_by_module": {
+            module: {
+                "count": len(items),
+                "ok_count": sum(1 for item in items if item.status == "ok"),
+                "insufficient_history_count": sum(
+                    1 for item in items if item.status == "insufficient_history"
+                ),
+            }
+            for module, items in sorted(by_module.items())
+        },
+        "derived_metric_details": details,
+        "dashboard_insufficient_history_potentially_resolvable_count": len(
+            potentially_resolvable
+        ),
+        "dashboard_insufficient_history_still_blocked_count": len(
+            insufficient_dashboard_keys - ok_derived_keys
+        ),
         "recommended_history_actions": sorted(set(actions)),
     }
 
@@ -629,6 +701,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Historical Store", ""])
     for key, value in audit["historical_store"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Historical Derived Metrics", ""])
+    for key, value in audit["historical_derived"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:

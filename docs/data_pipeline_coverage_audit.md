@@ -209,6 +209,35 @@ When the database is missing, recommended actions include:
 
 The audit does not use historical observations to rewrite Dashboard values or derived metrics.
 
+## Historical Derived Metrics Fields
+
+The audit also evaluates candidate historical derived metrics from the local market history store.
+This is read-only and does not update Dashboard current values.
+
+Top-level `historical_derived` fields:
+
+- `historical_derived_available`: whether any candidate derived metric is currently `ok`
+- `derived_metric_count`: total supported candidate metrics
+- `derived_metric_ok_count`: candidates with sufficient history
+- `derived_metric_insufficient_history_count`: candidates still blocked by history
+- `derived_metric_missing_dependency_count`: candidates blocked by missing dependency observations
+- `derived_metrics_by_module`: candidate counts and status counts grouped by Dashboard module
+- `derived_metric_details`: compact detail rows for each candidate
+- `dashboard_insufficient_history_potentially_resolvable_count`: current insufficient-history Dashboard metrics with an OK historical candidate
+- `dashboard_insufficient_history_still_blocked_count`: current insufficient-history Dashboard metrics still blocked by history
+
+When the market history DB is absent, recommended actions include:
+
+- `initialize_and_ingest_market_history`
+
+When candidate windows are still insufficient, recommended actions include:
+
+- `ingest_more_history`
+- `yfinance_batch_history_provider`
+
+Historical derived candidates use `source_badge=derived`.
+`insufficient_history` candidates are not eligible for AI factual context.
+
 ## Metadata Anomaly Types
 
 The audit detects:
@@ -292,5 +321,6 @@ Pick one focused next phase at a time:
 - Portfolio Deviation Compact Fields
 - Per-key Last-good Cache
 - Market Historical Store Foundation
+- Historical Derived Metrics
 - yfinance batch history
 - official macro pack

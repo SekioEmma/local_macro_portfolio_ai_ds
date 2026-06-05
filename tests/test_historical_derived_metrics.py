@@ -1,0 +1,173 @@
+import math
+import socket
+
+from data_quality import historical_derived_metrics as derived
+from data_quality import market_history_store
+
+
+def test_period_return_with_sufficient_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "sp500", "2026-01-01", 100.0)
+    _insert(db_path, "sp500", "2026-02-01", 110.0)
+
+    result = derived.calculate_period_return("sp500", 30, db_path=db_path)
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, 0.10)
+    assert result.source_badge == "derived"
+    assert "sp500" in result.dependency_keys
+    assert "period_return" in result.calculation
+    assert "sp500" in result.interpretation_hint
+
+
+def test_period_return_with_insufficient_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "sp500", "2026-02-01", 110.0)
+
+    result = derived.calculate_period_return("sp500", 30, db_path=db_path)
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert result.history_points_used == 1
+
+
+def test_rolling_average_with_sufficient_points(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    for day, value in enumerate([1, 2, 3, 4, 5], start=1):
+        _insert(db_path, "dgs10", f"2026-01-0{day}", float(value))
+
+    result = derived.calculate_rolling_average("dgs10", 5, db_path=db_path)
+
+    assert result.status == "ok"
+    assert result.value == 3.0
+    assert result.history_points_used == 5
+    assert result.history_points_required == 5
+
+
+def test_rolling_average_with_insufficient_points(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "dgs10", "2026-01-01", 1.0)
+
+    result = derived.calculate_rolling_average("dgs10", 5, db_path=db_path)
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert result.missing_reason == "history_points_insufficient"
+
+
+def test_relative_return_with_sufficient_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "nasdaq100", "2026-01-01", 100.0)
+    _insert(db_path, "nasdaq100", "2026-02-01", 130.0)
+    _insert(db_path, "sp500", "2026-01-01", 100.0)
+    _insert(db_path, "sp500", "2026-02-01", 110.0)
+
+    result = derived.calculate_relative_return("nasdaq100", "sp500", 30, db_path=db_path)
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, 0.20)
+    assert result.dependency_keys == ["nasdaq100", "sp500"]
+    assert "minus" in result.interpretation_hint
+
+
+def test_relative_return_with_one_dependency_insufficient(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "nasdaq100", "2026-01-01", 100.0)
+    _insert(db_path, "nasdaq100", "2026-02-01", 130.0)
+    _insert(db_path, "sp500", "2026-02-01", 110.0)
+
+    result = derived.calculate_relative_return("nasdaq100", "sp500", 30, db_path=db_path)
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert "sp500" in result.missing_reason
+
+
+def test_distance_to_threshold_with_latest_observation(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "dgs30", "2026-01-01", 4.8)
+
+    result = derived.calculate_distance_to_threshold("dgs30", 5.0, db_path=db_path)
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, -0.2)
+    assert result.unit == "pp"
+    assert "threshold" in result.interpretation_hint
+
+
+def test_distance_to_threshold_without_latest_observation(tmp_path):
+    result = derived.calculate_distance_to_threshold(
+        "dgs30",
+        5.0,
+        db_path=tmp_path / "missing.sqlite3",
+    )
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert result.missing_reason == "latest_observation_missing"
+
+
+def test_build_historical_dashboard_candidates_groups_supported_metrics(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    for day, value in enumerate([1, 2, 3, 4, 5], start=1):
+        _insert(db_path, "dgs10", f"2026-01-0{day}", float(value))
+    _insert(db_path, "dgs30", "2026-01-05", 4.8)
+
+    by_module = derived.build_historical_dashboard_candidates(db_path=db_path)
+    rate_metrics = {item.metric_key: item for item in by_module["rate_pressure"]}
+
+    assert set(by_module) == {
+        "equity_trend",
+        "inflation_energy_pressure",
+        "rate_pressure",
+    }
+    assert rate_metrics["dgs10_5d_avg"].status == "ok"
+    assert rate_metrics["dgs30_distance_to_5pct"].status == "ok"
+    assert rate_metrics["dgs10_10d_avg"].status == "insufficient_history"
+
+
+def test_flattened_metrics_are_compact_and_safe(tmp_path):
+    metrics = derived.flatten_historical_dashboard_candidates(db_path=tmp_path / "missing.sqlite3")
+    payloads = [derived.metric_to_dict(item) for item in metrics]
+    text = str(payloads)
+
+    assert len(payloads) == 10
+    assert all(item["source_badge"] == "derived" for item in payloads)
+    assert "raw_provider_response" not in text
+    assert "api_key" not in text.lower()
+    assert "holding" not in text.lower()
+
+
+def test_no_network_access(monkeypatch, tmp_path):
+    def _raise_on_network(*args, **kwargs):
+        raise AssertionError("Network access is not allowed in historical derived tests.")
+
+    monkeypatch.setattr(socket, "create_connection", _raise_on_network)
+
+    result = derived.calculate_rolling_average("dgs10", 5, db_path=tmp_path / "missing.sqlite3")
+
+    assert result.status == "insufficient_history"
+
+
+def _insert(db_path, metric_key, observation_date, value):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": metric_key,
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "index",
+            "status": "ok",
+            "source": "test_source",
+            "source_badge": "official",
+            "provider": "test_source",
+            "source_series": metric_key.upper(),
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "fresh",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {},
+        },
+        db_path=db_path,
+    )

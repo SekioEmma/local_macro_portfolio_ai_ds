@@ -213,6 +213,62 @@ def test_audit_reports_existing_market_history_store(monkeypatch, tmp_path):
     assert historical["dashboard_metrics_with_history_count"] == 1
 
 
+def test_audit_reports_historical_derived_block_when_db_missing(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+
+    result = audit.build_coverage_audit(
+        reports_dir=tmp_path,
+        market_history_db_path=tmp_path / "missing" / "market_history.sqlite3",
+    )
+    historical_derived = result["historical_derived"]
+
+    assert historical_derived["historical_derived_available"] is False
+    assert historical_derived["derived_metric_count"] == 10
+    assert historical_derived["derived_metric_ok_count"] == 0
+    assert historical_derived["derived_metric_insufficient_history_count"] == 10
+    assert "initialize_and_ingest_market_history" in historical_derived["recommended_history_actions"]
+
+
+def test_audit_reports_historical_derived_ok_and_blocked_counts(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+    for day, value in enumerate([1, 2, 3, 4, 5], start=1):
+        _insert_market_observation(db_path, "dgs10", f"2026-01-0{day}", float(value))
+    _insert_market_observation(db_path, "dgs30", "2026-01-05", 4.8)
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    historical_derived = result["historical_derived"]
+    rate = historical_derived["derived_metrics_by_module"]["rate_pressure"]
+
+    assert historical_derived["historical_derived_available"] is True
+    assert historical_derived["derived_metric_ok_count"] == 2
+    assert rate["ok_count"] == 2
+    assert historical_derived["dashboard_insufficient_history_still_blocked_count"] >= 1
+    assert any(
+        item["metric_key"] == "dgs10_5d_avg" and item["status"] == "ok"
+        for item in historical_derived["derived_metric_details"]
+    )
+
+
 def test_audit_detects_metadata_anomalies():
     rows = [
         _row(
@@ -337,6 +393,30 @@ def _module(key, status):
 
 def _write_json(path, payload):
     path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _insert_market_observation(db_path, metric_key, observation_date, value):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": metric_key,
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "percent",
+            "status": "ok",
+            "source": "test_source",
+            "source_badge": "official",
+            "provider": "test_source",
+            "source_series": metric_key.upper(),
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "fresh",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {},
+        },
+        db_path=db_path,
+    )
 
 
 def _block_network(monkeypatch):

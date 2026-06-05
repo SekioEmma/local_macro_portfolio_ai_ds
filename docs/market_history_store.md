@@ -161,3 +161,6 @@ Potential follow-up phases:
 - historical derived metrics from market history
 - yfinance batch history provider
 - official macro pack
+
+Historical derived metrics are a read-only calculation layer over this store.
+They should remain separate from provider fetch logic and should not replace Dashboard current values until a dedicated integration phase.
