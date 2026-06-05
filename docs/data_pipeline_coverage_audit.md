@@ -183,6 +183,32 @@ Recommendations are conditional:
 - corrupted last-good JSON adds `clear_or_rebuild_last_good_cache`
 - stale or expired last-good entries add `refresh_market_snapshot`
 
+## Market Historical Store Fields
+
+The audit reads the local market historical SQLite store without writing to it.
+If the database is absent, the audit does not fail.
+
+Top-level `historical_store` fields:
+
+- `market_history_available`: whether the store has observations
+- `market_history_db_exists`: whether the SQLite file exists
+- `market_history_schema_version`: applied schema version, or `0` when absent
+- `market_history_metric_count`: number of metrics with observations
+- `market_history_observation_count`: total observation count
+- `observations_by_metric`: observation counts keyed by metric
+- `latest_observation_by_metric`: latest observation date keyed by metric
+- `dashboard_metrics_with_history_count`: Dashboard evidence rows whose metric has historical observations
+- `insufficient_history_rows_count`: current Dashboard rows with `insufficient_history`
+- `metrics_insufficient_history_but_store_empty`: insufficient-history metrics with no store observations
+- `recommended_history_actions`: history-specific setup or ingest recommendations
+
+When the database is missing, recommended actions include:
+
+- `initialize_market_history_store`
+- `ingest_market_history_from_dashboard`
+
+The audit does not use historical observations to rewrite Dashboard values or derived metrics.
+
 ## Metadata Anomaly Types
 
 The audit detects:

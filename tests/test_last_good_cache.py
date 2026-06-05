@@ -114,8 +114,8 @@ def test_raw_extra_and_api_like_fields_are_not_written(tmp_path):
     metric = _metric("dgs10", value=4.52)
     metric.update(
         {
-            "raw_extra": {"api_key": "sk-THIS_MUST_NOT_BE_WRITTEN_123456"},
-            "DEEPSEEK_API_KEY": "sk-THIS_MUST_NOT_BE_WRITTEN_abcdef",
+            "raw_extra": {"api_key": "FAKE_SECRET_TOKEN_MUST_NOT_BE_WRITTEN"},
+            "DEEPSEEK_API_KEY": "FAKE_SECRET_TOKEN_MUST_NOT_BE_WRITTEN",
             "holdings": [{"ticker": "RAW_FUND"}],
         }
     )
@@ -125,7 +125,7 @@ def test_raw_extra_and_api_like_fields_are_not_written(tmp_path):
 
     assert "raw_extra" not in body
     assert "DEEPSEEK_API_KEY" not in body
-    assert "sk-THIS_MUST_NOT_BE_WRITTEN" not in body
+    assert "FAKE_SECRET_TOKEN_MUST_NOT_BE_WRITTEN" not in body
     assert "RAW_FUND" not in body
     assert set(json.loads(body)) <= set(last_good_cache.SAFE_FIELDS)
 

@@ -3,6 +3,7 @@ import socket
 
 from app_backend.schemas.responses import DashboardEvidenceRow, DashboardMetric, DashboardModule
 import audit_data_pipeline_coverage as audit
+from data_quality import market_history_store
 
 
 def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
@@ -129,6 +130,87 @@ def test_audit_reports_last_good_cache_status(monkeypatch, tmp_path):
     )
     assert rate_pressure["last_good_available_count"] == 1
     assert rate_pressure["missing_but_last_good_available_count"] == 1
+
+
+def test_audit_reports_missing_market_history_store(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+
+    result = audit.build_coverage_audit(
+        reports_dir=tmp_path,
+        market_history_db_path=tmp_path / "missing" / "market_history.sqlite3",
+    )
+    historical = result["historical_store"]
+
+    assert historical["market_history_available"] is False
+    assert historical["market_history_db_exists"] is False
+    assert historical["market_history_schema_version"] == 0
+    assert "initialize_market_history_store" in historical["recommended_history_actions"]
+    assert "ingest_market_history_from_dashboard" in historical["recommended_history_actions"]
+
+
+def test_audit_reports_existing_market_history_store(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "dgs10": {
+                "value": 4.5,
+                "status": "ok",
+                "source": "FRED",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": "dgs10",
+            "observation_date": "2026-01-01",
+            "value": 4.5,
+            "value_text": "4.5%",
+            "unit": "percent",
+            "status": "ok",
+            "source": "FRED",
+            "source_badge": "official",
+            "provider": "FRED",
+            "source_series": "DGS10",
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "fetched_at": "2026-01-01T00:00:00+00:00",
+            "freshness_status": "fresh",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {},
+        },
+        db_path=db_path,
+    )
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    historical = result["historical_store"]
+
+    assert historical["market_history_available"] is True
+    assert historical["market_history_db_exists"] is True
+    assert historical["market_history_schema_version"] == market_history_store.CURRENT_SCHEMA_VERSION
+    assert historical["market_history_metric_count"] == 1
+    assert historical["market_history_observation_count"] == 1
+    assert historical["observations_by_metric"] == {"dgs10": 1}
+    assert historical["latest_observation_by_metric"] == {"dgs10": "2026-01-01"}
+    assert historical["dashboard_metrics_with_history_count"] == 1
 
 
 def test_audit_detects_metadata_anomalies():

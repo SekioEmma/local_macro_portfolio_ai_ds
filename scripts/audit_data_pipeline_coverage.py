@@ -18,6 +18,7 @@ if str(SRC_ROOT) not in sys.path:
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
+from data_quality import market_history_store  # noqa: E402
 
 
 STATUS_KEYS = (
@@ -44,6 +45,7 @@ BAD_AI_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
 def build_coverage_audit(
     reports_dir: Path | str | None = None,
     last_good_cache_dir: Path | str | None = None,
+    market_history_db_path: Path | str | None = None,
 ) -> dict[str, Any]:
     summary = dashboard_service.build_dashboard_summary(reports_dir=reports_dir)
     evidence = dashboard_service.build_dashboard_evidence_table(
@@ -59,6 +61,10 @@ def build_coverage_audit(
         rows,
         cache_dir=_audit_last_good_cache_dir(reports_dir, last_good_cache_dir),
     )
+    historical_store = _historical_store_audit(
+        rows,
+        db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
+    )
 
     return {
         "generated_at": summary.generated_at,
@@ -67,6 +73,7 @@ def build_coverage_audit(
         "module_coverage": _module_coverage(summary.modules, rows, last_good),
         "portfolio_compact": portfolio_compact,
         "last_good_cache": last_good,
+        "historical_store": historical_store,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -77,6 +84,7 @@ def build_coverage_audit(
             dependency_anomalies,
             portfolio_compact,
             last_good,
+            historical_store,
         ),
     }
 
@@ -270,6 +278,7 @@ def _recommendations(
     dependency_anomalies: list[dict[str, Any]],
     portfolio_compact: dict[str, Any] | None = None,
     last_good: dict[str, Any] | None = None,
+    historical_store: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -293,9 +302,10 @@ def _recommendations(
             or last_good.get("last_good_expired_count", 0) > 0
         ):
             recommendations.append("refresh_market_snapshot")
+    if historical_store:
+        recommendations.extend(historical_store.get("recommended_history_actions", []))
     recommendations.extend(
         [
-            "implement_historical_store",
             "add_yfinance_batch_history",
             "add_official_macro_pack",
         ]
@@ -377,6 +387,63 @@ def _audit_last_good_cache_dir(
     if reports_dir is None:
         return None
     return Path(reports_dir) / ".last_good_cache"
+
+
+def _audit_market_history_db_path(
+    reports_dir: Path | str | None,
+    market_history_db_path: Path | str | None,
+) -> Path | str | None:
+    if market_history_db_path is not None:
+        return market_history_db_path
+    if reports_dir is None:
+        return None
+    return Path(reports_dir) / ".market_history" / "market_history.sqlite3"
+
+
+def _historical_store_audit(
+    rows: list[DashboardEvidenceRow],
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, Any]:
+    summary = market_history_store.get_market_history_summary(db_path=db_path)
+    observations_by_metric = summary["observations_by_metric"]
+    metrics_with_history = set(observations_by_metric)
+    insufficient_rows = [row for row in rows if row.status == "insufficient_history"]
+    insufficient_empty = sorted(
+        {
+            row.metric_key
+            for row in insufficient_rows
+            if row.metric_key not in metrics_with_history
+        }
+    )
+    actions: list[str] = []
+    if not summary["market_history_db_exists"]:
+        actions.extend(
+            [
+                "initialize_market_history_store",
+                "ingest_market_history_from_dashboard",
+            ]
+        )
+    elif summary["market_history_observation_count"] == 0:
+        actions.append("ingest_market_history_from_dashboard")
+    if insufficient_empty:
+        actions.append("ingest_market_history_from_dashboard")
+
+    return {
+        "market_history_available": bool(summary["market_history_observation_count"]),
+        "market_history_db_exists": summary["market_history_db_exists"],
+        "market_history_schema_version": summary["market_history_schema_version"],
+        "market_history_metric_count": summary["market_history_metric_count"],
+        "market_history_observation_count": summary["market_history_observation_count"],
+        "observations_by_metric": observations_by_metric,
+        "latest_observation_by_metric": summary["latest_observation_by_metric"],
+        "dashboard_metrics_with_history_count": sum(
+            1 for row in rows if row.metric_key in metrics_with_history
+        ),
+        "insufficient_history_rows_count": len(insufficient_rows),
+        "metrics_insufficient_history_but_store_empty": insufficient_empty,
+        "recommended_history_actions": sorted(set(actions)),
+    }
 
 
 def _portfolio_compact_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -559,6 +626,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Last-good Cache", ""])
     for key, value in audit["last_good_cache"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Historical Store", ""])
+    for key, value in audit["historical_store"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:
