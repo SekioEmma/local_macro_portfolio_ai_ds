@@ -21,6 +21,8 @@ from app_backend.services import dashboard_service  # noqa: E402
 
 STATUS_KEYS = (
     "ok",
+    "watch",
+    "pressure",
     "missing",
     "research_needed",
     "insufficient_history",
@@ -45,18 +47,24 @@ def build_coverage_audit(reports_dir: Path | str | None = None) -> dict[str, Any
 
     metadata_anomalies = _metadata_anomalies(rows)
     dependency_anomalies = _dependency_anomalies(summary.modules, rows)
+    portfolio_compact = _portfolio_compact_audit(rows)
 
     return {
         "generated_at": summary.generated_at,
         "overall_status": summary.overall_status,
         "coverage_summary": _coverage_summary(rows),
         "module_coverage": _module_coverage(summary.modules, rows),
+        "portfolio_compact": portfolio_compact,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
         "source_badge_distribution": _source_badge_distribution(rows),
         "ai_context_allowed_by_module": _ai_context_allowed_by_module(rows),
-        "recommendations": _recommendations(metadata_anomalies, dependency_anomalies),
+        "recommendations": _recommendations(
+            metadata_anomalies,
+            dependency_anomalies,
+            portfolio_compact,
+        ),
     }
 
 
@@ -76,6 +84,8 @@ def _coverage_summary(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
             1 for row in rows if _has_value(row) and not row.ai_context_allowed
         ),
         "ok_count": statuses["ok"],
+        "watch_count": statuses["watch"],
+        "pressure_count": statuses["pressure"],
         "missing_count": statuses["missing"],
         "research_needed_count": statuses["research_needed"],
         "insufficient_history_count": statuses["insufficient_history"],
@@ -115,6 +125,8 @@ def _module_coverage(modules: dict[str, Any], rows: list[DashboardEvidenceRow]) 
                 "module": module,
                 "row_count": row_count,
                 "ok_count": sum(1 for row in module_rows if row.status == "ok"),
+                "watch_count": sum(1 for row in module_rows if row.status == "watch"),
+                "pressure_count": sum(1 for row in module_rows if row.status == "pressure"),
                 "missing_count": sum(1 for row in module_rows if row.status == "missing"),
                 "research_needed_count": sum(
                     1 for row in module_rows if row.status == "research_needed"
@@ -222,6 +234,7 @@ def _dependency_anomalies(
 def _recommendations(
     metadata_anomalies: list[dict[str, Any]],
     dependency_anomalies: list[dict[str, Any]],
+    portfolio_compact: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -230,9 +243,15 @@ def _recommendations(
         recommendations.append("fix_derived_dependency_validation")
     if any(item["type"] == "module_ok_while_core_metrics_mostly_missing" for item in dependency_anomalies):
         recommendations.append("fix_module_status_aggregation")
+    if portfolio_compact:
+        if not portfolio_compact.get("portfolio_compact_available"):
+            recommendations.append("fill_portfolio_deviation_compact")
+        if portfolio_compact.get("portfolio_stale_status") == "stale":
+            recommendations.append("update_holdings_snapshot")
+        if portfolio_compact.get("portfolio_has_raw_holdings_leak"):
+            recommendations.append("privacy_blocker")
     recommendations.extend(
         [
-            "fill_portfolio_deviation_compact",
             "implement_last_good_cache",
             "implement_historical_store",
             "add_yfinance_batch_history",
@@ -265,6 +284,91 @@ def _ai_context_allowed_by_module(rows: list[DashboardEvidenceRow]) -> dict[str,
         item = result.setdefault(row.module, {"true": 0, "false": 0})
         item["true" if row.ai_context_allowed else "false"] += 1
     return dict(sorted(result.items()))
+
+
+def _portfolio_compact_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    portfolio_rows = [row for row in rows if row.module == "portfolio_deviation"]
+    compact_keys = {
+        "max_deviation_asset",
+        "max_deviation_pp",
+        "equity_total_deviation_pp",
+        "cash_reserve_status",
+        "holdings_updated_at",
+    }
+    compact_rows = [row for row in portfolio_rows if row.metric_key in compact_keys]
+    value_rows = [row for row in compact_rows if _has_value(row)]
+    missing_rows = [row for row in compact_rows if not _has_value(row)]
+    required_keys = {
+        "max_deviation_asset",
+        "max_deviation_pp",
+        "equity_total_deviation_pp",
+        "cash_reserve_status",
+    }
+    keys_with_values = {row.metric_key for row in value_rows}
+    holdings_row = next(
+        (row for row in compact_rows if row.metric_key == "holdings_updated_at"),
+        None,
+    )
+    return {
+        "portfolio_compact_available": required_keys.issubset(keys_with_values),
+        "portfolio_deviation_value_count": len(value_rows),
+        "portfolio_deviation_missing_count": len(missing_rows),
+        "portfolio_deviation_ai_context_allowed_count": sum(
+            1 for row in compact_rows if row.ai_context_allowed
+        ),
+        "portfolio_has_raw_holdings_leak": _portfolio_has_raw_holdings_leak(compact_rows),
+        "portfolio_cash_excluded_from_target": _portfolio_cash_excluded_from_target(compact_rows),
+        "portfolio_stale_status": holdings_row.freshness_status if holdings_row else "unknown",
+    }
+
+
+def _portfolio_has_raw_holdings_leak(rows: list[DashboardEvidenceRow]) -> bool:
+    forbidden_tokens = (
+        "holding",
+        "holdings",
+        "ticker",
+        "fund_code",
+        "fund code",
+        "amount",
+        "current_value",
+        "market_value",
+        "cost_basis",
+        "profit_loss",
+        "raw_fund",
+    )
+    safe_tokens = {
+        "holdings_updated_at",
+        "holdings updated at",
+    }
+    for row in rows:
+        payload = json.dumps(_row_payload(row), ensure_ascii=False).lower()
+        for token in safe_tokens:
+            payload = payload.replace(token, "")
+        if any(token in payload for token in forbidden_tokens):
+            return True
+    return False
+
+
+def _row_payload(row: DashboardEvidenceRow) -> dict[str, Any]:
+    if hasattr(row, "model_dump"):
+        return row.model_dump()
+    return row.dict()
+
+
+def _portfolio_cash_excluded_from_target(rows: list[DashboardEvidenceRow]) -> bool:
+    for row in rows:
+        if row.metric_key != "cash_reserve_status":
+            continue
+        text = " ".join(
+            str(item or "")
+            for item in (
+                row.value,
+                row.value_text,
+                row.interpretation_hint,
+            )
+        ).lower()
+        return "cash" in text and "excluded" in text and "target allocation" in text
+    return False
 
 
 def _anomaly(
@@ -357,6 +461,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
             f"- {item['module']}: {item['module_coverage_status']} "
             f"({item['usable_fact_count']}/{item['row_count']} usable)"
         )
+    lines.extend(["", "## Portfolio Compact", ""])
+    for key, value in audit["portfolio_compact"].items():
+        lines.append(f"- {key}: {value}")
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:
         lines.append(f"- {item['type']} ({item.get('reason') or 'unknown'}): {item['row_id']}")

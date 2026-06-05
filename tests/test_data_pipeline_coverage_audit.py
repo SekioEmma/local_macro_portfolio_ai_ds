@@ -32,8 +32,48 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "blocked_reason_counts" in result
     assert "source_badge_distribution" in result
     assert "ai_context_allowed_by_module" in result
+    assert "portfolio_compact" in result
+    assert "portfolio_compact_available" in result["portfolio_compact"]
     assert result["module_coverage"]
     assert "recommendations" in result
+
+
+def test_audit_reports_portfolio_compact_coverage(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "portfolio_snapshot.json",
+        {
+            "generated_at": "2026-06-10T00:00:00+00:00",
+            "status": "ok",
+            "holdings_updated_at": "2026-06-01",
+            "weights_ex_cash": {
+                "sp500": 0.54,
+                "nasdaq100": 0.17,
+                "short_bond": 0.19,
+                "gold": 0.10,
+            },
+            "target_allocation": {
+                "sp500": 0.50,
+                "nasdaq100": 0.20,
+                "short_bond": 0.20,
+                "gold": 0.10,
+            },
+            "cash_reserve_value": 1234567,
+            "holdings": [{"ticker": "RAW_FUND", "amount": 999999}],
+        },
+    )
+
+    result = audit.build_coverage_audit(reports_dir=tmp_path)
+    portfolio = result["portfolio_compact"]
+
+    assert portfolio["portfolio_compact_available"] is True
+    assert portfolio["portfolio_deviation_value_count"] == 5
+    assert portfolio["portfolio_deviation_missing_count"] == 0
+    assert portfolio["portfolio_deviation_ai_context_allowed_count"] == 5
+    assert portfolio["portfolio_has_raw_holdings_leak"] is False
+    assert portfolio["portfolio_cash_excluded_from_target"] is True
+    assert portfolio["portfolio_stale_status"] == "fresh"
+    assert "fill_portfolio_deviation_compact" not in result["recommendations"]
 
 
 def test_audit_detects_metadata_anomalies():

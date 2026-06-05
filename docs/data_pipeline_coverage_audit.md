@@ -34,6 +34,8 @@ These generated output files must not be committed.
 - `rows_with_value_and_complete_metadata`
 - `rows_with_value_but_blocked`
 - `ok_count`
+- `watch_count`
+- `pressure_count`
 - `missing_count`
 - `research_needed_count`
 - `insufficient_history_count`
@@ -110,6 +112,8 @@ Each Dashboard module reports:
 - `module`
 - `row_count`
 - `ok_count`
+- `watch_count`
+- `pressure_count`
 - `missing_count`
 - `research_needed_count`
 - `insufficient_history_count`
@@ -124,6 +128,25 @@ Each Dashboard module reports:
 - `partial`
 - `weak`
 - `unavailable`
+
+## Portfolio Compact Fields
+
+The audit includes a `portfolio_compact` block for the local
+`portfolio_deviation` module:
+
+- `portfolio_compact_available`: required aggregate compact fields have values
+- `portfolio_deviation_value_count`: compact rows with values
+- `portfolio_deviation_missing_count`: compact rows without values
+- `portfolio_deviation_ai_context_allowed_count`: compact rows eligible for AI factual context
+- `portfolio_has_raw_holdings_leak`: must remain `false`
+- `portfolio_cash_excluded_from_target`: cash reserve exclusion is visible in compact context
+- `portfolio_stale_status`: freshness status from the holdings update row
+
+Recommendations are conditional:
+
+- missing compact fields add `fill_portfolio_deviation_compact`
+- stale holdings add `update_holdings_snapshot`
+- any raw holdings leak adds `privacy_blocker`
 
 ## Metadata Anomaly Types
 
