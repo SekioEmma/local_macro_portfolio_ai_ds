@@ -349,6 +349,64 @@ def test_audit_reports_yfinance_history_observation_counts(monkeypatch, tmp_path
     assert "run_yfinance_history_ingest_live" not in yfinance_history["recommendations"]
 
 
+def test_audit_reports_dashboard_derived_integration(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-03-02T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+    for metric_key, source_series, end_value in (
+        ("sp500", "^GSPC", 110.0),
+        ("nasdaq100", "^NDX", 130.0),
+    ):
+        _insert_market_observation(
+            db_path,
+            metric_key,
+            "2026-01-01",
+            100.0,
+            source_badge="unofficial_fallback",
+            provider="yfinance",
+            source_series=source_series,
+            metric_kind="index",
+            ai_context_allowed=False,
+        )
+        _insert_market_observation(
+            db_path,
+            metric_key,
+            "2026-03-02",
+            end_value,
+            source_badge="unofficial_fallback",
+            provider="yfinance",
+            source_series=source_series,
+            metric_kind="index",
+            ai_context_allowed=False,
+        )
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    integration = result["dashboard_derived_integration"]
+
+    assert integration["equity_derived_integrated_count"] == 5
+    assert integration["equity_derived_still_insufficient_count"] == 0
+    assert integration["historical_derived_used_in_dashboard_count"] == 5
+    assert integration["dashboard_equity_trend_value_count"] == 5
+    assert integration["integrated_metric_keys"] == [
+        "nasdaq100_30d_return",
+        "nasdaq100_60d_return",
+        "nasdaq_vs_sp500_30d",
+        "sp500_30d_return",
+        "sp500_60d_return",
+    ]
+
+
 def test_audit_detects_metadata_anomalies():
     rows = [
         _row(

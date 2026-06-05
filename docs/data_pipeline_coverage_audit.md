@@ -266,6 +266,31 @@ Recommendations may include:
 yfinance observations are informational historical inputs.
 They are never treated as official facts and do not replace Dashboard current values.
 
+## Dashboard Derived Integration Fields
+
+The audit includes a `dashboard_derived_integration` block for values that are actually surfaced in Dashboard evidence rows from historical derived metrics.
+This is separate from `historical_derived`, which reports all supported candidates whether or not the Dashboard uses them.
+
+Top-level `dashboard_derived_integration` fields:
+
+- `equity_derived_integrated_count`: selected `equity_trend` rows now using historical derived values
+- `equity_derived_still_insufficient_count`: selected `equity_trend` rows still blocked by insufficient history
+- `historical_derived_used_in_dashboard_count`: Dashboard rows using local market history derived values
+- `dashboard_insufficient_history_remaining_count`: current Dashboard evidence rows still insufficient
+- `dashboard_equity_trend_value_count`: selected equity trend rows with values
+- `integrated_metric_keys`: integrated equity metric keys
+- `still_insufficient_metric_keys`: eligible equity metric keys still insufficient
+
+The integration only covers:
+
+- `sp500_30d_return`
+- `sp500_60d_return`
+- `nasdaq100_30d_return`
+- `nasdaq100_60d_return`
+- `nasdaq_vs_sp500_30d`
+
+Rate and oil historical derived candidates remain reported in `historical_derived` but are not integrated into Dashboard current values.
+
 ## Metadata Anomaly Types
 
 The audit detects:

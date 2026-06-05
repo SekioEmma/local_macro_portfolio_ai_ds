@@ -50,9 +50,17 @@ def build_coverage_audit(
     last_good_cache_dir: Path | str | None = None,
     market_history_db_path: Path | str | None = None,
 ) -> dict[str, Any]:
-    summary = dashboard_service.build_dashboard_summary(reports_dir=reports_dir)
+    dashboard_market_history_db_path = _audit_market_history_db_path(
+        reports_dir,
+        market_history_db_path,
+    )
+    summary = dashboard_service.build_dashboard_summary(
+        reports_dir=reports_dir,
+        market_history_db_path=dashboard_market_history_db_path,
+    )
     evidence = dashboard_service.build_dashboard_evidence_table(
         reports_dir=reports_dir,
+        market_history_db_path=dashboard_market_history_db_path,
         write_last_good=False,
     )
     rows = evidence.rows
@@ -74,8 +82,9 @@ def build_coverage_audit(
     )
     yfinance_history = _yfinance_history_audit(
         rows,
-        db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
+        db_path=dashboard_market_history_db_path,
     )
+    dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
 
     return {
         "generated_at": summary.generated_at,
@@ -87,6 +96,7 @@ def build_coverage_audit(
         "historical_store": historical_store,
         "historical_derived": historical_derived,
         "yfinance_history": yfinance_history,
+        "dashboard_derived_integration": dashboard_derived_integration,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -100,6 +110,7 @@ def build_coverage_audit(
             historical_store,
             historical_derived,
             yfinance_history,
+            dashboard_derived_integration,
         ),
     }
 
@@ -296,6 +307,7 @@ def _recommendations(
     historical_store: dict[str, Any] | None = None,
     historical_derived: dict[str, Any] | None = None,
     yfinance_history: dict[str, Any] | None = None,
+    dashboard_derived_integration: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -325,6 +337,11 @@ def _recommendations(
         recommendations.extend(historical_derived.get("recommended_history_actions", []))
     if yfinance_history:
         recommendations.extend(yfinance_history.get("recommendations", []))
+    if dashboard_derived_integration and dashboard_derived_integration.get(
+        "equity_derived_still_insufficient_count",
+        0,
+    ):
+        recommendations.append("check_dashboard_historical_derived_integration")
     recommendations.append("add_official_macro_pack")
     return sorted(set(recommendations))
 
@@ -522,6 +539,57 @@ def _historical_derived_audit(
         ),
         "recommended_history_actions": sorted(set(actions)),
     }
+
+
+def _dashboard_derived_integration_audit(
+    rows: list[DashboardEvidenceRow],
+) -> dict[str, Any]:
+    equity_keys = {
+        "sp500_30d_return",
+        "sp500_60d_return",
+        "nasdaq100_30d_return",
+        "nasdaq100_60d_return",
+        "nasdaq_vs_sp500_30d",
+    }
+    equity_rows = [
+        row for row in rows if row.module == "equity_trend" and row.metric_key in equity_keys
+    ]
+    integrated = [
+        row
+        for row in equity_rows
+        if row.status == "ok" and row.source_badge == "derived" and _has_value(row)
+    ]
+    still_insufficient = [
+        row for row in equity_rows if row.status == "insufficient_history"
+    ]
+    historical_derived_used = [
+        row
+        for row in rows
+        if row.source_badge == "derived"
+        and row.status == "ok"
+        and _has_value(row)
+        and _hint_mentions_local_market_history(row.interpretation_hint)
+    ]
+    return {
+        "equity_derived_integrated_count": len(integrated),
+        "equity_derived_still_insufficient_count": len(still_insufficient),
+        "historical_derived_used_in_dashboard_count": len(historical_derived_used),
+        "dashboard_insufficient_history_remaining_count": sum(
+            1 for row in rows if row.status == "insufficient_history"
+        ),
+        "dashboard_equity_trend_value_count": sum(
+            1 for row in equity_rows if _has_value(row)
+        ),
+        "integrated_metric_keys": sorted(row.metric_key for row in integrated),
+        "still_insufficient_metric_keys": sorted(
+            row.metric_key for row in still_insufficient
+        ),
+    }
+
+
+def _hint_mentions_local_market_history(value: str | None) -> bool:
+    text = (value or "").lower()
+    return "derived from local market history" in text
 
 
 def _yfinance_history_audit(
@@ -838,6 +906,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## yfinance History", ""])
     for key, value in audit["yfinance_history"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Dashboard Derived Integration", ""])
+    for key, value in audit["dashboard_derived_integration"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:

@@ -145,7 +145,8 @@ They are written through `market_history_store.upsert_market_observation`, so th
 ## Historical Derived Metrics
 
 Once a user manually ingests enough history, `historical_derived_metrics` can calculate candidate period returns and relative returns from the local store.
-This remains read-only until a dedicated Dashboard integration phase.
+Dashboard integration is currently limited to selected `equity_trend` derived metrics.
+Those rows use `source_badge=derived`, not `official`, and their interpretation text preserves the yfinance unofficial/proxy boundary.
 
 ## Current Non-goals
 
@@ -155,7 +156,7 @@ This phase does not:
 - access the network
 - add an official provider
 - call DeepSeek or Tavily
-- replace Dashboard current values
+- replace non-equity Dashboard current values
 - promote proxies into official evidence
 - save raw provider responses
 - save raw holdings

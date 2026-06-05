@@ -162,8 +162,9 @@ Potential follow-up phases:
 - user-run yfinance batch history ingestion
 - official macro pack
 
-Historical derived metrics are a read-only calculation layer over this store.
-They should remain separate from provider fetch logic and should not replace Dashboard current values until a dedicated integration phase.
+Historical derived metrics are a calculation layer over this store.
+Only a narrow Dashboard integration currently consumes selected `equity_trend` derived metrics when the local history window is sufficient.
+Rate and oil derived metrics remain outside Dashboard current values.
 
 ## yfinance History Boundary
 
@@ -177,4 +178,5 @@ yfinance observations:
 - default to `ai_context_allowed=false`
 - never become official facts
 - never save raw yfinance responses or raw DataFrames
-- do not replace Dashboard current values
+- may support selected `equity_trend` historical derived Dashboard rows
+- do not replace rate, oil, or official current provider values

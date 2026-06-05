@@ -94,16 +94,19 @@ Derived metrics use `source_badge=derived`.
 `insufficient_history` results always use `ai_context_allowed=false`.
 `ok` results include dependency keys, calculation name, window, points used, points required, and an interpretation hint.
 
-Dashboard integration remains a later phase.
+Dashboard integration is currently limited to selected `equity_trend` candidates.
+Only OK S&P 500/Nasdaq 30D/60D returns and `nasdaq_vs_sp500_30d` may be surfaced in Dashboard rows.
+Rate and oil candidates remain read-only audit candidates until a later phase.
 
 ## Current Non-goals
 
-This phase does not:
+The calculation service itself does not:
 
 - connect yfinance
 - access the network
 - alter provider request logic
-- replace Dashboard current values
+- call yfinance live
+- replace non-equity Dashboard current values
 - calculate official current signals
 - save raw provider responses
 - save raw prompts
@@ -123,3 +126,15 @@ It may add `unofficial_fallback` index history and `proxy` ETF history to `marke
 
 Historical derived metrics can later calculate candidate returns from those stored observations when the window is sufficient.
 The derived result still uses `source_badge=derived`, includes dependency keys and calculation metadata, and does not promote yfinance or proxy data into official evidence.
+
+## Dashboard Integration
+
+Dashboard integration lives in `app_backend.services.dashboard_service`.
+It uses historical derived results only when the existing `equity_trend` row is still `insufficient_history` and the historical candidate is `ok`.
+
+Integrated rows keep:
+
+- `source_badge=derived`
+- `source=local_market_history`
+- `freshness_status=historical`
+- interpretation text that states the local market history and yfinance unofficial/proxy boundary

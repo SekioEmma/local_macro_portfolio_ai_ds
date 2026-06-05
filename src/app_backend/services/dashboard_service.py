@@ -15,12 +15,15 @@ from app_backend.schemas.responses import (
     DashboardSummaryResponse,
 )
 from app_backend.services import provider_service
+from data_quality import historical_derived_metrics
 from data_quality import last_good_cache
+from data_quality import market_history_store
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
 DEFAULT_REPORTS_DIR = PROJECT_REPORTS_DIR
+DEFAULT_MARKET_HISTORY_DB_PATH = market_history_store.get_default_market_history_db_path()
 MAX_ERROR_SUMMARY_LENGTH = 200
 DASHBOARD_MODULE_KEYS = (
     "credit_stress",
@@ -84,10 +87,26 @@ DERIVED_METRIC_KEYS = {
     "dgs10_5d_avg",
     "dgs30_distance_to_5pct",
     "dgs30_breakout_confirmed",
+    "sp500_30d_return",
+    "sp500_60d_return",
+    "nasdaq100_30d_return",
+    "nasdaq100_60d_return",
     "nasdaq_vs_sp500_30d",
     "wti_30d_change",
     "brent_30d_change",
 }
+EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
+    "sp500_30d_return",
+    "sp500_60d_return",
+    "nasdaq100_30d_return",
+    "nasdaq100_60d_return",
+    "nasdaq_vs_sp500_30d",
+}
+EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
+    " Derived from local market history; underlying source includes yfinance "
+    "unofficial_fallback/proxy observations in the market history store; not an "
+    "official market breadth or valuation measure."
+)
 SOURCE_BADGE_ALIASES = {
     "official_api": "official",
     "official_or_public_data_api": "official",
@@ -228,8 +247,15 @@ class PortfolioDeviationCompact:
     notes: list[str]
 
 
-def build_dashboard_summary(reports_dir: Path | str | None = None) -> DashboardSummaryResponse:
+def build_dashboard_summary(
+    reports_dir: Path | str | None = None,
+    market_history_db_path: Path | str | None = None,
+) -> DashboardSummaryResponse:
     base_dir = Path(reports_dir) if reports_dir is not None else DEFAULT_REPORTS_DIR
+    dashboard_market_history_db_path = _dashboard_market_history_db_path(
+        base_dir,
+        market_history_db_path,
+    )
     reports = {
         key: _load_report(key, base_dir / file_name)
         for key, file_name in REPORT_FILES.items()
@@ -241,7 +267,7 @@ def build_dashboard_summary(reports_dir: Path | str | None = None) -> DashboardS
     provider_health = _provider_health_summary(
         base_dir / REPORT_FILES["provider_health"]
     )
-    modules = _build_modules(reports)
+    modules = _build_modules(reports, market_history_db_path=dashboard_market_history_db_path)
     missing_data = _missing_data(reports)
     data_freshness = _data_freshness(reports, provider_health)
     next_actions = _next_actions(modules, provider_health)
@@ -260,13 +286,17 @@ def build_dashboard_summary(reports_dir: Path | str | None = None) -> DashboardS
 
 def build_dashboard_evidence_table(
     reports_dir: Path | str | None = None,
+    market_history_db_path: Path | str | None = None,
     module: str | None = None,
     status: str | None = None,
     source_badge: str | None = None,
     ai_context_allowed: bool | None = None,
     write_last_good: bool = True,
 ) -> DashboardEvidenceTableResponse:
-    summary = build_dashboard_summary(reports_dir=reports_dir)
+    summary = build_dashboard_summary(
+        reports_dir=reports_dir,
+        market_history_db_path=market_history_db_path,
+    )
     all_rows = _evidence_rows_from_summary(summary)
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
@@ -319,6 +349,23 @@ def _load_report(name: str, path: Path) -> ReportState:
             error_summary=f"{path.name} is not a JSON object",
         )
     return ReportState(name=name, path=path, exists=True, data=payload)
+
+
+def _dashboard_market_history_db_path(
+    reports_dir: Path,
+    market_history_db_path: Path | str | None,
+) -> Path | str:
+    if market_history_db_path is not None:
+        return market_history_db_path
+    default_path = market_history_store.get_default_market_history_db_path()
+    if Path(DEFAULT_MARKET_HISTORY_DB_PATH) != default_path:
+        return DEFAULT_MARKET_HISTORY_DB_PATH
+    try:
+        if reports_dir.resolve() == PROJECT_REPORTS_DIR.resolve():
+            return DEFAULT_MARKET_HISTORY_DB_PATH
+    except OSError:
+        pass
+    return reports_dir / "market_history.sqlite3"
 
 
 def _evidence_rows_from_summary(
@@ -453,7 +500,11 @@ def _provider_health_summary(health_path: Path) -> dict:
     }
 
 
-def _build_modules(reports: dict[str, ReportState]) -> dict[str, DashboardModule]:
+def _build_modules(
+    reports: dict[str, ReportState],
+    *,
+    market_history_db_path: Path | str | None = None,
+) -> dict[str, DashboardModule]:
     market = reports["market_snapshot"]
     temperature = reports["market_temperature"]
     portfolio = reports["portfolio_snapshot"]
@@ -501,7 +552,11 @@ def _build_modules(reports: dict[str, ReportState]) -> dict[str, DashboardModule
             label="equity trend",
             reports=market_temperature_metadata_reports,
             signal_terms=("sp500", "nasdaq", "nasdaq100", "equity_temperature", "equity"),
-            key_metrics=_key_metrics_for_module("equity_trend", market_temperature_metadata_reports),
+            key_metrics=_key_metrics_for_module(
+                "equity_trend",
+                market_temperature_metadata_reports,
+                market_history_db_path=market_history_db_path,
+            ),
         ),
         "portfolio_deviation": _portfolio_module(portfolio),
     }
@@ -527,6 +582,19 @@ def _market_module(
         )
 
     available_reports = [report for report in reports if report.data is not None]
+    if key == "equity_trend" and _equity_historical_derived_metrics_available(key_metrics):
+        return _module(
+            key=key,
+            status="ok",
+            label=label,
+            summary=(
+                "equity trend historical derived metrics available; risk "
+                "interpretation remains descriptive"
+            ),
+            source_badge="derived",
+            updated_at=_latest_metric_generated_at(key_metrics),
+            key_metrics=key_metrics,
+        )
     if not available_reports:
         return _module(
             key=key,
@@ -643,11 +711,19 @@ def _module(
 def _key_metrics_for_module(
     module_key: str,
     reports: tuple[ReportState, ...],
+    *,
+    market_history_db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    return [
+    metrics = [
         _build_metric(module_key, reports, spec)
         for spec in METRIC_SPECS.get(module_key, [])
     ]
+    if module_key == "equity_trend":
+        return _apply_equity_historical_derived_metrics(
+            metrics,
+            db_path=market_history_db_path,
+        )
+    return metrics
 
 
 def _build_metric(
@@ -725,6 +801,110 @@ def _build_metric(
             interpretation_hint=interpretation_hint,
         ),
     )
+
+
+def _apply_equity_historical_derived_metrics(
+    metrics: list[DashboardMetric],
+    *,
+    db_path: Path | str | None = None,
+) -> list[DashboardMetric]:
+    target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
+    candidates = {
+        item.metric_key: item
+        for item in historical_derived_metrics.build_historical_dashboard_candidates(
+            db_path=target_db_path,
+        ).get("equity_trend", [])
+        if item.metric_key in EQUITY_HISTORICAL_DERIVED_METRIC_KEYS
+    }
+    return [
+        _equity_historical_derived_metric(metric, candidates.get(metric.metric_key))
+        for metric in metrics
+    ]
+
+
+def _equity_historical_derived_metric(
+    original: DashboardMetric,
+    candidate: historical_derived_metrics.HistoricalDerivedMetric | None,
+) -> DashboardMetric:
+    if original.metric_key not in EQUITY_HISTORICAL_DERIVED_METRIC_KEYS:
+        return original
+    if original.status != "insufficient_history":
+        return original
+    if candidate is None or candidate.status != "ok" or candidate.value is None:
+        return original
+    value = _dashboard_historical_derived_value(candidate)
+    hint = _dashboard_historical_derived_hint(candidate)
+    ai_context_allowed = bool(candidate.ai_context_allowed) and _ai_context_allowed(
+        status="ok",
+        source="local_market_history",
+        source_badge="derived",
+        observation_date=candidate.observation_date,
+        generated_at=candidate.generated_at,
+        freshness_status=candidate.freshness_status,
+        interpretation_hint=hint,
+    )
+    return DashboardMetric(
+        metric_key=original.metric_key,
+        display_name=original.display_name,
+        value=value,
+        value_text=_format_historical_derived_value(value, candidate.unit),
+        unit=original.unit,
+        status="ok",
+        source="local_market_history",
+        source_badge="derived",
+        observation_date=candidate.observation_date,
+        generated_at=candidate.generated_at,
+        freshness_status=candidate.freshness_status,
+        missing_reason=None,
+        interpretation_hint=hint,
+        ai_context_allowed=ai_context_allowed,
+    )
+
+
+def _dashboard_historical_derived_value(
+    candidate: historical_derived_metrics.HistoricalDerivedMetric,
+) -> float:
+    value = float(candidate.value)
+    if candidate.unit in {"percent", "pp"}:
+        return value * 100.0
+    return value
+
+
+def _format_historical_derived_value(value: float, unit: str | None) -> str:
+    if unit == "percent":
+        return f"{value:+.2f}%"
+    if unit == "pp":
+        return f"{value:+.2f}pp"
+    return f"{value:.4g}"
+
+
+def _dashboard_historical_derived_hint(
+    candidate: historical_derived_metrics.HistoricalDerivedMetric,
+) -> str:
+    base = (candidate.interpretation_hint or "").strip()
+    return (base + EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX).strip()
+
+
+def _equity_historical_derived_metrics_available(
+    metrics: list[DashboardMetric],
+) -> bool:
+    return any(
+        metric.metric_key in EQUITY_HISTORICAL_DERIVED_METRIC_KEYS
+        and metric.status == "ok"
+        and metric.source_badge == "derived"
+        and metric.value is not None
+        for metric in metrics
+    )
+
+
+def _latest_metric_generated_at(metrics: list[DashboardMetric]) -> str | None:
+    candidates = [
+        value
+        for metric in metrics
+        for value in [metric.generated_at or metric.observation_date]
+        if value
+    ]
+    return max(candidates) if candidates else None
 
 
 def _portfolio_compact_metric(
