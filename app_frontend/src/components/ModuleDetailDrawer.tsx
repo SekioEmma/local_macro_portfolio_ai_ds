@@ -227,6 +227,7 @@ function summarizeBlockedReasons(rows: DashboardEvidenceRow[]) {
 }
 
 function blockedReason(row: DashboardEvidenceRow) {
+  if (row.blocked_reason) return row.blocked_reason;
   if (blockedStatuses.has(row.status)) return row.status;
   if (["unknown", "missing", "stale", "insufficient_history"].includes(row.freshness_status)) {
     return row.freshness_status;

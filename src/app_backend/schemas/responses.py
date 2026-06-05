@@ -90,6 +90,7 @@ class DashboardEvidenceRow(BaseModel):
     freshness_status: str
     missing_reason: str | None
     interpretation_hint: str | None
+    blocked_reason: str | None = None
     ai_context_allowed: bool
 
 

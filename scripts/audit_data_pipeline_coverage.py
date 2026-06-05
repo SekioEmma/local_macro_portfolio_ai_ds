@@ -53,6 +53,9 @@ def build_coverage_audit(reports_dir: Path | str | None = None) -> dict[str, Any
         "module_coverage": _module_coverage(summary.modules, rows),
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
+        "blocked_reason_counts": _blocked_reason_counts(rows),
+        "source_badge_distribution": _source_badge_distribution(rows),
+        "ai_context_allowed_by_module": _ai_context_allowed_by_module(rows),
         "recommendations": _recommendations(metadata_anomalies, dependency_anomalies),
     }
 
@@ -66,6 +69,12 @@ def _coverage_summary(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
         "total_rows": len(rows),
         "rows_with_value": sum(1 for row in rows if _has_value(row)),
         "rows_missing_value": sum(1 for row in rows if not _has_value(row)),
+        "rows_with_value_and_complete_metadata": sum(
+            1 for row in rows if _has_value(row) and _has_complete_metadata(row)
+        ),
+        "rows_with_value_but_blocked": sum(
+            1 for row in rows if _has_value(row) and not row.ai_context_allowed
+        ),
         "ok_count": statuses["ok"],
         "missing_count": statuses["missing"],
         "research_needed_count": statuses["research_needed"],
@@ -75,11 +84,20 @@ def _coverage_summary(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
         "source_badge_missing_count": sum(
             1 for row in rows if _is_missing_source_badge(row.source_badge)
         ),
+        "provenance_missing_count": sum(
+            1 for row in rows if _has_value(row) and _provenance_missing(row)
+        ),
         "freshness_unknown_count": sum(
+            1 for row in rows if row.freshness_status in {"unknown", "missing"}
+        ),
+        "freshness_missing_or_unknown_count": sum(
             1 for row in rows if row.freshness_status in {"unknown", "missing"}
         ),
         "observation_date_missing_count": sum(
             1 for row in rows if not row.observation_date
+        ),
+        "date_missing_count": sum(
+            1 for row in rows if _has_value(row) and not row.observation_date and not row.generated_at
         ),
         "ai_context_allowed_true_count": sum(1 for row in rows if row.ai_context_allowed),
         "ai_context_allowed_false_count": sum(1 for row in rows if not row.ai_context_allowed),
@@ -127,23 +145,23 @@ def _metadata_anomalies(rows: list[DashboardEvidenceRow]) -> list[dict[str, Any]
     anomalies: list[dict[str, Any]] = []
     for row in rows:
         if _has_value(row) and _is_missing_source_badge(row.source_badge):
-            anomalies.append(_anomaly(row, "value_with_missing_source_badge"))
+            anomalies.append(_anomaly(row, "value_with_missing_source_badge", "source_badge_missing"))
         if _has_value(row) and row.freshness_status in {"unknown", "missing"}:
-            anomalies.append(_anomaly(row, "value_with_unknown_freshness"))
+            anomalies.append(_anomaly(row, "value_with_unknown_freshness", "freshness_unknown"))
         if _has_value(row) and not row.observation_date and not row.generated_at:
-            anomalies.append(_anomaly(row, "value_without_observation_or_generated_at"))
+            anomalies.append(_anomaly(row, "value_without_observation_or_generated_at", "date_missing"))
         if row.ai_context_allowed and _is_missing_source_badge(row.source_badge):
-            anomalies.append(_anomaly(row, "ai_allowed_with_missing_source_badge"))
+            anomalies.append(_anomaly(row, "ai_allowed_with_missing_source_badge", "source_badge_missing"))
         if row.ai_context_allowed and row.freshness_status in BAD_FRESHNESS:
-            anomalies.append(_anomaly(row, "ai_allowed_with_bad_freshness"))
+            anomalies.append(_anomaly(row, "ai_allowed_with_bad_freshness", "freshness_unknown"))
         if row.ai_context_allowed and row.status in BAD_AI_STATUSES:
-            anomalies.append(_anomaly(row, "ai_allowed_with_blocked_status"))
+            anomalies.append(_anomaly(row, "ai_allowed_with_blocked_status", f"status_{row.status}"))
         if row.ai_context_allowed and row.source_badge in BAD_AI_SOURCE_BADGES:
-            anomalies.append(_anomaly(row, "ai_allowed_with_blocked_source_badge"))
+            anomalies.append(_anomaly(row, "ai_allowed_with_blocked_source_badge", f"source_badge_{row.source_badge}"))
         if row.source_badge in {"proxy", "search-derived"} and not row.interpretation_hint:
-            anomalies.append(_anomaly(row, "proxy_or_search_derived_without_hint"))
+            anomalies.append(_anomaly(row, "proxy_or_search_derived_without_hint", "compact_report_missing_provenance"))
         if row.status in {"missing", "research_needed"} and not row.missing_reason:
-            anomalies.append(_anomaly(row, "missing_or_research_needed_without_reason"))
+            anomalies.append(_anomaly(row, "missing_or_research_needed_without_reason", "compact_report_missing_provenance"))
     return anomalies
 
 
@@ -158,13 +176,13 @@ def _dependency_anomalies(
     dgs30_distance = rows_by_key.get("dgs30_distance_to_5pct")
     if _source_missing(dgs30) and _row_has_ok_value(dgs30_distance):
         anomalies.append(
-            _anomaly(dgs30_distance, "dgs30_distance_ok_while_dgs30_missing")
+            _anomaly(dgs30_distance, "dgs30_distance_ok_while_dgs30_missing", "dependency_metadata_incomplete")
         )
 
     dgs30_breakout = rows_by_key.get("dgs30_breakout_confirmed")
     if _source_missing(dgs30) and _row_has_ok_value(dgs30_breakout):
         anomalies.append(
-            _anomaly(dgs30_breakout, "dgs30_breakout_ok_while_dgs30_missing")
+            _anomaly(dgs30_breakout, "dgs30_breakout_ok_while_dgs30_missing", "dependency_metadata_incomplete")
         )
 
     nasdaq_spread = rows_by_key.get("nasdaq_vs_sp500_30d")
@@ -173,13 +191,13 @@ def _dependency_anomalies(
         or _source_missing(rows_by_key.get("nasdaq100_30d_return"))
     ) and _row_has_ok_value(nasdaq_spread):
         anomalies.append(
-            _anomaly(nasdaq_spread, "nasdaq_vs_sp500_ok_while_dependency_missing")
+            _anomaly(nasdaq_spread, "nasdaq_vs_sp500_ok_while_dependency_missing", "dependency_metadata_incomplete")
         )
 
     for metric_key in ("wti_30d_change", "brent_30d_change"):
         row = rows_by_key.get(metric_key)
         if _row_has_ok_value(row) and not _has_clear_history_hint(row):
-            anomalies.append(_anomaly(row, f"{metric_key}_ok_without_history_hint"))
+            anomalies.append(_anomaly(row, f"{metric_key}_ok_without_history_hint", "dependency_metadata_incomplete"))
 
     for module_key, module in modules.items():
         core_keys = dashboard_service.CORE_METRIC_KEYS.get(module_key, set())
@@ -191,6 +209,7 @@ def _dependency_anomalies(
             anomalies.append(
                 {
                     "type": "module_ok_while_core_metrics_mostly_missing",
+                    "reason": "dependency_metadata_incomplete",
                     "module": module_key,
                     "metric_key": None,
                     "row_id": None,
@@ -223,9 +242,39 @@ def _recommendations(
     return sorted(set(recommendations))
 
 
-def _anomaly(row: DashboardEvidenceRow | None, anomaly_type: str) -> dict[str, Any]:
+def _blocked_reason_counts(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        if row.ai_context_allowed:
+            continue
+        reason = row.blocked_reason or "not_eligible"
+        counts[reason] = counts.get(reason, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _source_badge_distribution(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row.source_badge] = counts.get(row.source_badge, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _ai_context_allowed_by_module(rows: list[DashboardEvidenceRow]) -> dict[str, dict[str, int]]:
+    result: dict[str, dict[str, int]] = {}
+    for row in rows:
+        item = result.setdefault(row.module, {"true": 0, "false": 0})
+        item["true" if row.ai_context_allowed else "false"] += 1
+    return dict(sorted(result.items()))
+
+
+def _anomaly(
+    row: DashboardEvidenceRow | None,
+    anomaly_type: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
     return {
         "type": anomaly_type,
+        "reason": reason or (row.blocked_reason if row is not None else None),
         "module": row.module if row is not None else None,
         "metric_key": row.metric_key if row is not None else None,
         "row_id": row.row_id if row is not None else None,
@@ -248,6 +297,22 @@ def _has_value(row: DashboardEvidenceRow) -> bool:
 
 def _is_missing_source_badge(value: str | None) -> bool:
     return value in {None, "", "missing"}
+
+
+def _has_complete_metadata(row: DashboardEvidenceRow) -> bool:
+    if _is_missing_source_badge(row.source_badge):
+        return False
+    if row.freshness_status in {"unknown", "missing", "stale", "insufficient_history"}:
+        return False
+    return bool(row.observation_date or row.generated_at)
+
+
+def _provenance_missing(row: DashboardEvidenceRow) -> bool:
+    return (
+        _is_missing_source_badge(row.source_badge)
+        or row.freshness_status in {"unknown", "missing"}
+        or (not row.observation_date and not row.generated_at)
+    )
 
 
 def _source_missing(row: DashboardEvidenceRow | None) -> bool:
@@ -294,10 +359,16 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         )
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:
-        lines.append(f"- {item['type']}: {item['row_id']}")
+        lines.append(f"- {item['type']} ({item.get('reason') or 'unknown'}): {item['row_id']}")
     lines.extend(["", "## Derived Dependency Anomalies", ""])
     for item in audit["derived_dependency_anomalies"]:
         lines.append(f"- {item['type']}: {item.get('row_id') or item.get('module')}")
+    lines.extend(["", "## Blocked Reasons", ""])
+    for reason, count in audit["blocked_reason_counts"].items():
+        lines.append(f"- {reason}: {count}")
+    lines.extend(["", "## Source Badge Distribution", ""])
+    for badge, count in audit["source_badge_distribution"].items():
+        lines.append(f"- {badge}: {count}")
     lines.extend(["", "## Recommendations", ""])
     for item in audit["recommendations"]:
         lines.append(f"- {item}")

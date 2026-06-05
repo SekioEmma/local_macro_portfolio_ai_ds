@@ -33,6 +33,9 @@ REPORT_FILES = {
     "portfolio_snapshot": "portfolio_snapshot.json",
     "provider_health": "provider_health_check.json",
 }
+OPTIONAL_METADATA_REPORT_FILES = {
+    "llm_context_pack": "llm_context_pack.json",
+}
 ALLOWED_METRIC_STATUSES = {
     "ok",
     "watch",
@@ -73,6 +76,14 @@ AI_BLOCKED_SOURCE_BADGES = {
     "missing",
     "research_needed",
     "search-derived",
+}
+DERIVED_METRIC_KEYS = {
+    "dgs10_5d_avg",
+    "dgs30_distance_to_5pct",
+    "dgs30_breakout_confirmed",
+    "nasdaq_vs_sp500_30d",
+    "wti_30d_change",
+    "brent_30d_change",
 }
 SOURCE_BADGE_ALIASES = {
     "official_api": "official",
@@ -192,6 +203,10 @@ def build_dashboard_summary(reports_dir: Path | str | None = None) -> DashboardS
         key: _load_report(key, base_dir / file_name)
         for key, file_name in REPORT_FILES.items()
     }
+    for key, file_name in OPTIONAL_METADATA_REPORT_FILES.items():
+        path = base_dir / file_name
+        if path.exists():
+            reports[key] = _load_report(key, path)
     provider_health = _provider_health_summary(
         base_dir / REPORT_FILES["provider_health"]
     )
@@ -283,6 +298,7 @@ def _evidence_rows_from_summary(
 
 
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
+    ai_context_allowed = _evidence_ai_context_allowed(metric)
     return DashboardEvidenceRow(
         row_id=f"{module_key}:{metric.metric_key}",
         module=module_key,
@@ -299,7 +315,19 @@ def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidence
         freshness_status=metric.freshness_status,
         missing_reason=metric.missing_reason,
         interpretation_hint=metric.interpretation_hint,
-        ai_context_allowed=_evidence_ai_context_allowed(metric),
+        blocked_reason=None
+        if ai_context_allowed
+        else _ai_context_blocked_reason(
+            status=metric.status,
+            value=metric.value,
+            source=metric.source,
+            source_badge=metric.source_badge,
+            observation_date=metric.observation_date,
+            generated_at=metric.generated_at,
+            freshness_status=metric.freshness_status,
+            interpretation_hint=metric.interpretation_hint,
+        ),
+        ai_context_allowed=ai_context_allowed,
     )
 
 
@@ -379,44 +407,51 @@ def _build_modules(reports: dict[str, ReportState]) -> dict[str, DashboardModule
     market = reports["market_snapshot"]
     temperature = reports["market_temperature"]
     portfolio = reports["portfolio_snapshot"]
+    llm_context = reports.get("llm_context_pack")
+    market_metadata_reports = (market, llm_context) if llm_context else (market,)
+    market_temperature_metadata_reports = (
+        market,
+        temperature,
+        llm_context,
+    ) if llm_context else (market, temperature)
     return {
         "credit_stress": _market_module(
             key="credit_stress",
             label="credit stress",
-            reports=(market, temperature),
+            reports=market_temperature_metadata_reports,
             signal_terms=("financial_conditions", "high_yield_spread", "credit", "vix"),
-            key_metrics=_key_metrics_for_module("credit_stress", (market, temperature)),
+            key_metrics=_key_metrics_for_module("credit_stress", market_temperature_metadata_reports),
         ),
         "rate_pressure": _market_module(
             key="rate_pressure",
             label="rate pressure",
-            reports=(market,),
+            reports=market_metadata_reports,
             signal_terms=("dgs10", "dgs30", "treasury_yields", "10y", "30y"),
-            key_metrics=_key_metrics_for_module("rate_pressure", (market,)),
+            key_metrics=_key_metrics_for_module("rate_pressure", market_metadata_reports),
         ),
         "real_yield_pressure": _market_module(
             key="real_yield_pressure",
             label="real yield pressure",
-            reports=(market,),
+            reports=market_metadata_reports,
             signal_terms=("real_yield_10y", "dfii10", "real_yield"),
-            key_metrics=_key_metrics_for_module("real_yield_pressure", (market,)),
+            key_metrics=_key_metrics_for_module("real_yield_pressure", market_metadata_reports),
         ),
         "inflation_energy_pressure": _market_module(
             key="inflation_energy_pressure",
             label="inflation and energy pressure",
-            reports=(market, temperature),
+            reports=market_temperature_metadata_reports,
             signal_terms=("cpi", "pce", "ppi", "oil", "energy", "inflation"),
             key_metrics=_key_metrics_for_module(
                 "inflation_energy_pressure",
-                (market, temperature),
+                market_temperature_metadata_reports,
             ),
         ),
         "equity_trend": _market_module(
             key="equity_trend",
             label="equity trend",
-            reports=(market, temperature),
+            reports=market_temperature_metadata_reports,
             signal_terms=("sp500", "nasdaq", "nasdaq100", "equity_temperature", "equity"),
-            key_metrics=_key_metrics_for_module("equity_trend", (market, temperature)),
+            key_metrics=_key_metrics_for_module("equity_trend", market_temperature_metadata_reports),
         ),
         "portfolio_deviation": _portfolio_module(portfolio),
     }
@@ -576,14 +611,21 @@ def _build_metric(
         )
 
     value, payload, report = found
+    interpretation_hint = _metric_interpretation_hint(metric_key, payload)
+    quality_metadata = _metric_quality_metadata(report, metric_key) or _first_metric_quality_metadata(reports, metric_key)
     status = _metric_status(payload)
-    freshness_status = _metric_freshness(payload, report)
+    freshness_status = _metric_freshness(
+        payload,
+        report,
+        metric_key=metric_key,
+        quality_metadata=quality_metadata,
+    )
     if freshness_status == "stale" and status == "ok":
         status = "stale"
 
-    source = _metric_source(payload, report)
-    source_badge = _metric_source_badge(payload, report, module_key)
-    observation_date = _metric_observation_date(payload)
+    source = _metric_source(payload, report, quality_metadata)
+    source_badge = _metric_source_badge(payload, report, module_key, metric_key, quality_metadata)
+    observation_date = _metric_observation_date(payload, quality_metadata)
     generated_at = _metric_generated_at(payload, report)
     missing_reason = _string_or_none(payload.get("missing_reason")) if isinstance(payload, dict) else None
 
@@ -728,6 +770,8 @@ def _derived_metric_response(
     _, payload, report = source_metric
     generated_at = _metric_generated_at(payload, report)
     observation_date = _metric_observation_date(payload)
+    freshness_status = _metric_freshness(payload, report)
+    source = _metric_source(payload, report)
     return DashboardMetric(
         metric_key=metric_key,
         display_name=display_name,
@@ -735,20 +779,20 @@ def _derived_metric_response(
         value_text=_format_value(value, format_kind, "ok"),
         unit=unit,
         status="ok",
-        source=_metric_source(payload, report),
+        source=source,
         source_badge="derived",
         observation_date=observation_date,
         generated_at=generated_at,
-        freshness_status=_metric_freshness(payload, report),
+        freshness_status=freshness_status,
         missing_reason=None,
         interpretation_hint=interpretation_hint,
         ai_context_allowed=_ai_context_allowed(
             status="ok",
-            source=_metric_source(payload, report),
+            source=source,
             source_badge="derived",
             observation_date=observation_date,
             generated_at=generated_at,
-            freshness_status=_metric_freshness(payload, report),
+            freshness_status=freshness_status,
             interpretation_hint=interpretation_hint,
         ),
     )
@@ -864,10 +908,24 @@ def _metric_status_value(value: Any) -> str:
     return status if status in ALLOWED_METRIC_STATUSES else "unknown"
 
 
-def _metric_freshness(payload: dict[str, Any], report: ReportState) -> str:
+def _metric_freshness(
+    payload: dict[str, Any],
+    report: ReportState,
+    metric_key: str | None = None,
+    quality_metadata: dict[str, Any] | None = None,
+) -> str:
     freshness = payload.get("freshness_status")
     if freshness is None and isinstance(payload.get("freshness"), dict):
         freshness = payload["freshness"].get("freshness_status")
+    if freshness is None and isinstance(payload.get("freshness"), str):
+        freshness = payload.get("freshness")
+    if freshness is None and quality_metadata:
+        freshness = quality_metadata.get("freshness_status") or quality_metadata.get("freshness")
+    if freshness is None and metric_key:
+        quality = _metric_quality_metadata(report, metric_key)
+        freshness = quality.get("freshness_status") or quality.get("freshness")
+    if freshness is None and metric_key == "holdings_updated_at" and isinstance(report.data, dict):
+        freshness = report.data.get("holdings_freshness_status")
     if freshness is None and _contains_signal(payload, ("stale_cache",)):
         freshness = "stale"
     if freshness is None and report.data is not None and _contains_signal(report.data, ("stale_cache",)):
@@ -875,21 +933,43 @@ def _metric_freshness(payload: dict[str, Any], report: ReportState) -> str:
     return str(freshness or "unknown").lower()
 
 
-def _metric_source(payload: dict[str, Any], report: ReportState) -> str | None:
+def _metric_source(
+    payload: dict[str, Any],
+    report: ReportState,
+    quality_metadata: dict[str, Any] | None = None,
+) -> str | None:
     source = payload.get("source")
     if source is None and isinstance(payload.get("metadata"), dict):
         source = payload["metadata"].get("source")
+    if source is None and quality_metadata:
+        source = quality_metadata.get("source") or quality_metadata.get("provider")
     if source is None and isinstance(report.data, dict):
         source = report.data.get("source")
+    if source is None and report.name == "portfolio_snapshot":
+        source = "local"
     return _string_or_none(source)
 
 
-def _metric_source_badge(payload: dict[str, Any], report: ReportState, module_key: str) -> str:
+def _metric_source_badge(
+    payload: dict[str, Any],
+    report: ReportState,
+    module_key: str,
+    metric_key: str | None = None,
+    quality_metadata: dict[str, Any] | None = None,
+) -> str:
     if module_key == "portfolio_deviation":
         return "local"
+    if metric_key in DERIVED_METRIC_KEYS and (
+        payload.get("source_series") is not None
+        or payload.get("derived_from") is not None
+        or metric_key in {"dgs10_5d_avg", "dgs30_distance_to_5pct", "nasdaq_vs_sp500_30d"}
+    ):
+        return "derived"
     badge = payload.get("source_badge") or payload.get("source_tier")
     if badge is None and isinstance(payload.get("freshness"), dict):
         badge = payload["freshness"].get("source_tier")
+    if badge is None and quality_metadata:
+        badge = quality_metadata.get("source_badge") or quality_metadata.get("source_tier")
     if badge is None and isinstance(report.data, dict):
         badge = report.data.get("source_badge") or report.data.get("source_tier")
     badge_text = str(badge or "missing").lower()
@@ -899,11 +979,15 @@ def _metric_source_badge(payload: dict[str, Any], report: ReportState, module_ke
     return badge_text if badge_text in ALLOWED_SOURCE_BADGES else "missing"
 
 
-def _metric_observation_date(payload: dict[str, Any]) -> str | None:
+def _metric_observation_date(
+    payload: dict[str, Any],
+    quality_metadata: dict[str, Any] | None = None,
+) -> str | None:
     return _string_or_none(
         payload.get("observation_date")
         or payload.get("date")
         or payload.get("updated_at")
+        or (quality_metadata or {}).get("observation_date")
     )
 
 
@@ -913,6 +997,37 @@ def _metric_generated_at(payload: dict[str, Any], report: ReportState) -> str | 
     if isinstance(report.data, dict):
         return _string_or_none(report.data.get("generated_at") or report.data.get("updated_at"))
     return None
+
+
+def _metric_quality_metadata(report: ReportState, metric_key: str) -> dict[str, Any]:
+    if not isinstance(report.data, dict):
+        return {}
+    data_quality = report.data.get("data_quality")
+    if isinstance(data_quality, dict):
+        market_quality = data_quality.get("market_data_quality")
+        if isinstance(market_quality, dict) and isinstance(market_quality.get(metric_key), dict):
+            return market_quality[metric_key]
+    if report.name == "portfolio_snapshot" and metric_key == "holdings_updated_at":
+        return {
+            "source": "local",
+            "source_badge": "local",
+            "observation_date": report.data.get("holdings_updated_at"),
+            "freshness_status": report.data.get("holdings_freshness_status"),
+        }
+    return {}
+
+
+def _first_metric_quality_metadata(
+    reports: tuple[ReportState | None, ...],
+    metric_key: str,
+) -> dict[str, Any]:
+    for report in reports:
+        if report is None:
+            continue
+        metadata = _metric_quality_metadata(report, metric_key)
+        if metadata:
+            return metadata
+    return {}
 
 
 def _format_value(value: Any, format_kind: str, status: str) -> str:
@@ -990,23 +1105,71 @@ def _ai_context_allowed(
     freshness_status: str,
     interpretation_hint: str | None = None,
 ) -> bool:
+    if _ai_context_blocked_reason(
+        status=status,
+        value=True,
+        source=source,
+        source_badge=source_badge,
+        observation_date=observation_date,
+        generated_at=generated_at,
+        freshness_status=freshness_status,
+        interpretation_hint=interpretation_hint,
+    ):
+        return False
+    return True
+
+
+def _ai_context_blocked_reason(
+    *,
+    status: str,
+    value: Any,
+    source: str | None,
+    source_badge: str,
+    observation_date: str | None,
+    generated_at: str | None,
+    freshness_status: str,
+    interpretation_hint: str | None = None,
+) -> str | None:
+    if value is None:
+        return "value_missing"
     if status in AI_BLOCKED_METRIC_STATUSES:
-        return False
+        return f"status_{status}"
     if source_badge in AI_BLOCKED_SOURCE_BADGES:
-        return False
+        return f"source_badge_{source_badge}"
     has_date = bool(observation_date or generated_at)
     if freshness_status in AI_BLOCKED_FRESHNESS_STATUSES:
         if not (source_badge == "local" and bool(generated_at)):
-            return False
+            return f"freshness_{freshness_status}"
     if source_badge == "proxy":
-        hint = (interpretation_hint or "").lower()
-        if "allowed proxy" not in hint:
-            return False
-    if source_badge == "derived" and not interpretation_hint:
-        return False
+        return "source_badge_proxy"
+    if source_badge == "derived" and not _derived_dependency_hint_complete(interpretation_hint):
+        return "dependency_metadata_incomplete"
     if not source and source_badge not in {"local", "derived"}:
-        return False
-    return has_date
+        return "source_missing"
+    if not has_date:
+        return "date_missing"
+    return None
+
+
+def _metric_interpretation_hint(metric_key: str, payload: dict[str, Any]) -> str | None:
+    return _string_or_none(payload.get("interpretation_hint")) or _interpretation_hint(metric_key)
+
+
+def _derived_dependency_hint_complete(interpretation_hint: str | None) -> bool:
+    text = (interpretation_hint or "").lower()
+    return any(
+        marker in text
+        for marker in (
+            "derived",
+            "average",
+            "history",
+            "historical",
+            "observation",
+            "observations",
+            "window",
+            "compact",
+        )
+    )
 
 
 def _dependency_unusable(found: tuple[Any, dict[str, Any], ReportState]) -> bool:

@@ -26,6 +26,12 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     result = audit.build_coverage_audit(reports_dir=tmp_path)
 
     assert result["coverage_summary"]["total_rows"] > 0
+    assert "rows_with_value_and_complete_metadata" in result["coverage_summary"]
+    assert "rows_with_value_but_blocked" in result["coverage_summary"]
+    assert "provenance_missing_count" in result["coverage_summary"]
+    assert "blocked_reason_counts" in result
+    assert "source_badge_distribution" in result
+    assert "ai_context_allowed_by_module" in result
     assert result["module_coverage"]
     assert "recommendations" in result
 

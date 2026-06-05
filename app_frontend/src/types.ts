@@ -94,6 +94,7 @@ export type DashboardEvidenceRow = {
   freshness_status: string;
   missing_reason: string | null;
   interpretation_hint: string | null;
+  blocked_reason: string | null;
   ai_context_allowed: boolean;
 };
 

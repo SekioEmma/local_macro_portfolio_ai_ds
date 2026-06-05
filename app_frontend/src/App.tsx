@@ -618,9 +618,9 @@ function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
 function aiContextLabel(row: DashboardEvidenceRow) {
   if (row.ai_context_allowed) return "可进入 AI 事实层";
   if (row.value !== null && row.value !== undefined) {
-    return "有值，但元数据不足，不进入 AI 事实层";
+    return `有值，但被阻断：${row.blocked_reason || "metadata_incomplete"}`;
   }
-  return "不进入 AI 事实层";
+  return `不进入 AI 事实层：${row.blocked_reason || "not_eligible"}`;
 }
 
 function uniqueSorted(values: string[]) {
