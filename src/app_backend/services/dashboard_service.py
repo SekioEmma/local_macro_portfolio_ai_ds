@@ -56,6 +56,54 @@ ALLOWED_SOURCE_BADGES = {
     "local",
     "derived",
 }
+AI_BLOCKED_METRIC_STATUSES = {
+    "missing",
+    "research_needed",
+    "not_available",
+    "insufficient_history",
+    "stale",
+}
+AI_BLOCKED_FRESHNESS_STATUSES = {
+    "unknown",
+    "missing",
+    "stale",
+    "insufficient_history",
+}
+AI_BLOCKED_SOURCE_BADGES = {
+    "missing",
+    "research_needed",
+    "search-derived",
+}
+SOURCE_BADGE_ALIASES = {
+    "official_api": "official",
+    "official_or_public_data_api": "official",
+    "public_data_api": "official",
+    "third_party_api": "proxy",
+    "manual": "local",
+    "cached_report": "derived",
+}
+CORE_METRIC_KEYS = {
+    "credit_stress": {"high_yield_spread", "vix", "credit_stress_status"},
+    "rate_pressure": {"dgs10", "dgs30", "dgs30_distance_to_5pct"},
+    "real_yield_pressure": {"dfii10", "t10yie", "real_yield_pressure_status"},
+    "inflation_energy_pressure": {
+        "core_cpi_yoy",
+        "core_pce_yoy",
+        "ppiaco_yoy",
+        "wti_30d_change",
+        "brent_30d_change",
+    },
+    "equity_trend": {
+        "sp500_30d_return",
+        "nasdaq100_30d_return",
+        "nasdaq_vs_sp500_30d",
+    },
+    "portfolio_deviation": {
+        "max_deviation_asset",
+        "max_deviation_pp",
+        "equity_total_deviation_pp",
+    },
+}
 METRIC_SPECS = {
     "credit_stress": [
         ("high_yield_spread", "High-yield spread", "percent", "percent", "missing"),
@@ -263,19 +311,15 @@ def _evidence_value_text(metric: DashboardMetric) -> str:
 
 
 def _evidence_ai_context_allowed(metric: DashboardMetric) -> bool:
-    if metric.status in {
-        "missing",
-        "research_needed",
-        "insufficient_history",
-        "not_available",
-        "stale",
-    }:
-        return False
-    if metric.freshness_status == "stale":
-        return False
-    if metric.source_badge == "search-derived":
-        return False
-    return bool(metric.ai_context_allowed)
+    return _ai_context_allowed(
+        status=metric.status,
+        source=metric.source,
+        source_badge=metric.source_badge,
+        observation_date=metric.observation_date,
+        generated_at=metric.generated_at,
+        freshness_status=metric.freshness_status,
+        interpretation_hint=metric.interpretation_hint,
+    ) and bool(metric.ai_context_allowed)
 
 
 def _evidence_row_matches(
@@ -478,16 +522,24 @@ def _module(
     error_summary: str | None = None,
     key_metrics: list[DashboardMetric] | None = None,
 ) -> DashboardModule:
+    metrics = key_metrics or []
+    coerced_status = _coerce_status(status)
+    adjusted_status, coverage_note = _module_status_with_coverage(
+        key,
+        coerced_status,
+        metrics,
+    )
+    adjusted_summary = _summary_with_coverage_note(summary, coverage_note)
     return DashboardModule(
         key=key,
-        status=_coerce_status(status),
+        status=adjusted_status,
         label=label,
-        summary=summary,
+        summary=adjusted_summary,
         source_badge=source_badge,
         updated_at=updated_at,
         next_action=next_action,
         error_summary=_safe_error_summary(error_summary),
-        key_metrics=key_metrics or [],
+        key_metrics=metrics,
     )
 
 
@@ -556,6 +608,7 @@ def _build_metric(
             observation_date=observation_date,
             generated_at=generated_at,
             freshness_status=freshness_status,
+            interpretation_hint=interpretation_hint,
         ),
     )
 
@@ -566,9 +619,28 @@ def _derived_metric(
 ) -> DashboardMetric | None:
     if metric_key == "dgs30_distance_to_5pct":
         found = _find_metric("dgs30", reports)
-        if found is None or not isinstance(_to_float(found[0]), float):
-            return None
-        value = round(5.0 - _to_float(found[0]), 4)
+        if found is None or _dependency_unusable(found):
+            return _blocked_dependency_metric(
+                metric_key="dgs30_distance_to_5pct",
+                display_name="30Y distance to 5%",
+                unit="pp",
+                status="missing",
+                missing_reason="DGS30 is missing; distance to 5% cannot be calculated.",
+                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
+                interpretation_hint="Distance requires daily DGS30 compact evidence.",
+            )
+        dgs30_value = _to_float(found[0])
+        if not isinstance(dgs30_value, float):
+            return _blocked_dependency_metric(
+                metric_key="dgs30_distance_to_5pct",
+                display_name="30Y distance to 5%",
+                unit="pp",
+                status="missing",
+                missing_reason="DGS30 is missing; distance to 5% cannot be calculated.",
+                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
+                interpretation_hint="Distance requires numeric daily DGS30 compact evidence.",
+            )
+        value = round(dgs30_value - 5.0, 4)
         return _derived_metric_response(
             metric_key,
             "30Y distance to 5%",
@@ -578,15 +650,59 @@ def _derived_metric(
             found,
             "Distance is derived from daily DGS30; it is not intraday.",
         )
+    if metric_key == "dgs30_breakout_confirmed":
+        dgs30 = _find_metric("dgs30", reports)
+        if dgs30 is None or _dependency_unusable(dgs30):
+            return _blocked_dependency_metric(
+                metric_key="dgs30_breakout_confirmed",
+                display_name="30Y breakout confirmed",
+                unit=None,
+                status="missing",
+                missing_reason="DGS30 is missing; breakout confirmation cannot be evaluated.",
+                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
+                interpretation_hint="Breakout confirmation requires DGS30 and explicit compact history evidence.",
+            )
+        found = _find_metric("dgs30_breakout_confirmed", reports)
+        if found is None:
+            return None
+        _, payload, report = found
+        if _dependency_unusable(found):
+            return None
+        if not _has_breakout_history_evidence(payload):
+            return _blocked_dependency_metric(
+                metric_key="dgs30_breakout_confirmed",
+                display_name="30Y breakout confirmed",
+                unit=None,
+                status="insufficient_history",
+                missing_reason="DGS30 breakout confirmation requires compact history window evidence.",
+                generated_at=_metric_generated_at(payload, report),
+                interpretation_hint="Breakout confirmation requires explicit compact evidence; do not infer it.",
+            )
     if metric_key == "nasdaq_vs_sp500_30d":
         nasdaq = _find_metric("nasdaq100_30d_return", reports)
         sp500 = _find_metric("sp500_30d_return", reports)
-        if nasdaq is None or sp500 is None:
-            return None
+        if nasdaq is None or sp500 is None or _dependency_unusable(nasdaq) or _dependency_unusable(sp500):
+            return _blocked_dependency_metric(
+                metric_key="nasdaq_vs_sp500_30d",
+                display_name="Nasdaq vs S&P 500 30D",
+                unit="pp",
+                status="insufficient_history",
+                missing_reason="S&P 500 and Nasdaq 100 30D returns are both required.",
+                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
+                interpretation_hint="Derived spread requires both compact 30D return metrics.",
+            )
         nasdaq_value = _to_float(nasdaq[0])
         sp500_value = _to_float(sp500[0])
         if not isinstance(nasdaq_value, float) or not isinstance(sp500_value, float):
-            return None
+            return _blocked_dependency_metric(
+                metric_key="nasdaq_vs_sp500_30d",
+                display_name="Nasdaq vs S&P 500 30D",
+                unit="pp",
+                status="insufficient_history",
+                missing_reason="S&P 500 and Nasdaq 100 30D returns must both be numeric.",
+                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
+                interpretation_hint="Derived spread requires numeric compact 30D return metrics.",
+            )
         value = round(nasdaq_value - sp500_value, 4)
         return _derived_metric_response(
             metric_key,
@@ -633,7 +749,39 @@ def _derived_metric_response(
             observation_date=observation_date,
             generated_at=generated_at,
             freshness_status=_metric_freshness(payload, report),
+            interpretation_hint=interpretation_hint,
         ),
+    )
+
+
+def _blocked_dependency_metric(
+    *,
+    metric_key: str,
+    display_name: str,
+    unit: str | None,
+    status: str,
+    missing_reason: str,
+    generated_at: str | None,
+    interpretation_hint: str | None,
+) -> DashboardMetric:
+    normalized_status = _metric_status_value(status)
+    return DashboardMetric(
+        metric_key=metric_key,
+        display_name=display_name,
+        value=None,
+        value_text=_missing_value_text(normalized_status),
+        unit=unit,
+        status=normalized_status,
+        source=None,
+        source_badge="missing",
+        observation_date=None,
+        generated_at=generated_at,
+        freshness_status="missing"
+        if normalized_status == "missing"
+        else "insufficient_history",
+        missing_reason=missing_reason,
+        interpretation_hint=interpretation_hint,
+        ai_context_allowed=False,
     )
 
 
@@ -745,10 +893,9 @@ def _metric_source_badge(payload: dict[str, Any], report: ReportState, module_ke
     if badge is None and isinstance(report.data, dict):
         badge = report.data.get("source_badge") or report.data.get("source_tier")
     badge_text = str(badge or "missing").lower()
+    badge_text = SOURCE_BADGE_ALIASES.get(badge_text, badge_text)
     if badge_text in {"official", "official_fallback", "unofficial_fallback", "proxy", "search-derived"}:
         return badge_text
-    if badge_text == "manual":
-        return "local"
     return badge_text if badge_text in ALLOWED_SOURCE_BADGES else "missing"
 
 
@@ -841,16 +988,86 @@ def _ai_context_allowed(
     observation_date: str | None,
     generated_at: str | None,
     freshness_status: str,
+    interpretation_hint: str | None = None,
 ) -> bool:
-    if status in {"missing", "research_needed", "insufficient_history", "not_available", "stale"}:
+    if status in AI_BLOCKED_METRIC_STATUSES:
         return False
-    if freshness_status == "stale":
+    if source_badge in AI_BLOCKED_SOURCE_BADGES:
         return False
-    if source_badge == "search-derived":
+    has_date = bool(observation_date or generated_at)
+    if freshness_status in AI_BLOCKED_FRESHNESS_STATUSES:
+        if not (source_badge == "local" and bool(generated_at)):
+            return False
+    if source_badge == "proxy":
+        hint = (interpretation_hint or "").lower()
+        if "allowed proxy" not in hint:
+            return False
+    if source_badge == "derived" and not interpretation_hint:
         return False
-    if not source and source_badge != "local":
+    if not source and source_badge not in {"local", "derived"}:
         return False
-    return bool(observation_date or generated_at)
+    return has_date
+
+
+def _dependency_unusable(found: tuple[Any, dict[str, Any], ReportState]) -> bool:
+    value, payload, report = found
+    status = _metric_status(payload)
+    freshness = _metric_freshness(payload, report)
+    if status in AI_BLOCKED_METRIC_STATUSES:
+        return True
+    if freshness in {"missing", "insufficient_history", "stale"}:
+        return True
+    return value is None
+
+
+def _has_breakout_history_evidence(payload: dict[str, Any]) -> bool:
+    return any(
+        key in payload
+        for key in (
+            "window_observation_count",
+            "above_5pct_days_5d",
+            "five_observation_average",
+            "calculation",
+        )
+    )
+
+
+def _module_status_with_coverage(
+    module_key: str,
+    status: str,
+    key_metrics: list[DashboardMetric],
+) -> tuple[str, str | None]:
+    if status in {"error", "missing", "stale"}:
+        return status, None
+    core_metrics = [
+        metric
+        for metric in key_metrics
+        if metric.metric_key in CORE_METRIC_KEYS.get(module_key, set())
+    ]
+    if not core_metrics:
+        return status, None
+
+    blocked = [
+        metric for metric in core_metrics if metric.status in AI_BLOCKED_METRIC_STATUSES
+    ]
+    stale = [metric for metric in core_metrics if metric.freshness_status == "stale"]
+    if len(blocked) == len(core_metrics):
+        return "unknown", "core metric coverage unavailable"
+    if stale:
+        return "stale", "one or more core metrics are stale"
+    if blocked and status == "ok":
+        return "unknown", "partial core metric coverage"
+    return status, None
+
+
+def _summary_with_coverage_note(summary: str | None, coverage_note: str | None) -> str | None:
+    if not coverage_note:
+        return summary
+    if not summary:
+        return coverage_note
+    if coverage_note in summary:
+        return summary
+    return f"{summary}; {coverage_note}"
 
 
 def _missing_data(reports: dict[str, ReportState]) -> list[dict]:
@@ -942,7 +1159,7 @@ def _overall_status(modules: dict[str, DashboardModule], provider_health: dict) 
         return "error"
     if statuses == {"missing"} and provider_status == "not_run_yet":
         return "missing"
-    if statuses & {"missing", "stale", "degraded"} or provider_status in {
+    if statuses & {"missing", "stale", "degraded", "unknown"} or provider_status in {
         "degraded",
         "not_run_yet",
     }:

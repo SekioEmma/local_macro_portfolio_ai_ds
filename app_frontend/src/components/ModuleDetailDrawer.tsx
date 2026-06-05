@@ -181,6 +181,8 @@ function DrawerSection({
 }
 
 function MetricDetail({ metric }: { metric: DashboardMetric }) {
+  const metadataIncomplete =
+    metric.value !== null && metric.value !== undefined && !metric.ai_context_allowed;
   return (
     <article className="drawer-metric">
       <div className="module-card-head">
@@ -201,7 +203,16 @@ function MetricDetail({ metric }: { metric: DashboardMetric }) {
           <dt>observation</dt>
           <dd>{metric.observation_date || "not available"}</dd>
         </div>
+        <div>
+          <dt>ai_context_allowed</dt>
+          <dd>{metric.ai_context_allowed ? "可进入 AI 事实层" : "不进入 AI 事实层"}</dd>
+        </div>
       </dl>
+      {metadataIncomplete && (
+        <p className="metric-reason">
+          有值，但元数据不足，不进入 AI 事实层
+        </p>
+      )}
       {(metric.missing_reason || metric.interpretation_hint) && (
         <p className="metric-hint">
           {metric.missing_reason || metric.interpretation_hint}
@@ -217,8 +228,12 @@ function summarizeBlockedReasons(rows: DashboardEvidenceRow[]) {
 
 function blockedReason(row: DashboardEvidenceRow) {
   if (blockedStatuses.has(row.status)) return row.status;
-  if (row.freshness_status === "stale") return "stale";
-  if (row.source_badge === "search-derived") return "search-derived";
+  if (["unknown", "missing", "stale", "insufficient_history"].includes(row.freshness_status)) {
+    return row.freshness_status;
+  }
+  if (["missing", "research_needed", "search-derived", "proxy"].includes(row.source_badge)) {
+    return row.source_badge;
+  }
   if (!row.source && row.source_badge !== "local") return "no source";
   if (!row.observation_date && !row.generated_at) return "no date";
   return "not eligible";

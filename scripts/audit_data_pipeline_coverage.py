@@ -1,0 +1,331 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = PROJECT_ROOT / "src"
+DEFAULT_SAVE_JSON = PROJECT_ROOT / "outputs" / "reports" / "data_pipeline_coverage.json"
+DEFAULT_SAVE_MD = PROJECT_ROOT / "outputs" / "reports" / "data_pipeline_coverage.md"
+
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
+from app_backend.services import dashboard_service  # noqa: E402
+
+
+STATUS_KEYS = (
+    "ok",
+    "missing",
+    "research_needed",
+    "insufficient_history",
+    "stale",
+    "unknown",
+)
+BAD_FRESHNESS = {"unknown", "missing", "stale"}
+BAD_AI_STATUSES = {
+    "missing",
+    "research_needed",
+    "not_available",
+    "insufficient_history",
+    "stale",
+}
+BAD_AI_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
+
+
+def build_coverage_audit(reports_dir: Path | str | None = None) -> dict[str, Any]:
+    summary = dashboard_service.build_dashboard_summary(reports_dir=reports_dir)
+    evidence = dashboard_service.build_dashboard_evidence_table(reports_dir=reports_dir)
+    rows = evidence.rows
+
+    metadata_anomalies = _metadata_anomalies(rows)
+    dependency_anomalies = _dependency_anomalies(summary.modules, rows)
+
+    return {
+        "generated_at": summary.generated_at,
+        "overall_status": summary.overall_status,
+        "coverage_summary": _coverage_summary(rows),
+        "module_coverage": _module_coverage(summary.modules, rows),
+        "metadata_anomalies": metadata_anomalies,
+        "derived_dependency_anomalies": dependency_anomalies,
+        "recommendations": _recommendations(metadata_anomalies, dependency_anomalies),
+    }
+
+
+def _coverage_summary(rows: list[DashboardEvidenceRow]) -> dict[str, int]:
+    statuses = {key: 0 for key in STATUS_KEYS}
+    for row in rows:
+        if row.status in statuses:
+            statuses[row.status] += 1
+    return {
+        "total_rows": len(rows),
+        "rows_with_value": sum(1 for row in rows if _has_value(row)),
+        "rows_missing_value": sum(1 for row in rows if not _has_value(row)),
+        "ok_count": statuses["ok"],
+        "missing_count": statuses["missing"],
+        "research_needed_count": statuses["research_needed"],
+        "insufficient_history_count": statuses["insufficient_history"],
+        "stale_count": statuses["stale"],
+        "unknown_count": statuses["unknown"],
+        "source_badge_missing_count": sum(
+            1 for row in rows if _is_missing_source_badge(row.source_badge)
+        ),
+        "freshness_unknown_count": sum(
+            1 for row in rows if row.freshness_status in {"unknown", "missing"}
+        ),
+        "observation_date_missing_count": sum(
+            1 for row in rows if not row.observation_date
+        ),
+        "ai_context_allowed_true_count": sum(1 for row in rows if row.ai_context_allowed),
+        "ai_context_allowed_false_count": sum(1 for row in rows if not row.ai_context_allowed),
+    }
+
+
+def _module_coverage(modules: dict[str, Any], rows: list[DashboardEvidenceRow]) -> list[dict[str, Any]]:
+    by_module = {module: [row for row in rows if row.module == module] for module in modules}
+    coverage = []
+    for module, module_rows in by_module.items():
+        usable = sum(1 for row in module_rows if row.ai_context_allowed)
+        row_count = len(module_rows)
+        coverage.append(
+            {
+                "module": module,
+                "row_count": row_count,
+                "ok_count": sum(1 for row in module_rows if row.status == "ok"),
+                "missing_count": sum(1 for row in module_rows if row.status == "missing"),
+                "research_needed_count": sum(
+                    1 for row in module_rows if row.status == "research_needed"
+                ),
+                "insufficient_history_count": sum(
+                    1 for row in module_rows if row.status == "insufficient_history"
+                ),
+                "stale_count": sum(1 for row in module_rows if row.status == "stale"),
+                "usable_fact_count": usable,
+                "ai_context_allowed_count": usable,
+                "module_coverage_status": _module_coverage_status(usable, row_count),
+            }
+        )
+    return coverage
+
+
+def _module_coverage_status(usable: int, total: int) -> str:
+    if total <= 0 or usable == 0:
+        return "unavailable"
+    if usable == total:
+        return "usable"
+    if usable / total >= 0.5:
+        return "partial"
+    return "weak"
+
+
+def _metadata_anomalies(rows: list[DashboardEvidenceRow]) -> list[dict[str, Any]]:
+    anomalies: list[dict[str, Any]] = []
+    for row in rows:
+        if _has_value(row) and _is_missing_source_badge(row.source_badge):
+            anomalies.append(_anomaly(row, "value_with_missing_source_badge"))
+        if _has_value(row) and row.freshness_status in {"unknown", "missing"}:
+            anomalies.append(_anomaly(row, "value_with_unknown_freshness"))
+        if _has_value(row) and not row.observation_date and not row.generated_at:
+            anomalies.append(_anomaly(row, "value_without_observation_or_generated_at"))
+        if row.ai_context_allowed and _is_missing_source_badge(row.source_badge):
+            anomalies.append(_anomaly(row, "ai_allowed_with_missing_source_badge"))
+        if row.ai_context_allowed and row.freshness_status in BAD_FRESHNESS:
+            anomalies.append(_anomaly(row, "ai_allowed_with_bad_freshness"))
+        if row.ai_context_allowed and row.status in BAD_AI_STATUSES:
+            anomalies.append(_anomaly(row, "ai_allowed_with_blocked_status"))
+        if row.ai_context_allowed and row.source_badge in BAD_AI_SOURCE_BADGES:
+            anomalies.append(_anomaly(row, "ai_allowed_with_blocked_source_badge"))
+        if row.source_badge in {"proxy", "search-derived"} and not row.interpretation_hint:
+            anomalies.append(_anomaly(row, "proxy_or_search_derived_without_hint"))
+        if row.status in {"missing", "research_needed"} and not row.missing_reason:
+            anomalies.append(_anomaly(row, "missing_or_research_needed_without_reason"))
+    return anomalies
+
+
+def _dependency_anomalies(
+    modules: dict[str, Any],
+    rows: list[DashboardEvidenceRow],
+) -> list[dict[str, Any]]:
+    rows_by_key = {row.metric_key: row for row in rows}
+    anomalies: list[dict[str, Any]] = []
+
+    dgs30 = rows_by_key.get("dgs30")
+    dgs30_distance = rows_by_key.get("dgs30_distance_to_5pct")
+    if _source_missing(dgs30) and _row_has_ok_value(dgs30_distance):
+        anomalies.append(
+            _anomaly(dgs30_distance, "dgs30_distance_ok_while_dgs30_missing")
+        )
+
+    dgs30_breakout = rows_by_key.get("dgs30_breakout_confirmed")
+    if _source_missing(dgs30) and _row_has_ok_value(dgs30_breakout):
+        anomalies.append(
+            _anomaly(dgs30_breakout, "dgs30_breakout_ok_while_dgs30_missing")
+        )
+
+    nasdaq_spread = rows_by_key.get("nasdaq_vs_sp500_30d")
+    if (
+        _source_missing(rows_by_key.get("sp500_30d_return"))
+        or _source_missing(rows_by_key.get("nasdaq100_30d_return"))
+    ) and _row_has_ok_value(nasdaq_spread):
+        anomalies.append(
+            _anomaly(nasdaq_spread, "nasdaq_vs_sp500_ok_while_dependency_missing")
+        )
+
+    for metric_key in ("wti_30d_change", "brent_30d_change"):
+        row = rows_by_key.get(metric_key)
+        if _row_has_ok_value(row) and not _has_clear_history_hint(row):
+            anomalies.append(_anomaly(row, f"{metric_key}_ok_without_history_hint"))
+
+    for module_key, module in modules.items():
+        core_keys = dashboard_service.CORE_METRIC_KEYS.get(module_key, set())
+        core_rows = [row for row in rows if row.module == module_key and row.metric_key in core_keys]
+        if not core_rows:
+            continue
+        blocked = [row for row in core_rows if _source_missing(row)]
+        if module.status == "ok" and len(blocked) >= max(1, len(core_rows) // 2 + 1):
+            anomalies.append(
+                {
+                    "type": "module_ok_while_core_metrics_mostly_missing",
+                    "module": module_key,
+                    "metric_key": None,
+                    "row_id": None,
+                    "detail": f"{len(blocked)} of {len(core_rows)} core metrics are unavailable",
+                }
+            )
+    return anomalies
+
+
+def _recommendations(
+    metadata_anomalies: list[dict[str, Any]],
+    dependency_anomalies: list[dict[str, Any]],
+) -> list[str]:
+    recommendations: list[str] = []
+    if metadata_anomalies:
+        recommendations.append("fix_metadata_semantics")
+    if any("dgs30" in item["type"] or "nasdaq" in item["type"] or "30d_change" in item["type"] for item in dependency_anomalies):
+        recommendations.append("fix_derived_dependency_validation")
+    if any(item["type"] == "module_ok_while_core_metrics_mostly_missing" for item in dependency_anomalies):
+        recommendations.append("fix_module_status_aggregation")
+    recommendations.extend(
+        [
+            "fill_portfolio_deviation_compact",
+            "implement_last_good_cache",
+            "implement_historical_store",
+            "add_yfinance_batch_history",
+            "add_official_macro_pack",
+        ]
+    )
+    return sorted(set(recommendations))
+
+
+def _anomaly(row: DashboardEvidenceRow | None, anomaly_type: str) -> dict[str, Any]:
+    return {
+        "type": anomaly_type,
+        "module": row.module if row is not None else None,
+        "metric_key": row.metric_key if row is not None else None,
+        "row_id": row.row_id if row is not None else None,
+        "detail": _anomaly_detail(row),
+    }
+
+
+def _anomaly_detail(row: DashboardEvidenceRow | None) -> str:
+    if row is None:
+        return "referenced row is absent"
+    return (
+        f"status={row.status}; source_badge={row.source_badge}; "
+        f"freshness_status={row.freshness_status}; ai_context_allowed={row.ai_context_allowed}"
+    )
+
+
+def _has_value(row: DashboardEvidenceRow) -> bool:
+    return row.value is not None
+
+
+def _is_missing_source_badge(value: str | None) -> bool:
+    return value in {None, "", "missing"}
+
+
+def _source_missing(row: DashboardEvidenceRow | None) -> bool:
+    if row is None:
+        return True
+    if row.value is None:
+        return True
+    if row.status in BAD_AI_STATUSES:
+        return True
+    if row.freshness_status in {"missing", "insufficient_history", "stale"}:
+        return True
+    return False
+
+
+def _row_has_ok_value(row: DashboardEvidenceRow | None) -> bool:
+    return bool(row is not None and row.status == "ok" and row.value is not None)
+
+
+def _has_clear_history_hint(row: DashboardEvidenceRow | None) -> bool:
+    if row is None:
+        return False
+    hint = (row.interpretation_hint or "").lower()
+    reason = (row.missing_reason or "").lower()
+    return "30 day" in hint or "30d" in hint or "history" in hint or "history" in reason
+
+
+def _write_markdown(audit: dict[str, Any], path: Path) -> None:
+    lines = [
+        "# Data Pipeline Coverage Audit",
+        "",
+        f"- overall_status: {audit['overall_status']}",
+        f"- generated_at: {audit['generated_at'] or 'not available'}",
+        "",
+        "## Coverage Summary",
+        "",
+    ]
+    for key, value in audit["coverage_summary"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Module Coverage", ""])
+    for item in audit["module_coverage"]:
+        lines.append(
+            f"- {item['module']}: {item['module_coverage_status']} "
+            f"({item['usable_fact_count']}/{item['row_count']} usable)"
+        )
+    lines.extend(["", "## Metadata Anomalies", ""])
+    for item in audit["metadata_anomalies"]:
+        lines.append(f"- {item['type']}: {item['row_id']}")
+    lines.extend(["", "## Derived Dependency Anomalies", ""])
+    for item in audit["derived_dependency_anomalies"]:
+        lines.append(f"- {item['type']}: {item.get('row_id') or item.get('module')}")
+    lines.extend(["", "## Recommendations", ""])
+    for item in audit["recommendations"]:
+        lines.append(f"- {item}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Audit local dashboard data coverage.")
+    parser.add_argument(
+        "--reports-dir",
+        type=Path,
+        default=None,
+        help="Optional local reports directory for tests or dry audits.",
+    )
+    parser.add_argument("--save", action="store_true", help="Save ignored audit artifacts.")
+    args = parser.parse_args(argv)
+
+    audit = build_coverage_audit(reports_dir=args.reports_dir)
+    print(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True))
+    if args.save:
+        DEFAULT_SAVE_JSON.parent.mkdir(parents=True, exist_ok=True)
+        DEFAULT_SAVE_JSON.write_text(
+            json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        _write_markdown(audit, DEFAULT_SAVE_MD)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

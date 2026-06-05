@@ -39,9 +39,7 @@ export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTablePr
               <td>{row.freshness_status}</td>
               <td>{row.observation_date || "not available"}</td>
               <td>
-                {row.ai_context_allowed
-                  ? "可进入 AI 事实层"
-                  : "不进入 AI 事实层"}
+                {aiContextLabel(row)}
               </td>
             </tr>
           ))}
@@ -49,6 +47,14 @@ export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTablePr
       </table>
     </div>
   );
+}
+
+function aiContextLabel(row: DashboardEvidenceRow) {
+  if (row.ai_context_allowed) return "可进入 AI 事实层";
+  if (row.value !== null && row.value !== undefined) {
+    return "有值，但元数据不足，不进入 AI 事实层";
+  }
+  return "不进入 AI 事实层";
 }
 
 function safeValueText(valueText: string, status: string) {

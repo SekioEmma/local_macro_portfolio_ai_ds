@@ -141,8 +141,8 @@ def test_dashboard_summary_accepts_bom_encoded_portfolio_snapshot(monkeypatch, t
 
     assert response.status_code == 200
     data = response.json()
-    assert data["modules"]["portfolio_deviation"]["status"] == "ok"
-    assert data["modules"]["portfolio_deviation"]["summary"] == "portfolio snapshot available"
+    assert data["modules"]["portfolio_deviation"]["status"] == "unknown"
+    assert "portfolio snapshot available" in data["modules"]["portfolio_deviation"]["summary"]
     assert not any(
         item["key"] == "portfolio_snapshot" and item["status"] == "error"
         for item in data["missing_data"]

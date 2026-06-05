@@ -53,10 +53,10 @@ def test_dashboard_key_metrics_missing_fields_are_explicit(monkeypatch, tmp_path
     assert metric["value_text"] == "insufficient history"
     assert metric["ai_context_allowed"] is False
 
-    research = _metric(data, "rate_pressure", "dgs30_breakout_confirmed")
-    assert research["status"] == "research_needed"
-    assert research["value_text"] == "research needed"
-    assert research["ai_context_allowed"] is False
+    breakout = _metric(data, "rate_pressure", "dgs30_breakout_confirmed")
+    assert breakout["status"] == "missing"
+    assert breakout["value_text"] == "missing"
+    assert breakout["ai_context_allowed"] is False
 
 
 def test_dashboard_key_metrics_do_not_leak_raw_or_holdings(monkeypatch, tmp_path):

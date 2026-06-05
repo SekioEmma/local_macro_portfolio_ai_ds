@@ -335,6 +335,11 @@ function MetricRow({ metric }: { metric: DashboardMetric }) {
     "stale",
     "not_available"
   ].includes(metric.status);
+  const metadataIncomplete =
+    metric.value !== null &&
+    metric.value !== undefined &&
+    !metric.ai_context_allowed &&
+    !needsExplanation;
   return (
     <div className="metric-row">
       <div>
@@ -354,6 +359,11 @@ function MetricRow({ metric }: { metric: DashboardMetric }) {
       )}
       {!needsExplanation && metric.interpretation_hint && (
         <p className="metric-hint">{metric.interpretation_hint}</p>
+      )}
+      {metadataIncomplete && (
+        <p className="metric-reason">
+          有值，但元数据不足，不进入 AI 事实层
+        </p>
       )}
     </div>
   );
@@ -588,9 +598,7 @@ function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
                 <td>{row.observation_date || "not available"}</td>
                 <td>{row.generated_at || "not available"}</td>
                 <td>
-                  {row.ai_context_allowed
-                    ? "可进入 AI 事实层"
-                    : "不进入 AI 事实层"}
+                  {aiContextLabel(row)}
                 </td>
                 <td className="long-cell" title={row.missing_reason || ""}>
                   {row.missing_reason || ""}
@@ -605,6 +613,14 @@ function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
       </div>
     </section>
   );
+}
+
+function aiContextLabel(row: DashboardEvidenceRow) {
+  if (row.ai_context_allowed) return "可进入 AI 事实层";
+  if (row.value !== null && row.value !== undefined) {
+    return "有值，但元数据不足，不进入 AI 事实层";
+  }
+  return "不进入 AI 事实层";
 }
 
 function uniqueSorted(values: string[]) {
