@@ -38,6 +38,13 @@ PUBLIC_CHECK_KEYS = {
     "bls_cpi",
     "ny_fed_effr",
 }
+OFFICIAL_FALLBACK_CHECK_KEYS = {
+    "treasury_10y",
+    "bls_cpi",
+    "bea_pce",
+    "ny_fed_effr",
+}
+FAILED_STATUSES = {"error", "transient_error"}
 
 
 def main() -> int:
@@ -109,19 +116,27 @@ def run_health_checks(timeout_seconds: int = 20) -> list[dict[str, Any]]:
 
 
 def summarize_checks(checks: list[dict[str, Any]]) -> dict[str, int]:
-    summary = {"ok": 0, "skipped": 0, "error": 0}
+    summary = {
+        "ok": 0,
+        "skipped": 0,
+        "error": 0,
+        "transient_error": 0,
+        "official_fallback_ok": 0,
+    }
     for check in checks:
         status = str(check.get("status") or "error")
         summary[status] = summary.get(status, 0) + 1
+        if check.get("key") in OFFICIAL_FALLBACK_CHECK_KEYS and status == "ok":
+            summary["official_fallback_ok"] += 1
     return summary
 
 
 def overall_status(checks: list[dict[str, Any]]) -> str:
     public_checks = [check for check in checks if check.get("key") in PUBLIC_CHECK_KEYS]
-    public_errors = [check for check in public_checks if check.get("status") == "error"]
+    public_errors = [check for check in public_checks if check.get("status") in FAILED_STATUSES]
     if public_checks and len(public_errors) == len(public_checks):
         return "error"
-    if public_errors:
+    if public_errors or any(check.get("status") in FAILED_STATUSES for check in checks):
         return "degraded"
     return "ok"
 
@@ -143,8 +158,10 @@ def _missing_key_check(key: str, provider: str) -> dict[str, Any] | None:
 
 
 def _result_to_check(key: str, provider: str, result: dict[str, Any]) -> dict[str, Any]:
-    status = "ok" if result.get("status") == "ok" else "error"
     error_summary = _safe_error_summary(result.get("error"))
+    status = "ok" if result.get("status") == "ok" else "error"
+    if status == "error" and _is_transient_error(error_summary):
+        status = "transient_error"
     return {
         "key": key,
         "provider": provider,
@@ -166,6 +183,8 @@ def _observation_date(result: dict[str, Any]) -> str | None:
 
 def _error_type(error_summary: str | None) -> str:
     text = str(error_summary or "").lower()
+    if _is_transient_error(text):
+        return "transient_network"
     if "api_key" in text and "not configured" in text:
         return "missing_key"
     if "import failed" in text:
@@ -181,6 +200,25 @@ def _error_type(error_summary: str | None) -> str:
     if "no valid" in text or "missing" in text or "empty" in text:
         return "empty_response"
     return "provider_error"
+
+
+def _is_transient_error(error_summary: str | None) -> bool:
+    text = str(error_summary or "").lower()
+    return any(
+        marker in text
+        for marker in (
+            "ssleoferror",
+            "unexpected_eof",
+            "connectionpool",
+            "max retries exceeded",
+            "connection reset",
+            "connection aborted",
+            "timed out",
+            "timeout",
+            "temporarily unavailable",
+            "network",
+        )
+    )
 
 
 def _safe_error_summary(value: Any, max_length: int = 200) -> str | None:

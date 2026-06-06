@@ -102,6 +102,58 @@ def test_provider_health_truncates_error_summary(monkeypatch, tmp_path):
     assert len(error_summary) <= 200
 
 
+def test_provider_health_preserves_transient_and_fallback_compact_summary(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    health_path = tmp_path / "provider_health_check.json"
+    health_path.write_text(
+        json.dumps(
+            {
+                "generated_at": "2026-01-01T00:00:00+00:00",
+                "overall_status": "degraded",
+                "summary": {
+                    "ok": 2,
+                    "transient_error": 1,
+                    "error": 0,
+                    "official_fallback_ok": 2,
+                },
+                "checks": [
+                    {
+                        "key": "fred_dgs10",
+                        "provider": "FRED",
+                        "status": "transient_error",
+                        "source": "FRED",
+                        "observation_date": None,
+                        "value_present": False,
+                        "error_type": "transient_network",
+                        "error_summary": "HTTPSConnectionPool max retries exceeded",
+                    },
+                    {
+                        "key": "treasury_10y",
+                        "provider": "U.S. Treasury",
+                        "status": "ok",
+                        "source": "U.S. Treasury",
+                        "observation_date": "2026-01-01",
+                        "value_present": True,
+                        "raw_extra": "must_not_leak",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(provider_service, "DEFAULT_HEALTH_PATH", health_path)
+
+    data = TestClient(app).get("/api/provider-health").json()
+
+    assert data["overall_status"] == "degraded"
+    assert data["summary"]["transient_error"] == 1
+    assert data["summary"]["official_fallback_ok"] == 2
+    assert data["checks"][0]["status"] == "transient_error"
+    assert data["checks"][0]["error_type"] == "transient_network"
+    assert data["checks"][1]["provider"] == "U.S. Treasury"
+    assert "raw_extra" not in json.dumps(data, sort_keys=True)
+
+
 def test_provider_health_handles_invalid_cache(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     health_path = tmp_path / "provider_health_check.json"

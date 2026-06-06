@@ -112,6 +112,10 @@ INFLATION_YOY_METRIC_KEYS = {"core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy"}
 INDEX_LEVEL_YOY_MISSING_REASON = (
     "Only index level is available; YoY requires historical comparison."
 )
+LABOR_METRIC_SPECS = [
+    ("unemployment_rate", "Unemployment rate", "percent", "percent", "missing"),
+    ("initial_jobless_claims", "Initial jobless claims", "claims", "number", "missing"),
+]
 SOURCE_BADGE_ALIASES = {
     "official_api": "official",
     "official_or_public_data_api": "official",
@@ -263,14 +267,7 @@ def build_dashboard_summary(
         base_dir,
         market_history_db_path,
     )
-    reports = {
-        key: _load_report(key, base_dir / file_name)
-        for key, file_name in REPORT_FILES.items()
-    }
-    for key, file_name in OPTIONAL_METADATA_REPORT_FILES.items():
-        path = base_dir / file_name
-        if path.exists():
-            reports[key] = _load_report(key, path)
+    reports = _load_dashboard_reports(base_dir)
     provider_health = _provider_health_summary(
         base_dir / REPORT_FILES["provider_health"]
     )
@@ -300,11 +297,13 @@ def build_dashboard_evidence_table(
     ai_context_allowed: bool | None = None,
     write_last_good: bool = True,
 ) -> DashboardEvidenceTableResponse:
+    base_dir = Path(reports_dir) if reports_dir is not None else DEFAULT_REPORTS_DIR
     summary = build_dashboard_summary(
         reports_dir=reports_dir,
         market_history_db_path=market_history_db_path,
     )
-    all_rows = _evidence_rows_from_summary(summary)
+    reports = _load_dashboard_reports(base_dir)
+    all_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(reports)
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
     filtered_rows = [
@@ -323,7 +322,7 @@ def build_dashboard_evidence_table(
         generated_at=summary.generated_at,
         overall_status=summary.overall_status,
         row_count=len(filtered_rows),
-        modules=list(summary.modules.keys()),
+        modules=sorted({row.module for row in all_rows}),
         rows=filtered_rows,
         filters=_evidence_filters(
             all_rows,
@@ -334,6 +333,18 @@ def build_dashboard_evidence_table(
         ),
         next_actions=summary.next_actions,
     )
+
+
+def _load_dashboard_reports(base_dir: Path) -> dict[str, ReportState]:
+    reports = {
+        key: _load_report(key, base_dir / file_name)
+        for key, file_name in REPORT_FILES.items()
+    }
+    for key, file_name in OPTIONAL_METADATA_REPORT_FILES.items():
+        path = base_dir / file_name
+        if path.exists():
+            reports[key] = _load_report(key, path)
+    return reports
 
 
 def _load_report(name: str, path: Path) -> ReportState:
@@ -383,6 +394,18 @@ def _evidence_rows_from_summary(
         for metric in module.key_metrics:
             rows.append(_evidence_row(module_key, metric))
     return rows
+
+
+def _labor_macro_evidence_rows(
+    reports: dict[str, ReportState],
+) -> list[DashboardEvidenceRow]:
+    market = reports["market_snapshot"]
+    llm_context = reports.get("llm_context_pack")
+    metric_reports = (market, llm_context) if llm_context else (market,)
+    return [
+        _evidence_row("labor_macro", _build_metric("labor_macro", metric_reports, spec))
+        for spec in LABOR_METRIC_SPECS
+    ]
 
 
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
@@ -502,6 +525,7 @@ def _provider_health_summary(health_path: Path) -> dict:
         "generated_at": payload.get("generated_at"),
         "overall_status": payload.get("overall_status"),
         "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
+        "checks": payload.get("checks") if isinstance(payload.get("checks"), list) else [],
         "next_action": payload.get("next_action"),
         "error_summary": payload.get("error_summary"),
     }
@@ -1671,6 +1695,11 @@ def _format_value(value: Any, format_kind: str, status: str) -> str:
     if format_kind == "pp":
         number = _to_float(value)
         return f"{number:+.1f}pp" if isinstance(number, float) else str(value)
+    if format_kind == "number":
+        number = _to_float(value)
+        if isinstance(number, float):
+            return f"{number:,.0f}" if number.is_integer() else f"{number:,.1f}"
+        return str(value)
     return str(value)
 
 
@@ -1980,6 +2009,7 @@ def _overall_status(modules: dict[str, DashboardModule], provider_health: dict) 
         return "missing"
     if statuses & {"missing", "stale", "degraded", "unknown", "watch", "pressure", "stress"} or provider_status in {
         "degraded",
+        "transient_error",
         "not_run_yet",
     }:
         return "degraded"

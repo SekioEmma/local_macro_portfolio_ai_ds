@@ -80,6 +80,49 @@ def test_official_macro_aliases_surface_real_yield_rows(monkeypatch, tmp_path):
     assert t10yie["source_badge"] == "official"
 
 
+def test_official_labor_compact_rows_surface_in_evidence_table(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_market(
+        tmp_path,
+        {
+            "market_data_package": {
+                "labor_indicators": {
+                    "unemployment_rate": _metric(
+                        4.0,
+                        unit="percent",
+                        source="FRED:UNRATE",
+                        source_tier="official_or_public_data_api",
+                    ),
+                    "initial_jobless_claims": _metric(
+                        230000,
+                        unit="claims",
+                        source="FRED:ICSA",
+                        source_tier="official_or_public_data_api",
+                    ),
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table").json()
+    unemployment = _row(data, "labor_macro", "unemployment_rate")
+    claims = _row(data, "labor_macro", "initial_jobless_claims")
+
+    assert unemployment["status"] == "ok"
+    assert unemployment["value_text"] == "4.00%"
+    assert unemployment["source_badge"] == "official"
+    assert unemployment["ai_context_allowed"] is True
+    assert claims["status"] == "ok"
+    assert claims["value"] == 230000
+    assert claims["value_text"] == "230,000"
+    assert claims["source_badge"] == "official"
+    assert claims["ai_context_allowed"] is True
+
+    summary = TestClient(app).get("/api/dashboard/summary").json()
+    assert "labor_macro" not in summary["modules"]
+
+
 def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     _write_market(tmp_path, {})
@@ -93,6 +136,8 @@ def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_pa
         ("real_yield_pressure", "t10yie"),
         ("inflation_energy_pressure", "core_cpi_yoy"),
         ("inflation_energy_pressure", "core_pce_yoy"),
+        ("labor_macro", "unemployment_rate"),
+        ("labor_macro", "initial_jobless_claims"),
     ):
         row = _row(data, module, key)
         assert row["status"] == "missing"

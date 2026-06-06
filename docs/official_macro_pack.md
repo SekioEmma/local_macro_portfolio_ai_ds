@@ -12,6 +12,7 @@ The initial configured metrics are:
 - `t10yie`: FRED `T10YIE`, daily 10-year breakeven inflation
 - `core_cpi_yoy`: FRED `CPILFESL` compact Core CPI YoY observation
 - `core_pce_yoy`: FRED `PCEPILFE` compact Core PCE YoY observation
+- `ppiaco_yoy`: FRED `PPIACO` all commodities PPI YoY observation, not final demand PPI
 - `unemployment_rate`: FRED `UNRATE`, monthly unemployment rate
 - `initial_jobless_claims`: FRED `ICSA`, weekly initial claims
 
@@ -25,7 +26,7 @@ Dashboard and Evidence Table rows are enabled for:
 - `real_yield_pressure`: `dfii10`, `t10yie`
 - `inflation_energy_pressure`: `core_cpi_yoy`, `core_pce_yoy`, `ppi_final_demand`
 
-Labor metrics are configured for audit coverage only in this phase. They are not added to the Dashboard homepage.
+Labor metrics are surfaced as `labor_macro` Evidence Table rows for audit coverage. They are not added to the Dashboard homepage cards.
 
 ## Provenance Semantics
 

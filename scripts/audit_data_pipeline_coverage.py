@@ -87,6 +87,7 @@ def build_coverage_audit(
     )
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows)
+    provider_health = _provider_health_audit(summary.provider_health)
 
     return {
         "generated_at": summary.generated_at,
@@ -100,6 +101,7 @@ def build_coverage_audit(
         "yfinance_history": yfinance_history,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
+        "provider_health": provider_health,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -611,6 +613,11 @@ def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
             _official_macro_row_available(row_by_key.get(key), metrics[key])
             for key in ("unemployment_rate", "initial_jobless_claims")
         ),
+        "labor_missing_count": sum(
+            1
+            for key in ("unemployment_rate", "initial_jobless_claims")
+            if not _official_macro_row_available(row_by_key.get(key), metrics[key])
+        ),
         "dgs2_status": status_by_key["dgs2"],
         "dgs30_status": status_by_key["dgs30"],
         "dfii10_status": status_by_key["dfii10"],
@@ -625,6 +632,10 @@ def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
         "blocked_due_to_index_level_count": sum(
             1 for row in rows if _blocked_due_to_index_level(row)
         ),
+        "official_macro_missing_reasons": {
+            key: _official_macro_missing_reason(row_by_key.get(key), metrics[key])
+            for key in missing_keys
+        },
         "details": details,
     }
 
@@ -662,6 +673,43 @@ def _blocked_due_to_index_level(row: DashboardEvidenceRow) -> bool:
         and row.missing_reason
         and "Only index level is available" in row.missing_reason
     )
+
+
+def _official_macro_missing_reason(
+    row: DashboardEvidenceRow | None,
+    metric: official_macro_pack.OfficialMacroMetric,
+) -> str:
+    if row is not None and row.missing_reason:
+        return row.missing_reason
+    return metric.missing_reason
+
+
+def _provider_health_audit(provider_health: dict[str, Any]) -> dict[str, Any]:
+    checks = provider_health.get("checks")
+    compact_checks = checks if isinstance(checks, list) else []
+    transient = [
+        check
+        for check in compact_checks
+        if isinstance(check, dict)
+        and (
+            check.get("status") == "transient_error"
+            or check.get("error_type") == "transient_network"
+        )
+    ]
+    official_fallback_ok = [
+        str(check.get("provider"))
+        for check in compact_checks
+        if isinstance(check, dict)
+        and check.get("status") == "ok"
+        and str(check.get("provider") or "")
+        in {"U.S. Treasury", "BLS", "BEA", "New York Fed"}
+    ]
+    return {
+        "overall_status": provider_health.get("overall_status"),
+        "provider_health_transient_error_count": len(transient),
+        "official_fallback_ok_count": len(official_fallback_ok),
+        "official_fallback_ok_providers": sorted(set(official_fallback_ok)),
+    }
 
 
 def _dashboard_derived_integration_audit(

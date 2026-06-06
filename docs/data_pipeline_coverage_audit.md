@@ -306,11 +306,24 @@ Top-level `official_macro_pack` fields:
 - `real_yield_available`: whether `dfii10` and `t10yie` are both available
 - `inflation_core_available`: whether `core_cpi_yoy` and `core_pce_yoy` are both available
 - `labor_available`: whether `unemployment_rate` and `initial_jobless_claims` are both available
+- `labor_missing_count`: count of missing labor metrics in the official macro pack
+- `official_macro_missing_reasons`: compact missing reasons by metric key
 - `ppi_final_demand_status`: remains `research_needed` until a verified official series is configured
 - `details`: compact per-metric source, series, frequency, dashboard, and missing status metadata
 
 The official macro pack does not treat PPIACO as final demand PPI.
-Labor metrics are configured for audit visibility only in this phase and are not added to the Dashboard homepage.
+Labor metrics are surfaced as `labor_macro` Evidence Table rows for audit visibility and are not added to the Dashboard homepage.
+
+## Provider Health Fields
+
+The audit includes a `provider_health` block derived from the compact provider-health cache.
+
+- `overall_status`: provider-health status such as `ok`, `degraded`, `error`, or `not_run_yet`
+- `provider_health_transient_error_count`: transient network/SSL errors such as a single FRED SSL EOF
+- `official_fallback_ok_count`: successful official fallback checks, such as U.S. Treasury, BLS, BEA, or New York Fed
+- `official_fallback_ok_providers`: successful official fallback provider names
+
+A transient FRED request error should degrade provider health without implying that all official data failed when official fallback checks are OK.
 
 ## Metadata Anomaly Types
 

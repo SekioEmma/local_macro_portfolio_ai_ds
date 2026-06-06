@@ -603,6 +603,25 @@ deepseek_market_data_package:
       source_tier: "official_or_public_data_api"
       interpretation_hint: "Daily Brent oil price; global energy pressure indicator."
       risk_relevance: "Helps assess global energy shocks and inflation pressure."
+  labor_indicators:
+    unemployment_rate:
+      provider: "fred"
+      series_id: "UNRATE"
+      name: "Unemployment Rate"
+      unit: "percent"
+      frequency: "monthly"
+      source_tier: "official_or_public_data_api"
+      interpretation_hint: "FRED UNRATE is a monthly unemployment-rate observation."
+      risk_relevance: "Labor-market slack context; not a standalone trading signal."
+    initial_jobless_claims:
+      provider: "fred"
+      series_id: "ICSA"
+      name: "Initial Claims"
+      unit: "claims"
+      frequency: "weekly"
+      source_tier: "official_or_public_data_api"
+      interpretation_hint: "FRED ICSA is a weekly initial unemployment claims observation."
+      risk_relevance: "High-frequency labor-market stress context; not a standalone trading signal."
   unavailable_or_research_needed:
     valuation_proxy:
       status: "not_available"

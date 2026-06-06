@@ -68,7 +68,8 @@ Missing, research-needed, insufficient-history, stale, and not-available states 
 ## Financial Boundaries
 
 - DGS Treasury series are daily, not intraday.
-- `dgs2`, `dgs30`, `dfii10`, `t10yie`, `core_cpi_yoy`, and `core_pce_yoy` use official macro-pack metadata when compact local values are present.
+- `dgs2`, `dgs30`, `dfii10`, `t10yie`, `core_cpi_yoy`, `core_pce_yoy`, `ppiaco_yoy`, `unemployment_rate`, and `initial_jobless_claims` use official macro-pack metadata when compact local values are present.
+- Labor metrics appear as `labor_macro` evidence rows for audit coverage; they are not homepage cards.
 - DGS breakout confirmation requires explicit compact evidence.
 - PPIACO is not final demand PPI.
 - PPI final demand remains `research_needed` until a verified official series id is configured.

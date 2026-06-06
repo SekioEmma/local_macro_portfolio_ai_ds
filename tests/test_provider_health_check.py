@@ -1,5 +1,6 @@
 from run_provider_health_check import (
     _error_type,
+    _result_to_check,
     _missing_key_check,
     _safe_error_summary,
     overall_status,
@@ -13,9 +14,16 @@ def test_summarize_checks_counts_statuses():
         {"key": "b", "status": "skipped"},
         {"key": "c", "status": "error"},
         {"key": "d", "status": "ok"},
+        {"key": "treasury_10y", "status": "ok"},
     ]
 
-    assert summarize_checks(checks) == {"ok": 2, "skipped": 1, "error": 1}
+    assert summarize_checks(checks) == {
+        "ok": 3,
+        "skipped": 1,
+        "error": 1,
+        "transient_error": 0,
+        "official_fallback_ok": 1,
+    }
 
 
 def test_error_summary_redacts_and_truncates(monkeypatch):
@@ -44,6 +52,26 @@ def test_rate_limit_error_type_is_specific():
     assert _error_type("Too Many Requests. Rate limited. Try after a while.") == "rate_limited"
 
 
+def test_transient_network_error_type_is_specific():
+    summary = "HTTPSConnectionPool max retries exceeded SSLEOFError unexpected EOF"
+
+    assert _error_type(summary) == "transient_network"
+
+
+def test_result_to_check_marks_ssl_eof_as_transient_error():
+    result = {
+        "status": "error",
+        "source": "FRED",
+        "value": None,
+        "error": "HTTPSConnectionPool max retries exceeded SSLEOFError unexpected EOF",
+    }
+
+    check = _result_to_check("fred_dgs10", "FRED", result)
+
+    assert check["status"] == "transient_error"
+    assert check["error_type"] == "transient_network"
+
+
 def test_overall_status_ignores_missing_optional_keys():
     checks = [
         {"key": "fred_dgs10", "status": "skipped"},
@@ -55,3 +83,15 @@ def test_overall_status_ignores_missing_optional_keys():
     ]
 
     assert overall_status(checks) == "ok"
+
+
+def test_overall_status_degrades_for_single_transient_provider_error():
+    checks = [
+        {"key": "fred_dgs10", "status": "transient_error"},
+        {"key": "treasury_10y", "status": "ok"},
+        {"key": "bls_cpi", "status": "ok"},
+        {"key": "ny_fed_effr", "status": "ok"},
+        {"key": "yfinance_sp500", "status": "ok"},
+    ]
+
+    assert overall_status(checks) == "degraded"

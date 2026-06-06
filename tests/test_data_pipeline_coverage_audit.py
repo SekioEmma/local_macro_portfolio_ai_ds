@@ -480,6 +480,76 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
     assert "add_official_macro_pack" not in result["recommendations"]
 
 
+def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "market_data_package": {
+                "labor_indicators": {
+                    "unemployment_rate": {
+                        "value": 4.0,
+                        "status": "ok",
+                        "source": "FRED:UNRATE",
+                        "source_tier": "official_or_public_data_api",
+                        "observation_date": "2026-01-01",
+                        "freshness": "normal_lag",
+                    },
+                    "initial_jobless_claims": {
+                        "value": 230000,
+                        "status": "ok",
+                        "source": "FRED:ICSA",
+                        "source_tier": "official_or_public_data_api",
+                        "observation_date": "2026-01-04",
+                        "freshness": "fresh",
+                    },
+                }
+            },
+        },
+    )
+    _write_json(
+        tmp_path / "provider_health_check.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "overall_status": "degraded",
+            "summary": {"ok": 4, "transient_error": 1, "official_fallback_ok": 4},
+            "checks": [
+                {
+                    "key": "fred_dgs10",
+                    "provider": "FRED",
+                    "status": "transient_error",
+                    "source": "FRED",
+                    "value_present": False,
+                    "error_type": "transient_network",
+                    "error_summary": "SSL EOF",
+                },
+                {
+                    "key": "treasury_10y",
+                    "provider": "U.S. Treasury",
+                    "status": "ok",
+                    "source": "U.S. Treasury",
+                    "value_present": True,
+                },
+            ],
+        },
+    )
+
+    result = audit.build_coverage_audit(reports_dir=tmp_path)
+    official = result["official_macro_pack"]
+    provider = result["provider_health"]
+
+    assert official["labor_available"] is True
+    assert official["labor_missing_count"] == 0
+    assert official["unemployment_rate_status"] == "ok"
+    assert official["initial_jobless_claims_status"] == "ok"
+    assert provider["overall_status"] == "degraded"
+    assert provider["provider_health_transient_error_count"] == 1
+    assert provider["official_fallback_ok_count"] == 1
+    assert provider["official_fallback_ok_providers"] == ["U.S. Treasury"]
+
+
 def test_audit_detects_metadata_anomalies():
     rows = [
         _row(

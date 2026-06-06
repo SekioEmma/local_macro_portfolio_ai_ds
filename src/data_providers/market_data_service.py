@@ -43,6 +43,10 @@ INFLATION_INDICATOR_KEYS = (
     "ppi_all_commodities",
     "ppi_final_demand",
 )
+LABOR_INDICATOR_KEYS = (
+    "unemployment_rate",
+    "initial_jobless_claims",
+)
 REQUIRED_CORE_KEYS = (
     "sp500",
     "nasdaq",
@@ -175,6 +179,7 @@ def get_market_data_package(
     treasury_config = _optional_mapping(package_config, "treasury_yields")
     inflation_config = _optional_mapping(package_config, "inflation_indicators")
     oil_config = _optional_mapping(package_config, "oil_and_energy")
+    labor_config = _optional_mapping(package_config, "labor_indicators")
     unavailable_config = _optional_mapping(package_config, "unavailable_or_research_needed")
 
     treasury_yields = {
@@ -222,6 +227,17 @@ def get_market_data_package(
         timestamp=generated_at,
     )
 
+    labor_indicators = {
+        key: _fred_package_item(
+            key=key,
+            item_config=_optional_mapping(labor_config, key),
+            expected_frequency="weekly" if key == "initial_jobless_claims" else "monthly",
+            max_stale_days=14 if key == "initial_jobless_claims" else 75,
+            timestamp=generated_at,
+        )
+        for key in LABOR_INDICATOR_KEYS
+    }
+
     existing_financial_conditions = {
         key: financial_conditions[key]
         for key in (
@@ -245,11 +261,13 @@ def get_market_data_package(
             treasury_yields,
             inflation_indicators,
             oil_and_energy,
+            labor_indicators,
             existing_financial_conditions,
         ),
         "treasury_yields": treasury_yields,
         "inflation_indicators": inflation_indicators,
         "oil_and_energy": oil_and_energy,
+        "labor_indicators": labor_indicators,
         "existing_financial_conditions": existing_financial_conditions,
         "unavailable_or_research_needed": unavailable,
         "market_analysis_framework": _market_analysis_framework(),

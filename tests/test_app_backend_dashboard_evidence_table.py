@@ -15,6 +15,7 @@ MODULE_KEYS = {
     "equity_trend",
     "portfolio_deviation",
 }
+EVIDENCE_MODULE_KEYS = MODULE_KEYS | {"labor_macro"}
 
 
 def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
@@ -28,9 +29,9 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     data = response.json()
     assert data["row_count"] == len(data["rows"])
     assert data["row_count"] > 0
-    assert set(data["modules"]) == MODULE_KEYS
-    assert {row["module"] for row in data["rows"]} == MODULE_KEYS
-    assert data["filters"]["available"]["modules"] == sorted(MODULE_KEYS)
+    assert set(data["modules"]) == EVIDENCE_MODULE_KEYS
+    assert {row["module"] for row in data["rows"]} == EVIDENCE_MODULE_KEYS
+    assert data["filters"]["available"]["modules"] == sorted(EVIDENCE_MODULE_KEYS)
 
     for row in data["rows"]:
         assert row["row_id"] == f"{row['module']}:{row['metric_key']}"
@@ -215,6 +216,8 @@ def _write_fake_reports(tmp_path, source_badge="official"):
                 "core_cpi_yoy": metric(3.1),
                 "core_pce_yoy": metric(2.8),
                 "ppiaco_yoy": metric(1.7),
+                "unemployment_rate": metric(4.0),
+                "initial_jobless_claims": metric(230000),
                 "wti_30d_change": metric(-4.2, source="EIA"),
                 "brent_30d_change": metric(-3.8, source="EIA"),
                 "sp500_30d_return": metric(2.2, source="yfinance"),
