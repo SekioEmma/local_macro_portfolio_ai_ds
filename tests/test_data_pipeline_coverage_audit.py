@@ -446,17 +446,35 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
                 "observation_date": "2026-01-01",
                 "freshness_status": "fresh",
             },
+            "ppiaco_yoy": {
+                "value": 1.7,
+                "status": "ok",
+                "source": "FRED:PPIACO",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
         },
     )
 
     result = audit.build_coverage_audit(reports_dir=tmp_path)
     official = result["official_macro_pack"]
 
-    assert official["official_macro_configured_count"] == 9
+    assert official["official_macro_configured_count"] == 10
     assert official["real_yield_available"] is True
     assert official["inflation_core_available"] is True
     assert official["labor_available"] is False
+    assert official["rate_macro_available_count"] == 0
+    assert official["dfii10_status"] == "ok"
+    assert official["t10yie_status"] == "ok"
+    assert official["core_cpi_yoy_status"] == "ok"
+    assert official["core_pce_yoy_status"] == "ok"
+    assert official["ppiaco_yoy_status"] == "ok"
     assert official["ppi_final_demand_status"] == "research_needed"
+    assert official["unemployment_rate_status"] == "missing"
+    assert official["initial_jobless_claims_status"] == "missing"
+    assert official["suspicious_yoy_count"] == 0
+    assert official["blocked_due_to_index_level_count"] == 0
     assert "ppi_final_demand" in official["missing_metric_keys"]
     assert "official_macro_pack" in result
     assert "add_official_macro_pack" not in result["recommendations"]

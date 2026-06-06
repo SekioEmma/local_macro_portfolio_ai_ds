@@ -1512,6 +1512,8 @@ def _find_metric_payload(value: Any, metric_key: str) -> tuple[Any, dict[str, An
 
 
 def _extract_metric_value(payload: dict[str, Any]) -> Any:
+    if "value" in payload:
+        return payload.get("value")
     for key in ("value", "value_text", "status", "label", "date", "updated_at"):
         if key in payload and payload.get(key) is not None:
             return payload.get(key)
@@ -1654,6 +1656,8 @@ def _format_value(value: Any, format_kind: str, status: str) -> str:
         return _missing_value_text(status)
     if status == "stale" and value is None:
         return "stale"
+    if value is None:
+        return "missing"
     if format_kind == "bool":
         if isinstance(value, bool):
             return "true" if value else "false"
@@ -1667,8 +1671,6 @@ def _format_value(value: Any, format_kind: str, status: str) -> str:
     if format_kind == "pp":
         number = _to_float(value)
         return f"{number:+.1f}pp" if isinstance(number, float) else str(value)
-    if value is None:
-        return "unknown"
     return str(value)
 
 
@@ -1801,7 +1803,12 @@ def _ai_context_blocked_reason(
 
 
 def _metric_interpretation_hint(metric_key: str, payload: dict[str, Any]) -> str | None:
-    return _string_or_none(payload.get("interpretation_hint")) or _interpretation_hint(metric_key)
+    hint = _string_or_none(payload.get("interpretation_hint"))
+    if metric_key == "ppiaco_yoy" and hint:
+        if "final demand" not in hint.lower():
+            return f"{hint} PPIACO is not final demand PPI."
+        return hint
+    return hint or _interpretation_hint(metric_key)
 
 
 def _derived_dependency_hint_complete(interpretation_hint: str | None) -> bool:

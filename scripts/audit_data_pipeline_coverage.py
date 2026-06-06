@@ -583,10 +583,20 @@ def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
         }
         for key, metric in sorted(metrics.items())
     ]
+    status_by_key = {
+        key: _official_macro_row_status(row_by_key.get(key), metrics[key])
+        for key in configured_keys
+    }
+    rate_macro_keys = ("dgs2", "dgs30")
     return {
         "official_macro_configured_count": len(configured_keys),
         "official_macro_available_count": len(available_keys),
         "official_macro_missing_count": len(missing_keys),
+        "rate_macro_available_count": sum(
+            1
+            for key in rate_macro_keys
+            if _official_macro_row_available(row_by_key.get(key), metrics[key])
+        ),
         "available_metric_keys": available_keys,
         "missing_metric_keys": missing_keys,
         "real_yield_available": all(
@@ -601,7 +611,20 @@ def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
             _official_macro_row_available(row_by_key.get(key), metrics[key])
             for key in ("unemployment_rate", "initial_jobless_claims")
         ),
+        "dgs2_status": status_by_key["dgs2"],
+        "dgs30_status": status_by_key["dgs30"],
+        "dfii10_status": status_by_key["dfii10"],
+        "t10yie_status": status_by_key["t10yie"],
+        "core_cpi_yoy_status": status_by_key["core_cpi_yoy"],
+        "core_pce_yoy_status": status_by_key["core_pce_yoy"],
+        "ppiaco_yoy_status": status_by_key["ppiaco_yoy"],
         "ppi_final_demand_status": official_macro_pack.ppi_final_demand_status(),
+        "unemployment_rate_status": status_by_key["unemployment_rate"],
+        "initial_jobless_claims_status": status_by_key["initial_jobless_claims"],
+        "suspicious_yoy_count": sum(1 for row in rows if _yoy_metric_suspiciously_large(row)),
+        "blocked_due_to_index_level_count": sum(
+            1 for row in rows if _blocked_due_to_index_level(row)
+        ),
         "details": details,
     }
 
@@ -630,6 +653,15 @@ def _official_macro_row_status(
     if row is None:
         return metric.status_when_missing
     return row.status
+
+
+def _blocked_due_to_index_level(row: DashboardEvidenceRow) -> bool:
+    return bool(
+        "yoy" in row.metric_key.lower()
+        and row.status == "insufficient_history"
+        and row.missing_reason
+        and "Only index level is available" in row.missing_reason
+    )
 
 
 def _dashboard_derived_integration_audit(

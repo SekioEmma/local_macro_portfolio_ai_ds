@@ -153,6 +153,32 @@ def test_blocked_statuses_and_search_derived_do_not_enter_ai_context(monkeypatch
     assert _row(data, "credit_stress", "vix")["ai_context_allowed"] is False
 
 
+def test_error_payload_with_null_value_does_not_display_error_as_value(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_market(
+        tmp_path,
+        {
+            "high_yield_spread": {
+                "value": None,
+                "status": "error",
+                "source": "FRED",
+                "source_badge": "official",
+                "observation_date": None,
+                "freshness_status": "unknown",
+                "error": "provider failed",
+            },
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table").json()
+    row = _row(data, "credit_stress", "high_yield_spread")
+
+    assert row["value"] is None
+    assert row["value_text"] == "missing"
+    assert row["ai_context_allowed"] is False
+
+
 def _write_market(tmp_path, metrics):
     payload = {
         "generated_at": "2026-01-01T00:00:00+00:00",

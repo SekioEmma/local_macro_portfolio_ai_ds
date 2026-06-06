@@ -17,6 +17,7 @@ def test_official_macro_pack_definitions_are_stable():
     assert metrics["t10yie"].source_series == "T10YIE"
     assert metrics["core_cpi_yoy"].source_series == "CPILFESL"
     assert metrics["core_pce_yoy"].source_series == "PCEPILFE"
+    assert metrics["ppiaco_yoy"].source_series == "PPIACO"
     assert metrics["unemployment_rate"].source_series == "UNRATE"
     assert metrics["initial_jobless_claims"].source_series == "ICSA"
     assert metrics["ppi_final_demand"].status_when_missing == "research_needed"
@@ -163,6 +164,60 @@ def test_core_inflation_yoy_decimal_and_percent_format_correctly(monkeypatch, tm
     assert _row(data, "inflation_energy_pressure", "core_pce_yoy")["value_text"] == "+3.12%"
 
 
+def test_official_macro_yoy_aliases_surface_existing_compact_fields(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_market(
+        tmp_path,
+        {
+            "market_data_package": {
+                "inflation_indicators": {
+                    "core_cpi_yoy_pct": _metric(
+                        2.74,
+                        unit="percent",
+                        source="FRED:CPILFESL",
+                        source_tier="official_or_public_data_api",
+                    ),
+                    "core_pce_yoy_pct": _metric(
+                        3.29,
+                        unit="percent",
+                        source="FRED:PCEPILFE",
+                        source_tier="official_or_public_data_api",
+                    ),
+                    "ppi_all_commodities_yoy_pct": _metric(
+                        9.82,
+                        unit="percent",
+                        source="FRED:PPIACO",
+                        source_tier="official_or_public_data_api",
+                    ),
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table").json()
+
+    for key, expected in (
+        ("core_cpi_yoy", "+2.74%"),
+        ("core_pce_yoy", "+3.29%"),
+        ("ppiaco_yoy", "+9.82%"),
+    ):
+        row = _row(data, "inflation_energy_pressure", key)
+        assert row["status"] == "ok"
+        assert row["value_text"] == expected
+        assert row["source_badge"] == "official"
+        assert row["ai_context_allowed"] is True
+
+    assert "not final demand PPI" in _row(
+        data,
+        "inflation_energy_pressure",
+        "ppiaco_yoy",
+    )["interpretation_hint"]
+    final_demand = _row(data, "inflation_energy_pressure", "ppi_final_demand")
+    assert final_demand["status"] == "research_needed"
+    assert final_demand["ai_context_allowed"] is False
+
+
 def test_official_macro_response_avoids_raw_and_consensus_words(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     _write_market(
@@ -187,13 +242,15 @@ def test_official_macro_response_avoids_raw_and_consensus_words(monkeypatch, tmp
     assert "surprise" not in lower_body
 
 
-def _metric(value, *, unit=None):
+def _metric(value, *, unit=None, source=None, source_tier=None):
     return {
         "value": value,
         "status": "ok",
         "observation_date": "2026-01-01",
         "freshness_status": "fresh",
         **({"unit": unit} if unit else {}),
+        **({"source": source} if source else {}),
+        **({"source_tier": source_tier} if source_tier else {}),
     }
 
 
