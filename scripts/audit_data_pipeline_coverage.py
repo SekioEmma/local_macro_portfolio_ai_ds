@@ -21,6 +21,7 @@ from data_providers import yfinance_history_provider  # noqa: E402
 from data_quality import historical_derived_metrics  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
 from data_quality import market_history_store  # noqa: E402
+from data_quality import official_macro_pack  # noqa: E402
 
 
 STATUS_KEYS = (
@@ -85,6 +86,7 @@ def build_coverage_audit(
         db_path=dashboard_market_history_db_path,
     )
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
+    official_macro = _official_macro_pack_audit(rows)
 
     return {
         "generated_at": summary.generated_at,
@@ -97,6 +99,7 @@ def build_coverage_audit(
         "historical_derived": historical_derived,
         "yfinance_history": yfinance_history,
         "dashboard_derived_integration": dashboard_derived_integration,
+        "official_macro_pack": official_macro,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -111,6 +114,7 @@ def build_coverage_audit(
             historical_derived,
             yfinance_history,
             dashboard_derived_integration,
+            official_macro,
         ),
     }
 
@@ -242,6 +246,14 @@ def _metadata_anomalies(rows: list[DashboardEvidenceRow]) -> list[dict[str, Any]
             anomalies.append(_anomaly(row, "proxy_or_search_derived_without_hint", "compact_report_missing_provenance"))
         if row.status in {"missing", "research_needed"} and not row.missing_reason:
             anomalies.append(_anomaly(row, "missing_or_research_needed_without_reason", "compact_report_missing_provenance"))
+        if _yoy_metric_suspiciously_large(row):
+            anomalies.append(
+                _anomaly(
+                    row,
+                    "yoy_metric_suspiciously_large",
+                    "inflation_yoy_metric_blocked_due_to_index_level",
+                )
+            )
     return anomalies
 
 
@@ -308,6 +320,7 @@ def _recommendations(
     historical_derived: dict[str, Any] | None = None,
     yfinance_history: dict[str, Any] | None = None,
     dashboard_derived_integration: dict[str, Any] | None = None,
+    official_macro: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -342,7 +355,8 @@ def _recommendations(
         0,
     ):
         recommendations.append("check_dashboard_historical_derived_integration")
-    recommendations.append("add_official_macro_pack")
+    if official_macro and official_macro.get("official_macro_missing_count", 0) > 0:
+        recommendations.append("fill_official_macro_compact_reports")
     return sorted(set(recommendations))
 
 
@@ -539,6 +553,83 @@ def _historical_derived_audit(
         ),
         "recommended_history_actions": sorted(set(actions)),
     }
+
+
+def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    row_by_key = {row.metric_key: row for row in rows}
+    metrics = official_macro_pack.OFFICIAL_MACRO_METRICS
+    configured_keys = sorted(metrics)
+    available_keys = sorted(
+        key
+        for key, metric in metrics.items()
+        if _official_macro_row_available(row_by_key.get(key), metric)
+    )
+    missing_keys = sorted(set(configured_keys) - set(available_keys))
+    details = [
+        {
+            "metric_key": key,
+            "module": metric.module,
+            "status": _official_macro_row_status(row_by_key.get(key), metric),
+            "source": metric.source,
+            "source_badge": metric.source_badge,
+            "source_series": metric.source_series,
+            "expected_frequency": metric.expected_frequency,
+            "dashboard_enabled": metric.dashboard_enabled,
+            "missing_reason": (
+                row_by_key[key].missing_reason
+                if key in row_by_key and row_by_key[key].missing_reason
+                else metric.missing_reason
+            ),
+        }
+        for key, metric in sorted(metrics.items())
+    ]
+    return {
+        "official_macro_configured_count": len(configured_keys),
+        "official_macro_available_count": len(available_keys),
+        "official_macro_missing_count": len(missing_keys),
+        "available_metric_keys": available_keys,
+        "missing_metric_keys": missing_keys,
+        "real_yield_available": all(
+            _official_macro_row_available(row_by_key.get(key), metrics[key])
+            for key in ("dfii10", "t10yie")
+        ),
+        "inflation_core_available": all(
+            _official_macro_row_available(row_by_key.get(key), metrics[key])
+            for key in ("core_cpi_yoy", "core_pce_yoy")
+        ),
+        "labor_available": all(
+            _official_macro_row_available(row_by_key.get(key), metrics[key])
+            for key in ("unemployment_rate", "initial_jobless_claims")
+        ),
+        "ppi_final_demand_status": official_macro_pack.ppi_final_demand_status(),
+        "details": details,
+    }
+
+
+def _official_macro_row_available(
+    row: DashboardEvidenceRow | None,
+    metric: official_macro_pack.OfficialMacroMetric,
+) -> bool:
+    if metric.status_when_missing == "research_needed":
+        return False
+    return bool(
+        row is not None
+        and row.status == "ok"
+        and _has_value(row)
+        and row.source_badge == "official"
+        and row.source
+        and (row.observation_date or row.generated_at)
+        and row.freshness_status not in BAD_FRESHNESS
+    )
+
+
+def _official_macro_row_status(
+    row: DashboardEvidenceRow | None,
+    metric: official_macro_pack.OfficialMacroMetric,
+) -> str:
+    if row is None:
+        return metric.status_when_missing
+    return row.status
 
 
 def _dashboard_derived_integration_audit(
@@ -830,6 +921,16 @@ def _has_value(row: DashboardEvidenceRow) -> bool:
     return row.value is not None
 
 
+def _yoy_metric_suspiciously_large(row: DashboardEvidenceRow) -> bool:
+    if "yoy" not in row.metric_key.lower() or not _has_value(row):
+        return False
+    try:
+        value = float(row.value)
+    except (TypeError, ValueError):
+        return False
+    return abs(value) > 50.0
+
+
 def _is_missing_source_badge(value: str | None) -> bool:
     return value in {None, "", "missing"}
 
@@ -909,6 +1010,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Dashboard Derived Integration", ""])
     for key, value in audit["dashboard_derived_integration"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Official Macro Pack", ""])
+    for key, value in audit["official_macro_pack"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Metadata Anomalies", ""])
     for item in audit["metadata_anomalies"]:

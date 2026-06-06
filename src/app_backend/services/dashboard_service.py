@@ -18,6 +18,7 @@ from app_backend.services import provider_service
 from data_quality import historical_derived_metrics
 from data_quality import last_good_cache
 from data_quality import market_history_store
+from data_quality import official_macro_pack
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -107,6 +108,10 @@ EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
     "unofficial_fallback/proxy observations in the market history store; not an "
     "official market breadth or valuation measure."
 )
+INFLATION_YOY_METRIC_KEYS = {"core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy"}
+INDEX_LEVEL_YOY_MISSING_REASON = (
+    "Only index level is available; YoY requires historical comparison."
+)
 SOURCE_BADGE_ALIASES = {
     "official_api": "official",
     "official_or_public_data_api": "official",
@@ -117,7 +122,7 @@ SOURCE_BADGE_ALIASES = {
 }
 CORE_METRIC_KEYS = {
     "credit_stress": {"high_yield_spread", "vix", "credit_stress_status"},
-    "rate_pressure": {"dgs10", "dgs30", "dgs30_distance_to_5pct"},
+    "rate_pressure": {"dgs2", "dgs10", "dgs30", "dgs30_distance_to_5pct"},
     "real_yield_pressure": {"dfii10", "t10yie", "real_yield_pressure_status"},
     "inflation_energy_pressure": {
         "core_cpi_yoy",
@@ -151,6 +156,7 @@ METRIC_SPECS = {
         ("credit_stress_status", "Credit stress status", None, "text", "missing"),
     ],
     "rate_pressure": [
+        ("dgs2", "2Y Treasury yield", "percent", "percent", "missing"),
         ("dgs10", "10Y Treasury yield", "percent", "percent", "missing"),
         ("dgs30", "30Y Treasury yield", "percent", "percent", "missing"),
         (
@@ -178,6 +184,7 @@ METRIC_SPECS = {
         ("core_cpi_yoy", "Core CPI YoY", "percent", "signed_percent", "missing"),
         ("core_pce_yoy", "Core PCE YoY", "percent", "signed_percent", "missing"),
         ("ppiaco_yoy", "PPIACO YoY", "percent", "signed_percent", "missing"),
+        ("ppi_final_demand", "PPI final demand", "percent", "signed_percent", "research_needed"),
         ("wti_30d_change", "WTI 30D change", "percent", "signed_percent", "insufficient_history"),
         ("brent_30d_change", "Brent 30D change", "percent", "signed_percent", "insufficient_history"),
     ],
@@ -747,15 +754,23 @@ def _build_metric(
         return compact
 
     found = _find_metric(metric_key, reports)
+    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
     interpretation_hint = _interpretation_hint(metric_key)
     if found is None:
         return _missing_metric(
             metric_key=metric_key,
             display_name=display_name,
             unit=unit,
-            status=missing_status,
+            status=official_macro.status_when_missing if official_macro else missing_status,
             generated_at=_first_updated_at([report for report in reports if report.data is not None]),
             interpretation_hint=interpretation_hint,
+            source=official_macro.source if official_macro else None,
+            source_badge=(
+                official_macro.source_badge
+                if official_macro and official_macro.source_badge == "research_needed"
+                else None
+            ),
+            missing_reason=official_macro.missing_reason if official_macro else None,
         )
 
     value, payload, report = found
@@ -773,9 +788,38 @@ def _build_metric(
 
     source = _metric_source(payload, report, quality_metadata)
     source_badge = _metric_source_badge(payload, report, module_key, metric_key, quality_metadata)
+    if official_macro and source is None and source_badge == "missing":
+        source = official_macro.source
+        source_badge = official_macro.source_badge
+    if official_macro and source_badge == "missing":
+        source_badge = official_macro.source_badge
+    if official_macro and source is None:
+        source = official_macro.source
     observation_date = _metric_observation_date(payload, quality_metadata)
     generated_at = _metric_generated_at(payload, report)
     missing_reason = _string_or_none(payload.get("missing_reason")) if isinstance(payload, dict) else None
+    yoy_result = _normalize_inflation_yoy_value(metric_key, value, payload)
+    if yoy_result == "index_level":
+        return DashboardMetric(
+            metric_key=metric_key,
+            display_name=display_name,
+            value=None,
+            value_text=_missing_value_text("insufficient_history"),
+            unit=unit,
+            status="insufficient_history",
+            source=source,
+            source_badge="missing",
+            observation_date=None,
+            generated_at=generated_at,
+            freshness_status="insufficient_history",
+            missing_reason=INDEX_LEVEL_YOY_MISSING_REASON,
+            interpretation_hint=interpretation_hint,
+            ai_context_allowed=False,
+        )
+    if isinstance(yoy_result, float):
+        value = yoy_result
+    if official_macro and status in AI_BLOCKED_METRIC_STATUSES and missing_reason is None:
+        missing_reason = official_macro.missing_reason
 
     return DashboardMetric(
         metric_key=metric_key,
@@ -1391,9 +1435,16 @@ def _missing_metric(
     status: str,
     generated_at: str | None,
     interpretation_hint: str | None = None,
+    source: str | None = None,
+    source_badge: str | None = None,
+    missing_reason: str | None = None,
 ) -> DashboardMetric:
     normalized_status = _metric_status_value(status)
-    source_badge = "research_needed" if normalized_status == "research_needed" else "missing"
+    normalized_source_badge = (
+        source_badge
+        if source_badge in ALLOWED_SOURCE_BADGES
+        else "research_needed" if normalized_status == "research_needed" else "missing"
+    )
     return DashboardMetric(
         metric_key=metric_key,
         display_name=display_name,
@@ -1401,12 +1452,12 @@ def _missing_metric(
         value_text=_missing_value_text(normalized_status),
         unit=unit,
         status=normalized_status,
-        source=None,
-        source_badge=source_badge,
+        source=source,
+        source_badge=normalized_source_badge,
         observation_date=None,
         generated_at=generated_at,
         freshness_status="unknown",
-        missing_reason=_missing_value_text(normalized_status),
+        missing_reason=missing_reason or _missing_value_text(normalized_status),
         interpretation_hint=interpretation_hint,
         ai_context_allowed=False,
     )
@@ -1416,15 +1467,28 @@ def _find_metric(
     metric_key: str,
     reports: tuple[ReportState, ...],
 ) -> tuple[Any, dict[str, Any], ReportState] | None:
+    metric_keys = (metric_key, *official_macro_pack.aliases_for(metric_key))
     for report in reports:
         if report.data is None:
             continue
-        found = _find_metric_payload(report.data, metric_key)
-        if found is None:
-            continue
-        value, payload = found
-        return value, payload, report
+        for key in metric_keys:
+            found = _find_metric_payload(report.data, key)
+            if found is None:
+                continue
+            if key != metric_key and _alias_payload_unusable(found):
+                continue
+            value, payload = found
+            return value, payload, report
     return None
+
+
+def _alias_payload_unusable(found: tuple[Any, dict[str, Any]]) -> bool:
+    value, payload = found
+    if not isinstance(payload, dict):
+        return value is None
+    if "value" not in payload and "value_text" not in payload:
+        return True
+    return value is None
 
 
 def _find_metric_payload(value: Any, metric_key: str) -> tuple[Any, dict[str, Any]] | None:
@@ -1608,6 +1672,34 @@ def _format_value(value: Any, format_kind: str, status: str) -> str:
     return str(value)
 
 
+def _normalize_inflation_yoy_value(
+    metric_key: str,
+    value: Any,
+    payload: dict[str, Any],
+) -> float | str | None:
+    if metric_key not in INFLATION_YOY_METRIC_KEYS:
+        return None
+    number = _to_float(value)
+    if number is None:
+        return None
+    if _payload_declares_index_level(payload) or abs(number) > 50.0:
+        return "index_level"
+    if -1.0 < number < 1.0 and number != 0.0:
+        return round(number * 100.0, 6)
+    return number
+
+
+def _payload_declares_index_level(payload: dict[str, Any]) -> bool:
+    for key in ("value_type", "metric_kind", "calculation", "unit"):
+        text = str(payload.get(key) or "").lower()
+        if "index" in text and "yoy" not in text and "year" not in text:
+            return True
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        return _payload_declares_index_level(metadata)
+    return False
+
+
 def _missing_value_text(status: str) -> str:
     if status == "research_needed":
         return "research needed"
@@ -1634,7 +1726,10 @@ def _to_float(value: Any) -> float | None:
 
 
 def _interpretation_hint(metric_key: str) -> str | None:
-    if metric_key in {"dgs10", "dgs30", "dgs10_5d_avg", "dgs30_distance_to_5pct"}:
+    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
+    if official_macro is not None:
+        return official_macro.interpretation_hint
+    if metric_key in {"dgs10", "dgs10_5d_avg", "dgs30_distance_to_5pct"}:
         return "FRED Treasury yield series are daily, not intraday."
     if metric_key == "dgs30_breakout_confirmed":
         return "Breakout confirmation requires explicit compact evidence; do not infer it."

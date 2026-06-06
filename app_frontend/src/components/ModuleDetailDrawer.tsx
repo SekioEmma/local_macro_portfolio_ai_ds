@@ -1,11 +1,18 @@
+import type { ReactNode } from "react";
 import type {
   DashboardEvidenceRow,
   DashboardMetric,
   DashboardModule
 } from "../types";
-import type { ReactNode } from "react";
 import { EvidenceRowsTable } from "./EvidenceRowsTable";
 import { MetricBadge } from "./MetricBadge";
+import {
+  formatCompactHint,
+  getAiContextLabel,
+  getFreshnessLabel,
+  getMissingReasonLabel,
+  getSourceBadgeLabel
+} from "../utils/displayLabels";
 
 type ModuleDetailDrawerProps = {
   moduleKey: string;
@@ -26,17 +33,17 @@ const blockedStatuses = new Set([
 
 const interpretationBoundaries: Record<string, string> = {
   credit_stress:
-    "VIX 升高不是系统性危机的充分条件；信用压力模块用于区分普通回调和系统性风险，不能单独生成交易建议。",
+    "VIX 升高不是系统性危机的充分条件；信用压力模块用于区分普通回调和信用压力，不输出交易建议。",
   rate_pressure:
-    "DGS 是日度观测，不是盘中高点；5% 是启发式心理阈值，不是交易信号；没有 confirmed boolean 不得写站稳或突破确认。",
+    "DGS 是日度观测，不是盘中高点；5% 是解释阈值，不是交易信号；breakout 需要明确证据。",
   real_yield_pressure:
-    "实际利率是机制解释，不是黄金或成长股的唯一/主要驱动，不是交易信号。",
+    "实际收益率是机制解释，不是黄金或成长股的单一驱动，也不是交易信号。",
   inflation_energy_pressure:
-    "CPI/PCE/PPI 是低频数据；没有 consensus 不得写超预期；PPIACO 不是 final demand PPI；油价变化不能机械推断通胀失控。",
+    "CPI/PCE/PPI 是低频数据；没有明确预期数据时不得写超预期；PPIACO 不是 final demand PPI；油价变化不能机械推断通胀失控。",
   equity_trend:
     "指数回撤不是系统性危机的充分条件；没有 breadth/concentration 数据不得确认市场集中恶化。",
   portfolio_deviation:
-    "组合偏离不能归因于宏观市场因素；只描述风险暴露；现金备用金不参与目标配置；不得输出交易指令。"
+    "组合偏离不能归因于宏观市场因素；只描述风险暴露；现金备用金不参与目标配置；不输出交易指令。"
 };
 
 export function ModuleDetailDrawer({
@@ -61,28 +68,28 @@ export function ModuleDetailDrawer({
       >
         <header className="drawer-header">
           <div>
-            <p className="eyebrow">Show All / 查看详情</p>
+            <p className="eyebrow">查看详情</p>
             <h2>{moduleLabel}</h2>
             <p className="muted">{moduleKey}</p>
           </div>
           <button
-            aria-label="Close module detail"
+            aria-label="关闭模块详情"
             className="icon-button"
             type="button"
             onClick={onClose}
           >
-            ×
+            x
           </button>
         </header>
 
         <div className="drawer-status-row">
           <MetricBadge status={moduleSummary.status} />
-          <span>{moduleSummary.source_badge || "source unknown"}</span>
-          <span>{moduleSummary.updated_at || "updated time unavailable"}</span>
+          <span>{getSourceBadgeLabel(moduleSummary.source_badge || "missing")}</span>
+          <span>{moduleSummary.updated_at || "更新时间不可用"}</span>
         </div>
 
-        <DrawerSection title="Status Summary">
-          <p>{moduleSummary.summary || "No compact module summary available."}</p>
+        <DrawerSection title="状态摘要">
+          <p>{moduleSummary.summary || "暂无模块摘要。"}</p>
           {moduleSummary.error_summary && (
             <p className="error-text">{moduleSummary.error_summary}</p>
           )}
@@ -91,7 +98,7 @@ export function ModuleDetailDrawer({
           )}
         </DrawerSection>
 
-        <DrawerSection title="Key Metrics">
+        <DrawerSection title="关键指标">
           <div className="drawer-metric-grid">
             {moduleSummary.key_metrics.map((metric) => (
               <MetricDetail key={metric.metric_key} metric={metric} />
@@ -99,22 +106,20 @@ export function ModuleDetailDrawer({
           </div>
         </DrawerSection>
 
-        <DrawerSection title="Evidence Rows">
+        <DrawerSection title="证据表">
           {evidenceError && (
-            <p className="error-text">
-              evidence rows unavailable: {evidenceError}
-            </p>
+            <p className="error-text">证据行不可用：{evidenceError}</p>
           )}
           <EvidenceRowsTable rows={evidenceRows} compact />
         </DrawerSection>
 
-        <DrawerSection title="Interpretation Boundary">
-          <p>{interpretationBoundaries[moduleKey] || "No boundary note configured."}</p>
+        <DrawerSection title="解释边界">
+          <p>{interpretationBoundaries[moduleKey] || "暂无解释边界。"}</p>
         </DrawerSection>
 
-        <DrawerSection title="Missing / Research Needed">
+        <DrawerSection title="缺失 / 待研究">
           {missingRows.length === 0 ? (
-            <p className="muted">No missing, research-needed, insufficient-history, not-available, or stale rows.</p>
+            <p className="muted">没有缺失、待研究、历史不足、不可用或过期的行。</p>
           ) : (
             <ul className="drawer-list">
               {missingRows.map((row) => (
@@ -125,8 +130,8 @@ export function ModuleDetailDrawer({
                   </div>
                   <MetricBadge status={row.status} />
                   <p>
-                    {row.missing_reason ||
-                      row.interpretation_hint ||
+                    {getMissingReasonLabel(row.missing_reason) ||
+                      formatCompactHint(row.interpretation_hint) ||
                       blockedReason(row)}
                   </p>
                 </li>
@@ -135,14 +140,14 @@ export function ModuleDetailDrawer({
           )}
         </DrawerSection>
 
-        <DrawerSection title="AI Factual Context Eligibility">
+        <DrawerSection title="AI 事实层资格">
           <div className="ai-eligibility-grid">
             <div>
-              <span>可进入 AI factual context</span>
+              <span>{getAiContextLabel(true)}</span>
               <strong>{aiAllowed.length}</strong>
             </div>
             <div>
-              <span>不进入 AI factual context</span>
+              <span>{getAiContextLabel(false)}</span>
               <strong>{aiBlocked.length}</strong>
             </div>
           </div>
@@ -157,7 +162,7 @@ export function ModuleDetailDrawer({
             </ul>
           )}
           <button className="secondary-button" type="button" disabled>
-            Open in AI Chat later phase
+            后续阶段打开 AI Chat
           </button>
         </DrawerSection>
       </aside>
@@ -192,30 +197,32 @@ function MetricDetail({ metric }: { metric: DashboardMetric }) {
       <p className="drawer-value">{safeValueText(metric.value_text, metric.status)}</p>
       <dl>
         <div>
-          <dt>source</dt>
-          <dd>{metric.source_badge}</dd>
+          <dt>来源</dt>
+          <dd title={metric.source_badge}>{getSourceBadgeLabel(metric.source_badge)}</dd>
         </div>
         <div>
-          <dt>freshness</dt>
-          <dd>{metric.freshness_status}</dd>
+          <dt>新鲜度</dt>
+          <dd title={metric.freshness_status}>{getFreshnessLabel(metric.freshness_status)}</dd>
         </div>
         <div>
-          <dt>observation</dt>
+          <dt>观测</dt>
           <dd>{metric.observation_date || "not available"}</dd>
         </div>
         <div>
-          <dt>ai_context_allowed</dt>
-          <dd>{metric.ai_context_allowed ? "可进入 AI 事实层" : "不进入 AI 事实层"}</dd>
+          <dt>AI 事实层</dt>
+          <dd>{getAiContextLabel(metric.ai_context_allowed)}</dd>
         </div>
       </dl>
       {metadataIncomplete && (
-        <p className="metric-reason">
-          有值，但元数据不足，不进入 AI 事实层
-        </p>
+        <p className="metric-reason">有值但元数据不足，不进入 AI 事实层。</p>
       )}
       {(metric.missing_reason || metric.interpretation_hint) && (
-        <p className="metric-hint">
-          {metric.missing_reason || metric.interpretation_hint}
+        <p
+          className="metric-hint"
+          title={metric.missing_reason || metric.interpretation_hint || ""}
+        >
+          {getMissingReasonLabel(metric.missing_reason) ||
+            formatCompactHint(metric.interpretation_hint)}
         </p>
       )}
     </article>
@@ -223,7 +230,9 @@ function MetricDetail({ metric }: { metric: DashboardMetric }) {
 }
 
 function summarizeBlockedReasons(rows: DashboardEvidenceRow[]) {
-  return Array.from(new Set(rows.filter((row) => !row.ai_context_allowed).map(blockedReason)));
+  return Array.from(
+    new Set(rows.filter((row) => !row.ai_context_allowed).map(blockedReason))
+  );
 }
 
 function blockedReason(row: DashboardEvidenceRow) {

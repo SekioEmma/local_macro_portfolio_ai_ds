@@ -291,6 +291,27 @@ The integration only covers:
 
 Rate and oil historical derived candidates remain reported in `historical_derived` but are not integrated into Dashboard current values.
 
+## Official Macro Pack Fields
+
+The audit includes an `official_macro_pack` block for configured official macro metadata.
+It is read-only and does not call FRED, BLS, BEA, Treasury, yfinance, DeepSeek, Tavily, or search.
+
+Top-level `official_macro_pack` fields:
+
+- `official_macro_configured_count`: configured official macro rows, including the `ppi_final_demand` research boundary
+- `official_macro_available_count`: configured rows with an OK value, official source badge, source, date metadata, and non-bad freshness
+- `official_macro_missing_count`: configured rows not currently available from compact local evidence
+- `available_metric_keys`: available metric keys
+- `missing_metric_keys`: missing or research-needed metric keys
+- `real_yield_available`: whether `dfii10` and `t10yie` are both available
+- `inflation_core_available`: whether `core_cpi_yoy` and `core_pce_yoy` are both available
+- `labor_available`: whether `unemployment_rate` and `initial_jobless_claims` are both available
+- `ppi_final_demand_status`: remains `research_needed` until a verified official series is configured
+- `details`: compact per-metric source, series, frequency, dashboard, and missing status metadata
+
+The official macro pack does not treat PPIACO as final demand PPI.
+Labor metrics are configured for audit visibility only in this phase and are not added to the Dashboard homepage.
+
 ## Metadata Anomaly Types
 
 The audit detects:

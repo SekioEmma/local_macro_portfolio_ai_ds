@@ -1,4 +1,9 @@
 import type { DashboardEvidenceRow } from "../types";
+import {
+  getAiContextLabel,
+  getFreshnessLabel,
+  getSourceBadgeLabel
+} from "../utils/displayLabels";
 import { MetricBadge } from "./MetricBadge";
 
 type EvidenceRowsTableProps = {
@@ -8,7 +13,7 @@ type EvidenceRowsTableProps = {
 
 export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTableProps) {
   if (rows.length === 0) {
-    return <p className="muted">No evidence rows available for this module.</p>;
+    return <p className="muted">当前模块没有证据行。</p>;
   }
 
   return (
@@ -17,13 +22,13 @@ export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTablePr
         <thead>
           <tr>
             <th>metric_key</th>
-            <th>display_name</th>
-            <th>value_text</th>
-            <th>status</th>
-            <th>source_badge</th>
-            <th>freshness_status</th>
-            <th>observation_date</th>
-            <th>ai_context_allowed</th>
+            <th>名称</th>
+            <th>显示值</th>
+            <th>状态</th>
+            <th>来源类型</th>
+            <th>新鲜度</th>
+            <th>观测日期</th>
+            <th>AI 事实层</th>
           </tr>
         </thead>
         <tbody>
@@ -35,12 +40,10 @@ export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTablePr
               <td>
                 <MetricBadge status={row.status} />
               </td>
-              <td>{row.source_badge}</td>
-              <td>{row.freshness_status}</td>
+              <td title={row.source_badge}>{getSourceBadgeLabel(row.source_badge)}</td>
+              <td title={row.freshness_status}>{getFreshnessLabel(row.freshness_status)}</td>
               <td>{row.observation_date || "not available"}</td>
-              <td>
-                {aiContextLabel(row)}
-              </td>
+              <td>{aiContextLabel(row)}</td>
             </tr>
           ))}
         </tbody>
@@ -50,11 +53,11 @@ export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTablePr
 }
 
 function aiContextLabel(row: DashboardEvidenceRow) {
-  if (row.ai_context_allowed) return "可进入 AI 事实层";
+  if (row.ai_context_allowed) return getAiContextLabel(true);
   if (row.value !== null && row.value !== undefined) {
-    return `有值，但被阻断：${row.blocked_reason || "metadata_incomplete"}`;
+    return `有值但阻断：${row.blocked_reason || "metadata_incomplete"}`;
   }
-  return `不进入 AI 事实层：${row.blocked_reason || "not_eligible"}`;
+  return `${getAiContextLabel(false)}：${row.blocked_reason || "not_eligible"}`;
 }
 
 function safeValueText(valueText: string, status: string) {

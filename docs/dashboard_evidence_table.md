@@ -68,8 +68,11 @@ Missing, research-needed, insufficient-history, stale, and not-available states 
 ## Financial Boundaries
 
 - DGS Treasury series are daily, not intraday.
+- `dgs2`, `dgs30`, `dfii10`, `t10yie`, `core_cpi_yoy`, and `core_pce_yoy` use official macro-pack metadata when compact local values are present.
 - DGS breakout confirmation requires explicit compact evidence.
 - PPIACO is not final demand PPI.
+- PPI final demand remains `research_needed` until a verified official series id is configured.
+- Core CPI/Core PCE/PPI `*_yoy` rows must represent actual YoY rates; index levels must be blocked as insufficient history instead of displayed as impossible percentages.
 - Cash reserve status is not a target allocation.
 - Portfolio deviation is local context and is not attributed to market factors.
 - Dashboard status and evidence rows are not buy/sell instructions.

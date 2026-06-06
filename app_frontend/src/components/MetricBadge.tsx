@@ -1,9 +1,15 @@
+import { getStatusLabel } from "../utils/displayLabels";
+
 type MetricBadgeProps = {
   status: string;
 };
 
 export function MetricBadge({ status }: MetricBadgeProps) {
-  return <span className={`status-pill ${statusClass(status)}`}>{status}</span>;
+  return (
+    <span className={`status-pill ${statusClass(status)}`} title={status}>
+      {getStatusLabel(status)}
+    </span>
+  );
 }
 
 function statusClass(status: string) {

@@ -407,6 +407,61 @@ def test_audit_reports_dashboard_derived_integration(monkeypatch, tmp_path):
     ]
 
 
+def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "dfii10": {
+                "value": 2.0,
+                "status": "ok",
+                "source": "FRED",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+            "t10yie": {
+                "value": 2.3,
+                "status": "ok",
+                "source": "FRED",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+            "core_cpi_yoy": {
+                "value": 3.1,
+                "status": "ok",
+                "source": "FRED",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+            "core_pce_yoy": {
+                "value": 2.7,
+                "status": "ok",
+                "source": "FRED",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+
+    result = audit.build_coverage_audit(reports_dir=tmp_path)
+    official = result["official_macro_pack"]
+
+    assert official["official_macro_configured_count"] == 9
+    assert official["real_yield_available"] is True
+    assert official["inflation_core_available"] is True
+    assert official["labor_available"] is False
+    assert official["ppi_final_demand_status"] == "research_needed"
+    assert "ppi_final_demand" in official["missing_metric_keys"]
+    assert "official_macro_pack" in result
+    assert "add_official_macro_pack" not in result["recommendations"]
+
+
 def test_audit_detects_metadata_anomalies():
     rows = [
         _row(
@@ -426,6 +481,26 @@ def test_audit_detects_metadata_anomalies():
     assert "value_with_unknown_freshness" in anomaly_types
     assert "ai_allowed_with_missing_source_badge" in anomaly_types
     assert "ai_allowed_with_bad_freshness" in anomaly_types
+
+
+def test_audit_flags_suspicious_large_yoy_metric():
+    rows = [
+        _row(
+            "inflation_energy_pressure",
+            "core_cpi_yoy",
+            value=335.42,
+            source_badge="official",
+            ai_context_allowed=True,
+        )
+    ]
+
+    anomalies = audit._metadata_anomalies(rows)
+
+    assert any(
+        item["type"] == "yoy_metric_suspiciously_large"
+        and item["reason"] == "inflation_yoy_metric_blocked_due_to_index_level"
+        for item in anomalies
+    )
 
 
 def test_audit_detects_derived_dependency_anomalies():

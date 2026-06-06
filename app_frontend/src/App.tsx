@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  createFavorite,
-  createRefreshRun,
   fetchDashboardEvidenceTable,
   fetchDashboardSummary,
   fetchFavorites,
@@ -9,13 +7,11 @@ import {
   fetchRefreshRuns,
   fetchSettings,
   fetchStatus,
-  fetchStorageStatus,
-  updateSettings
+  fetchStorageStatus
 } from "./api/client";
 import { ModuleDetailDrawer } from "./components/ModuleDetailDrawer";
 import type {
   ApiResult,
-  AppSettings,
   AppSettingsResponse,
   DashboardEvidenceRow,
   DashboardEvidenceTableResponse,
@@ -28,17 +24,18 @@ import type {
   StatusResponse,
   StorageStatusResponse
 } from "./types";
+import {
+  formatCompactHint,
+  formatSourceFreshness,
+  getAiContextLabel,
+  getFreshnessLabel,
+  getMissingReasonLabel,
+  getModuleLabel,
+  getSourceBadgeLabel,
+  getStatusLabel
+} from "./utils/displayLabels";
 
 type ViewKey = "dashboard" | "evidence" | "chat" | "account" | "diagnostics";
-
-const moduleLabels: Record<string, string> = {
-  credit_stress: "信用压力",
-  rate_pressure: "利率压力",
-  real_yield_pressure: "真实收益率压力",
-  inflation_energy_pressure: "通胀与能源压力",
-  equity_trend: "权益趋势",
-  portfolio_deviation: "组合偏离"
-};
 
 const navItems: Array<{ key: ViewKey; label: string }> = [
   { key: "dashboard", label: "市场仪表盘" },
@@ -178,9 +175,6 @@ export default function App() {
             favorites={favorites}
             isLoading={isLoading}
             reload={loadAll}
-            setSettings={setSettings}
-            setRefreshRuns={setRefreshRuns}
-            setFavorites={setFavorites}
           />
         )}
       </main>
@@ -210,10 +204,7 @@ function DashboardView({
     (row) => row.module === selectedModuleKey
   ) || [];
 
-  if (isLoading) {
-    return <LoadingState title="市场仪表盘" />;
-  }
-
+  if (isLoading) return <LoadingState title="市场仪表盘" />;
   if (dashboard.error || !data) {
     return <ErrorState title="市场仪表盘" message={dashboard.error} />;
   }
@@ -229,7 +220,7 @@ function DashboardView({
       </header>
 
       <section className="status-strip">
-        <Metric label="整体状态" value={data.overall_status} />
+        <Metric label="整体状态" value={getStatusLabel(data.overall_status)} />
         <Metric label="风险等级" value={data.overall_risk_level || "unknown"} />
         <Metric label="更新时间" value={data.generated_at || "not available"} />
         <Metric
@@ -250,7 +241,7 @@ function DashboardView({
       </section>
 
       <section className="content-grid">
-        <InfoPanel title="Missing Data">
+        <InfoPanel title="缺失数据">
           {data.missing_data.length === 0 ? (
             <p className="muted">暂无缺失数据提示。</p>
           ) : (
@@ -265,7 +256,7 @@ function DashboardView({
           )}
         </InfoPanel>
 
-        <InfoPanel title="Data Freshness">
+        <InfoPanel title="数据新鲜度">
           <FreshnessList data={data.data_freshness} />
         </InfoPanel>
       </section>
@@ -273,7 +264,7 @@ function DashboardView({
       {selectedModuleKey && selectedModule && (
         <ModuleDetailDrawer
           moduleKey={selectedModuleKey}
-          moduleLabel={moduleLabels[selectedModuleKey] || selectedModuleKey}
+          moduleLabel={getModuleLabel(selectedModuleKey)}
           moduleSummary={selectedModule}
           evidenceRows={selectedRows}
           evidenceError={evidence.error}
@@ -296,7 +287,10 @@ function ModuleCard({
   return (
     <article className="module-card">
       <div className="module-card-head">
-        <h3>{moduleLabels[moduleKey] || moduleKey}</h3>
+        <h3>
+          {getModuleLabel(moduleKey)}
+          <small className="module-key">{moduleKey}</small>
+        </h3>
         <StatusPill status={module.status} />
       </div>
       <p className="module-label">{module.label || "未标注"}</p>
@@ -308,11 +302,11 @@ function ModuleCard({
       </div>
       <dl>
         <div>
-          <dt>Source</dt>
-          <dd>{module.source_badge || "unknown"}</dd>
+          <dt>来源</dt>
+          <dd>{getSourceBadgeLabel(module.source_badge || "missing")}</dd>
         </div>
         <div>
-          <dt>Updated</dt>
+          <dt>更新</dt>
           <dd>{module.updated_at || "not available"}</dd>
         </div>
       </dl>
@@ -321,7 +315,7 @@ function ModuleCard({
       )}
       {module.next_action && <p className="next-action">{module.next_action}</p>}
       <button className="secondary-button detail-button" type="button" onClick={onShowAll}>
-        Show All / 查看详情
+        查看详情
       </button>
     </article>
   );
@@ -344,9 +338,7 @@ function MetricRow({ metric }: { metric: DashboardMetric }) {
     <div className="metric-row">
       <div>
         <strong>{metric.display_name}</strong>
-        <small>
-          {metric.source_badge} / {metric.freshness_status}
-        </small>
+        <small>{formatSourceFreshness(metric.source_badge, metric.freshness_status)}</small>
       </div>
       <div className="metric-value">
         <span>{metric.value_text}</span>
@@ -354,16 +346,18 @@ function MetricRow({ metric }: { metric: DashboardMetric }) {
       </div>
       {needsExplanation && (
         <p className="metric-reason">
-          {metric.missing_reason || metric.interpretation_hint || metric.status}
+          {getMissingReasonLabel(metric.missing_reason) ||
+            formatCompactHint(metric.interpretation_hint) ||
+            getStatusLabel(metric.status)}
         </p>
       )}
       {!needsExplanation && metric.interpretation_hint && (
-        <p className="metric-hint">{metric.interpretation_hint}</p>
+        <p className="metric-hint" title={metric.interpretation_hint}>
+          {formatCompactHint(metric.interpretation_hint)}
+        </p>
       )}
       {metadataIncomplete && (
-        <p className="metric-reason">
-          有值，但元数据不足，不进入 AI 事实层
-        </p>
+        <p className="metric-reason">有值但元数据不足，不进入 AI 事实层。</p>
       )}
     </div>
   );
@@ -381,9 +375,8 @@ function FreshnessList({ data }: { data: Record<string, unknown> }) {
           <li key={key}>
             <span>{key}</span>
             <small>
-              {String(value.status || "unknown")} /{" "}
-              {String(value.generated_at || "not available")} / stale_cache:{" "}
-              {String(Boolean(value.stale_cache))}
+              {getStatusLabel(String(value.status || "unknown"))} /{" "}
+              {String(value.generated_at || "not available")}
               {value.next_action ? ` / ${String(value.next_action)}` : ""}
             </small>
           </li>
@@ -445,10 +438,7 @@ function EvidenceTableView({
     available.source_badges ||
     uniqueSorted(data?.rows.map((row) => row.source_badge) || []);
 
-  if (isLoading) {
-    return <LoadingState title="全量证据表" />;
-  }
-
+  if (isLoading) return <LoadingState title="全量证据表" />;
   if (evidence.error || !data) {
     return <ErrorState title="全量证据表" message={evidence.error} />;
   }
@@ -467,42 +457,45 @@ function EvidenceTableView({
       </header>
 
       <section className="status-strip">
-        <Metric label="overall_status" value={data.overall_status} />
-        <Metric label="generated_at" value={data.generated_at || "not available"} />
-        <Metric label="row_count" value={String(data.row_count)} />
-        <Metric label="filtered_rows" value={String(filteredRows.length)} />
+        <Metric label="整体状态" value={getStatusLabel(data.overall_status)} />
+        <Metric label="生成时间" value={data.generated_at || "not available"} />
+        <Metric label="总行数" value={String(data.row_count)} />
+        <Metric label="筛选后" value={String(filteredRows.length)} />
       </section>
 
       <section className="filter-bar" aria-label="evidence filters">
         <FilterSelect
-          label="module"
+          label="模块"
           value={filters.module}
           options={moduleOptions}
+          formatOption={getModuleLabel}
           onChange={(value) => setFilters({ ...filters, module: value })}
         />
         <FilterSelect
-          label="status"
+          label="状态"
           value={filters.status}
           options={statusOptions}
+          formatOption={getStatusLabel}
           onChange={(value) => setFilters({ ...filters, status: value })}
         />
         <FilterSelect
-          label="source_badge"
+          label="来源类型"
           value={filters.sourceBadge}
           options={sourceOptions}
+          formatOption={getSourceBadgeLabel}
           onChange={(value) => setFilters({ ...filters, sourceBadge: value })}
         />
         <label className="filter-control">
-          ai_context_allowed
+          AI 事实层
           <select
             value={filters.aiContextAllowed}
             onChange={(event) =>
               setFilters({ ...filters, aiContextAllowed: event.target.value })
             }
           >
-            <option value="all">all</option>
-            <option value="true">可进入 AI 事实层</option>
-            <option value="false">不进入 AI 事实层</option>
+            <option value="all">全部</option>
+            <option value="true">{getAiContextLabel(true)}</option>
+            <option value="false">{getAiContextLabel(false)}</option>
           </select>
         </label>
       </section>
@@ -529,11 +522,13 @@ function FilterSelect({
   label,
   value,
   options,
+  formatOption,
   onChange
 }: {
   label: string;
   value: string;
   options: string[];
+  formatOption?: (value: string) => string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -543,10 +538,10 @@ function FilterSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
-        <option value="all">all</option>
+        <option value="all">全部</option>
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {formatOption ? formatOption(option) : option}
           </option>
         ))}
       </select>
@@ -558,7 +553,7 @@ function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
   if (rows.length === 0) {
     return (
       <section className="info-panel">
-        <p className="muted">当前过滤条件下没有 evidence rows。</p>
+        <p className="muted">当前筛选条件下没有 evidence rows。</p>
       </section>
     );
   }
@@ -569,39 +564,40 @@ function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
         <table className="evidence-table">
           <thead>
             <tr>
-              <th>module</th>
+              <th>模块</th>
               <th>metric_key</th>
-              <th>display_name</th>
-              <th>value_text</th>
-              <th>status</th>
-              <th>source_badge</th>
-              <th>freshness_status</th>
-              <th>observation_date</th>
-              <th>generated_at</th>
-              <th>ai_context_allowed</th>
-              <th>missing_reason</th>
-              <th>interpretation_hint</th>
+              <th>名称</th>
+              <th>显示值</th>
+              <th>状态</th>
+              <th>来源类型</th>
+              <th>新鲜度</th>
+              <th>观测日期</th>
+              <th>生成时间</th>
+              <th>AI 事实层</th>
+              <th>缺失原因</th>
+              <th>解释边界</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.row_id}>
-                <td>{row.module}</td>
+                <td>
+                  <span>{getModuleLabel(row.module)}</span>
+                  <small className="table-subtext">{row.module}</small>
+                </td>
                 <td>{row.metric_key}</td>
                 <td>{row.display_name}</td>
                 <td className="value-cell">{row.value_text}</td>
                 <td>
                   <StatusPill status={row.status} />
                 </td>
-                <td>{row.source_badge}</td>
-                <td>{row.freshness_status}</td>
+                <td title={row.source_badge}>{getSourceBadgeLabel(row.source_badge)}</td>
+                <td title={row.freshness_status}>{getFreshnessLabel(row.freshness_status)}</td>
                 <td>{row.observation_date || "not available"}</td>
                 <td>{row.generated_at || "not available"}</td>
-                <td>
-                  {aiContextLabel(row)}
-                </td>
+                <td>{aiContextLabel(row)}</td>
                 <td className="long-cell" title={row.missing_reason || ""}>
-                  {row.missing_reason || ""}
+                  {getMissingReasonLabel(row.missing_reason)}
                 </td>
                 <td className="long-cell" title={row.interpretation_hint || ""}>
                   {row.interpretation_hint || ""}
@@ -616,11 +612,11 @@ function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
 }
 
 function aiContextLabel(row: DashboardEvidenceRow) {
-  if (row.ai_context_allowed) return "可进入 AI 事实层";
+  if (row.ai_context_allowed) return getAiContextLabel(true);
   if (row.value !== null && row.value !== undefined) {
-    return `有值，但被阻断：${row.blocked_reason || "metadata_incomplete"}`;
+    return `有值但阻断：${row.blocked_reason || "metadata_incomplete"}`;
   }
-  return `不进入 AI 事实层：${row.blocked_reason || "not_eligible"}`;
+  return `${getAiContextLabel(false)}：${row.blocked_reason || "not_eligible"}`;
 }
 
 function uniqueSorted(values: string[]) {
@@ -635,10 +631,7 @@ function DiagnosticsView({
   refreshRuns,
   favorites,
   isLoading,
-  reload,
-  setSettings,
-  setRefreshRuns,
-  setFavorites
+  reload
 }: {
   status: ApiResult<StatusResponse>;
   providerHealth: ApiResult<ProviderHealthResponse>;
@@ -648,13 +641,8 @@ function DiagnosticsView({
   favorites: ApiResult<FavoriteAnswer[]>;
   isLoading: boolean;
   reload: () => void;
-  setSettings: (value: ApiResult<AppSettingsResponse>) => void;
-  setRefreshRuns: (value: ApiResult<RefreshRun[]>) => void;
-  setFavorites: (value: ApiResult<FavoriteAnswer[]>) => void;
 }) {
-  if (isLoading) {
-    return <LoadingState title="诊断" />;
-  }
+  if (isLoading) return <LoadingState title="诊断" />;
 
   return (
     <section className="page-stack">
@@ -674,6 +662,14 @@ function DiagnosticsView({
             <p className="error-text">{status.error || "状态不可用。"}</p>
           ) : (
             <ul className="compact-list">
+              <li>
+                <span>app</span>
+                <small>{status.data.app_name}</small>
+              </li>
+              <li>
+                <span>mode</span>
+                <small>{status.data.mode}</small>
+              </li>
               {Object.entries(status.data.api_keys_configured).map(([key, value]) => (
                 <li key={key}>
                   <span>{key}</span>
@@ -701,10 +697,6 @@ function DiagnosticsView({
                 <span>schema</span>
                 <small>{storage.data.schema_version ?? "unknown"}</small>
               </li>
-              <li>
-                <span>initialized</span>
-                <small>{storage.data.initialized ? "yes" : "no"}</small>
-              </li>
             </ul>
           )}
         </InfoPanel>
@@ -713,7 +705,7 @@ function DiagnosticsView({
           {settings.error || !settings.data ? (
             <p className="error-text">{settings.error || "settings 不可用。"}</p>
           ) : (
-            <SettingsForm current={settings.data.settings} onSaved={setSettings} />
+            <RecordMap data={settings.data.settings} />
           )}
         </InfoPanel>
 
@@ -726,13 +718,12 @@ function DiagnosticsView({
                 <StatusPill status={providerHealth.data.overall_status} />
                 <span>{providerHealthText(providerHealth.data.overall_status)}</span>
               </div>
-              <p className="muted">{JSON.stringify(providerHealth.data.summary)}</p>
               <ul className="compact-list">
                 {providerHealth.data.checks.map((check) => (
                   <li key={check.key}>
                     <span>{check.key}</span>
                     <small>
-                      {check.provider} / {check.status}
+                      {check.provider} / {getStatusLabel(check.status)}
                     </small>
                   </li>
                 ))}
@@ -742,36 +733,10 @@ function DiagnosticsView({
         </InfoPanel>
 
         <InfoPanel title="Refresh Runs">
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => createRefreshRun().then((result) => {
-              if (result.error) {
-                setRefreshRuns({ data: refreshRuns.data, error: result.error });
-                return;
-              }
-              fetchRefreshRuns().then(setRefreshRuns);
-            })}
-          >
-            写入占位 refresh run
-          </button>
           <RecordList items={refreshRuns.data || []} error={refreshRuns.error} />
         </InfoPanel>
 
         <InfoPanel title="Favorites">
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={() => createFavorite().then((result) => {
-              if (result.error) {
-                setFavorites({ data: favorites.data, error: result.error });
-                return;
-              }
-              fetchFavorites().then(setFavorites);
-            })}
-          >
-            写入占位 favorite
-          </button>
           <RecordList items={favorites.data || []} error={favorites.error} />
         </InfoPanel>
       </section>
@@ -780,96 +745,20 @@ function DiagnosticsView({
 }
 
 function providerHealthText(status: string | null | undefined) {
-  if (status === "not_run_yet") {
-    return "尚未运行健康检查";
-  }
-  return status || "unknown";
+  if (status === "not_run_yet") return "尚未运行健康检查";
+  return getStatusLabel(status || "unknown");
 }
 
-function SettingsForm({
-  current,
-  onSaved
-}: {
-  current: AppSettings;
-  onSaved: (value: ApiResult<AppSettingsResponse>) => void;
-}) {
-  const [draft, setDraft] = useState<AppSettings>({
-    ui_language: current.ui_language || "zh-CN",
-    default_context_mode: current.default_context_mode || "full",
-    search_enabled_by_default: Boolean(current.search_enabled_by_default),
-    save_chat_by_default: Boolean(current.save_chat_by_default),
-    show_cost_detail: current.show_cost_detail || "details_only"
-  });
-  const [message, setMessage] = useState<string | null>(null);
-
-  const save = () => {
-    updateSettings(draft).then((result) => {
-      onSaved(result);
-      setMessage(result.error ? result.error : "设置已保存。");
-    });
-  };
-
+function RecordMap({ data }: { data: Record<string, unknown> }) {
   return (
-    <div className="settings-form">
-      <label>
-        UI language
-        <select
-          value={draft.ui_language}
-          onChange={(event) => setDraft({ ...draft, ui_language: event.target.value })}
-        >
-          <option value="zh-CN">zh-CN</option>
-        </select>
-      </label>
-      <label>
-        context mode
-        <select
-          value={draft.default_context_mode}
-          onChange={(event) =>
-            setDraft({ ...draft, default_context_mode: event.target.value })
-          }
-        >
-          <option value="full">full</option>
-          <option value="sanitized">sanitized</option>
-        </select>
-      </label>
-      <label>
-        cost detail
-        <select
-          value={draft.show_cost_detail}
-          onChange={(event) =>
-            setDraft({ ...draft, show_cost_detail: event.target.value })
-          }
-        >
-          <option value="details_only">details_only</option>
-          <option value="always">always</option>
-          <option value="hidden">hidden</option>
-        </select>
-      </label>
-      <label className="checkbox-row">
-        <input
-          checked={Boolean(draft.search_enabled_by_default)}
-          type="checkbox"
-          onChange={(event) =>
-            setDraft({ ...draft, search_enabled_by_default: event.target.checked })
-          }
-        />
-        search enabled by default
-      </label>
-      <label className="checkbox-row">
-        <input
-          checked={Boolean(draft.save_chat_by_default)}
-          type="checkbox"
-          onChange={(event) =>
-            setDraft({ ...draft, save_chat_by_default: event.target.checked })
-          }
-        />
-        save chat by default
-      </label>
-      <button className="secondary-button" type="button" onClick={save}>
-        保存设置
-      </button>
-      {message && <p className="muted">{message}</p>}
-    </div>
+    <ul className="compact-list">
+      {Object.entries(data).map(([key, value]) => (
+        <li key={key}>
+          <span>{key}</span>
+          <small>{String(value)}</small>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -887,12 +776,8 @@ function RecordList({
   }>;
   error: string | null;
 }) {
-  if (error) {
-    return <p className="error-text">{error}</p>;
-  }
-  if (items.length === 0) {
-    return <p className="muted">暂无记录。</p>;
-  }
+  if (error) return <p className="error-text">{error}</p>;
+  if (items.length === 0) return <p className="muted">暂无记录。</p>;
   return (
     <ul className="compact-list">
       {items.slice(0, 5).map((item) => (
@@ -940,7 +825,11 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function StatusPill({ status }: { status: string }) {
-  return <span className={`status-pill ${statusClass(status)}`}>{status}</span>;
+  return (
+    <span className={`status-pill ${statusClass(status)}`} title={status}>
+      {getStatusLabel(status)}
+    </span>
+  );
 }
 
 function statusClass(status: string) {
@@ -948,9 +837,13 @@ function statusClass(status: string) {
   if (status === "stress" || status === "error") return "error";
   if (["watch", "pressure", "degraded", "stale"].includes(status)) return "warn";
   if (
-    ["missing", "not_run_yet", "research_needed", "insufficient_history", "not_available"].includes(
-      status
-    )
+    [
+      "missing",
+      "not_run_yet",
+      "research_needed",
+      "insufficient_history",
+      "not_available"
+    ].includes(status)
   ) {
     return "missing";
   }

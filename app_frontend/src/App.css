@@ -176,6 +176,20 @@ button {
   font-size: 17px;
 }
 
+.module-card h3 {
+  display: grid;
+  gap: 2px;
+}
+
+.module-key,
+.table-subtext {
+  display: block;
+  margin-top: 2px;
+  color: #60758a;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .module-card p,
 .placeholder-page p {
   line-height: 1.55;
@@ -290,6 +304,14 @@ button {
   margin: 0;
 }
 
+.metric-hint,
+.metric-reason {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .compact-list {
   display: grid;
   gap: 10px;
@@ -346,21 +368,22 @@ button {
 
 .evidence-table-wrap {
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .evidence-table {
   width: 100%;
   min-width: 1280px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .evidence-table th,
 .evidence-table td {
   border-bottom: 1px solid #edf1f4;
-  padding: 10px;
+  padding: 7px 8px;
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .evidence-table th {
@@ -377,7 +400,19 @@ button {
 
 .long-cell {
   max-width: 260px;
-  overflow-wrap: anywhere;
+  min-width: 220px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+}
+
+.evidence-table.compact {
+  min-width: 920px;
+}
+
+.evidence-table.compact th,
+.evidence-table.compact td {
+  padding: 6px 8px;
 }
 
 .json-panel {
