@@ -4,7 +4,8 @@ const moduleLabels: Record<string, string> = {
   real_yield_pressure: "实际收益率压力",
   inflation_energy_pressure: "通胀与能源压力",
   equity_trend: "权益趋势",
-  portfolio_deviation: "组合偏离"
+  portfolio_deviation: "组合偏离",
+  labor_macro: "劳动力宏观"
 };
 
 const statusLabels: Record<string, string> = {

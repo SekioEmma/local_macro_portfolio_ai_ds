@@ -13,6 +13,11 @@ import {
   getMissingReasonLabel,
   getSourceBadgeLabel
 } from "../utils/displayLabels";
+import {
+  aiContextClass,
+  freshnessClass,
+  sourceBadgeClass
+} from "../utils/styleClasses";
 
 type ModuleDetailDrawerProps = {
   moduleKey: string;
@@ -84,7 +89,7 @@ export function ModuleDetailDrawer({
 
         <div className="drawer-status-row">
           <MetricBadge status={moduleSummary.status} />
-          <span>{getSourceBadgeLabel(moduleSummary.source_badge || "missing")}</span>
+          <SourceChip sourceBadge={moduleSummary.source_badge || "missing"} />
           <span>{moduleSummary.updated_at || "更新时间不可用"}</span>
         </div>
 
@@ -198,11 +203,15 @@ function MetricDetail({ metric }: { metric: DashboardMetric }) {
       <dl>
         <div>
           <dt>来源</dt>
-          <dd title={metric.source_badge}>{getSourceBadgeLabel(metric.source_badge)}</dd>
+          <dd>
+            <SourceChip sourceBadge={metric.source_badge} />
+          </dd>
         </div>
         <div>
           <dt>新鲜度</dt>
-          <dd title={metric.freshness_status}>{getFreshnessLabel(metric.freshness_status)}</dd>
+          <dd>
+            <FreshnessChip freshnessStatus={metric.freshness_status} />
+          </dd>
         </div>
         <div>
           <dt>观测</dt>
@@ -210,7 +219,13 @@ function MetricDetail({ metric }: { metric: DashboardMetric }) {
         </div>
         <div>
           <dt>AI 事实层</dt>
-          <dd>{getAiContextLabel(metric.ai_context_allowed)}</dd>
+          <dd>
+            <span
+              className={`data-chip ai-chip ${aiContextClass(metric.ai_context_allowed)}`}
+            >
+              {getAiContextLabel(metric.ai_context_allowed)}
+            </span>
+          </dd>
         </div>
       </dl>
       {metadataIncomplete && (
@@ -226,6 +241,28 @@ function MetricDetail({ metric }: { metric: DashboardMetric }) {
         </p>
       )}
     </article>
+  );
+}
+
+function SourceChip({ sourceBadge }: { sourceBadge: string }) {
+  return (
+    <span
+      className={`data-chip source-chip ${sourceBadgeClass(sourceBadge)}`}
+      title={sourceBadge}
+    >
+      {getSourceBadgeLabel(sourceBadge)}
+    </span>
+  );
+}
+
+function FreshnessChip({ freshnessStatus }: { freshnessStatus: string }) {
+  return (
+    <span
+      className={`data-chip freshness-chip ${freshnessClass(freshnessStatus)}`}
+      title={freshnessStatus}
+    >
+      {getFreshnessLabel(freshnessStatus)}
+    </span>
   );
 }
 

@@ -4,6 +4,11 @@ import {
   getFreshnessLabel,
   getSourceBadgeLabel
 } from "../utils/displayLabels";
+import {
+  aiContextClass,
+  freshnessClass,
+  sourceBadgeClass
+} from "../utils/styleClasses";
 import { MetricBadge } from "./MetricBadge";
 
 type EvidenceRowsTableProps = {
@@ -40,10 +45,16 @@ export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTablePr
               <td>
                 <MetricBadge status={row.status} />
               </td>
-              <td title={row.source_badge}>{getSourceBadgeLabel(row.source_badge)}</td>
-              <td title={row.freshness_status}>{getFreshnessLabel(row.freshness_status)}</td>
+              <td>
+                <SourceChip sourceBadge={row.source_badge} />
+              </td>
+              <td>
+                <FreshnessChip freshnessStatus={row.freshness_status} />
+              </td>
               <td>{row.observation_date || "not available"}</td>
-              <td>{aiContextLabel(row)}</td>
+              <td>
+                <AiContextChip row={row} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -58,6 +69,39 @@ function aiContextLabel(row: DashboardEvidenceRow) {
     return `有值但阻断：${row.blocked_reason || "metadata_incomplete"}`;
   }
   return `${getAiContextLabel(false)}：${row.blocked_reason || "not_eligible"}`;
+}
+
+function SourceChip({ sourceBadge }: { sourceBadge: string }) {
+  return (
+    <span
+      className={`data-chip source-chip ${sourceBadgeClass(sourceBadge)}`}
+      title={sourceBadge}
+    >
+      {getSourceBadgeLabel(sourceBadge)}
+    </span>
+  );
+}
+
+function FreshnessChip({ freshnessStatus }: { freshnessStatus: string }) {
+  return (
+    <span
+      className={`data-chip freshness-chip ${freshnessClass(freshnessStatus)}`}
+      title={freshnessStatus}
+    >
+      {getFreshnessLabel(freshnessStatus)}
+    </span>
+  );
+}
+
+function AiContextChip({ row }: { row: DashboardEvidenceRow }) {
+  return (
+    <span
+      className={`data-chip ai-chip ${aiContextClass(row.ai_context_allowed)}`}
+      title={row.blocked_reason || ""}
+    >
+      {aiContextLabel(row)}
+    </span>
+  );
 }
 
 function safeValueText(valueText: string, status: string) {

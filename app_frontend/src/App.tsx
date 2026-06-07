@@ -26,7 +26,6 @@ import type {
 } from "./types";
 import {
   formatCompactHint,
-  formatSourceFreshness,
   getAiContextLabel,
   getFreshnessLabel,
   getMissingReasonLabel,
@@ -34,6 +33,12 @@ import {
   getSourceBadgeLabel,
   getStatusLabel
 } from "./utils/displayLabels";
+import {
+  aiContextClass,
+  freshnessClass,
+  sourceBadgeClass,
+  statusClass
+} from "./utils/styleClasses";
 
 type ViewKey = "dashboard" | "evidence" | "chat" | "account" | "diagnostics";
 
@@ -303,7 +308,9 @@ function ModuleCard({
       <dl>
         <div>
           <dt>来源</dt>
-          <dd>{getSourceBadgeLabel(module.source_badge || "missing")}</dd>
+          <dd>
+            <SourceChip sourceBadge={module.source_badge || "missing"} />
+          </dd>
         </div>
         <div>
           <dt>更新</dt>
@@ -338,7 +345,10 @@ function MetricRow({ metric }: { metric: DashboardMetric }) {
     <div className="metric-row">
       <div>
         <strong>{metric.display_name}</strong>
-        <small>{formatSourceFreshness(metric.source_badge, metric.freshness_status)}</small>
+        <span className="chip-row">
+          <SourceChip sourceBadge={metric.source_badge} />
+          <FreshnessChip freshnessStatus={metric.freshness_status} />
+        </span>
       </div>
       <div className="metric-value">
         <span>{metric.value_text}</span>
@@ -591,16 +601,26 @@ function EvidenceTable({ rows }: { rows: DashboardEvidenceRow[] }) {
                 <td>
                   <StatusPill status={row.status} />
                 </td>
-                <td title={row.source_badge}>{getSourceBadgeLabel(row.source_badge)}</td>
-                <td title={row.freshness_status}>{getFreshnessLabel(row.freshness_status)}</td>
+                <td>
+                  <SourceChip sourceBadge={row.source_badge} />
+                </td>
+                <td>
+                  <FreshnessChip freshnessStatus={row.freshness_status} />
+                </td>
                 <td>{row.observation_date || "not available"}</td>
                 <td>{row.generated_at || "not available"}</td>
-                <td>{aiContextLabel(row)}</td>
+                <td>
+                  <AiContextChip row={row} />
+                </td>
                 <td className="long-cell" title={row.missing_reason || ""}>
-                  {getMissingReasonLabel(row.missing_reason)}
+                  <span className="long-cell-text">
+                    {getMissingReasonLabel(row.missing_reason)}
+                  </span>
                 </td>
                 <td className="long-cell" title={row.interpretation_hint || ""}>
-                  {row.interpretation_hint || ""}
+                  <span className="long-cell-text">
+                    {row.interpretation_hint || ""}
+                  </span>
                 </td>
               </tr>
             ))}
@@ -617,6 +637,39 @@ function aiContextLabel(row: DashboardEvidenceRow) {
     return `有值但阻断：${row.blocked_reason || "metadata_incomplete"}`;
   }
   return `${getAiContextLabel(false)}：${row.blocked_reason || "not_eligible"}`;
+}
+
+function SourceChip({ sourceBadge }: { sourceBadge: string }) {
+  return (
+    <span
+      className={`data-chip source-chip ${sourceBadgeClass(sourceBadge)}`}
+      title={sourceBadge}
+    >
+      {getSourceBadgeLabel(sourceBadge)}
+    </span>
+  );
+}
+
+function FreshnessChip({ freshnessStatus }: { freshnessStatus: string }) {
+  return (
+    <span
+      className={`data-chip freshness-chip ${freshnessClass(freshnessStatus)}`}
+      title={freshnessStatus}
+    >
+      {getFreshnessLabel(freshnessStatus)}
+    </span>
+  );
+}
+
+function AiContextChip({ row }: { row: DashboardEvidenceRow }) {
+  return (
+    <span
+      className={`data-chip ai-chip ${aiContextClass(row.ai_context_allowed)}`}
+      title={row.blocked_reason || ""}
+    >
+      {aiContextLabel(row)}
+    </span>
+  );
 }
 
 function uniqueSorted(values: string[]) {
@@ -830,24 +883,6 @@ function StatusPill({ status }: { status: string }) {
       {getStatusLabel(status)}
     </span>
   );
-}
-
-function statusClass(status: string) {
-  if (status === "ok") return "ok";
-  if (status === "stress" || status === "error") return "error";
-  if (["watch", "pressure", "degraded", "stale"].includes(status)) return "warn";
-  if (
-    [
-      "missing",
-      "not_run_yet",
-      "research_needed",
-      "insufficient_history",
-      "not_available"
-    ].includes(status)
-  ) {
-    return "missing";
-  }
-  return "unknown";
 }
 
 function LoadingState({ title }: { title: string }) {
