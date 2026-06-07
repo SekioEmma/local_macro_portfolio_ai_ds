@@ -103,11 +103,24 @@ EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
     "nasdaq100_60d_return",
     "nasdaq_vs_sp500_30d",
 }
+OIL_HISTORICAL_DERIVED_METRIC_KEYS = {
+    "wti_30d_change",
+    "brent_30d_change",
+}
 EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
     " Derived from local market history; underlying source includes yfinance "
     "unofficial_fallback/proxy observations in the market history store; not an "
     "official market breadth or valuation measure."
 )
+OIL_HISTORICAL_DERIVED_HINT_SUFFIX = (
+    " Derived from local market history; underlying source should be inspected via "
+    "the market history store and remains a derived energy-pressure input, not a "
+    "real-time oil quote or inflation forecast."
+)
+METRIC_ALIASES = {
+    "wti_30d_change": ("wti_oil_30d_change",),
+    "brent_30d_change": ("brent_oil_30d_change",),
+}
 INFLATION_YOY_METRIC_KEYS = {"core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy"}
 INDEX_LEVEL_YOY_MISSING_REASON = (
     "Only index level is available; YoY requires historical comparison."
@@ -125,7 +138,7 @@ SOURCE_BADGE_ALIASES = {
     "cached_report": "derived",
 }
 CORE_METRIC_KEYS = {
-    "credit_stress": {"high_yield_spread", "vix", "credit_stress_status"},
+    "credit_stress": {"high_yield_spread", "investment_grade_spread", "vix", "credit_stress_status"},
     "rate_pressure": {"dgs2", "dgs10", "dgs30", "dgs30_distance_to_5pct"},
     "real_yield_pressure": {"dfii10", "t10yie", "real_yield_pressure_status"},
     "inflation_energy_pressure": {
@@ -154,7 +167,7 @@ METRIC_SPECS = {
             "Investment-grade spread",
             "percent",
             "percent",
-            "research_needed",
+            "missing",
         ),
         ("vix", "VIX", "index", "number", "missing"),
         ("credit_stress_status", "Credit stress status", None, "text", "missing"),
@@ -750,8 +763,21 @@ def _key_metrics_for_module(
         for spec in METRIC_SPECS.get(module_key, [])
     ]
     if module_key == "equity_trend":
-        return _apply_equity_historical_derived_metrics(
+        return _apply_historical_derived_metrics(
             metrics,
+            module_key="equity_trend",
+            metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+            hint_suffix=EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX,
+            fallback_source="local_market_history",
+            db_path=market_history_db_path,
+        )
+    if module_key == "inflation_energy_pressure":
+        return _apply_historical_derived_metrics(
+            metrics,
+            module_key="inflation_energy_pressure",
+            metric_keys=OIL_HISTORICAL_DERIVED_METRIC_KEYS,
+            hint_suffix=OIL_HISTORICAL_DERIVED_HINT_SUFFIX,
+            fallback_source="local_market_history",
             db_path=market_history_db_path,
         )
     return metrics
@@ -871,9 +897,13 @@ def _build_metric(
     )
 
 
-def _apply_equity_historical_derived_metrics(
+def _apply_historical_derived_metrics(
     metrics: list[DashboardMetric],
     *,
+    module_key: str,
+    metric_keys: set[str],
+    hint_suffix: str,
+    fallback_source: str,
     db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
     target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
@@ -881,30 +911,40 @@ def _apply_equity_historical_derived_metrics(
         item.metric_key: item
         for item in historical_derived_metrics.build_historical_dashboard_candidates(
             db_path=target_db_path,
-        ).get("equity_trend", [])
-        if item.metric_key in EQUITY_HISTORICAL_DERIVED_METRIC_KEYS
+        ).get(module_key, [])
+        if item.metric_key in metric_keys
     }
     return [
-        _equity_historical_derived_metric(metric, candidates.get(metric.metric_key))
+        _historical_derived_metric(
+            metric,
+            candidates.get(metric.metric_key),
+            metric_keys=metric_keys,
+            hint_suffix=hint_suffix,
+            fallback_source=fallback_source,
+        )
         for metric in metrics
     ]
 
 
-def _equity_historical_derived_metric(
+def _historical_derived_metric(
     original: DashboardMetric,
     candidate: historical_derived_metrics.HistoricalDerivedMetric | None,
+    *,
+    metric_keys: set[str],
+    hint_suffix: str,
+    fallback_source: str,
 ) -> DashboardMetric:
-    if original.metric_key not in EQUITY_HISTORICAL_DERIVED_METRIC_KEYS:
+    if original.metric_key not in metric_keys:
         return original
     if original.status != "insufficient_history":
         return original
     if candidate is None or candidate.status != "ok" or candidate.value is None:
         return original
     value = _dashboard_historical_derived_value(candidate)
-    hint = _dashboard_historical_derived_hint(candidate)
+    hint = _dashboard_historical_derived_hint(candidate, hint_suffix=hint_suffix)
     ai_context_allowed = bool(candidate.ai_context_allowed) and _ai_context_allowed(
         status="ok",
-        source="local_market_history",
+        source=fallback_source,
         source_badge="derived",
         observation_date=candidate.observation_date,
         generated_at=candidate.generated_at,
@@ -918,7 +958,7 @@ def _equity_historical_derived_metric(
         value_text=_format_historical_derived_value(value, candidate.unit),
         unit=original.unit,
         status="ok",
-        source="local_market_history",
+        source=fallback_source,
         source_badge="derived",
         observation_date=candidate.observation_date,
         generated_at=candidate.generated_at,
@@ -948,9 +988,11 @@ def _format_historical_derived_value(value: float, unit: str | None) -> str:
 
 def _dashboard_historical_derived_hint(
     candidate: historical_derived_metrics.HistoricalDerivedMetric,
+    *,
+    hint_suffix: str,
 ) -> str:
     base = (candidate.interpretation_hint or "").strip()
-    return (base + EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX).strip()
+    return (base + hint_suffix).strip()
 
 
 def _equity_historical_derived_metrics_available(
@@ -1282,6 +1324,10 @@ def _derived_metric(
     metric_key: str,
     reports: tuple[ReportState, ...],
 ) -> DashboardMetric | None:
+    if metric_key == "credit_stress_status":
+        if _find_metric("credit_stress_status", reports, include_aliases=False) is not None:
+            return None
+        return _credit_stress_status_metric(reports)
     if metric_key == "dgs30_distance_to_5pct":
         found = _find_metric("dgs30", reports)
         if found is None or _dependency_unusable(found):
@@ -1381,6 +1427,107 @@ def _derived_metric(
     return None
 
 
+def _credit_stress_status_metric(
+    reports: tuple[ReportState, ...],
+) -> DashboardMetric:
+    high_yield = _usable_numeric_metric("high_yield_spread", reports)
+    investment_grade = _usable_numeric_metric("investment_grade_spread", reports)
+    vix = _usable_numeric_metric("vix", reports)
+    generated_at = _latest_metric_timestamp(
+        [item for item in (high_yield, investment_grade, vix) if item is not None]
+    ) or _first_updated_at([report for report in reports if report.data is not None])
+    observation_date = _latest_metric_observation_date(
+        [item for item in (high_yield, investment_grade, vix) if item is not None]
+    )
+    hint = (
+        "Derived from available credit spread evidence plus VIX. VIX alone is not "
+        "sufficient to infer systemic credit stress or crisis."
+    )
+
+    if high_yield is None and investment_grade is None:
+        return _blocked_dependency_metric(
+            metric_key="credit_stress_status",
+            display_name="Credit stress status",
+            unit=None,
+            status="unknown" if vix is not None else "missing",
+            missing_reason=(
+                "Credit spread evidence is missing; VIX alone is not sufficient "
+                "to classify credit stress."
+            ),
+            generated_at=generated_at,
+            interpretation_hint=hint,
+        )
+
+    high_yield_value = high_yield[0] if high_yield else None
+    investment_grade_value = investment_grade[0] if investment_grade else None
+    vix_value = vix[0] if vix else None
+    status, value, missing_reason = _credit_status_from_values(
+        high_yield=high_yield_value,
+        investment_grade=investment_grade_value,
+        vix=vix_value,
+    )
+    return DashboardMetric(
+        metric_key="credit_stress_status",
+        display_name="Credit stress status",
+        value=value,
+        value_text=_format_value(value, "text", status),
+        unit=None,
+        status=status,
+        source="dashboard_compact",
+        source_badge="derived",
+        observation_date=observation_date,
+        generated_at=generated_at,
+        freshness_status="fresh" if observation_date or generated_at else "unknown",
+        missing_reason=missing_reason,
+        interpretation_hint=hint,
+        ai_context_allowed=_ai_context_allowed(
+            status=status,
+            source="dashboard_compact",
+            source_badge="derived",
+            observation_date=observation_date,
+            generated_at=generated_at,
+            freshness_status="fresh" if observation_date or generated_at else "unknown",
+            interpretation_hint=hint,
+        ),
+    )
+
+
+def _credit_status_from_values(
+    *,
+    high_yield: float | None,
+    investment_grade: float | None,
+    vix: float | None,
+) -> tuple[str, str, str | None]:
+    credit_values = [value for value in (high_yield, investment_grade) if value is not None]
+    if not credit_values:
+        return "unknown", "spread_data_missing", "Credit spread evidence is missing."
+
+    high_yield_stress = high_yield is not None and high_yield >= 8.0
+    investment_grade_stress = investment_grade is not None and investment_grade >= 3.0
+    high_yield_pressure = high_yield is not None and high_yield >= 5.0
+    investment_grade_pressure = investment_grade is not None and investment_grade >= 2.0
+    high_yield_watch = high_yield is not None and high_yield >= 3.5
+    investment_grade_watch = investment_grade is not None and investment_grade >= 1.5
+    vix_pressure = vix is not None and vix >= 30.0
+    vix_watch = vix is not None and vix >= 25.0
+
+    if high_yield_stress or investment_grade_stress:
+        return "stress", "credit_spreads_stressed", None
+    if high_yield_pressure or investment_grade_pressure or (
+        vix_pressure and (high_yield_watch or investment_grade_watch)
+    ):
+        return "pressure", "credit_pressure", None
+    if high_yield_watch or investment_grade_watch or vix_watch:
+        return "watch", "credit_watch", None
+    if investment_grade is None:
+        return (
+            "watch",
+            "partial_coverage",
+            "Investment-grade spread is missing; credit stress coverage is partial.",
+        )
+    return "ok", "credit_calm", None
+
+
 def _derived_metric_response(
     metric_key: str,
     display_name: str,
@@ -1445,6 +1592,7 @@ def _blocked_dependency_metric(
         generated_at=generated_at,
         freshness_status="missing"
         if normalized_status == "missing"
+        else "unknown" if normalized_status == "unknown"
         else "insufficient_history",
         missing_reason=missing_reason,
         interpretation_hint=interpretation_hint,
@@ -1490,8 +1638,14 @@ def _missing_metric(
 def _find_metric(
     metric_key: str,
     reports: tuple[ReportState, ...],
+    *,
+    include_aliases: bool = True,
 ) -> tuple[Any, dict[str, Any], ReportState] | None:
-    metric_keys = (metric_key, *official_macro_pack.aliases_for(metric_key))
+    metric_keys = (
+        (metric_key, *METRIC_ALIASES.get(metric_key, ()), *official_macro_pack.aliases_for(metric_key))
+        if include_aliases
+        else (metric_key,)
+    )
     for report in reports:
         if report.data is None:
             continue
@@ -1504,6 +1658,39 @@ def _find_metric(
             value, payload = found
             return value, payload, report
     return None
+
+
+def _usable_numeric_metric(
+    metric_key: str,
+    reports: tuple[ReportState, ...],
+) -> tuple[float, dict[str, Any], ReportState] | None:
+    found = _find_metric(metric_key, reports)
+    if found is None or _dependency_unusable(found):
+        return None
+    value = _to_float(found[0])
+    if not isinstance(value, float):
+        return None
+    return value, found[1], found[2]
+
+
+def _latest_metric_timestamp(
+    found_items: list[tuple[float, dict[str, Any], ReportState]],
+) -> str | None:
+    candidates = [
+        _metric_generated_at(payload, report)
+        for _, payload, report in found_items
+    ]
+    return max([item for item in candidates if item], default=None)
+
+
+def _latest_metric_observation_date(
+    found_items: list[tuple[float, dict[str, Any], ReportState]],
+) -> str | None:
+    candidates = [
+        _metric_observation_date(payload)
+        for _, payload, _ in found_items
+    ]
+    return max([item for item in candidates if item], default=None)
 
 
 def _alias_payload_unusable(found: tuple[Any, dict[str, Any]]) -> bool:
@@ -1740,6 +1927,8 @@ def _missing_value_text(status: str) -> str:
         return "stale"
     if status == "not_available":
         return "not available"
+    if status == "unknown":
+        return "unknown"
     return "missing"
 
 

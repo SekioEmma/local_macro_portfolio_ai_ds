@@ -135,6 +135,36 @@ Each Dashboard module reports:
 - `weak`
 - `unavailable`
 
+## Module Coverage Summary Fields
+
+`module_coverage_summary` is a machine-readable per-module rollup for fast gap
+triage:
+
+- `usable_row_count_by_module`
+- `missing_count_by_module`
+- `research_needed_count_by_module`
+- `insufficient_history_count_by_module`
+- `official_count_by_module`
+- `derived_or_proxy_count_by_module`
+- `ai_context_allowed_count_by_module`
+- `coverage_status_by_module`
+
+The top-level audit also reports:
+
+- `top_missing_metrics`
+- `top_research_needed_metrics`
+- `top_insufficient_history_metrics`
+- `dashboard_overall_degraded_reasons`
+- `data_sufficiency_assessment`
+
+`data_sufficiency_assessment.daily_macro_monitoring` can be
+`partial_but_usable` when every main dashboard module has at least one AI
+factual row. This does not mean the data is sufficient for crisis confirmation,
+valuation judgment, or market-breadth judgment.
+`insufficient_for_crisis_confirmation` remains `true` because systemic crisis
+confirmation requires broader funding, labor, earnings, and multi-signal credit
+evidence than the compact dashboard provides.
+
 ## Portfolio Compact Fields
 
 The audit includes a `portfolio_compact` block for the local

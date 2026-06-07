@@ -33,6 +33,13 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "blocked_reason_counts" in result
     assert "source_badge_distribution" in result
     assert "ai_context_allowed_by_module" in result
+    assert "module_coverage_summary" in result
+    assert "usable_row_count_by_module" in result["module_coverage_summary"]
+    assert "top_missing_metrics" in result
+    assert "top_research_needed_metrics" in result
+    assert "top_insufficient_history_metrics" in result
+    assert "dashboard_overall_degraded_reasons" in result
+    assert "data_sufficiency_assessment" in result
     assert "portfolio_compact" in result
     assert "portfolio_compact_available" in result["portfolio_compact"]
     assert result["module_coverage"]
@@ -548,6 +555,49 @@ def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path)
     assert provider["provider_health_transient_error_count"] == 1
     assert provider["official_fallback_ok_count"] == 1
     assert provider["official_fallback_ok_providers"] == ["U.S. Treasury"]
+
+
+def test_audit_reports_module_coverage_summary_and_degraded_reasons(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "financial_conditions": {"label": "partial"},
+            "high_yield_spread": {
+                "value": 3.1,
+                "status": "ok",
+                "source": "FRED:BAMLH0A0HYM2",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+            "vix": {
+                "value": 18.0,
+                "status": "ok",
+                "source": "CBOE",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+
+    result = audit.build_coverage_audit(reports_dir=tmp_path)
+    summary = result["module_coverage_summary"]
+
+    assert summary["usable_row_count_by_module"]["credit_stress"] >= 2
+    assert summary["missing_count_by_module"]["credit_stress"] >= 1
+    assert summary["official_count_by_module"]["credit_stress"] >= 2
+    assert summary["derived_or_proxy_count_by_module"]["credit_stress"] >= 1
+    assert any(
+        "credit_stress" in reason and "blocked_core_metrics" in reason
+        for reason in result["dashboard_overall_degraded_reasons"]
+    )
+    assert result["data_sufficiency_assessment"]["insufficient_for_crisis_confirmation"] is True
+    assert result["data_sufficiency_assessment"]["insufficient_for_valuation_judgment"] is True
+    assert result["data_sufficiency_assessment"]["insufficient_for_breadth_judgment"] is True
 
 
 def test_audit_detects_metadata_anomalies():

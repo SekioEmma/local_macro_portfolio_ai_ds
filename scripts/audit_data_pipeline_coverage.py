@@ -88,12 +88,24 @@ def build_coverage_audit(
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows)
     provider_health = _provider_health_audit(summary.provider_health)
+    module_coverage = _module_coverage(summary.modules, rows, last_good)
 
     return {
         "generated_at": summary.generated_at,
         "overall_status": summary.overall_status,
         "coverage_summary": _coverage_summary(rows, last_good),
-        "module_coverage": _module_coverage(summary.modules, rows, last_good),
+        "module_coverage": module_coverage,
+        "module_coverage_summary": _module_coverage_summary(module_coverage, rows),
+        "top_missing_metrics": _top_gap_metrics(rows, "missing"),
+        "top_research_needed_metrics": _top_gap_metrics(rows, "research_needed"),
+        "top_insufficient_history_metrics": _top_gap_metrics(rows, "insufficient_history"),
+        "dashboard_overall_degraded_reasons": _dashboard_overall_degraded_reasons(
+            summary.overall_status,
+            summary.modules,
+            provider_health,
+            rows,
+        ),
+        "data_sufficiency_assessment": _data_sufficiency_assessment(rows),
         "portfolio_compact": portfolio_compact,
         "last_good_cache": last_good,
         "historical_store": historical_store,
@@ -225,6 +237,128 @@ def _module_coverage_status(usable: int, total: int) -> str:
     if usable / total >= 0.5:
         return "partial"
     return "weak"
+
+
+def _module_coverage_summary(
+    module_coverage: list[dict[str, Any]],
+    rows: list[DashboardEvidenceRow],
+) -> dict[str, Any]:
+    rows_by_module = {
+        item["module"]: [row for row in rows if row.module == item["module"]]
+        for item in module_coverage
+    }
+    modules = [item["module"] for item in module_coverage]
+    return {
+        "usable_row_count_by_module": {
+            item["module"]: item["usable_fact_count"] for item in module_coverage
+        },
+        "missing_count_by_module": {
+            item["module"]: item["missing_count"] for item in module_coverage
+        },
+        "research_needed_count_by_module": {
+            item["module"]: item["research_needed_count"] for item in module_coverage
+        },
+        "insufficient_history_count_by_module": {
+            item["module"]: item["insufficient_history_count"] for item in module_coverage
+        },
+        "official_count_by_module": {
+            module: sum(1 for row in rows_by_module[module] if row.source_badge == "official")
+            for module in modules
+        },
+        "derived_or_proxy_count_by_module": {
+            module: sum(
+                1
+                for row in rows_by_module[module]
+                if row.source_badge in {"derived", "proxy", "unofficial_fallback"}
+            )
+            for module in modules
+        },
+        "ai_context_allowed_count_by_module": {
+            item["module"]: item["ai_context_allowed_count"] for item in module_coverage
+        },
+        "coverage_status_by_module": {
+            item["module"]: item["module_coverage_status"] for item in module_coverage
+        },
+    }
+
+
+def _top_gap_metrics(
+    rows: list[DashboardEvidenceRow],
+    status: str,
+    *,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "module": row.module,
+            "metric_key": row.metric_key,
+            "status": row.status,
+            "source_badge": row.source_badge,
+            "missing_reason": row.missing_reason,
+            "blocked_reason": row.blocked_reason,
+        }
+        for row in rows
+        if row.status == status
+    ][:limit]
+
+
+def _dashboard_overall_degraded_reasons(
+    overall_status: str,
+    modules: dict[str, Any],
+    provider_health: dict[str, Any],
+    rows: list[DashboardEvidenceRow],
+) -> list[str]:
+    reasons: list[str] = []
+    if overall_status == "ok":
+        return reasons
+    for module_key, module in modules.items():
+        if module.status != "ok":
+            reasons.append(f"{module_key}: module_status={module.status}")
+        blocked_core = [
+            row.metric_key
+            for row in rows
+            if row.module == module_key
+            and row.metric_key in dashboard_service.CORE_METRIC_KEYS.get(module_key, set())
+            and row.status in BAD_AI_STATUSES
+        ]
+        if blocked_core:
+            reasons.append(f"{module_key}: blocked_core_metrics={','.join(sorted(blocked_core))}")
+    provider_status = provider_health.get("overall_status")
+    if provider_status not in {None, "ok"}:
+        reasons.append(f"provider_health={provider_status}")
+    return sorted(set(reasons))
+
+
+def _data_sufficiency_assessment(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    usable_by_module = {
+        module: sum(1 for row in rows if row.module == module and row.ai_context_allowed)
+        for module in sorted({row.module for row in rows})
+    }
+    return {
+        "daily_macro_monitoring": (
+            "partial_but_usable"
+            if all(
+                usable_by_module.get(module, 0) > 0
+                for module in (
+                    "credit_stress",
+                    "rate_pressure",
+                    "real_yield_pressure",
+                    "inflation_energy_pressure",
+                    "equity_trend",
+                    "portfolio_deviation",
+                )
+            )
+            else "insufficient"
+        ),
+        "insufficient_for_crisis_confirmation": True,
+        "insufficient_for_valuation_judgment": True,
+        "insufficient_for_breadth_judgment": True,
+        "notes": [
+            "Daily monitoring can use available rates, inflation, labor, equity, portfolio, and partial credit evidence.",
+            "Crisis confirmation still requires broader credit/funding/labor/earnings evidence than this dashboard provides.",
+            "Valuation and breadth/concentration remain outside configured audited data.",
+        ],
+    }
 
 
 def _metadata_anomalies(rows: list[DashboardEvidenceRow]) -> list[dict[str, Any]]:
@@ -1067,6 +1201,22 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
     ]
     for key, value in audit["coverage_summary"].items():
         lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Module Coverage Summary", ""])
+    for key, value in audit["module_coverage_summary"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Dashboard Degraded Reasons", ""])
+    for reason in audit["dashboard_overall_degraded_reasons"]:
+        lines.append(f"- {reason}")
+    lines.extend(["", "## Data Sufficiency Assessment", ""])
+    for key, value in audit["data_sufficiency_assessment"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Top Gaps", ""])
+    for key in (
+        "top_missing_metrics",
+        "top_research_needed_metrics",
+        "top_insufficient_history_metrics",
+    ):
+        lines.append(f"- {key}: {audit[key]}")
     lines.extend(["", "## Module Coverage", ""])
     for item in audit["module_coverage"]:
         lines.append(

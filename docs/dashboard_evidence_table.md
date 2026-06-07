@@ -70,6 +70,9 @@ Missing, research-needed, insufficient-history, stale, and not-available states 
 - DGS Treasury series are daily, not intraday.
 - `dgs2`, `dgs30`, `dfii10`, `t10yie`, `core_cpi_yoy`, `core_pce_yoy`, `ppiaco_yoy`, `unemployment_rate`, and `initial_jobless_claims` use official macro-pack metadata when compact local values are present.
 - Labor metrics appear as `labor_macro` evidence rows for audit coverage; they are not homepage cards.
+- `investment_grade_spread` can use FRED `BAMLC0A0CM` through the existing financial-conditions provider path. HYG/LQD remain proxy history only and must not be marked official.
+- `credit_stress_status` is derived from credit spread evidence plus VIX; VIX alone must not confirm crisis or systemic credit stress.
+- `wti_30d_change` and `brent_30d_change` may use existing FRED oil compact aliases or local market-history derived rows. They remain derived energy-pressure inputs, not real-time oil quotes.
 - DGS breakout confirmation requires explicit compact evidence.
 - PPIACO is not final demand PPI.
 - PPI final demand remains `research_needed` until a verified official series id is configured.

@@ -23,6 +23,7 @@ MACRO_DATA_KEYS = ("dgs10", "fedfunds", "cpi", "pce", "nonfarm")
 FX_DATA_KEYS = ("usd_cny",)
 FINANCIAL_CONDITION_KEYS = (
     "high_yield_spread",
+    "investment_grade_spread",
     "vix",
     "real_yield_10y",
     "breakeven_inflation_10y",
@@ -242,6 +243,7 @@ def get_market_data_package(
         key: financial_conditions[key]
         for key in (
             "high_yield_spread",
+            "investment_grade_spread",
             "vix",
             "real_yield_10y",
             "breakeven_inflation_10y",

@@ -261,6 +261,11 @@ data_quality:
     max_stale_days: 7
     source_tier: "official_or_public_data_api"
     importance: "financial_conditions"
+  investment_grade_spread:
+    expected_frequency: "daily"
+    max_stale_days: 7
+    source_tier: "official_or_public_data_api"
+    importance: "financial_conditions"
   vix:
     expected_frequency: "daily"
     max_stale_days: 7
@@ -436,6 +441,7 @@ macro_regime_series:
 
 financial_condition_keys:
   - high_yield_spread
+  - investment_grade_spread
   - vix
   - real_yield_10y
   - breakeven_inflation_10y
@@ -453,6 +459,15 @@ financial_conditions:
     source_tier: "official_or_public_data_api"
     interpretation_hint: "Higher values may indicate rising credit stress."
     risk_relevance: "Helps distinguish valuation pullback from credit stress."
+  investment_grade_spread:
+    provider: "fred"
+    series_id: "BAMLC0A0CM"
+    name: "ICE BofA US Corporate Index Option-Adjusted Spread"
+    unit: "percent"
+    asset_type: "credit_spread"
+    source_tier: "official_or_public_data_api"
+    interpretation_hint: "Investment-grade corporate OAS from FRED; lower-risk credit spread context, not a crisis signal by itself."
+    risk_relevance: "Adds higher-quality credit spread coverage so VIX and high-yield are not the only stress inputs."
   vix:
     provider: "fred"
     series_id: "VIXCLS"

@@ -85,6 +85,37 @@ def test_rate_and_oil_metrics_are_not_replaced_by_equity_history(monkeypatch, tm
     assert _metric(data["modules"]["inflation_energy_pressure"], "wti_30d_change")[
         "status"
     ] == "insufficient_history"
+    assert _metric(data["modules"]["inflation_energy_pressure"], "wti_30d_change")[
+        "ai_context_allowed"
+    ] is False
+
+
+def test_oil_historical_derived_metrics_integrate_into_dashboard(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
+    _insert(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
+    _insert(db_path, "brent", "2026-01-31", 75.0, source_series="DCOILBRENTEU")
+    _insert(db_path, "brent", "2026-03-02", 72.0, source_series="DCOILBRENTEU")
+    _write_market_report(tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    inflation = data["modules"]["inflation_energy_pressure"]
+    wti = _metric(inflation, "wti_30d_change")
+    brent = _metric(inflation, "brent_30d_change")
+
+    assert wti["status"] == "ok"
+    assert wti["value_text"] == "+10.00%"
+    assert brent["status"] == "ok"
+    assert brent["value_text"] == "-4.00%"
+    for metric in (wti, brent):
+        assert metric["source"] == "local_market_history"
+        assert metric["source_badge"] == "derived"
+        assert metric["freshness_status"] == "historical"
+        assert metric["ai_context_allowed"] is True
+        assert "not a real-time oil quote" in metric["interpretation_hint"]
 
 
 def test_equity_history_insufficient_keeps_dashboard_insufficient(monkeypatch, tmp_path):

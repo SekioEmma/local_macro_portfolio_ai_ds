@@ -97,11 +97,80 @@ def test_provider_health_not_run_yet_is_not_provider_broken(monkeypatch, tmp_pat
     assert data["provider_health"]["error_summary"] is None
 
 
+def test_credit_stress_status_derives_partial_when_ig_missing(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    generated_at = "2026-01-01T00:00:00+00:00"
+    metric = lambda value, source="FRED", source_badge="official": {
+        "value": value,
+        "status": "ok",
+        "source": source,
+        "source_badge": source_badge,
+        "observation_date": "2026-01-01",
+        "freshness_status": "fresh",
+    }
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": generated_at,
+            "status": "ok",
+            "financial_conditions": {"label": "partial"},
+            "high_yield_spread": metric(3.0),
+            "vix": metric(18.0, source="CBOE"),
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    credit = data["modules"]["credit_stress"]
+    status = _metric(data, "credit_stress", "credit_stress_status")
+    ig = _metric(data, "credit_stress", "investment_grade_spread")
+
+    assert ig["status"] == "missing"
+    assert status["status"] == "watch"
+    assert status["value"] == "partial_coverage"
+    assert "Investment-grade spread is missing" in status["missing_reason"]
+    assert credit["status"] == "unknown"
+    assert "partial core metric coverage" in credit["summary"]
+
+
+def test_credit_stress_status_does_not_infer_crisis_from_vix_alone(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "financial_conditions": {"label": "vix only"},
+            "vix": {
+                "value": 42.0,
+                "status": "ok",
+                "source": "CBOE",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    status = _metric(data, "credit_stress", "credit_stress_status")
+
+    assert status["status"] == "unknown"
+    assert status["ai_context_allowed"] is False
+    assert "VIX alone is not sufficient" in status["missing_reason"]
+    assert status["value_text"] == "unknown"
+
+
 def _metric(data, module_key, metric_key):
     for metric in data["modules"][module_key]["key_metrics"]:
         if metric["metric_key"] == metric_key:
             return metric
     raise AssertionError(f"missing metric {module_key}.{metric_key}")
+
+
+def _write_json(path, payload):
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _write_fake_reports(tmp_path):
