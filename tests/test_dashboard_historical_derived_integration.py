@@ -93,10 +93,10 @@ def test_rate_and_oil_metrics_are_not_replaced_by_equity_history(monkeypatch, tm
 def test_oil_historical_derived_metrics_integrate_into_dashboard(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
-    _insert(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
-    _insert(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
-    _insert(db_path, "brent", "2026-01-31", 75.0, source_series="DCOILBRENTEU")
-    _insert(db_path, "brent", "2026-03-02", 72.0, source_series="DCOILBRENTEU")
+    _insert_official_energy(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
+    _insert_official_energy(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
+    _insert_official_energy(db_path, "brent", "2026-01-31", 75.0, source_series="DCOILBRENTEU")
+    _insert_official_energy(db_path, "brent", "2026-03-02", 72.0, source_series="DCOILBRENTEU")
     _write_market_report(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
@@ -115,7 +115,57 @@ def test_oil_historical_derived_metrics_integrate_into_dashboard(monkeypatch, tm
         assert metric["source_badge"] == "derived"
         assert metric["freshness_status"] == "historical"
         assert metric["ai_context_allowed"] is True
+        assert "official FRED/EIA daily oil history" in metric["interpretation_hint"]
         assert "not a real-time oil quote" in metric["interpretation_hint"]
+
+
+def test_oil_historical_derived_prefers_official_market_history(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_official_energy(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
+    _insert_official_energy(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
+    _write_market_report(
+        tmp_path,
+        extra={
+            "wti_oil_30d_change": {
+                "value": -1.5,
+                "status": "ok",
+                "unit": "percent",
+                "source": "FRED:DCOILWTICO",
+                "source_badge": "derived",
+                "source_series": "DCOILWTICO",
+                "observation_date": "2026-03-02",
+                "freshness_status": "fresh",
+            }
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    wti = _metric(data["modules"]["inflation_energy_pressure"], "wti_30d_change")
+
+    assert wti["status"] == "ok"
+    assert wti["value_text"] == "+10.00%"
+    assert wti["source"] == "local_market_history"
+    assert wti["freshness_status"] == "historical"
+    assert "official FRED/EIA daily oil history" in wti["interpretation_hint"]
+
+
+def test_oil_historical_derived_requires_official_history(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
+    _insert(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
+    _write_market_report(tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    wti = _metric(data["modules"]["inflation_energy_pressure"], "wti_30d_change")
+
+    assert wti["status"] == "insufficient_history"
+    assert wti["ai_context_allowed"] is False
 
 
 def test_equity_history_insufficient_keeps_dashboard_insufficient(monkeypatch, tmp_path):
@@ -155,14 +205,15 @@ def test_dashboard_historical_derived_response_is_compact(monkeypatch, tmp_path)
     assert "current_holdings.csv" not in body
 
 
-def _write_market_report(tmp_path):
+def _write_market_report(tmp_path, *, extra=None):
+    payload = {
+        "generated_at": "2026-03-02T00:00:00+00:00",
+        "status": "ok",
+    }
+    if extra:
+        payload.update(extra)
     (tmp_path / "market_snapshot.json").write_text(
-        json.dumps(
-            {
-                "generated_at": "2026-03-02T00:00:00+00:00",
-                "status": "ok",
-            }
-        ),
+        json.dumps(payload),
         encoding="utf-8",
     )
 
@@ -188,6 +239,34 @@ def _insert(db_path, metric_key, observation_date, value, *, source_series):
             "lineage": {
                 "source_badge": "unofficial_fallback",
                 "value_field": "Adjusted Close",
+            },
+        },
+        db_path=db_path,
+    )
+
+
+def _insert_official_energy(db_path, metric_key, observation_date, value, *, source_series):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": metric_key,
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "USD per barrel",
+            "status": "ok",
+            "source": f"FRED:{source_series}",
+            "source_badge": "official",
+            "provider": "FRED",
+            "source_series": source_series,
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "historical",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {
+                "provider": "FRED",
+                "source_series": source_series,
+                "source_detail": "EIA daily crude oil price series distributed through FRED",
             },
         },
         db_path=db_path,

@@ -319,7 +319,30 @@ The integration only covers:
 - `nasdaq100_60d_return`
 - `nasdaq_vs_sp500_30d`
 
-Rate and oil historical derived candidates remain reported in `historical_derived` but are not integrated into Dashboard current values.
+Rate historical derived candidates remain reported in `historical_derived`.
+Oil historical derived candidates may be integrated into Dashboard current values
+only when their dependencies are official FRED/EIA history rows.
+
+## Energy History Fields
+
+The audit includes an `energy_history` block for official WTI/Brent history
+coverage and Dashboard status checks:
+
+- `energy_history_available`: whether both `wti` and `brent` have local history observations
+- `wti_history_observation_count`
+- `brent_history_observation_count`
+- `wti_30d_change_status`
+- `brent_30d_change_status`
+- `real_yield_pressure_status_status`
+- `dgs30_breakout_confirmed_status`
+- `ppi_final_demand_status`
+- `recommended_history_actions`
+
+WTI/Brent history should be filled through `scripts/ingest_official_energy_history.py`.
+The script writes compact FRED/EIA observations into `market_history`; it must not
+commit the SQLite DB.
+`ppi_final_demand_status` remains `research_needed` until a verified official
+series is configured.
 
 ## Official Macro Pack Fields
 

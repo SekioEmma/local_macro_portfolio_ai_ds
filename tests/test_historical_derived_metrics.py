@@ -83,6 +83,24 @@ def test_relative_return_with_one_dependency_insufficient(tmp_path):
     assert "sp500" in result.missing_reason
 
 
+def test_oil_period_return_preserves_official_dependency_metadata(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
+    _insert(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
+
+    result = derived.calculate_period_return(
+        "wti",
+        30,
+        db_path=db_path,
+        output_metric_key="wti_30d_change",
+    )
+
+    assert result.status == "ok"
+    assert result.ai_context_allowed is True
+    assert result.dependency_source_badges == ["official"]
+    assert result.dependency_source_series == ["DCOILWTICO"]
+
+
 def test_distance_to_threshold_with_latest_observation(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "dgs30", "2026-01-01", 4.8)
@@ -149,7 +167,7 @@ def test_no_network_access(monkeypatch, tmp_path):
     assert result.status == "insufficient_history"
 
 
-def _insert(db_path, metric_key, observation_date, value):
+def _insert(db_path, metric_key, observation_date, value, *, source_series=None):
     market_history_store.upsert_market_observation(
         {
             "metric_key": metric_key,
@@ -161,7 +179,7 @@ def _insert(db_path, metric_key, observation_date, value):
             "source": "test_source",
             "source_badge": "official",
             "provider": "test_source",
-            "source_series": metric_key.upper(),
+            "source_series": source_series or metric_key.upper(),
             "generated_at": f"{observation_date}T00:00:00+00:00",
             "fetched_at": f"{observation_date}T00:00:00+00:00",
             "freshness_status": "fresh",

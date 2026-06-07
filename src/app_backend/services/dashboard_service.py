@@ -113,9 +113,9 @@ EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
     "official market breadth or valuation measure."
 )
 OIL_HISTORICAL_DERIVED_HINT_SUFFIX = (
-    " Derived from local market history; underlying source should be inspected via "
-    "the market history store and remains a derived energy-pressure input, not a "
-    "real-time oil quote or inflation forecast."
+    " Derived from official FRED/EIA daily oil history in local market history; "
+    "this remains a derived energy-pressure input, not a real-time oil quote, "
+    "inflation forecast, or commodity trading signal."
 )
 METRIC_ALIASES = {
     "wti_30d_change": ("wti_oil_30d_change",),
@@ -125,6 +125,7 @@ INFLATION_YOY_METRIC_KEYS = {"core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy"}
 INDEX_LEVEL_YOY_MISSING_REASON = (
     "Only index level is available; YoY requires historical comparison."
 )
+DGS30_BREAKOUT_MISSING_REASON = "Requires explicit confirmation rule and sufficient DGS30 history."
 LABOR_METRIC_SPECS = [
     ("unemployment_rate", "Unemployment rate", "percent", "percent", "missing"),
     ("initial_jobless_claims", "Initial jobless claims", "claims", "number", "missing"),
@@ -589,6 +590,7 @@ def _build_modules(
             key_metrics=_key_metrics_for_module(
                 "inflation_energy_pressure",
                 market_temperature_metadata_reports,
+                market_history_db_path=market_history_db_path,
             ),
         ),
         "equity_trend": _market_module(
@@ -778,6 +780,8 @@ def _key_metrics_for_module(
             metric_keys=OIL_HISTORICAL_DERIVED_METRIC_KEYS,
             hint_suffix=OIL_HISTORICAL_DERIVED_HINT_SUFFIX,
             fallback_source="local_market_history",
+            required_dependency_source_badges={"official"},
+            replace_existing=True,
             db_path=market_history_db_path,
         )
     return metrics
@@ -904,6 +908,8 @@ def _apply_historical_derived_metrics(
     metric_keys: set[str],
     hint_suffix: str,
     fallback_source: str,
+    required_dependency_source_badges: set[str] | None = None,
+    replace_existing: bool = False,
     db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
     target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
@@ -921,6 +927,8 @@ def _apply_historical_derived_metrics(
             metric_keys=metric_keys,
             hint_suffix=hint_suffix,
             fallback_source=fallback_source,
+            required_dependency_source_badges=required_dependency_source_badges,
+            replace_existing=replace_existing,
         )
         for metric in metrics
     ]
@@ -933,13 +941,19 @@ def _historical_derived_metric(
     metric_keys: set[str],
     hint_suffix: str,
     fallback_source: str,
+    required_dependency_source_badges: set[str] | None,
+    replace_existing: bool,
 ) -> DashboardMetric:
     if original.metric_key not in metric_keys:
         return original
-    if original.status != "insufficient_history":
+    if original.status != "insufficient_history" and not replace_existing:
         return original
     if candidate is None or candidate.status != "ok" or candidate.value is None:
         return original
+    if required_dependency_source_badges is not None:
+        source_badges = set(candidate.dependency_source_badges or [])
+        if not source_badges or not source_badges.issubset(required_dependency_source_badges):
+            return original
     value = _dashboard_historical_derived_value(candidate)
     hint = _dashboard_historical_derived_hint(candidate, hint_suffix=hint_suffix)
     ai_context_allowed = bool(candidate.ai_context_allowed) and _ai_context_allowed(
@@ -1328,6 +1342,10 @@ def _derived_metric(
         if _find_metric("credit_stress_status", reports, include_aliases=False) is not None:
             return None
         return _credit_stress_status_metric(reports)
+    if metric_key == "real_yield_pressure_status":
+        if _find_metric("real_yield_pressure_status", reports, include_aliases=False) is not None:
+            return None
+        return _real_yield_pressure_status_metric(reports)
     if metric_key == "dgs30_distance_to_5pct":
         found = _find_metric("dgs30", reports)
         if found is None or _dependency_unusable(found):
@@ -1362,6 +1380,17 @@ def _derived_metric(
             "Distance is derived from daily DGS30; it is not intraday.",
         )
     if metric_key == "dgs30_breakout_confirmed":
+        found = _find_metric("dgs30_breakout_confirmed", reports)
+        if found is None:
+            return _blocked_dependency_metric(
+                metric_key="dgs30_breakout_confirmed",
+                display_name="30Y breakout confirmed",
+                unit=None,
+                status="research_needed",
+                missing_reason=DGS30_BREAKOUT_MISSING_REASON,
+                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
+                interpretation_hint="Breakout confirmation requires explicit compact evidence; do not infer it.",
+            )
         dgs30 = _find_metric("dgs30", reports)
         if dgs30 is None or _dependency_unusable(dgs30):
             return _blocked_dependency_metric(
@@ -1373,9 +1402,6 @@ def _derived_metric(
                 generated_at=_first_updated_at([report for report in reports if report.data is not None]),
                 interpretation_hint="Breakout confirmation requires DGS30 and explicit compact history evidence.",
             )
-        found = _find_metric("dgs30_breakout_confirmed", reports)
-        if found is None:
-            return None
         _, payload, report = found
         if _dependency_unusable(found):
             return None
@@ -1528,6 +1554,84 @@ def _credit_status_from_values(
     return "ok", "credit_calm", None
 
 
+def _real_yield_pressure_status_metric(
+    reports: tuple[ReportState, ...],
+) -> DashboardMetric:
+    real_yield = _usable_numeric_metric("dfii10", reports)
+    breakeven = _usable_numeric_metric("t10yie", reports)
+    generated_at = _latest_metric_timestamp(
+        [item for item in (real_yield, breakeven) if item is not None]
+    ) or _first_updated_at([report for report in reports if report.data is not None])
+    observation_date = _latest_metric_observation_date(
+        [item for item in (real_yield, breakeven) if item is not None]
+    )
+    hint = (
+        "Derived from 10Y real yield (DFII10) and 10Y breakeven inflation (T10YIE). "
+        "Real yield pressure is a valuation and opportunity-cost mechanism, not a sole "
+        "driver of equities, gold, or portfolio action."
+    )
+    if real_yield is None or breakeven is None:
+        missing = []
+        if real_yield is None:
+            missing.append("DFII10")
+        if breakeven is None:
+            missing.append("T10YIE")
+        return _blocked_dependency_metric(
+            metric_key="real_yield_pressure_status",
+            display_name="Real yield pressure status",
+            unit=None,
+            status="missing",
+            missing_reason=(
+                "Real yield pressure status requires both "
+                f"{' and '.join(missing)} compact evidence."
+            ),
+            generated_at=generated_at,
+            interpretation_hint=hint,
+        )
+
+    status, value = _real_yield_status_from_values(
+        real_yield=real_yield[0],
+        breakeven=breakeven[0],
+    )
+    freshness_status = "fresh" if observation_date or generated_at else "unknown"
+    return DashboardMetric(
+        metric_key="real_yield_pressure_status",
+        display_name="Real yield pressure status",
+        value=value,
+        value_text=_format_value(value, "text", status),
+        unit=None,
+        status=status,
+        source="dashboard_compact",
+        source_badge="derived",
+        observation_date=observation_date,
+        generated_at=generated_at,
+        freshness_status=freshness_status,
+        missing_reason=None,
+        interpretation_hint=hint,
+        ai_context_allowed=_ai_context_allowed(
+            status=status,
+            source="dashboard_compact",
+            source_badge="derived",
+            observation_date=observation_date,
+            generated_at=generated_at,
+            freshness_status=freshness_status,
+            interpretation_hint=hint,
+        ),
+    )
+
+
+def _real_yield_status_from_values(
+    *,
+    real_yield: float,
+    breakeven: float,
+) -> tuple[str, str]:
+    if real_yield >= 2.0:
+        return "pressure", "real_yield_pressure"
+    if real_yield >= 1.5 or breakeven >= 2.5:
+        return "watch", "real_yield_watch"
+    return "ok", "real_yield_calm"
+
+
 def _derived_metric_response(
     metric_key: str,
     display_name: str,
@@ -1587,7 +1691,7 @@ def _blocked_dependency_metric(
         unit=unit,
         status=normalized_status,
         source=None,
-        source_badge="missing",
+        source_badge="research_needed" if normalized_status == "research_needed" else "missing",
         observation_date=None,
         generated_at=generated_at,
         freshness_status="missing"
@@ -1629,7 +1733,12 @@ def _missing_metric(
         observation_date=None,
         generated_at=generated_at,
         freshness_status="unknown",
-        missing_reason=missing_reason or _missing_value_text(normalized_status),
+        missing_reason=missing_reason
+        or (
+            DGS30_BREAKOUT_MISSING_REASON
+            if metric_key == "dgs30_breakout_confirmed"
+            else _missing_value_text(normalized_status)
+        ),
         interpretation_hint=interpretation_hint,
         ai_context_allowed=False,
     )

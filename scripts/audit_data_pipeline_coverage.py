@@ -81,6 +81,7 @@ def build_coverage_audit(
         rows,
         db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
     )
+    energy_history = _energy_history_audit(rows, historical_store)
     yfinance_history = _yfinance_history_audit(
         rows,
         db_path=dashboard_market_history_db_path,
@@ -110,6 +111,7 @@ def build_coverage_audit(
         "last_good_cache": last_good,
         "historical_store": historical_store,
         "historical_derived": historical_derived,
+        "energy_history": energy_history,
         "yfinance_history": yfinance_history,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
@@ -126,6 +128,7 @@ def build_coverage_audit(
             last_good,
             historical_store,
             historical_derived,
+            energy_history,
             yfinance_history,
             dashboard_derived_integration,
             official_macro,
@@ -454,6 +457,7 @@ def _recommendations(
     last_good: dict[str, Any] | None = None,
     historical_store: dict[str, Any] | None = None,
     historical_derived: dict[str, Any] | None = None,
+    energy_history: dict[str, Any] | None = None,
     yfinance_history: dict[str, Any] | None = None,
     dashboard_derived_integration: dict[str, Any] | None = None,
     official_macro: dict[str, Any] | None = None,
@@ -484,6 +488,8 @@ def _recommendations(
         recommendations.extend(historical_store.get("recommended_history_actions", []))
     if historical_derived:
         recommendations.extend(historical_derived.get("recommended_history_actions", []))
+    if energy_history:
+        recommendations.extend(energy_history.get("recommended_history_actions", []))
     if yfinance_history:
         recommendations.extend(yfinance_history.get("recommendations", []))
     if dashboard_derived_integration and dashboard_derived_integration.get(
@@ -658,6 +664,12 @@ def _historical_derived_audit(
         actions.append("initialize_and_ingest_market_history")
     if any(item.status == "insufficient_history" for item in all_metrics):
         actions.extend(["ingest_more_history", "run_yfinance_history_ingest_live"])
+    if any(
+        item.metric_key in {"wti_30d_change", "brent_30d_change"}
+        and item.status == "insufficient_history"
+        for item in all_metrics
+    ):
+        actions.append("run_official_energy_history_ingest_live")
     return {
         "historical_derived_available": any(item.status == "ok" for item in all_metrics),
         "derived_metric_count": len(all_metrics),
@@ -689,6 +701,42 @@ def _historical_derived_audit(
         ),
         "recommended_history_actions": sorted(set(actions)),
     }
+
+
+def _energy_history_audit(
+    rows: list[DashboardEvidenceRow],
+    historical_store: dict[str, Any],
+) -> dict[str, Any]:
+    observations = historical_store.get("observations_by_metric", {})
+    rows_by_key = {row.metric_key: row for row in rows}
+    wti_count = int(observations.get("wti") or 0)
+    brent_count = int(observations.get("brent") or 0)
+    actions: list[str] = []
+    if wti_count == 0 or brent_count == 0:
+        actions.append("run_official_energy_history_ingest_live")
+    if _row_status(rows_by_key.get("wti_30d_change")) == "insufficient_history" or _row_status(
+        rows_by_key.get("brent_30d_change")
+    ) == "insufficient_history":
+        actions.append("ingest_official_energy_history")
+    return {
+        "energy_history_available": wti_count > 0 and brent_count > 0,
+        "wti_history_observation_count": wti_count,
+        "brent_history_observation_count": brent_count,
+        "wti_30d_change_status": _row_status(rows_by_key.get("wti_30d_change")),
+        "brent_30d_change_status": _row_status(rows_by_key.get("brent_30d_change")),
+        "real_yield_pressure_status_status": _row_status(
+            rows_by_key.get("real_yield_pressure_status")
+        ),
+        "dgs30_breakout_confirmed_status": _row_status(
+            rows_by_key.get("dgs30_breakout_confirmed")
+        ),
+        "ppi_final_demand_status": _row_status(rows_by_key.get("ppi_final_demand")),
+        "recommended_history_actions": sorted(set(actions)),
+    }
+
+
+def _row_status(row: DashboardEvidenceRow | None) -> str:
+    return row.status if row is not None else "missing"
 
 
 def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -1234,6 +1282,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Historical Derived Metrics", ""])
     for key, value in audit["historical_derived"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Energy History", ""])
+    for key, value in audit["energy_history"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## yfinance History", ""])
     for key, value in audit["yfinance_history"].items():

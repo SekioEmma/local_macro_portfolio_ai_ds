@@ -42,6 +42,9 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "data_sufficiency_assessment" in result
     assert "portfolio_compact" in result
     assert "portfolio_compact_available" in result["portfolio_compact"]
+    assert "energy_history" in result
+    assert "energy_history_available" in result["energy_history"]
+    assert "real_yield_pressure_status_status" in result["energy_history"]
     assert result["module_coverage"]
     assert "recommendations" in result
 
@@ -412,6 +415,77 @@ def test_audit_reports_dashboard_derived_integration(monkeypatch, tmp_path):
         "sp500_30d_return",
         "sp500_60d_return",
     ]
+
+
+def test_audit_reports_energy_history_and_real_yield_status(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-03-02T00:00:00+00:00",
+            "status": "ok",
+            "dfii10": {
+                "value": 2.05,
+                "status": "ok",
+                "source": "FRED:DFII10",
+                "source_badge": "official",
+                "observation_date": "2026-03-02",
+                "freshness_status": "fresh",
+            },
+            "t10yie": {
+                "value": 2.35,
+                "status": "ok",
+                "source": "FRED:T10YIE",
+                "source_badge": "official",
+                "observation_date": "2026-03-02",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+    for metric_key, series, start_value, end_value in (
+        ("wti", "DCOILWTICO", 70.0, 77.0),
+        ("brent", "DCOILBRENTEU", 75.0, 72.0),
+    ):
+        _insert_market_observation(
+            db_path,
+            metric_key,
+            "2026-01-31",
+            start_value,
+            source_badge="official",
+            provider="FRED",
+            source_series=series,
+            metric_kind="raw",
+            ai_context_allowed=True,
+        )
+        _insert_market_observation(
+            db_path,
+            metric_key,
+            "2026-03-02",
+            end_value,
+            source_badge="official",
+            provider="FRED",
+            source_series=series,
+            metric_kind="raw",
+            ai_context_allowed=True,
+        )
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    energy = result["energy_history"]
+
+    assert energy["energy_history_available"] is True
+    assert energy["wti_history_observation_count"] == 2
+    assert energy["brent_history_observation_count"] == 2
+    assert energy["wti_30d_change_status"] == "ok"
+    assert energy["brent_30d_change_status"] == "ok"
+    assert energy["real_yield_pressure_status_status"] == "pressure"
+    assert energy["dgs30_breakout_confirmed_status"] == "research_needed"
+    assert energy["ppi_final_demand_status"] == "research_needed"
 
 
 def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):

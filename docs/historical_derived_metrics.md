@@ -3,6 +3,7 @@
 Historical derived metrics are local-only candidate calculations built from the market historical store.
 They do not call providers, DeepSeek, Tavily, search, or yfinance.
 If yfinance observations exist in the market history store, this service reads them only as local stored observations.
+Official WTI/Brent history can be ingested separately through FRED/EIA daily series and then read from the same local store.
 
 ## Purpose
 
@@ -96,7 +97,8 @@ Derived metrics use `source_badge=derived`.
 
 Dashboard integration is currently limited to selected `equity_trend` candidates.
 Only OK S&P 500/Nasdaq 30D/60D returns and `nasdaq_vs_sp500_30d` may be surfaced in Dashboard rows.
-Rate and oil candidates remain read-only audit candidates until a later phase.
+Oil candidates may be surfaced only when their local history dependencies are official FRED/EIA rows.
+Rate candidates remain read-only audit candidates unless an explicit compact rule exists.
 
 ## Current Non-goals
 
@@ -106,7 +108,6 @@ The calculation service itself does not:
 - access the network
 - alter provider request logic
 - call yfinance live
-- replace non-equity Dashboard current values
 - calculate official current signals
 - save raw provider responses
 - save raw prompts
@@ -130,11 +131,30 @@ The derived result still uses `source_badge=derived`, includes dependency keys a
 ## Dashboard Integration
 
 Dashboard integration lives in `app_backend.services.dashboard_service`.
-It uses historical derived results only when the existing `equity_trend` row is still `insufficient_history` and the historical candidate is `ok`.
+It uses historical derived results only when the existing row is still `insufficient_history` and the historical candidate is `ok`.
 
 Integrated rows keep:
 
 - `source_badge=derived`
 - `source=local_market_history`
 - `freshness_status=historical`
-- interpretation text that states the local market history and yfinance unofficial/proxy boundary
+- interpretation text that states the dependency boundary
+
+Equity rows state the local market history and yfinance unofficial/proxy boundary.
+WTI/Brent rows state official FRED/EIA daily oil history and remain derived energy-pressure inputs, not real-time oil quotes, inflation forecasts, or commodity trading signals.
+
+## Official Energy History Ingest
+
+Official WTI/Brent history can be previewed or written with:
+
+```text
+python scripts/ingest_official_energy_history.py --dry-run
+python scripts/ingest_official_energy_history.py --live --write
+```
+
+The script uses configured FRED series:
+
+- `wti`: `DCOILWTICO`
+- `brent`: `DCOILBRENTEU`
+
+It writes compact `market_observations` rows only and does not store raw provider responses.

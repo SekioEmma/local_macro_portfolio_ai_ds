@@ -54,8 +54,8 @@ def test_dashboard_key_metrics_missing_fields_are_explicit(monkeypatch, tmp_path
     assert metric["ai_context_allowed"] is False
 
     breakout = _metric(data, "rate_pressure", "dgs30_breakout_confirmed")
-    assert breakout["status"] == "missing"
-    assert breakout["value_text"] == "missing"
+    assert breakout["status"] == "research_needed"
+    assert breakout["value_text"] == "research needed"
     assert breakout["ai_context_allowed"] is False
 
 
@@ -160,6 +160,98 @@ def test_credit_stress_status_does_not_infer_crisis_from_vix_alone(monkeypatch, 
     assert status["ai_context_allowed"] is False
     assert "VIX alone is not sufficient" in status["missing_reason"]
     assert status["value_text"] == "unknown"
+
+
+def test_real_yield_pressure_status_derives_from_dfii10_and_t10yie(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "dfii10": {
+                "value": 2.05,
+                "status": "ok",
+                "source": "FRED:DFII10",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+            "t10yie": {
+                "value": 2.35,
+                "status": "ok",
+                "source": "FRED:T10YIE",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    status = _metric(data, "real_yield_pressure", "real_yield_pressure_status")
+
+    assert status["status"] == "pressure"
+    assert status["value"] == "real_yield_pressure"
+    assert status["source_badge"] == "derived"
+    assert status["ai_context_allowed"] is True
+    assert "not a sole driver" in status["interpretation_hint"]
+    assert "portfolio action" in status["interpretation_hint"]
+
+
+def test_real_yield_pressure_status_blocks_when_dependency_missing(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "dfii10": {
+                "value": 1.25,
+                "status": "ok",
+                "source": "FRED:DFII10",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    status = _metric(data, "real_yield_pressure", "real_yield_pressure_status")
+
+    assert status["status"] == "missing"
+    assert status["ai_context_allowed"] is False
+    assert "T10YIE" in status["missing_reason"]
+
+
+def test_dgs30_breakout_remains_research_needed_without_explicit_rule(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_json(
+        tmp_path / "market_snapshot.json",
+        {
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "dgs30": {
+                "value": 5.05,
+                "status": "ok",
+                "source": "FRED:DGS30",
+                "source_badge": "official",
+                "observation_date": "2026-01-01",
+                "freshness_status": "fresh",
+            },
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/summary").json()
+    breakout = _metric(data, "rate_pressure", "dgs30_breakout_confirmed")
+
+    assert breakout["status"] == "research_needed"
+    assert breakout["ai_context_allowed"] is False
+    assert breakout["missing_reason"] == "Requires explicit confirmation rule and sufficient DGS30 history."
 
 
 def _metric(data, module_key, metric_key):

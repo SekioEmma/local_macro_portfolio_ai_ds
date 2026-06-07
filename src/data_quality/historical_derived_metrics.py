@@ -32,6 +32,9 @@ class HistoricalDerivedMetric:
     calculation: str
     history_points_used: int
     history_points_required: int
+    dependency_source_badges: list[str] | None = None
+    dependency_source_series: list[str] | None = None
+    dependency_sources: list[str] | None = None
 
 
 DERIVED_METRIC_SPECS: dict[str, dict[str, Any]] = {
@@ -153,6 +156,7 @@ def calculate_period_return(
             missing_reason="window_start_value_zero",
         )
     value = latest["value"] / start["value"] - 1.0
+    dependency_observations = [start, latest]
     return _ok_metric(
         metric_key=output_metric_key or f"{metric_key}_{window_days}d_return",
         value=value,
@@ -168,6 +172,7 @@ def calculate_period_return(
             f"Derived from market history: latest {metric_key} divided by "
             f"the nearest observation on or before {window_days} calendar days earlier, minus 1."
         ),
+        dependency_observations=dependency_observations,
     )
 
 
@@ -208,6 +213,7 @@ def calculate_rolling_average(
             f"Derived from market history: arithmetic average of the latest "
             f"{window_observations} {metric_key} observations."
         ),
+        dependency_observations=window,
     )
 
 
@@ -268,6 +274,16 @@ def calculate_relative_return(
             f"Derived from market history: {numerator_metric_key} {window_days}D return "
             f"minus {denominator_metric_key} {window_days}D return."
         ),
+        dependency_source_badges=sorted(
+            set((numerator.dependency_source_badges or []) + (denominator.dependency_source_badges or []))
+        ),
+        dependency_source_series=sorted(
+            set((numerator.dependency_source_series or []) + (denominator.dependency_source_series or []))
+        ),
+        dependency_sources=sorted(
+            set((numerator.dependency_sources or []) + (denominator.dependency_sources or []))
+        ),
+        ai_context_allowed=numerator.ai_context_allowed and denominator.ai_context_allowed,
     )
 
 
@@ -306,6 +322,7 @@ def calculate_distance_to_threshold(
         interpretation_hint=(
             f"Derived from market history: latest {metric_key} minus threshold {threshold}."
         ),
+        dependency_observations=[latest],
     )
 
 
@@ -352,6 +369,9 @@ def metric_to_dict(metric: HistoricalDerivedMetric) -> dict[str, Any]:
         "calculation": metric.calculation,
         "history_points_used": metric.history_points_used,
         "history_points_required": metric.history_points_required,
+        "dependency_source_badges": metric.dependency_source_badges,
+        "dependency_source_series": metric.dependency_source_series,
+        "dependency_sources": metric.dependency_sources,
     }
 
 
@@ -420,6 +440,10 @@ def _numeric_observations(
                 "date": parsed_date,
                 "observation_date": observation.get("observation_date"),
                 "generated_at": observation.get("generated_at"),
+                "source": observation.get("source"),
+                "source_badge": observation.get("source_badge"),
+                "source_series": observation.get("source_series"),
+                "ai_context_allowed": observation.get("ai_context_allowed"),
             }
         )
     return sorted(results, key=lambda item: item["date"])
@@ -446,7 +470,13 @@ def _ok_metric(
     observation_date: str | None,
     generated_at: str | None,
     interpretation_hint: str,
+    dependency_observations: list[dict[str, Any]] | None = None,
+    dependency_source_badges: list[str] | None = None,
+    dependency_source_series: list[str] | None = None,
+    dependency_sources: list[str] | None = None,
+    ai_context_allowed: bool | None = None,
 ) -> HistoricalDerivedMetric:
+    dependency_metadata = _dependency_metadata(dependency_observations or [])
     return HistoricalDerivedMetric(
         metric_key=metric_key,
         value=value,
@@ -460,13 +490,69 @@ def _ok_metric(
         freshness_status=DEFAULT_FRESHNESS_STATUS,
         missing_reason=None,
         interpretation_hint=interpretation_hint,
-        ai_context_allowed=True,
+        ai_context_allowed=(
+            bool(ai_context_allowed)
+            if ai_context_allowed is not None
+            else _dependency_metadata_complete(dependency_observations or [])
+        ),
         dependency_keys=dependency_keys,
         window=window,
         calculation=calculation,
         history_points_used=points_used,
         history_points_required=points_required,
+        dependency_source_badges=dependency_source_badges
+        if dependency_source_badges is not None
+        else dependency_metadata["source_badges"],
+        dependency_source_series=dependency_source_series
+        if dependency_source_series is not None
+        else dependency_metadata["source_series"],
+        dependency_sources=dependency_sources
+        if dependency_sources is not None
+        else dependency_metadata["sources"],
     )
+
+
+def _dependency_metadata(observations: list[dict[str, Any]]) -> dict[str, list[str]]:
+    return {
+        "source_badges": sorted(
+            {
+                str(item.get("source_badge"))
+                for item in observations
+                if item.get("source_badge") is not None
+            }
+        ),
+        "source_series": sorted(
+            {
+                str(item.get("source_series"))
+                for item in observations
+                if item.get("source_series") is not None
+            }
+        ),
+        "sources": sorted(
+            {
+                str(item.get("source"))
+                for item in observations
+                if item.get("source") is not None
+            }
+        ),
+    }
+
+
+def _dependency_metadata_complete(observations: list[dict[str, Any]]) -> bool:
+    if not observations:
+        return False
+    for item in observations:
+        if item.get("source_badge") is None:
+            return False
+        if item.get("source") is None:
+            return False
+        if item.get("source_series") is None:
+            return False
+        if item.get("observation_date") is None:
+            return False
+        if item.get("generated_at") is None:
+            return False
+    return True
 
 
 def _insufficient_metric(
@@ -501,6 +587,9 @@ def _insufficient_metric(
         calculation=calculation,
         history_points_used=points_used,
         history_points_required=points_required,
+        dependency_source_badges=[],
+        dependency_source_series=[],
+        dependency_sources=[],
     )
 
 
