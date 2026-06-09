@@ -13,6 +13,7 @@ MODULE_KEYS = {
     "real_yield_pressure",
     "inflation_energy_pressure",
     "equity_trend",
+    "breadth_concentration_proxy",
     "portfolio_deviation",
 }
 

@@ -296,6 +296,24 @@ Recommendations may include:
 yfinance observations are informational historical inputs.
 They are never treated as official facts and do not replace Dashboard current values.
 
+## Proxy Breadth Fields
+
+The audit includes a `proxy_breadth` block for local-only SPY/RSP/QQQ/HYG/LQD proxy-derived metrics.
+It does not call yfinance, does not fetch live data, and does not treat proxy rows as official market breadth or valuation data.
+
+Top-level `proxy_breadth` fields:
+
+- `breadth_proxy_available`: whether SPY-vs-RSP proxy breadth rows are available
+- `breadth_proxy_metric_count`: number of proxy breadth/concentration rows in Evidence Table
+- `breadth_proxy_ok_count`: proxy rows with sufficient history
+- `breadth_proxy_insufficient_history_count`: proxy rows blocked by insufficient history
+- `concentration_proxy_available`: whether QQQ-vs-SPY or SPY-vs-RSP concentration proxy rows are available
+- `credit_proxy_available`: whether HYG-vs-LQD credit proxy rows are available
+- `proxy_metrics_ai_context_allowed_count`: proxy-derived rows eligible for AI factual context under proxy-only semantics
+
+These fields report proxy evidence only.
+They do not satisfy true valuation, true advance/decline breadth, or systemic-crisis confirmation.
+
 ## Dashboard Derived Integration Fields
 
 The audit includes a `dashboard_derived_integration` block for values that are actually surfaced in Dashboard evidence rows from historical derived metrics.
@@ -318,10 +336,12 @@ The integration only covers:
 - `nasdaq100_30d_return`
 - `nasdaq100_60d_return`
 - `nasdaq_vs_sp500_30d`
+- `breadth_concentration_proxy` rows for SPY/RSP/QQQ/HYG/LQD proxy returns and relative returns
 
 Rate historical derived candidates remain reported in `historical_derived`.
 Oil historical derived candidates may be integrated into Dashboard current values
 only when their dependencies are official FRED/EIA history rows.
+Proxy breadth candidates may be integrated only when their dependencies are stored proxy observations.
 
 ## Energy History Fields
 

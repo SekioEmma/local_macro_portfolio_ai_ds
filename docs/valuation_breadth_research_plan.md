@@ -87,7 +87,13 @@ The following can be implemented in a future code phase without live provider wo
 | `hyg_vs_lqd_30d` | `hyg_proxy`, `lqd_proxy` | 30D relative return | `derived` from `proxy` dependencies |
 | `hyg_vs_lqd_60d` | `hyg_proxy`, `lqd_proxy` | 60D relative return | `derived` from `proxy` dependencies |
 
-Implementation notes for V1:
+V1 implementation status:
+
+- Implemented as local-only historical derived metrics in `breadth_concentration_proxy`.
+- Surfaced in Dashboard summary and Evidence Table as proxy-derived rows.
+- Audited through the `proxy_breadth` block in `scripts/audit_data_pipeline_coverage.py`.
+
+Implementation notes:
 
 - Add specs to `historical_derived_metrics` only after tests define proxy dependency policy.
 - Use `source=local_market_history` and `source_badge=derived`.
@@ -166,8 +172,8 @@ Suggested semantics:
 
 ### Step V1: Proxy breadth derived metrics
 
-Add local-only historical derived specs for SPY/RSP/QQQ/HYG/LQD proxy returns and relative returns.
-Add no-network tests and audit fields.
+Implemented local-only historical derived specs for SPY/RSP/QQQ/HYG/LQD proxy returns and relative returns.
+Added no-network tests and audit fields.
 Do not add live yfinance calls beyond the existing manual ingest script.
 
 ### Step V2: Valuation source research

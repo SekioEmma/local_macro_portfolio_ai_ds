@@ -101,6 +101,55 @@ def test_oil_period_return_preserves_official_dependency_metadata(tmp_path):
     assert result.dependency_source_series == ["DCOILWTICO"]
 
 
+def test_proxy_breadth_metrics_calculate_from_proxy_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_proxy_series(db_path)
+
+    by_module = derived.build_historical_dashboard_candidates(db_path=db_path)
+    proxy = {
+        item.metric_key: item
+        for item in by_module["breadth_concentration_proxy"]
+    }
+
+    assert proxy["spy_proxy_30d_return"].status == "ok"
+    assert math.isclose(proxy["spy_proxy_30d_return"].value, 120 / 110 - 1)
+    assert math.isclose(proxy["rsp_proxy_60d_return"].value, 0.10)
+    assert math.isclose(
+        proxy["spy_vs_rsp_30d"].value,
+        (120 / 110 - 1) - (110 / 105 - 1),
+    )
+    assert math.isclose(
+        proxy["qqq_vs_spy_30d"].value,
+        (140 / 115 - 1) - (120 / 110 - 1),
+    )
+    assert math.isclose(
+        proxy["hyg_vs_lqd_30d"].value,
+        (104 / 102 - 1) - (102 / 101 - 1),
+    )
+    for metric in proxy.values():
+        assert metric.source_badge == "derived"
+        assert metric.ai_context_allowed is True
+        assert metric.dependency_source_badges == ["proxy"]
+        assert "yfinance ETF proxy" in metric.interpretation_hint
+        assert "not official market breadth" in metric.interpretation_hint
+        assert "not valuation data" in metric.interpretation_hint
+        assert "not a crash confirmation signal" in metric.interpretation_hint
+
+
+def test_proxy_breadth_metrics_block_without_sufficient_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_proxy(db_path, "spy_proxy", "2026-03-02", 120.0, source_series="SPY")
+
+    result = derived.build_historical_dashboard_candidates(db_path=db_path)[
+        "breadth_concentration_proxy"
+    ]
+    spy = next(item for item in result if item.metric_key == "spy_proxy_30d_return")
+
+    assert spy.status == "insufficient_history"
+    assert spy.ai_context_allowed is False
+    assert spy.missing_reason == "history_points_insufficient"
+
+
 def test_distance_to_threshold_with_latest_observation(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "dgs30", "2026-01-01", 4.8)
@@ -135,6 +184,7 @@ def test_build_historical_dashboard_candidates_groups_supported_metrics(tmp_path
     rate_metrics = {item.metric_key: item for item in by_module["rate_pressure"]}
 
     assert set(by_module) == {
+        "breadth_concentration_proxy",
         "equity_trend",
         "inflation_energy_pressure",
         "rate_pressure",
@@ -149,7 +199,7 @@ def test_flattened_metrics_are_compact_and_safe(tmp_path):
     payloads = [derived.metric_to_dict(item) for item in metrics]
     text = str(payloads)
 
-    assert len(payloads) == 10
+    assert len(payloads) == 22
     assert all(item["source_badge"] == "derived" for item in payloads)
     assert "raw_provider_response" not in text
     assert "api_key" not in text.lower()
@@ -186,6 +236,59 @@ def _insert(db_path, metric_key, observation_date, value, *, source_series=None)
             "ai_context_allowed": True,
             "metric_kind": "raw",
             "lineage": {},
+        },
+        db_path=db_path,
+    )
+
+
+def _insert_proxy_series(db_path):
+    values_by_metric = {
+        "spy_proxy": [100.0, 110.0, 120.0],
+        "rsp_proxy": [100.0, 105.0, 110.0],
+        "qqq_proxy": [100.0, 115.0, 140.0],
+        "hyg_proxy": [100.0, 102.0, 104.0],
+        "lqd_proxy": [100.0, 101.0, 102.0],
+    }
+    series_by_metric = {
+        "spy_proxy": "SPY",
+        "rsp_proxy": "RSP",
+        "qqq_proxy": "QQQ",
+        "hyg_proxy": "HYG",
+        "lqd_proxy": "LQD",
+    }
+    for metric_key, values in values_by_metric.items():
+        for observation_date, value in zip(
+            ["2026-01-01", "2026-01-31", "2026-03-02"],
+            values,
+        ):
+            _insert_proxy(
+                db_path,
+                metric_key,
+                observation_date,
+                value,
+                source_series=series_by_metric[metric_key],
+            )
+
+
+def _insert_proxy(db_path, metric_key, observation_date, value, *, source_series):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": metric_key,
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "price",
+            "status": "ok",
+            "source": "Yahoo Finance via yfinance",
+            "source_badge": "proxy",
+            "provider": "yfinance",
+            "source_series": source_series,
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "historical",
+            "ai_context_allowed": False,
+            "metric_kind": "proxy",
+            "lineage": {"source_badge": "proxy"},
         },
         db_path=db_path,
     )

@@ -81,6 +81,21 @@ It does not read raw reports, raw provider responses, holdings, prompts, or outp
 - `wti_30d_change`
 - `brent_30d_change`
 
+`breadth_concentration_proxy`:
+
+- `spy_proxy_30d_return`
+- `spy_proxy_60d_return`
+- `rsp_proxy_30d_return`
+- `rsp_proxy_60d_return`
+- `qqq_proxy_30d_return`
+- `qqq_proxy_60d_return`
+- `spy_vs_rsp_30d`
+- `spy_vs_rsp_60d`
+- `qqq_vs_spy_30d`
+- `qqq_vs_spy_60d`
+- `hyg_vs_lqd_30d`
+- `hyg_vs_lqd_60d`
+
 ## Status Rules
 
 A derived metric returns `ok` only when its historical dependency window is sufficient.
@@ -142,6 +157,8 @@ Integrated rows keep:
 
 Equity rows state the local market history and yfinance unofficial/proxy boundary.
 WTI/Brent rows state official FRED/EIA daily oil history and remain derived energy-pressure inputs, not real-time oil quotes, inflation forecasts, or commodity trading signals.
+Proxy breadth rows state the local market history and yfinance ETF proxy boundary.
+They are not official market breadth, not valuation data, and not crash confirmation signals.
 
 ## Official Energy History Ingest
 

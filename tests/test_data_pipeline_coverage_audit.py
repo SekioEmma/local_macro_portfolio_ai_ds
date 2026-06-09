@@ -45,6 +45,8 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "energy_history" in result
     assert "energy_history_available" in result["energy_history"]
     assert "real_yield_pressure_status_status" in result["energy_history"]
+    assert "proxy_breadth" in result
+    assert "breadth_proxy_available" in result["proxy_breadth"]
     assert result["module_coverage"]
     assert "recommendations" in result
 
@@ -240,9 +242,9 @@ def test_audit_reports_historical_derived_block_when_db_missing(monkeypatch, tmp
     historical_derived = result["historical_derived"]
 
     assert historical_derived["historical_derived_available"] is False
-    assert historical_derived["derived_metric_count"] == 10
+    assert historical_derived["derived_metric_count"] == 22
     assert historical_derived["derived_metric_ok_count"] == 0
-    assert historical_derived["derived_metric_insufficient_history_count"] == 10
+    assert historical_derived["derived_metric_insufficient_history_count"] == 22
     assert "initialize_and_ingest_market_history" in historical_derived["recommended_history_actions"]
 
 
@@ -415,6 +417,38 @@ def test_audit_reports_dashboard_derived_integration(monkeypatch, tmp_path):
         "sp500_30d_return",
         "sp500_60d_return",
     ]
+
+
+def test_audit_reports_proxy_breadth_coverage(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-03-02T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+    _insert_proxy_series(db_path)
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    proxy = result["proxy_breadth"]
+
+    assert proxy["breadth_proxy_available"] is True
+    assert proxy["breadth_proxy_metric_count"] == 12
+    assert proxy["breadth_proxy_ok_count"] == 12
+    assert proxy["breadth_proxy_insufficient_history_count"] == 0
+    assert proxy["concentration_proxy_available"] is True
+    assert proxy["credit_proxy_available"] is True
+    assert proxy["proxy_metrics_ai_context_allowed_count"] == 12
+    assert proxy["proxy_insufficient_history_metric_keys"] == []
+    assert "spy_vs_rsp_30d" in proxy["proxy_metric_keys"]
+    assert "hyg_vs_lqd_60d" in proxy["proxy_metric_keys"]
 
 
 def test_audit_reports_energy_history_and_real_yield_status(monkeypatch, tmp_path):
@@ -853,6 +887,39 @@ def _insert_market_observation(
         },
         db_path=db_path,
     )
+
+
+def _insert_proxy_series(db_path):
+    values_by_metric = {
+        "spy_proxy": [100.0, 110.0, 120.0],
+        "rsp_proxy": [100.0, 105.0, 110.0],
+        "qqq_proxy": [100.0, 115.0, 140.0],
+        "hyg_proxy": [100.0, 102.0, 104.0],
+        "lqd_proxy": [100.0, 101.0, 102.0],
+    }
+    series_by_metric = {
+        "spy_proxy": "SPY",
+        "rsp_proxy": "RSP",
+        "qqq_proxy": "QQQ",
+        "hyg_proxy": "HYG",
+        "lqd_proxy": "LQD",
+    }
+    for metric_key, values in values_by_metric.items():
+        for observation_date, value in zip(
+            ["2026-01-01", "2026-01-31", "2026-03-02"],
+            values,
+        ):
+            _insert_market_observation(
+                db_path,
+                metric_key,
+                observation_date,
+                value,
+                source_badge="proxy",
+                provider="yfinance",
+                source_series=series_by_metric[metric_key],
+                metric_kind="proxy",
+                ai_context_allowed=False,
+            )
 
 
 def _block_network(monkeypatch):

@@ -32,6 +32,7 @@ DASHBOARD_MODULE_KEYS = (
     "real_yield_pressure",
     "inflation_energy_pressure",
     "equity_trend",
+    "breadth_concentration_proxy",
     "portfolio_deviation",
 )
 REPORT_FILES = {
@@ -95,6 +96,18 @@ DERIVED_METRIC_KEYS = {
     "nasdaq_vs_sp500_30d",
     "wti_30d_change",
     "brent_30d_change",
+    "spy_proxy_30d_return",
+    "spy_proxy_60d_return",
+    "rsp_proxy_30d_return",
+    "rsp_proxy_60d_return",
+    "qqq_proxy_30d_return",
+    "qqq_proxy_60d_return",
+    "spy_vs_rsp_30d",
+    "spy_vs_rsp_60d",
+    "qqq_vs_spy_30d",
+    "qqq_vs_spy_60d",
+    "hyg_vs_lqd_30d",
+    "hyg_vs_lqd_60d",
 }
 EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
     "sp500_30d_return",
@@ -106,6 +119,20 @@ EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
 OIL_HISTORICAL_DERIVED_METRIC_KEYS = {
     "wti_30d_change",
     "brent_30d_change",
+}
+PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS = {
+    "spy_proxy_30d_return",
+    "spy_proxy_60d_return",
+    "rsp_proxy_30d_return",
+    "rsp_proxy_60d_return",
+    "qqq_proxy_30d_return",
+    "qqq_proxy_60d_return",
+    "spy_vs_rsp_30d",
+    "spy_vs_rsp_60d",
+    "qqq_vs_spy_30d",
+    "qqq_vs_spy_60d",
+    "hyg_vs_lqd_30d",
+    "hyg_vs_lqd_60d",
 }
 EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
     " Derived from local market history; underlying source includes yfinance "
@@ -153,6 +180,14 @@ CORE_METRIC_KEYS = {
         "sp500_30d_return",
         "nasdaq100_30d_return",
         "nasdaq_vs_sp500_30d",
+    },
+    "breadth_concentration_proxy": {
+        "spy_proxy_30d_return",
+        "rsp_proxy_30d_return",
+        "qqq_proxy_30d_return",
+        "spy_vs_rsp_30d",
+        "qqq_vs_spy_30d",
+        "hyg_vs_lqd_30d",
     },
     "portfolio_deviation": {
         "max_deviation_asset",
@@ -224,6 +259,20 @@ METRIC_SPECS = {
             "insufficient_history",
         ),
         ("nasdaq_vs_sp500_30d", "Nasdaq vs S&P 500 30D", "pp", "pp", "insufficient_history"),
+    ],
+    "breadth_concentration_proxy": [
+        ("spy_proxy_30d_return", "SPY proxy 30D return", "percent", "signed_percent", "insufficient_history"),
+        ("spy_proxy_60d_return", "SPY proxy 60D return", "percent", "signed_percent", "insufficient_history"),
+        ("rsp_proxy_30d_return", "RSP proxy 30D return", "percent", "signed_percent", "insufficient_history"),
+        ("rsp_proxy_60d_return", "RSP proxy 60D return", "percent", "signed_percent", "insufficient_history"),
+        ("qqq_proxy_30d_return", "QQQ proxy 30D return", "percent", "signed_percent", "insufficient_history"),
+        ("qqq_proxy_60d_return", "QQQ proxy 60D return", "percent", "signed_percent", "insufficient_history"),
+        ("spy_vs_rsp_30d", "SPY vs RSP 30D", "pp", "pp", "insufficient_history"),
+        ("spy_vs_rsp_60d", "SPY vs RSP 60D", "pp", "pp", "insufficient_history"),
+        ("qqq_vs_spy_30d", "QQQ vs SPY 30D", "pp", "pp", "insufficient_history"),
+        ("qqq_vs_spy_60d", "QQQ vs SPY 60D", "pp", "pp", "insufficient_history"),
+        ("hyg_vs_lqd_30d", "HYG vs LQD 30D", "pp", "pp", "insufficient_history"),
+        ("hyg_vs_lqd_60d", "HYG vs LQD 60D", "pp", "pp", "insufficient_history"),
     ],
     "portfolio_deviation": [
         ("max_deviation_asset", "Max deviation asset", None, "text", "missing"),
@@ -604,6 +653,17 @@ def _build_modules(
                 market_history_db_path=market_history_db_path,
             ),
         ),
+        "breadth_concentration_proxy": _market_module(
+            key="breadth_concentration_proxy",
+            label="proxy breadth and concentration",
+            reports=market_temperature_metadata_reports,
+            signal_terms=("breadth", "concentration", "spy_proxy", "rsp_proxy", "qqq_proxy"),
+            key_metrics=_key_metrics_for_module(
+                "breadth_concentration_proxy",
+                market_temperature_metadata_reports,
+                market_history_db_path=market_history_db_path,
+            ),
+        ),
         "portfolio_deviation": _portfolio_module(portfolio),
     }
 
@@ -636,6 +696,19 @@ def _market_module(
             summary=(
                 "equity trend historical derived metrics available; risk "
                 "interpretation remains descriptive"
+            ),
+            source_badge="derived",
+            updated_at=_latest_metric_generated_at(key_metrics),
+            key_metrics=key_metrics,
+        )
+    if key == "breadth_concentration_proxy" and _proxy_historical_derived_metrics_available(key_metrics):
+        return _module(
+            key=key,
+            status="ok",
+            label=label,
+            summary=(
+                "proxy breadth and concentration metrics available; yfinance ETF "
+                "proxy boundary applies"
             ),
             source_badge="derived",
             updated_at=_latest_metric_generated_at(key_metrics),
@@ -782,6 +855,16 @@ def _key_metrics_for_module(
             fallback_source="local_market_history",
             required_dependency_source_badges={"official"},
             replace_existing=True,
+            db_path=market_history_db_path,
+        )
+    if module_key == "breadth_concentration_proxy":
+        return _apply_historical_derived_metrics(
+            metrics,
+            module_key="breadth_concentration_proxy",
+            metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+            hint_suffix="",
+            fallback_source="local_market_history",
+            required_dependency_source_badges={"proxy"},
             db_path=market_history_db_path,
         )
     return metrics
@@ -1014,6 +1097,18 @@ def _equity_historical_derived_metrics_available(
 ) -> bool:
     return any(
         metric.metric_key in EQUITY_HISTORICAL_DERIVED_METRIC_KEYS
+        and metric.status == "ok"
+        and metric.source_badge == "derived"
+        and metric.value is not None
+        for metric in metrics
+    )
+
+
+def _proxy_historical_derived_metrics_available(
+    metrics: list[DashboardMetric],
+) -> bool:
+    return any(
+        metric.metric_key in PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS
         and metric.status == "ok"
         and metric.source_badge == "derived"
         and metric.value is not None

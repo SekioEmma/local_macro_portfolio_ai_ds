@@ -44,6 +44,30 @@ BAD_AI_STATUSES = {
 }
 BAD_AI_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
 DEFAULT_YFINANCE_HISTORY_CONFIG = PROJECT_ROOT / "configs" / "yfinance_history.yaml"
+PROXY_BREADTH_METRIC_KEYS = {
+    "spy_proxy_30d_return",
+    "spy_proxy_60d_return",
+    "rsp_proxy_30d_return",
+    "rsp_proxy_60d_return",
+    "qqq_proxy_30d_return",
+    "qqq_proxy_60d_return",
+    "spy_vs_rsp_30d",
+    "spy_vs_rsp_60d",
+    "qqq_vs_spy_30d",
+    "qqq_vs_spy_60d",
+    "hyg_vs_lqd_30d",
+    "hyg_vs_lqd_60d",
+}
+CONCENTRATION_PROXY_METRIC_KEYS = {
+    "spy_vs_rsp_30d",
+    "spy_vs_rsp_60d",
+    "qqq_vs_spy_30d",
+    "qqq_vs_spy_60d",
+}
+CREDIT_PROXY_METRIC_KEYS = {
+    "hyg_vs_lqd_30d",
+    "hyg_vs_lqd_60d",
+}
 
 
 def build_coverage_audit(
@@ -86,6 +110,7 @@ def build_coverage_audit(
         rows,
         db_path=dashboard_market_history_db_path,
     )
+    proxy_breadth = _proxy_breadth_audit(rows)
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows)
     provider_health = _provider_health_audit(summary.provider_health)
@@ -113,6 +138,7 @@ def build_coverage_audit(
         "historical_derived": historical_derived,
         "energy_history": energy_history,
         "yfinance_history": yfinance_history,
+        "proxy_breadth": proxy_breadth,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
         "provider_health": provider_health,
@@ -359,7 +385,7 @@ def _data_sufficiency_assessment(rows: list[DashboardEvidenceRow]) -> dict[str, 
         "notes": [
             "Daily monitoring can use available rates, inflation, labor, equity, portfolio, and partial credit evidence.",
             "Crisis confirmation still requires broader credit/funding/labor/earnings evidence than this dashboard provides.",
-            "Valuation and breadth/concentration remain outside configured audited data.",
+            "True valuation and constituent-level breadth/concentration remain outside configured audited data; proxy breadth may be available separately.",
         ],
     }
 
@@ -737,6 +763,34 @@ def _energy_history_audit(
 
 def _row_status(row: DashboardEvidenceRow | None) -> str:
     return row.status if row is not None else "missing"
+
+
+def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    proxy_rows = [row for row in rows if row.metric_key in PROXY_BREADTH_METRIC_KEYS]
+    ok_rows = [row for row in proxy_rows if row.status == "ok" and _has_value(row)]
+    insufficient_rows = [row for row in proxy_rows if row.status == "insufficient_history"]
+    return {
+        "breadth_proxy_available": any(
+            row.metric_key in {"spy_vs_rsp_30d", "spy_vs_rsp_60d"}
+            for row in ok_rows
+        ),
+        "breadth_proxy_metric_count": len(proxy_rows),
+        "breadth_proxy_ok_count": len(ok_rows),
+        "breadth_proxy_insufficient_history_count": len(insufficient_rows),
+        "concentration_proxy_available": any(
+            row.metric_key in CONCENTRATION_PROXY_METRIC_KEYS for row in ok_rows
+        ),
+        "credit_proxy_available": any(
+            row.metric_key in CREDIT_PROXY_METRIC_KEYS for row in ok_rows
+        ),
+        "proxy_metrics_ai_context_allowed_count": sum(
+            1 for row in proxy_rows if row.ai_context_allowed
+        ),
+        "proxy_metric_keys": sorted(row.metric_key for row in proxy_rows),
+        "proxy_insufficient_history_metric_keys": sorted(
+            row.metric_key for row in insufficient_rows
+        ),
+    }
 
 
 def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -1288,6 +1342,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## yfinance History", ""])
     for key, value in audit["yfinance_history"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Proxy Breadth", ""])
+    for key, value in audit["proxy_breadth"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Dashboard Derived Integration", ""])
     for key, value in audit["dashboard_derived_integration"].items():

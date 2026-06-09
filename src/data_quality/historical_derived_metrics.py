@@ -10,6 +10,12 @@ from data_quality import market_history_store
 
 DEFAULT_FRESHNESS_STATUS = "historical"
 DERIVED_SOURCE_BADGE = "derived"
+PROXY_BREADTH_MODULE = "breadth_concentration_proxy"
+PROXY_BREADTH_HINT_SUFFIX = (
+    " Derived from local market history; underlying source includes yfinance ETF "
+    "proxy observations. This is not official market breadth, not valuation data, "
+    "and not a crash confirmation signal."
+)
 
 
 @dataclass(frozen=True)
@@ -109,6 +115,108 @@ DERIVED_METRIC_SPECS: dict[str, dict[str, Any]] = {
         "window_days": 30,
         "unit": "percent",
     },
+    "spy_proxy_30d_return": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "period_return",
+        "metric_key": "spy_proxy",
+        "window_days": 30,
+        "unit": "percent",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "spy_proxy_60d_return": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "period_return",
+        "metric_key": "spy_proxy",
+        "window_days": 60,
+        "unit": "percent",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "rsp_proxy_30d_return": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "period_return",
+        "metric_key": "rsp_proxy",
+        "window_days": 30,
+        "unit": "percent",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "rsp_proxy_60d_return": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "period_return",
+        "metric_key": "rsp_proxy",
+        "window_days": 60,
+        "unit": "percent",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "qqq_proxy_30d_return": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "period_return",
+        "metric_key": "qqq_proxy",
+        "window_days": 30,
+        "unit": "percent",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "qqq_proxy_60d_return": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "period_return",
+        "metric_key": "qqq_proxy",
+        "window_days": 60,
+        "unit": "percent",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "spy_vs_rsp_30d": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "relative_return",
+        "numerator_metric_key": "spy_proxy",
+        "denominator_metric_key": "rsp_proxy",
+        "window_days": 30,
+        "unit": "pp",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "spy_vs_rsp_60d": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "relative_return",
+        "numerator_metric_key": "spy_proxy",
+        "denominator_metric_key": "rsp_proxy",
+        "window_days": 60,
+        "unit": "pp",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "qqq_vs_spy_30d": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "relative_return",
+        "numerator_metric_key": "qqq_proxy",
+        "denominator_metric_key": "spy_proxy",
+        "window_days": 30,
+        "unit": "pp",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "qqq_vs_spy_60d": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "relative_return",
+        "numerator_metric_key": "qqq_proxy",
+        "denominator_metric_key": "spy_proxy",
+        "window_days": 60,
+        "unit": "pp",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "hyg_vs_lqd_30d": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "relative_return",
+        "numerator_metric_key": "hyg_proxy",
+        "denominator_metric_key": "lqd_proxy",
+        "window_days": 30,
+        "unit": "pp",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
+    "hyg_vs_lqd_60d": {
+        "module": PROXY_BREADTH_MODULE,
+        "kind": "relative_return",
+        "numerator_metric_key": "hyg_proxy",
+        "denominator_metric_key": "lqd_proxy",
+        "window_days": 60,
+        "unit": "pp",
+        "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
+    },
 }
 
 
@@ -119,6 +227,7 @@ def calculate_period_return(
     db_path: Path | str | None = None,
     output_metric_key: str | None = None,
     unit: str | None = "percent",
+    interpretation_hint_suffix: str | None = None,
 ) -> HistoricalDerivedMetric:
     observations = _numeric_observations(metric_key, db_path=db_path)
     required = 2
@@ -171,6 +280,7 @@ def calculate_period_return(
         interpretation_hint=(
             f"Derived from market history: latest {metric_key} divided by "
             f"the nearest observation on or before {window_days} calendar days earlier, minus 1."
+            f"{interpretation_hint_suffix or ''}"
         ),
         dependency_observations=dependency_observations,
     )
@@ -225,6 +335,7 @@ def calculate_relative_return(
     db_path: Path | str | None = None,
     output_metric_key: str | None = None,
     unit: str | None = "pp",
+    interpretation_hint_suffix: str | None = None,
 ) -> HistoricalDerivedMetric:
     numerator = calculate_period_return(
         numerator_metric_key,
@@ -273,6 +384,7 @@ def calculate_relative_return(
         interpretation_hint=(
             f"Derived from market history: {numerator_metric_key} {window_days}D return "
             f"minus {denominator_metric_key} {window_days}D return."
+            f"{interpretation_hint_suffix or ''}"
         ),
         dependency_source_badges=sorted(
             set((numerator.dependency_source_badges or []) + (denominator.dependency_source_badges or []))
@@ -397,6 +509,7 @@ def _calculate_spec(
             db_path=db_path,
             output_metric_key=output_key,
             unit=spec.get("unit"),
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
         )
     if kind == "relative_return":
         return calculate_relative_return(
@@ -406,6 +519,7 @@ def _calculate_spec(
             db_path=db_path,
             output_metric_key=output_key,
             unit=spec.get("unit"),
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
         )
     if kind == "distance_to_threshold":
         return calculate_distance_to_threshold(
