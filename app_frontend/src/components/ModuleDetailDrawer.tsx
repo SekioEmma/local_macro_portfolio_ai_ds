@@ -51,6 +51,17 @@ const interpretationBoundaries: Record<string, string> = {
     "组合偏离不能归因于宏观市场因素；只描述风险暴露；现金备用金不参与目标配置；不输出交易指令。"
 };
 
+Object.assign(interpretationBoundaries, {
+  breadth_concentration_proxy:
+    "Uses ETF/index proxy relationships only. SPY/RSP/QQQ are not true constituent breadth. Proxy concentration cannot confirm mega-cap concentration without constituent weights. Do not treat proxy rows as official facts or use them alone for systemic or crash risk.",
+  market_stress_derived:
+    "Drawdown is an outcome, not a cause. Curve slope is macro context, not a trading signal. TLT/SHY/GLD are ETF proxies, not official macro series. VIX, drawdown, and proxy moves alone cannot confirm systemic crisis.",
+  labor_macro:
+    "Sahm rule proxy is a recession-warning proxy, not official recession confirmation. One-month unemployment increases do not confirm recession. Claims increases are labor-pressure observations, not crisis confirmation. Payrolls are revised; do not overstate certainty.",
+  financial_stress_composite:
+    "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Proxy inputs are not official breadth or funding stress."
+});
+
 export function ModuleDetailDrawer({
   moduleKey,
   moduleLabel,

@@ -9,6 +9,7 @@ const statusClassMap: Record<string, string> = {
   missing: "status-missing",
   research_needed: "status-research-needed",
   insufficient_history: "status-insufficient-history",
+  insufficient_evidence: "status-insufficient-history",
   stale: "status-stale",
   not_available: "status-missing",
   not_run_yet: "status-muted",

@@ -50,6 +50,10 @@ class DashboardMetric(BaseModel):
     missing_reason: str | None
     interpretation_hint: str | None
     ai_context_allowed: bool
+    input_evidence: list[dict[str, Any]] | None = None
+    component_contributions: dict[str, Any] | None = None
+    missing_inputs: list[str] | None = None
+    interpretation_boundary: str | None = None
 
 
 class DashboardModule(BaseModel):
@@ -94,6 +98,10 @@ class DashboardEvidenceRow(BaseModel):
     interpretation_hint: str | None
     blocked_reason: str | None = None
     ai_context_allowed: bool
+    input_evidence: list[dict[str, Any]] | None = None
+    component_contributions: dict[str, Any] | None = None
+    missing_inputs: list[str] | None = None
+    interpretation_boundary: str | None = None
 
 
 class DashboardEvidenceTableResponse(BaseModel):

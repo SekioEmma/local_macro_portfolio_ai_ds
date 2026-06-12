@@ -31,6 +31,7 @@ STATUS_KEYS = (
     "missing",
     "research_needed",
     "insufficient_history",
+    "insufficient_evidence",
     "stale",
     "unknown",
 )
@@ -40,6 +41,7 @@ BAD_AI_STATUSES = {
     "research_needed",
     "not_available",
     "insufficient_history",
+    "insufficient_evidence",
     "stale",
 }
 BAD_AI_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
@@ -96,6 +98,14 @@ CROSS_ASSET_PROXY_METRIC_KEYS = {
     "shy_proxy_30d_return",
     "tlt_vs_shy_30d",
 }
+FINANCIAL_STRESS_COMPOSITE_METRIC_KEYS = {
+    "financial_stress_score",
+    "financial_stress_status",
+    "financial_stress_dominant_pressure_source",
+    "financial_stress_component_contributions",
+    "financial_stress_missing_inputs",
+    "financial_stress_interpretation_boundary",
+}
 
 
 def build_coverage_audit(
@@ -140,6 +150,7 @@ def build_coverage_audit(
     )
     proxy_breadth = _proxy_breadth_audit(rows)
     market_stress_derived = _market_stress_derived_audit(rows)
+    financial_stress_composite = _financial_stress_composite_audit(rows)
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
@@ -170,6 +181,7 @@ def build_coverage_audit(
         "yfinance_history": yfinance_history,
         "proxy_breadth": proxy_breadth,
         "market_stress_derived": market_stress_derived,
+        "financial_stress_composite": financial_stress_composite,
         "valuation_research": valuation_research,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
@@ -219,6 +231,7 @@ def _coverage_summary(
         "missing_count": statuses["missing"],
         "research_needed_count": statuses["research_needed"],
         "insufficient_history_count": statuses["insufficient_history"],
+        "insufficient_evidence_count": statuses["insufficient_evidence"],
         "stale_count": statuses["stale"],
         "unknown_count": statuses["unknown"],
         "source_badge_missing_count": sum(
@@ -886,6 +899,44 @@ def _market_stress_derived_audit(rows: list[DashboardEvidenceRow]) -> dict[str, 
         "market_stress_metric_keys": sorted(row.metric_key for row in stress_rows),
         "market_stress_insufficient_history_metric_keys": sorted(
             row.metric_key for row in insufficient_rows
+        ),
+    }
+
+
+def _financial_stress_composite_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    stress_rows = [
+        row for row in rows if row.metric_key in FINANCIAL_STRESS_COMPOSITE_METRIC_KEYS
+    ]
+    row_by_key = {row.metric_key: row for row in stress_rows}
+    score = row_by_key.get("financial_stress_score")
+    status = row_by_key.get("financial_stress_status")
+    dominant = row_by_key.get("financial_stress_dominant_pressure_source")
+    missing = row_by_key.get("financial_stress_missing_inputs")
+    contributions = (
+        getattr(score, "component_contributions", None)
+        if score is not None
+        else None
+    )
+    contribution_groups = (
+        sorted(contributions.keys()) if isinstance(contributions, dict) else []
+    )
+    return {
+        "financial_stress_composite_available": bool(score and _has_value(score)),
+        "financial_stress_metric_count": len(stress_rows),
+        "financial_stress_score": score.value if score is not None else None,
+        "financial_stress_score_status": score.status if score is not None else "missing",
+        "financial_stress_status": status.value if status is not None else "missing",
+        "financial_stress_dominant_pressure_source": (
+            dominant.value if dominant is not None else None
+        ),
+        "financial_stress_missing_inputs": missing.value if missing is not None else None,
+        "financial_stress_contribution_groups": contribution_groups,
+        "financial_stress_ai_context_allowed": bool(
+            score is not None and score.ai_context_allowed
+        ),
+        "financial_stress_source_badge": score.source_badge if score is not None else "missing",
+        "financial_stress_has_interpretation_boundary": bool(
+            score is not None and getattr(score, "interpretation_boundary", None)
         ),
     }
 

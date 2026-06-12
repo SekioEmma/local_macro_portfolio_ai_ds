@@ -15,6 +15,7 @@ from app_backend.schemas.responses import (
     DashboardSummaryResponse,
 )
 from app_backend.services import provider_service
+from data_quality import financial_stress_composite
 from data_quality import historical_derived_metrics
 from data_quality import last_good_cache
 from data_quality import market_history_store
@@ -56,6 +57,7 @@ ALLOWED_METRIC_STATUSES = {
     "research_needed",
     "insufficient_history",
     "not_available",
+    "insufficient_evidence",
 }
 ALLOWED_SOURCE_BADGES = {
     "official",
@@ -73,6 +75,7 @@ AI_BLOCKED_METRIC_STATUSES = {
     "research_needed",
     "not_available",
     "insufficient_history",
+    "insufficient_evidence",
     "stale",
 }
 AI_BLOCKED_FRESHNESS_STATUSES = {
@@ -125,6 +128,12 @@ DERIVED_METRIC_KEYS = {
     "continuing_claims_4w_avg",
     "sahm_rule_proxy_status",
     "labor_deterioration_status",
+    "financial_stress_score",
+    "financial_stress_status",
+    "financial_stress_dominant_pressure_source",
+    "financial_stress_component_contributions",
+    "financial_stress_missing_inputs",
+    "financial_stress_interpretation_boundary",
 }
 EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
     "sp500_30d_return",
@@ -463,10 +472,11 @@ def build_dashboard_evidence_table(
         base_dir,
         market_history_db_path,
     )
-    all_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(
+    base_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(
         reports,
         db_path=dashboard_market_history_db_path,
     )
+    all_rows = base_rows + _financial_stress_composite_evidence_rows(base_rows)
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
     filtered_rows = [
@@ -585,6 +595,18 @@ def _labor_macro_evidence_rows(
     return [_evidence_row("labor_macro", metric) for metric in metrics]
 
 
+def _financial_stress_composite_evidence_rows(
+    rows: list[DashboardEvidenceRow],
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = financial_stress_composite.build_financial_stress_rows(
+        [_model_to_dict(row) for row in rows]
+    )
+    return [
+        _evidence_row("financial_stress_composite", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
     ai_context_allowed = _evidence_ai_context_allowed(metric)
     blocked_reason = _ppi_observation_date_blocked_reason(metric)
@@ -620,6 +642,10 @@ def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidence
             interpretation_hint=metric.interpretation_hint,
         ),
         ai_context_allowed=ai_context_allowed,
+        input_evidence=metric.input_evidence,
+        component_contributions=metric.component_contributions,
+        missing_inputs=metric.missing_inputs,
+        interpretation_boundary=metric.interpretation_boundary,
     )
 
 

@@ -17,7 +17,7 @@ MODULE_KEYS = {
     "market_stress_derived",
     "portfolio_deviation",
 }
-EVIDENCE_MODULE_KEYS = MODULE_KEYS | {"labor_macro"}
+EVIDENCE_MODULE_KEYS = MODULE_KEYS | {"labor_macro", "financial_stress_composite"}
 
 
 def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
@@ -45,6 +45,12 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
         assert row["source_badge"]
         assert row["freshness_status"]
         assert "ai_context_allowed" in row
+    stress_score = _row(data, "financial_stress_composite", "financial_stress_score")
+    assert stress_score["source_badge"] == "derived"
+    assert stress_score["component_contributions"]["credit_conditions"]["inputs"]
+    assert "Financial stress score is a transparent pressure temperature" in stress_score[
+        "interpretation_boundary"
+    ]
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):
@@ -208,6 +214,7 @@ def _write_fake_reports(tmp_path, source_badge="official"):
                 "status": "ok",
                 "risk_level": "watch",
                 "high_yield_spread": metric(3.4),
+                "investment_grade_spread": metric(1.2),
                 "vix": metric(18.2, source="CBOE"),
                 "credit_stress_status": metric("watch"),
                 "dgs10": metric(4.52),

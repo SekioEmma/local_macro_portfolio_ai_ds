@@ -2,6 +2,7 @@ import type {
   ApiResult,
   AppSettings,
   AppSettingsResponse,
+  DashboardEvidenceFilters,
   DashboardEvidenceTableResponse,
   DashboardSummaryResponse,
   FavoriteAnswer,
@@ -27,10 +28,22 @@ export function fetchDashboardSummary(): Promise<ApiResult<DashboardSummaryRespo
   return requestJson<DashboardSummaryResponse>("/api/dashboard/summary");
 }
 
-export function fetchDashboardEvidenceTable(): Promise<
+export function fetchDashboardEvidenceTable(
+  filters: DashboardEvidenceFilters = {}
+): Promise<
   ApiResult<DashboardEvidenceTableResponse>
 > {
-  return requestJson<DashboardEvidenceTableResponse>("/api/dashboard/evidence-table");
+  const query = new URLSearchParams();
+  if (filters.module) query.set("module", filters.module);
+  if (filters.status) query.set("status", filters.status);
+  if (filters.source_badge) query.set("source_badge", filters.source_badge);
+  if (filters.ai_context_allowed !== undefined) {
+    query.set("ai_context_allowed", String(filters.ai_context_allowed));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestJson<DashboardEvidenceTableResponse>(
+    `/api/dashboard/evidence-table${suffix}`
+  );
 }
 
 export function fetchStorageStatus(): Promise<ApiResult<StorageStatusResponse>> {

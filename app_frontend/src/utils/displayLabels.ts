@@ -75,6 +75,26 @@ const metricLabels: Record<string, string> = {
   tlt_vs_shy_30d: "TLT-SHY 30日相对回报"
 };
 
+Object.assign(moduleLabels, {
+  financial_stress_composite: "Financial stress composite"
+});
+
+Object.assign(statusLabels, {
+  insufficient_evidence: "Insufficient evidence"
+});
+
+Object.assign(metricLabels, {
+  financial_stress_score: "Financial stress score",
+  financial_stress_status: "Financial stress status",
+  financial_stress_dominant_pressure_source:
+    "Financial stress dominant pressure source",
+  financial_stress_component_contributions:
+    "Financial stress component contributions",
+  financial_stress_missing_inputs: "Financial stress missing inputs",
+  financial_stress_interpretation_boundary:
+    "Financial stress interpretation boundary"
+});
+
 export function getModuleLabel(moduleKey: string) {
   return moduleLabels[moduleKey] || moduleKey;
 }

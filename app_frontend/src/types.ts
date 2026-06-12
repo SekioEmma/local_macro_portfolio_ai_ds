@@ -60,6 +60,10 @@ export type DashboardMetric = {
   missing_reason: string | null;
   interpretation_hint: string | null;
   ai_context_allowed: boolean;
+  input_evidence?: Array<Record<string, unknown>> | null;
+  component_contributions?: Record<string, unknown> | null;
+  missing_inputs?: string[] | null;
+  interpretation_boundary?: string | null;
 };
 
 export type DashboardSummaryResponse = {
@@ -98,6 +102,17 @@ export type DashboardEvidenceRow = {
   interpretation_hint: string | null;
   blocked_reason: string | null;
   ai_context_allowed: boolean;
+  input_evidence?: Array<Record<string, unknown>> | null;
+  component_contributions?: Record<string, unknown> | null;
+  missing_inputs?: string[] | null;
+  interpretation_boundary?: string | null;
+};
+
+export type DashboardEvidenceFilters = {
+  module?: string;
+  status?: string;
+  source_badge?: string;
+  ai_context_allowed?: boolean;
 };
 
 export type DashboardEvidenceTableResponse = {

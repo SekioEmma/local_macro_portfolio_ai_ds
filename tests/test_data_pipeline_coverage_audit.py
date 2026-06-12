@@ -49,6 +49,9 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "breadth_proxy_available" in result["proxy_breadth"]
     assert "valuation_research" in result
     assert result["valuation_research"]["valuation_available"] is False
+    assert "financial_stress_composite" in result
+    assert "financial_stress_score_status" in result["financial_stress_composite"]
+    assert result["financial_stress_composite"]["financial_stress_source_badge"] == "derived"
     assert result["module_coverage"]
     assert "recommendations" in result
 

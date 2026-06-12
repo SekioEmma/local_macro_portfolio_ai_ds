@@ -13,6 +13,7 @@ import { ModuleDetailDrawer } from "./components/ModuleDetailDrawer";
 import type {
   ApiResult,
   AppSettingsResponse,
+  DashboardEvidenceFilters,
   DashboardEvidenceRow,
   DashboardEvidenceTableResponse,
   DashboardMetric,
@@ -42,6 +43,20 @@ import {
 
 type ViewKey = "dashboard" | "evidence" | "chat" | "account" | "diagnostics";
 
+type EvidenceFilterState = {
+  module: string;
+  status: string;
+  sourceBadge: string;
+  aiContextAllowed: string;
+};
+
+const defaultEvidenceFilters: EvidenceFilterState = {
+  module: "all",
+  status: "all",
+  sourceBadge: "all",
+  aiContextAllowed: "all"
+};
+
 const navItems: Array<{ key: ViewKey; label: string }> = [
   { key: "dashboard", label: "市场仪表盘" },
   { key: "evidence", label: "全量证据表" },
@@ -65,6 +80,9 @@ export default function App() {
   const [evidence, setEvidence] = useState<
     ApiResult<DashboardEvidenceTableResponse>
   >({ data: null, error: null });
+  const [filteredEvidence, setFilteredEvidence] = useState<
+    ApiResult<DashboardEvidenceTableResponse>
+  >({ data: null, error: null });
   const [storage, setStorage] = useState<ApiResult<StorageStatusResponse>>({
     data: null,
     error: null
@@ -81,15 +99,19 @@ export default function App() {
     data: null,
     error: null
   });
+  const [evidenceFilters, setEvidenceFilters] = useState<EvidenceFilterState>(
+    defaultEvidenceFilters
+  );
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadAll = () => {
+  const loadAll = (nextEvidenceFilters = evidenceFilters) => {
     setIsLoading(true);
     Promise.all([
       fetchStatus(),
       fetchProviderHealth(),
       fetchDashboardSummary(),
       fetchDashboardEvidenceTable(),
+      fetchDashboardEvidenceTable(toApiEvidenceFilters(nextEvidenceFilters)),
       fetchStorageStatus(),
       fetchSettings(),
       fetchRefreshRuns(),
@@ -101,6 +123,7 @@ export default function App() {
           providerResult,
           dashboardResult,
           evidenceResult,
+          filteredEvidenceResult,
           storageResult,
           settingsResult,
           refreshResult,
@@ -110,6 +133,7 @@ export default function App() {
           setProviderHealth(providerResult);
           setDashboard(dashboardResult);
           setEvidence(evidenceResult);
+          setFilteredEvidence(filteredEvidenceResult);
           setStorage(storageResult);
           setSettings(settingsResult);
           setRefreshRuns(refreshResult);
@@ -156,7 +180,18 @@ export default function App() {
           />
         )}
         {activeView === "evidence" && (
-          <EvidenceTableView evidence={evidence} isLoading={isLoading} />
+          <EvidenceTableView
+            evidence={filteredEvidence}
+            filters={evidenceFilters}
+            isLoading={isLoading}
+            onFiltersChange={(nextFilters) => {
+              setEvidenceFilters(nextFilters);
+              setIsLoading(true);
+              fetchDashboardEvidenceTable(toApiEvidenceFilters(nextFilters))
+                .then(setFilteredEvidence)
+                .finally(() => setIsLoading(false));
+            }}
+          />
         )}
         {activeView === "chat" && (
           <PlaceholderView
@@ -396,49 +431,19 @@ function FreshnessList({ data }: { data: Record<string, unknown> }) {
   );
 }
 
-type EvidenceFilterState = {
-  module: string;
-  status: string;
-  sourceBadge: string;
-  aiContextAllowed: string;
-};
-
-const defaultEvidenceFilters: EvidenceFilterState = {
-  module: "all",
-  status: "all",
-  sourceBadge: "all",
-  aiContextAllowed: "all"
-};
-
 function EvidenceTableView({
   evidence,
-  isLoading
+  filters,
+  isLoading,
+  onFiltersChange
 }: {
   evidence: ApiResult<DashboardEvidenceTableResponse>;
+  filters: EvidenceFilterState;
   isLoading: boolean;
+  onFiltersChange: (filters: EvidenceFilterState) => void;
 }) {
-  const [filters, setFilters] = useState<EvidenceFilterState>(
-    defaultEvidenceFilters
-  );
   const data = evidence.data;
-
-  const filteredRows = useMemo(() => {
-    if (!data) return [];
-    return data.rows.filter((row) => {
-      if (filters.module !== "all" && row.module !== filters.module) return false;
-      if (filters.status !== "all" && row.status !== filters.status) return false;
-      if (
-        filters.sourceBadge !== "all" &&
-        row.source_badge !== filters.sourceBadge
-      ) {
-        return false;
-      }
-      if (filters.aiContextAllowed !== "all") {
-        return row.ai_context_allowed === (filters.aiContextAllowed === "true");
-      }
-      return true;
-    });
-  }, [data, filters]);
+  const filteredRows = data?.rows || [];
 
   const available = data?.filters.available || {};
   const moduleOptions = available.modules || data?.modules || [];
@@ -479,28 +484,28 @@ function EvidenceTableView({
           value={filters.module}
           options={moduleOptions}
           formatOption={getModuleLabel}
-          onChange={(value) => setFilters({ ...filters, module: value })}
+          onChange={(value) => onFiltersChange({ ...filters, module: value })}
         />
         <FilterSelect
           label="状态"
           value={filters.status}
           options={statusOptions}
           formatOption={getStatusLabel}
-          onChange={(value) => setFilters({ ...filters, status: value })}
+          onChange={(value) => onFiltersChange({ ...filters, status: value })}
         />
         <FilterSelect
           label="来源类型"
           value={filters.sourceBadge}
           options={sourceOptions}
           formatOption={getSourceBadgeLabel}
-          onChange={(value) => setFilters({ ...filters, sourceBadge: value })}
+          onChange={(value) => onFiltersChange({ ...filters, sourceBadge: value })}
         />
         <label className="filter-control">
           AI 事实层
           <select
             value={filters.aiContextAllowed}
             onChange={(event) =>
-              setFilters({ ...filters, aiContextAllowed: event.target.value })
+              onFiltersChange({ ...filters, aiContextAllowed: event.target.value })
             }
           >
             <option value="all">全部</option>
@@ -674,6 +679,21 @@ function AiContextChip({ row }: { row: DashboardEvidenceRow }) {
 
 function uniqueSorted(values: string[]) {
   return Array.from(new Set(values)).sort();
+}
+
+function toApiEvidenceFilters(
+  filters: EvidenceFilterState
+): DashboardEvidenceFilters {
+  return {
+    module: filters.module === "all" ? undefined : filters.module,
+    status: filters.status === "all" ? undefined : filters.status,
+    source_badge:
+      filters.sourceBadge === "all" ? undefined : filters.sourceBadge,
+    ai_context_allowed:
+      filters.aiContextAllowed === "all"
+        ? undefined
+        : filters.aiContextAllowed === "true"
+  };
 }
 
 function DiagnosticsView({
