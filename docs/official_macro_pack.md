@@ -28,6 +28,14 @@ into local `market_history` when run with `--live --write`. Its default
 `source_badge=official`, `source_series=PPIFIS`, `metric_kind=raw`, and
 `freshness_status=historical`.
 
+`scripts/ingest_official_labor_history.py` can ingest official FRED labor
+history for `UNRATE`, `ICSA`, `PAYEMS`, and `CCSA` into local `market_history`
+when run with `--live --write`. Its default `--dry-run` path does not fetch or
+write. Default limits are 24 monthly observations for `UNRATE`/`PAYEMS` and 52
+weekly observations for `ICSA`/`CCSA`. Stored rows are normalized observations
+only and use `source=FRED`, `source_badge=official`, `provider=FRED`,
+`metric_kind=raw`, and `freshness_status=historical`.
+
 ## Dashboard Scope
 
 Dashboard and Evidence Table rows are enabled for:

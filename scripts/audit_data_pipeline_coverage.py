@@ -1023,6 +1023,10 @@ def _official_macro_pack_audit(
         "sahm_rule_proxy_status",
         "labor_deterioration_status",
     )
+    labor_history_counts = {
+        key: int(observations.get(key) or 0)
+        for key in labor_keys
+    }
     return {
         "official_macro_configured_count": len(configured_keys),
         "official_macro_available_count": len(available_keys),
@@ -1080,6 +1084,17 @@ def _official_macro_pack_audit(
         ),
         "labor_deterioration_missing_inputs": _labor_deterioration_missing_inputs(
             row_by_key.get("labor_deterioration_status")
+        ),
+        "labor_history_observation_counts": labor_history_counts,
+        "unemployment_rate_history_observation_count": labor_history_counts["unemployment_rate"],
+        "initial_jobless_claims_history_observation_count": labor_history_counts["initial_jobless_claims"],
+        "nonfarm_payrolls_history_observation_count": labor_history_counts["nonfarm_payrolls"],
+        "continuing_claims_history_observation_count": labor_history_counts["continuing_claims"],
+        "labor_history_sufficient_for_derived": (
+            labor_history_counts["unemployment_rate"] >= 12
+            and labor_history_counts["initial_jobless_claims"] >= 8
+            and labor_history_counts["continuing_claims"] >= 8
+            and labor_history_counts["nonfarm_payrolls"] >= 2
         ),
         "suspicious_yoy_count": sum(1 for row in rows if _yoy_metric_suspiciously_large(row)),
         "blocked_due_to_index_level_count": sum(

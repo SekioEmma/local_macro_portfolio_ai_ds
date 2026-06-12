@@ -774,6 +774,14 @@ def test_audit_reports_ppi_final_demand_and_valuation_gates(monkeypatch, tmp_pat
 
 def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path):
     _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    for index in range(12):
+        _insert_market_observation(db_path, "unemployment_rate", f"2025-{index + 1:02d}-01", 4.0, source_series="UNRATE")
+    for index in range(8):
+        _insert_market_observation(db_path, "initial_jobless_claims", f"2026-01-{index + 1:02d}", 230000, source_series="ICSA")
+        _insert_market_observation(db_path, "continuing_claims", f"2026-01-{index + 1:02d}", 1700000, source_series="CCSA")
+    for index in range(2):
+        _insert_market_observation(db_path, "nonfarm_payrolls", f"2025-{index + 11:02d}-01", 160000, source_series="PAYEMS")
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -844,7 +852,7 @@ def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path)
         },
     )
 
-    result = audit.build_coverage_audit(reports_dir=tmp_path)
+    result = audit.build_coverage_audit(reports_dir=tmp_path, market_history_db_path=db_path)
     official = result["official_macro_pack"]
     provider = result["provider_health"]
 
@@ -854,6 +862,17 @@ def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path)
     assert official["initial_jobless_claims_status"] == "ok"
     assert official["nonfarm_payrolls_status"] == "ok"
     assert official["continuing_claims_status"] == "ok"
+    assert official["labor_history_observation_counts"] == {
+        "unemployment_rate": 12,
+        "initial_jobless_claims": 8,
+        "nonfarm_payrolls": 2,
+        "continuing_claims": 8,
+    }
+    assert official["unemployment_rate_history_observation_count"] == 12
+    assert official["initial_jobless_claims_history_observation_count"] == 8
+    assert official["nonfarm_payrolls_history_observation_count"] == 2
+    assert official["continuing_claims_history_observation_count"] == 8
+    assert official["labor_history_sufficient_for_derived"] is True
     assert provider["overall_status"] == "degraded"
     assert provider["provider_health_transient_error_count"] == 1
     assert provider["official_fallback_ok_count"] == 1

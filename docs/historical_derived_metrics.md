@@ -104,6 +104,16 @@ short, and `ok`/`watch`/`pressure` only when the required windows are complete.
 Single-month unemployment increases do not determine recession, and claims
 increases are labor-pressure observations rather than crisis confirmation.
 
+Official labor history can be previewed or written with:
+
+```text
+python scripts/ingest_official_labor_history.py --dry-run
+python scripts/ingest_official_labor_history.py --live --write
+```
+
+The default dry-run does not fetch or write. Live write stores normalized FRED
+observations for `UNRATE`, `ICSA`, `PAYEMS`, and `CCSA` only.
+
 ## Supported Candidate Metrics
 
 `rate_pressure`:

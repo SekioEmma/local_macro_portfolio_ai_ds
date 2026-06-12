@@ -227,6 +227,15 @@ The `official_macro_pack` block reports official labor gate status for:
 - `nonfarm_payrolls` / FRED `PAYEMS`
 - `continuing_claims` / FRED `CCSA`
 
+It also reports labor history counts from `market_history`:
+
+- `labor_history_observation_counts`
+- `unemployment_rate_history_observation_count`
+- `initial_jobless_claims_history_observation_count`
+- `nonfarm_payrolls_history_observation_count`
+- `continuing_claims_history_observation_count`
+- `labor_history_sufficient_for_derived`
+
 The `historical_derived` block includes labor derived details for:
 
 - `unemployment_rate_3m_avg`
@@ -240,6 +249,10 @@ Labor deterioration details include dependency source metadata, `input_evidence`
 and `missing_inputs`. Missing or insufficient history stays blocked from AI
 context. `watch` and `pressure` are labor-market context states only; they are
 not recession predictions, crisis confirmations, or trading advice.
+
+`scripts/ingest_official_labor_history.py --dry-run` can preview configured
+labor history ingest without fetching or writing. `--live --write` writes only
+normalized FRED observations to the ignored local market-history database.
 
 Top-level `historical_store` fields:
 
