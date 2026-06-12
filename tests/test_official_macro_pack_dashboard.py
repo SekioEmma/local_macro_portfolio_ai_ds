@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
+from data_quality import market_history_store
 from data_quality import official_macro_pack
 
 
@@ -173,6 +174,111 @@ def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_pa
         assert row["missing_reason"]
         assert row["interpretation_hint"]
         assert row["ai_context_allowed"] is False
+
+
+def test_labor_compact_missing_uses_official_history_fallback(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_history(db_path, "continuing_claims", "2026-06-07", 1700000, source_series="CCSA")
+    _write_market(
+        tmp_path,
+        {
+            "market_data_package": {
+                "labor_indicators": {
+                    "unemployment_rate": _metric(4.0, source="FRED:UNRATE"),
+                    "initial_jobless_claims": _metric(230000, source="FRED:ICSA"),
+                }
+            }
+        },
+    )
+
+    data = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        market_history_db_path=db_path,
+        write_last_good=False,
+    ).model_dump()
+    row = _row(data, "labor_macro", "continuing_claims")
+
+    assert row["status"] == "ok"
+    assert row["value"] == 1700000
+    assert row["source"] == "FRED"
+    assert row["source_badge"] == "official"
+    assert row["source_series"] == "CCSA"
+    assert row["observation_date"] == "2026-06-07"
+    assert row["generated_at"] == "2026-06-07T00:00:00+00:00"
+    assert row["freshness_status"] == "historical"
+    assert "continuing unemployment claims" in row["interpretation_hint"]
+    assert row["ai_context_allowed"] is True
+
+
+def test_labor_payems_compact_unknown_freshness_uses_history_metadata(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_history(db_path, "nonfarm_payrolls", "2026-05-01", 160000, source_series="PAYEMS")
+    _write_market(
+        tmp_path,
+        {
+            "market_data_package": {
+                "labor_indicators": {
+                    "nonfarm_payrolls": {
+                        "value": 159001,
+                        "status": "ok",
+                        "source": "FRED:PAYEMS",
+                        "observation_date": "2026-05-01",
+                    }
+                }
+            }
+        },
+    )
+
+    data = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        market_history_db_path=db_path,
+        write_last_good=False,
+    ).model_dump()
+    row = _row(data, "labor_macro", "nonfarm_payrolls")
+
+    assert row["status"] == "ok"
+    assert row["value"] == 160000
+    assert row["source_series"] == "PAYEMS"
+    assert row["freshness_status"] != "unknown"
+    assert row["freshness_status"] == "historical"
+    assert row["ai_context_allowed"] is True
+
+
+def test_labor_history_fallback_stale_blocks_ai_context(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_history(db_path, "continuing_claims", "2026-01-01", 1700000, source_series="CCSA")
+    _write_market(tmp_path, {})
+
+    data = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        market_history_db_path=db_path,
+        write_last_good=False,
+    ).model_dump()
+    row = _row(data, "labor_macro", "continuing_claims")
+
+    assert row["status"] == "stale"
+    assert row["source_badge"] == "official"
+    assert row["freshness_status"] == "stale"
+    assert row["ai_context_allowed"] is False
+
+
+def test_labor_compact_missing_stays_missing_without_history(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_market(tmp_path, {})
+
+    data = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        market_history_db_path=tmp_path / "missing.sqlite3",
+        write_last_good=False,
+    ).model_dump()
+    row = _row(data, "labor_macro", "continuing_claims")
+
+    assert row["status"] == "missing"
+    assert row["source_badge"] == "missing"
+    assert row["ai_context_allowed"] is False
 
 
 def test_ppi_boundary_preserves_missing_final_demand(monkeypatch, tmp_path):
@@ -426,6 +532,30 @@ def _write_market(tmp_path, metrics):
         **metrics,
     }
     (tmp_path / "market_snapshot.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _insert_history(db_path, metric_key, observation_date, value, *, source_series):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": metric_key,
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "claims" if metric_key.endswith("claims") else "index",
+            "status": "ok",
+            "source": "FRED",
+            "source_badge": "official",
+            "provider": "FRED",
+            "source_series": source_series,
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "historical",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {},
+        },
+        db_path=db_path,
+    )
 
 
 def _row(data, module_key, metric_key):

@@ -571,6 +571,7 @@ def _labor_macro_evidence_rows(
         _build_metric("labor_macro", metric_reports, spec)
         for spec in LABOR_METRIC_SPECS
     ]
+    metrics = _apply_labor_history_fallback(metrics, db_path=db_path)
     metrics = _apply_historical_derived_metrics(
         metrics,
         module_key="labor_macro",
@@ -1236,6 +1237,154 @@ def _apply_ppi_final_demand_history(
         else metric
         for metric in metrics
     ]
+
+
+def _apply_labor_history_fallback(
+    metrics: list[DashboardMetric],
+    *,
+    db_path: Path | str | None = None,
+) -> list[DashboardMetric]:
+    target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
+    latest_by_key = {
+        metric.metric_key: _latest_official_labor_observation(metric.metric_key, target_db_path)
+        for metric in metrics
+        if _is_labor_official_metric(metric.metric_key)
+    }
+    return [
+        _labor_history_metric(metric, latest_by_key.get(metric.metric_key))
+        if _labor_history_fallback_needed(metric, latest_by_key.get(metric.metric_key))
+        else metric
+        for metric in metrics
+    ]
+
+
+def _is_labor_official_metric(metric_key: str) -> bool:
+    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
+    return bool(
+        official_macro
+        and official_macro.module == "labor_macro"
+        and official_macro.source_series
+    )
+
+
+def _labor_history_fallback_needed(
+    metric: DashboardMetric,
+    observation: dict[str, Any] | None,
+) -> bool:
+    if observation is None:
+        return False
+    if metric.status != "ok" or metric.value is None:
+        return True
+    if metric.freshness_status in AI_BLOCKED_FRESHNESS_STATUSES:
+        return True
+    if not metric.observation_date:
+        return True
+    if not metric.generated_at:
+        return True
+    if metric.source_badge != "official":
+        return True
+    return False
+
+
+def _latest_official_labor_observation(
+    metric_key: str,
+    db_path: Path | str | None,
+) -> dict[str, Any] | None:
+    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
+    if official_macro is None or official_macro.module != "labor_macro":
+        return None
+    rows = market_history_store.list_market_observations(
+        metric_key=metric_key,
+        limit=100,
+        db_path=db_path,
+    )
+    for row in rows:
+        if row.get("status") != "ok":
+            continue
+        if row.get("source_badge") != "official":
+            continue
+        if row.get("provider") != "FRED":
+            continue
+        if row.get("source_series") != official_macro.source_series:
+            continue
+        if row.get("value_numeric") is None:
+            continue
+        return row
+    return None
+
+
+def _labor_history_metric(
+    original: DashboardMetric,
+    observation: dict[str, Any] | None,
+) -> DashboardMetric:
+    if observation is None:
+        return original
+    official_macro = official_macro_pack.get_official_macro_metric(original.metric_key)
+    if official_macro is None:
+        return original
+    value = float(observation["value_numeric"])
+    observation_date = _string_or_none(observation.get("observation_date"))
+    generated_at = _string_or_none(observation.get("generated_at"))
+    fetched_at = _string_or_none(observation.get("fetched_at"))
+    freshness_status = _labor_history_freshness_status(
+        official_macro,
+        observation_date=observation_date,
+        stored_freshness=_string_or_none(observation.get("freshness_status")),
+    )
+    status = "stale" if freshness_status == "stale" else "ok"
+    interpretation_hint = official_macro.interpretation_hint
+    ai_context_allowed = bool(observation.get("ai_context_allowed")) and _ai_context_allowed(
+        status=status,
+        source="FRED",
+        source_badge="official",
+        observation_date=observation_date,
+        generated_at=generated_at or fetched_at,
+        freshness_status=freshness_status,
+        interpretation_hint=interpretation_hint,
+    )
+    return DashboardMetric(
+        metric_key=original.metric_key,
+        display_name=original.display_name,
+        value=value,
+        value_text=_format_value(value, "number" if original.unit != "percent" else "percent", status),
+        unit=original.unit,
+        status=status,
+        source="FRED",
+        source_badge="official",
+        source_series=official_macro.source_series,
+        observation_date=observation_date,
+        generated_at=generated_at or fetched_at,
+        freshness_status=freshness_status,
+        missing_reason=None,
+        interpretation_hint=interpretation_hint,
+        ai_context_allowed=ai_context_allowed,
+    )
+
+
+def _labor_history_freshness_status(
+    official_macro: official_macro_pack.OfficialMacroMetric,
+    *,
+    observation_date: str | None,
+    stored_freshness: str | None,
+) -> str:
+    parsed_date = _parse_iso_date(observation_date)
+    if parsed_date is None:
+        return stored_freshness or "unknown"
+    max_stale_days = 21 if official_macro.expected_frequency == "weekly" else 75
+    if (date.today() - parsed_date).days > max_stale_days:
+        return "stale"
+    if stored_freshness and stored_freshness not in AI_BLOCKED_FRESHNESS_STATUSES:
+        return stored_freshness
+    return "historical"
+
+
+def _parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
 
 
 def _latest_ppifis_observation(db_path: Path | str | None) -> dict[str, Any] | None:

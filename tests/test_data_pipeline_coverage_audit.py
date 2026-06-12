@@ -857,6 +857,9 @@ def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path)
     provider = result["provider_health"]
 
     assert official["labor_available"] is True
+    assert official["labor_official_compact_current_available"] is True
+    assert official["labor_history_fallback_available"] is False
+    assert official["labor_available_by_source"]["derived_labor"]["labor_deterioration_status"] is True
     assert official["labor_missing_count"] == 0
     assert official["unemployment_rate_status"] == "ok"
     assert official["initial_jobless_claims_status"] == "ok"

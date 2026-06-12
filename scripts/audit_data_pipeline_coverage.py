@@ -1027,6 +1027,28 @@ def _official_macro_pack_audit(
         key: int(observations.get(key) or 0)
         for key in labor_keys
     }
+    labor_current_available = {
+        key: _official_macro_row_available(row_by_key.get(key), metrics[key])
+        for key in labor_keys
+    }
+    labor_history_fallback_available = {
+        key: bool(
+            labor_current_available[key]
+            and row_by_key.get(key)
+            and row_by_key[key].freshness_status == "historical"
+            and labor_history_counts[key] > 0
+        )
+        for key in labor_keys
+    }
+    labor_compact_current_available = {
+        key: bool(
+            labor_current_available[key]
+            and row_by_key.get(key)
+            and row_by_key[key].freshness_status != "historical"
+        )
+        for key in labor_keys
+    }
+    labor_deterioration_row = row_by_key.get("labor_deterioration_status")
     return {
         "official_macro_configured_count": len(configured_keys),
         "official_macro_available_count": len(available_keys),
@@ -1050,6 +1072,19 @@ def _official_macro_pack_audit(
             _official_macro_row_available(row_by_key.get(key), metrics[key])
             for key in labor_keys
         ),
+        "labor_official_compact_current_available": all(labor_compact_current_available.values()),
+        "labor_history_fallback_available": any(labor_history_fallback_available.values()),
+        "labor_available_by_source": {
+            "official_compact_current": labor_compact_current_available,
+            "history_fallback": labor_history_fallback_available,
+            "derived_labor": {
+                "labor_deterioration_status": bool(
+                    labor_deterioration_row is not None
+                    and labor_deterioration_row.status in {"ok", "watch", "pressure"}
+                    and labor_deterioration_row.ai_context_allowed
+                )
+            },
+        },
         "labor_missing_count": sum(
             1
             for key in labor_keys

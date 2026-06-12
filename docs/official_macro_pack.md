@@ -65,6 +65,14 @@ Labor rows remain source-bound:
 - Sahm proxy status is a recession-warning proxy, not an official recession fact
 - labor deterioration status is macro context only; it is not a recession prediction, crisis confirmation, or trading signal
 
+When compact labor reports omit `PAYEMS` or `CCSA`, Dashboard evidence may use
+the latest official `market_history` observation as a compact fallback. The
+fallback keeps `source=FRED`, `source_badge=official`, `source_series`,
+`observation_date`, `generated_at`/`fetched_at`, `freshness_status`, and the
+configured interpretation hint. Fallback rows are marked stale and blocked from
+AI context when the latest history observation is outside the configured
+freshness window; missing history remains missing.
+
 `ppi_final_demand` can enter AI factual context only when the row has a value, `source`/`source_badge`, `source_series=PPIFIS`, `observation_date`, `generated_at`, non-stale freshness, and an interpretation hint. `ppi_final_demand_yoy` is blocked as `insufficient_history` unless it is explicitly provided as a YoY compact metric or derived from enough official `PPIFIS` index history.
 
 PPI Final Demand hints must state:
