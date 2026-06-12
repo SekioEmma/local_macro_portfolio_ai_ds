@@ -409,6 +409,7 @@ def test_build_historical_dashboard_candidates_groups_supported_metrics(tmp_path
         "breadth_concentration_proxy",
         "equity_trend",
         "inflation_energy_pressure",
+        "labor_macro",
         "market_stress_derived",
         "rate_pressure",
     }
@@ -422,11 +423,142 @@ def test_flattened_metrics_are_compact_and_safe(tmp_path):
     payloads = [derived.metric_to_dict(item) for item in metrics]
     text = str(payloads)
 
-    assert len(payloads) == 33
+    assert len(payloads) == 39
     assert all(item["source_badge"] == "derived" for item in payloads)
     assert "raw_provider_response" not in text
     assert "api_key" not in text.lower()
     assert "holding" not in text.lower()
+
+
+def test_labor_unemployment_derived_metrics_calculate_from_official_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    values = [4.0, 3.9, 3.8, 3.8, 3.9, 4.0, 4.1, 4.2, 4.3, 4.3, 4.4, 4.5]
+    for month, value in enumerate(values, start=1):
+        _insert(db_path, "unemployment_rate", f"2025-{month:02d}-01", value, source_series="UNRATE")
+
+    average = derived.calculate_rolling_average(
+        "unemployment_rate",
+        3,
+        db_path=db_path,
+        output_metric_key="unemployment_rate_3m_avg",
+        unit="raw_percent",
+    )
+    gap = derived.calculate_low_gap(
+        "unemployment_rate",
+        12,
+        db_path=db_path,
+        output_metric_key="unemployment_rate_12m_low_gap",
+    )
+
+    assert average.status == "ok"
+    assert math.isclose(average.value, (4.3 + 4.4 + 4.5) / 3)
+    assert average.value_text == "4.40%"
+    assert average.dependency_source_series == ["UNRATE"]
+    assert gap.status == "ok"
+    assert math.isclose(gap.value, 0.7)
+    assert gap.value_text == "0.70pp"
+
+
+def test_labor_claims_averages_calculate_from_official_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    for week, value in enumerate([200000, 205000, 210000, 215000], start=1):
+        _insert(db_path, "initial_jobless_claims", f"2026-01-{week:02d}", value, source_series="ICSA")
+    for week, value in enumerate([1700000, 1710000, 1720000, 1730000], start=1):
+        _insert(db_path, "continuing_claims", f"2026-01-{week:02d}", value, source_series="CCSA")
+
+    initial = derived.calculate_rolling_average(
+        "initial_jobless_claims",
+        4,
+        db_path=db_path,
+        output_metric_key="initial_claims_4w_avg",
+        unit="claims",
+    )
+    continuing = derived.calculate_rolling_average(
+        "continuing_claims",
+        4,
+        db_path=db_path,
+        output_metric_key="continuing_claims_4w_avg",
+        unit="claims",
+    )
+
+    assert initial.status == "ok"
+    assert initial.value == 207500
+    assert initial.value_text == "207,500"
+    assert initial.dependency_source_series == ["ICSA"]
+    assert continuing.status == "ok"
+    assert continuing.value == 1715000
+    assert continuing.value_text == "1,715,000"
+    assert continuing.dependency_source_series == ["CCSA"]
+
+
+def test_labor_derived_metrics_block_with_insufficient_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "continuing_claims", "2026-01-01", 1700000, source_series="CCSA")
+
+    result = derived.calculate_rolling_average(
+        "continuing_claims",
+        4,
+        db_path=db_path,
+        output_metric_key="continuing_claims_4w_avg",
+    )
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert result.missing_reason == "history_points_insufficient"
+
+
+def test_sahm_rule_proxy_is_not_official_recession_fact(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    values = [3.8, 3.8, 3.8, 3.9, 4.0, 4.0, 4.1, 4.2, 4.4, 4.5, 4.6, 4.7]
+    for month, value in enumerate(values, start=1):
+        _insert(db_path, "unemployment_rate", f"2025-{month:02d}-01", value, source_series="UNRATE")
+
+    result = derived.calculate_sahm_rule_proxy_status(db_path=db_path)
+
+    assert result.status == "watch"
+    assert result.source_badge == "derived"
+    assert result.dependency_source_series == ["UNRATE"]
+    assert "recession-warning proxy" in result.interpretation_hint
+    assert "not an official recession fact" in result.interpretation_hint
+    assert "trading signal" in result.interpretation_hint
+
+
+def test_labor_deterioration_status_preserves_inputs_and_missing_inputs(tmp_path):
+    missing = derived.calculate_labor_deterioration_status(db_path=tmp_path / "missing.sqlite3")
+
+    assert missing.status == "missing"
+    assert missing.ai_context_allowed is False
+    assert set(missing.missing_inputs) == {
+        "unemployment_rate",
+        "initial_jobless_claims",
+        "continuing_claims",
+        "nonfarm_payrolls",
+    }
+
+    db_path = tmp_path / "market_history.sqlite3"
+    for month, value in enumerate([3.8, 3.8, 3.8, 3.9, 4.0, 4.0, 4.1, 4.2, 4.4, 4.5, 4.6, 4.7], start=1):
+        _insert(db_path, "unemployment_rate", f"2025-{month:02d}-01", value, source_series="UNRATE")
+    for week, value in enumerate([200000, 202000, 204000, 206000, 230000, 232000, 234000, 236000], start=1):
+        _insert(db_path, "initial_jobless_claims", f"2026-01-{week:02d}", value, source_series="ICSA")
+    for week, value in enumerate([1700000, 1705000, 1710000, 1715000, 1730000, 1735000, 1740000, 1745000], start=1):
+        _insert(db_path, "continuing_claims", f"2026-01-{week:02d}", value, source_series="CCSA")
+    _insert(db_path, "nonfarm_payrolls", "2025-11-01", 160000, source_series="PAYEMS")
+    _insert(db_path, "nonfarm_payrolls", "2025-12-01", 159900, source_series="PAYEMS")
+
+    result = derived.calculate_labor_deterioration_status(db_path=db_path)
+
+    assert result.status == "pressure"
+    assert result.source_badge == "derived"
+    assert result.missing_inputs == []
+    assert {item["metric_key"] for item in result.input_evidence} == {
+        "unemployment_rate_12m_low_gap",
+        "initial_claims_4w_avg",
+        "continuing_claims_4w_avg",
+        "nonfarm_payrolls_monthly_change",
+    }
+    assert result.dependency_source_series == ["UNRATE", "ICSA", "CCSA", "PAYEMS"]
+    assert "Single-month unemployment increases do not determine recession" in result.interpretation_hint
+    assert "not crisis confirmation" in result.interpretation_hint
 
 
 def test_no_network_access(monkeypatch, tmp_path):

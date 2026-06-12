@@ -119,6 +119,12 @@ DERIVED_METRIC_KEYS = {
     "gld_proxy_30d_return",
     "shy_proxy_30d_return",
     "tlt_vs_shy_30d",
+    "unemployment_rate_3m_avg",
+    "unemployment_rate_12m_low_gap",
+    "initial_claims_4w_avg",
+    "continuing_claims_4w_avg",
+    "sahm_rule_proxy_status",
+    "labor_deterioration_status",
 }
 EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
     "sp500_30d_return",
@@ -160,6 +166,14 @@ MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS = {
     "shy_proxy_30d_return",
     "tlt_vs_shy_30d",
 }
+LABOR_HISTORICAL_DERIVED_METRIC_KEYS = {
+    "unemployment_rate_3m_avg",
+    "unemployment_rate_12m_low_gap",
+    "initial_claims_4w_avg",
+    "continuing_claims_4w_avg",
+    "sahm_rule_proxy_status",
+    "labor_deterioration_status",
+}
 EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
     " Derived from local market history; underlying source includes yfinance "
     "unofficial_fallback/proxy observations in the market history store; not an "
@@ -187,6 +201,26 @@ DGS30_BREAKOUT_MISSING_REASON = "Requires explicit confirmation rule and suffici
 LABOR_METRIC_SPECS = [
     ("unemployment_rate", "Unemployment rate", "percent", "percent", "missing"),
     ("initial_jobless_claims", "Initial jobless claims", "claims", "number", "missing"),
+    ("nonfarm_payrolls", "Nonfarm payrolls", "thousand_persons", "number", "missing"),
+    ("continuing_claims", "Continuing claims", "claims", "number", "missing"),
+    (
+        "unemployment_rate_3m_avg",
+        "Unemployment rate 3M average",
+        "percent",
+        "percent",
+        "insufficient_history",
+    ),
+    (
+        "unemployment_rate_12m_low_gap",
+        "Unemployment 12M low gap",
+        "pp",
+        "pp",
+        "insufficient_history",
+    ),
+    ("initial_claims_4w_avg", "Initial claims 4W average", "claims", "number", "insufficient_history"),
+    ("continuing_claims_4w_avg", "Continuing claims 4W average", "claims", "number", "insufficient_history"),
+    ("sahm_rule_proxy_status", "Sahm rule proxy status", None, "text", "insufficient_history"),
+    ("labor_deterioration_status", "Labor deterioration status", None, "text", "insufficient_history"),
 ]
 SOURCE_BADGE_ALIASES = {
     "official_api": "official",
@@ -425,7 +459,14 @@ def build_dashboard_evidence_table(
         market_history_db_path=market_history_db_path,
     )
     reports = _load_dashboard_reports(base_dir)
-    all_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(reports)
+    dashboard_market_history_db_path = _dashboard_market_history_db_path(
+        base_dir,
+        market_history_db_path,
+    )
+    all_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(
+        reports,
+        db_path=dashboard_market_history_db_path,
+    )
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
     filtered_rows = [
@@ -520,14 +561,27 @@ def _evidence_rows_from_summary(
 
 def _labor_macro_evidence_rows(
     reports: dict[str, ReportState],
+    *,
+    db_path: Path | str | None = None,
 ) -> list[DashboardEvidenceRow]:
     market = reports["market_snapshot"]
     llm_context = reports.get("llm_context_pack")
     metric_reports = (market, llm_context) if llm_context else (market,)
-    return [
-        _evidence_row("labor_macro", _build_metric("labor_macro", metric_reports, spec))
+    metrics = [
+        _build_metric("labor_macro", metric_reports, spec)
         for spec in LABOR_METRIC_SPECS
     ]
+    metrics = _apply_historical_derived_metrics(
+        metrics,
+        module_key="labor_macro",
+        metric_keys=LABOR_HISTORICAL_DERIVED_METRIC_KEYS,
+        hint_suffix="",
+        fallback_source="market_history",
+        required_dependency_source_badges={"official"},
+        replace_existing=True,
+        db_path=db_path,
+    )
+    return [_evidence_row("labor_macro", metric) for metric in metrics]
 
 
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
@@ -1263,7 +1317,29 @@ def _historical_derived_metric(
         return original
     if original.status != "insufficient_history" and not replace_existing:
         return original
-    if candidate is None or candidate.status != "ok" or candidate.value is None:
+    if candidate is None:
+        return original
+    if candidate.status in {"missing", "insufficient_history"}:
+        if original.metric_key != "labor_deterioration_status":
+            return original
+        return DashboardMetric(
+            metric_key=original.metric_key,
+            display_name=original.display_name,
+            value=None,
+            value_text=candidate.value_text,
+            unit=original.unit,
+            status=candidate.status,
+            source=fallback_source,
+            source_badge="derived",
+            source_series=", ".join(candidate.dependency_source_series or []) or None,
+            observation_date=candidate.observation_date,
+            generated_at=candidate.generated_at,
+            freshness_status=candidate.freshness_status,
+            missing_reason=candidate.missing_reason,
+            interpretation_hint=candidate.interpretation_hint,
+            ai_context_allowed=False,
+        )
+    if candidate.status not in {"ok", "watch", "pressure"} or candidate.value is None:
         return original
     if required_dependency_source_badges is not None:
         source_badges = set(candidate.dependency_source_badges or [])
@@ -1272,7 +1348,7 @@ def _historical_derived_metric(
     value = _dashboard_historical_derived_value(candidate)
     hint = _dashboard_historical_derived_hint(candidate, hint_suffix=hint_suffix)
     ai_context_allowed = bool(candidate.ai_context_allowed) and _ai_context_allowed(
-        status="ok",
+        status=candidate.status,
         source=fallback_source,
         source_badge="derived",
         observation_date=candidate.observation_date,
@@ -1335,20 +1411,30 @@ def _compact_dgs_fallback_observations(
 
 def _dashboard_historical_derived_value(
     candidate: historical_derived_metrics.HistoricalDerivedMetric,
-) -> float:
+) -> float | str | bool:
+    if isinstance(candidate.value, (str, bool)):
+        return candidate.value
     value = float(candidate.value)
     if candidate.unit in {"percent", "pp"}:
         return value * 100.0
     return value
 
 
-def _format_historical_derived_value(value: float, unit: str | None) -> str:
+def _format_historical_derived_value(value: float | str | bool, unit: str | None) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return value
     if unit == "percent":
         return f"{value:+.2f}%"
     if unit == "pp":
         return f"{value:+.2f}pp"
     if unit == "raw_pp":
         return f"{value:+.2f}pp"
+    if unit == "raw_percent":
+        return f"{value:.2f}%"
+    if unit == "claims":
+        return f"{value:,.0f}"
     return f"{value:.4g}"
 
 

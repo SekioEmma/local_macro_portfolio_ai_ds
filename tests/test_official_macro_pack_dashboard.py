@@ -20,6 +20,8 @@ def test_official_macro_pack_definitions_are_stable():
     assert metrics["ppiaco_yoy"].source_series == "PPIACO"
     assert metrics["unemployment_rate"].source_series == "UNRATE"
     assert metrics["initial_jobless_claims"].source_series == "ICSA"
+    assert metrics["nonfarm_payrolls"].source_series == "PAYEMS"
+    assert metrics["continuing_claims"].source_series == "CCSA"
     assert metrics["ppi_final_demand"].status_when_missing == "missing"
     assert metrics["ppi_final_demand"].source_series == "PPIFIS"
     assert metrics["ppi_final_demand_yoy"].status_when_missing == "insufficient_history"
@@ -101,6 +103,18 @@ def test_official_labor_compact_rows_surface_in_evidence_table(monkeypatch, tmp_
                         source="FRED:ICSA",
                         source_tier="official_or_public_data_api",
                     ),
+                    "nonfarm_payrolls": _metric(
+                        160000,
+                        unit="thousand_persons",
+                        source="FRED:PAYEMS",
+                        source_tier="official_or_public_data_api",
+                    ),
+                    "continuing_claims": _metric(
+                        1700000,
+                        unit="claims",
+                        source="FRED:CCSA",
+                        source_tier="official_or_public_data_api",
+                    ),
                 }
             }
         },
@@ -110,6 +124,8 @@ def test_official_labor_compact_rows_surface_in_evidence_table(monkeypatch, tmp_
     data = TestClient(app).get("/api/dashboard/evidence-table").json()
     unemployment = _row(data, "labor_macro", "unemployment_rate")
     claims = _row(data, "labor_macro", "initial_jobless_claims")
+    payrolls = _row(data, "labor_macro", "nonfarm_payrolls")
+    continuing = _row(data, "labor_macro", "continuing_claims")
 
     assert unemployment["status"] == "ok"
     assert unemployment["value_text"] == "4.00%"
@@ -120,6 +136,13 @@ def test_official_labor_compact_rows_surface_in_evidence_table(monkeypatch, tmp_
     assert claims["value_text"] == "230,000"
     assert claims["source_badge"] == "official"
     assert claims["ai_context_allowed"] is True
+    assert payrolls["status"] == "ok"
+    assert payrolls["source_series"] == "PAYEMS"
+    assert payrolls["source_badge"] == "official"
+    assert continuing["status"] == "ok"
+    assert continuing["value_text"] == "1,700,000"
+    assert continuing["source_series"] == "CCSA"
+    assert continuing["source_badge"] == "official"
 
     summary = TestClient(app).get("/api/dashboard/summary").json()
     assert "labor_macro" not in summary["modules"]
@@ -140,6 +163,8 @@ def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_pa
         ("inflation_energy_pressure", "core_pce_yoy"),
         ("labor_macro", "unemployment_rate"),
         ("labor_macro", "initial_jobless_claims"),
+        ("labor_macro", "nonfarm_payrolls"),
+        ("labor_macro", "continuing_claims"),
     ):
         row = _row(data, module, key)
         assert row["status"] == "missing"

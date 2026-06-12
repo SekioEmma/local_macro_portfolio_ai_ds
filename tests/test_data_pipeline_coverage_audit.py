@@ -244,9 +244,10 @@ def test_audit_reports_historical_derived_block_when_db_missing(monkeypatch, tmp
     historical_derived = result["historical_derived"]
 
     assert historical_derived["historical_derived_available"] is False
-    assert historical_derived["derived_metric_count"] == 33
+    assert historical_derived["derived_metric_count"] == 39
     assert historical_derived["derived_metric_ok_count"] == 0
-    assert historical_derived["derived_metric_insufficient_history_count"] == 33
+    assert historical_derived["derived_metric_insufficient_history_count"] == 38
+    assert historical_derived["derived_metric_missing_dependency_count"] >= 1
     assert "initialize_and_ingest_market_history" in historical_derived["recommended_history_actions"]
 
 
@@ -702,7 +703,7 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
     result = audit.build_coverage_audit(reports_dir=tmp_path)
     official = result["official_macro_pack"]
 
-    assert official["official_macro_configured_count"] == 11
+    assert official["official_macro_configured_count"] == 13
     assert official["real_yield_available"] is True
     assert official["inflation_core_available"] is True
     assert official["labor_available"] is False
@@ -718,6 +719,8 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
     assert official["ppi_final_demand_ai_context_allowed"] is False
     assert official["unemployment_rate_status"] == "missing"
     assert official["initial_jobless_claims_status"] == "missing"
+    assert official["nonfarm_payrolls_status"] == "missing"
+    assert official["continuing_claims_status"] == "missing"
     assert official["suspicious_yoy_count"] == 0
     assert official["blocked_due_to_index_level_count"] == 0
     assert "ppi_final_demand" in official["missing_metric_keys"]
@@ -794,6 +797,22 @@ def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path)
                         "observation_date": "2026-01-04",
                         "freshness": "fresh",
                     },
+                    "nonfarm_payrolls": {
+                        "value": 160000,
+                        "status": "ok",
+                        "source": "FRED:PAYEMS",
+                        "source_tier": "official_or_public_data_api",
+                        "observation_date": "2025-12-01",
+                        "freshness": "normal_lag",
+                    },
+                    "continuing_claims": {
+                        "value": 1700000,
+                        "status": "ok",
+                        "source": "FRED:CCSA",
+                        "source_tier": "official_or_public_data_api",
+                        "observation_date": "2026-01-04",
+                        "freshness": "fresh",
+                    },
                 }
             },
         },
@@ -833,6 +852,8 @@ def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path)
     assert official["labor_missing_count"] == 0
     assert official["unemployment_rate_status"] == "ok"
     assert official["initial_jobless_claims_status"] == "ok"
+    assert official["nonfarm_payrolls_status"] == "ok"
+    assert official["continuing_claims_status"] == "ok"
     assert provider["overall_status"] == "degraded"
     assert provider["provider_health_transient_error_count"] == 1
     assert provider["official_fallback_ok_count"] == 1

@@ -159,6 +159,44 @@ OFFICIAL_MACRO_METRICS: dict[str, OfficialMacroMetric] = {
         aliases=("icsa",),
         dashboard_enabled=False,
     ),
+    "nonfarm_payrolls": OfficialMacroMetric(
+        metric_key="nonfarm_payrolls",
+        display_name="Nonfarm payrolls",
+        module="labor_macro",
+        source="FRED",
+        source_badge="official",
+        provider="fred",
+        source_series="PAYEMS",
+        unit="thousand_persons",
+        expected_frequency="monthly",
+        status_when_missing="missing",
+        missing_reason="FRED PAYEMS compact observation is missing from local reports.",
+        interpretation_hint=(
+            "FRED PAYEMS is a monthly nonfarm payroll employment level; "
+            "one observation is not a recession call or trading signal."
+        ),
+        aliases=("payems", "nonfarm"),
+        dashboard_enabled=False,
+    ),
+    "continuing_claims": OfficialMacroMetric(
+        metric_key="continuing_claims",
+        display_name="Continuing claims",
+        module="labor_macro",
+        source="FRED",
+        source_badge="official",
+        provider="fred",
+        source_series="CCSA",
+        unit="claims",
+        expected_frequency="weekly",
+        status_when_missing="missing",
+        missing_reason="FRED CCSA compact observation is missing from local reports.",
+        interpretation_hint=(
+            "FRED CCSA is a weekly continuing unemployment claims observation; "
+            "claims pressure is not a crisis confirmation or trading signal."
+        ),
+        aliases=("ccsa",),
+        dashboard_enabled=False,
+    ),
     "ppi_final_demand": OfficialMacroMetric(
         metric_key="ppi_final_demand",
         display_name="PPI final demand",

@@ -17,6 +17,8 @@ The initial configured metrics are:
 - `ppi_final_demand_yoy`: derived from `PPIFIS` index history only when at least 13 monthly observations are available
 - `unemployment_rate`: FRED `UNRATE`, monthly unemployment rate
 - `initial_jobless_claims`: FRED `ICSA`, weekly initial claims
+- `nonfarm_payrolls`: FRED `PAYEMS`, monthly nonfarm payroll employment level
+- `continuing_claims`: FRED `CCSA`, weekly continuing claims
 
 `PPIFIS` was selected after source research against the FRED series page for "Producer Price Index by Commodity: Final Demand". `PPIACO` remains a separate all-commodities PPI series and must not be used to fill PPI Final Demand.
 
@@ -34,7 +36,7 @@ Dashboard and Evidence Table rows are enabled for:
 - `real_yield_pressure`: `dfii10`, `t10yie`
 - `inflation_energy_pressure`: `core_cpi_yoy`, `core_pce_yoy`, `ppiaco_yoy`, `ppi_final_demand`, `ppi_final_demand_yoy`
 
-Labor metrics are surfaced as `labor_macro` Evidence Table rows for audit coverage. They are not added to the Dashboard homepage cards.
+Labor metrics are surfaced as `labor_macro` Evidence Table rows for audit coverage. They include `UNRATE`, `ICSA`, `PAYEMS`, and `CCSA` official rows plus local derived labor context when history is sufficient. They are not added to the Dashboard homepage cards.
 
 ## Provenance Semantics
 
@@ -47,6 +49,13 @@ Rows with compact values use:
 - an `interpretation_hint` describing frequency and source boundaries
 
 Missing rows stay blocked from AI factual context. They include a configured source label, `source_badge=missing`, a `missing_reason`, and an interpretation hint.
+
+Labor rows remain source-bound:
+
+- official labor rows require FRED source metadata and source series
+- unemployment and claims derived rows use `source_badge=derived`
+- Sahm proxy status is a recession-warning proxy, not an official recession fact
+- labor deterioration status is macro context only; it is not a recession prediction, crisis confirmation, or trading signal
 
 `ppi_final_demand` can enter AI factual context only when the row has a value, `source`/`source_badge`, `source_series=PPIFIS`, `observation_date`, `generated_at`, non-stale freshness, and an interpretation hint. `ppi_final_demand_yoy` is blocked as `insufficient_history` unless it is explicitly provided as a YoY compact metric or derived from enough official `PPIFIS` index history.
 

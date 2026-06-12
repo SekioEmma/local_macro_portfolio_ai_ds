@@ -12,6 +12,7 @@ DEFAULT_FRESHNESS_STATUS = "historical"
 DERIVED_SOURCE_BADGE = "derived"
 PROXY_BREADTH_MODULE = "breadth_concentration_proxy"
 MARKET_STRESS_DERIVED_MODULE = "market_stress_derived"
+LABOR_MACRO_MODULE = "labor_macro"
 PROXY_BREADTH_HINT_SUFFIX = (
     " Derived from local market history; underlying source includes yfinance ETF "
     "proxy observations. This is not official market breadth, not valuation data, "
@@ -28,6 +29,14 @@ CURVE_SLOPE_HINT_SUFFIX = (
 CROSS_ASSET_PROXY_HINT_SUFFIX = (
     " Derived from local market history; TLT/GLD/SHY are yfinance ETF proxy "
     "observations, not official asset-class data or trading advice."
+)
+LABOR_HINT_SUFFIX = (
+    " Derived from official labor-market history as macro context; this is not "
+    "a recession prediction, crisis confirmation, trading signal, or trading advice."
+)
+SAHM_PROXY_HINT_SUFFIX = (
+    " Sahm rule proxy is a recession-warning proxy based on unemployment-rate "
+    "history, not an official recession fact and not a trading signal."
 )
 
 
@@ -57,6 +66,8 @@ class HistoricalDerivedMetric:
     dependency_observation_dates: list[str] | None = None
     dependency_generated_ats: list[str] | None = None
     dependency_freshness_statuses: list[str] | None = None
+    input_evidence: list[dict[str, Any]] | None = None
+    missing_inputs: list[str] | None = None
 
 
 DERIVED_METRIC_SPECS: dict[str, dict[str, Any]] = {
@@ -328,6 +339,52 @@ DERIVED_METRIC_SPECS: dict[str, dict[str, Any]] = {
             "not an official bond-risk indicator."
         ),
     },
+    "unemployment_rate_3m_avg": {
+        "module": LABOR_MACRO_MODULE,
+        "kind": "rolling_average",
+        "metric_key": "unemployment_rate",
+        "window_observations": 3,
+        "unit": "raw_percent",
+        "interpretation_hint_suffix": LABOR_HINT_SUFFIX,
+    },
+    "unemployment_rate_12m_low_gap": {
+        "module": LABOR_MACRO_MODULE,
+        "kind": "low_gap",
+        "metric_key": "unemployment_rate",
+        "window_observations": 12,
+        "unit": "raw_pp",
+        "interpretation_hint_suffix": LABOR_HINT_SUFFIX,
+    },
+    "initial_claims_4w_avg": {
+        "module": LABOR_MACRO_MODULE,
+        "kind": "rolling_average",
+        "metric_key": "initial_jobless_claims",
+        "window_observations": 4,
+        "unit": "claims",
+        "interpretation_hint_suffix": LABOR_HINT_SUFFIX,
+    },
+    "continuing_claims_4w_avg": {
+        "module": LABOR_MACRO_MODULE,
+        "kind": "rolling_average",
+        "metric_key": "continuing_claims",
+        "window_observations": 4,
+        "unit": "claims",
+        "interpretation_hint_suffix": LABOR_HINT_SUFFIX,
+    },
+    "sahm_rule_proxy_status": {
+        "module": LABOR_MACRO_MODULE,
+        "kind": "sahm_rule_proxy_status",
+        "metric_key": "unemployment_rate",
+        "window_observations": 12,
+        "unit": "text",
+        "interpretation_hint_suffix": SAHM_PROXY_HINT_SUFFIX,
+    },
+    "labor_deterioration_status": {
+        "module": LABOR_MACRO_MODULE,
+        "kind": "labor_deterioration_status",
+        "unit": "text",
+        "interpretation_hint_suffix": LABOR_HINT_SUFFIX,
+    },
 }
 
 
@@ -404,6 +461,7 @@ def calculate_rolling_average(
     db_path: Path | str | None = None,
     output_metric_key: str | None = None,
     unit: str | None = "percent",
+    interpretation_hint_suffix: str | None = None,
 ) -> HistoricalDerivedMetric:
     if metric_key == "ppi_final_demand" and not interpretation_hint_suffix:
         interpretation_hint_suffix = (
@@ -438,6 +496,51 @@ def calculate_rolling_average(
         interpretation_hint=(
             f"Derived from market history: arithmetic average of the latest "
             f"{window_observations} {metric_key} observations."
+            f"{interpretation_hint_suffix or ''}"
+        ),
+        dependency_observations=window,
+    )
+
+
+def calculate_low_gap(
+    metric_key: str,
+    window_observations: int,
+    *,
+    db_path: Path | str | None = None,
+    output_metric_key: str | None = None,
+    unit: str | None = "raw_pp",
+    interpretation_hint_suffix: str | None = None,
+) -> HistoricalDerivedMetric:
+    observations = _numeric_observations(metric_key, db_path=db_path)
+    if len(observations) < window_observations:
+        return _insufficient_metric(
+            metric_key=output_metric_key or f"{metric_key}_{window_observations}m_low_gap",
+            dependency_keys=[metric_key],
+            window=f"{window_observations} observations",
+            calculation="low_gap",
+            points_used=len(observations),
+            points_required=window_observations,
+            missing_reason="history_points_insufficient",
+        )
+    window = observations[-window_observations:]
+    latest = window[-1]
+    low = min(item["value"] for item in window)
+    value = latest["value"] - low
+    return _ok_metric(
+        metric_key=output_metric_key or f"{metric_key}_{window_observations}m_low_gap",
+        value=value,
+        unit=unit,
+        dependency_keys=[metric_key],
+        window=f"{window_observations} observations",
+        calculation="low_gap",
+        points_used=window_observations,
+        points_required=window_observations,
+        observation_date=latest["observation_date"],
+        generated_at=latest.get("generated_at"),
+        interpretation_hint=(
+            f"Derived from market history: latest {metric_key} minus the "
+            f"lowest value in the latest {window_observations} observations."
+            f"{interpretation_hint_suffix or ''}"
         ),
         dependency_observations=window,
     )
@@ -749,6 +852,168 @@ def calculate_distance_to_threshold(
     )
 
 
+def calculate_sahm_rule_proxy_status(
+    *,
+    db_path: Path | str | None = None,
+    output_metric_key: str = "sahm_rule_proxy_status",
+    interpretation_hint_suffix: str | None = None,
+) -> HistoricalDerivedMetric:
+    interpretation_hint_suffix = interpretation_hint_suffix or SAHM_PROXY_HINT_SUFFIX
+    observations = _numeric_observations("unemployment_rate", db_path=db_path)
+    required = 12
+    if len(observations) < required:
+        return _insufficient_metric(
+            metric_key=output_metric_key,
+            dependency_keys=["unemployment_rate"],
+            window="12 observations",
+            calculation="sahm_rule_proxy_status",
+            points_used=len(observations),
+            points_required=required,
+            missing_reason="history_points_insufficient",
+        )
+    window = observations[-required:]
+    latest_three = window[-3:]
+    three_month_avg = sum(item["value"] for item in latest_three) / 3
+    twelve_month_low = min(item["value"] for item in window)
+    gap = three_month_avg - twelve_month_low
+    status = "watch" if gap >= 0.5 else "ok"
+    latest = window[-1]
+    evidence = [
+        {"metric_key": "unemployment_rate_3m_avg", "value": round(three_month_avg, 4)},
+        {"metric_key": "unemployment_rate_12m_low_gap", "value": round(gap, 4)},
+    ]
+    return _status_metric(
+        metric_key=output_metric_key,
+        value=status,
+        status=status,
+        dependency_keys=["unemployment_rate"],
+        window="12 observations",
+        calculation="sahm_rule_proxy_status",
+        points_used=required,
+        points_required=required,
+        observation_date=latest["observation_date"],
+        generated_at=latest.get("generated_at"),
+        interpretation_hint=(
+            "Derived from market history: latest 3-observation unemployment-rate "
+            "average minus the latest 12-observation low."
+            f"{interpretation_hint_suffix or ''}"
+        ),
+        dependency_observations=window,
+        input_evidence=evidence,
+        missing_inputs=[],
+    )
+
+
+def calculate_labor_deterioration_status(
+    *,
+    db_path: Path | str | None = None,
+    output_metric_key: str = "labor_deterioration_status",
+    interpretation_hint_suffix: str | None = None,
+) -> HistoricalDerivedMetric:
+    interpretation_hint_suffix = interpretation_hint_suffix or LABOR_HINT_SUFFIX
+    required_windows = {
+        "unemployment_rate": 12,
+        "initial_jobless_claims": 8,
+        "continuing_claims": 8,
+        "nonfarm_payrolls": 2,
+    }
+    observations = {
+        key: _numeric_observations(key, db_path=db_path)
+        for key in required_windows
+    }
+    missing_inputs = [key for key, rows in observations.items() if not rows]
+    if missing_inputs:
+        return _blocked_status_metric(
+            metric_key=output_metric_key,
+            status="missing",
+            missing_reason="missing_inputs",
+            dependency_keys=list(required_windows),
+            window="labor deterioration windows",
+            calculation="labor_deterioration_status",
+            points_used=sum(len(rows) for rows in observations.values()),
+            points_required=sum(required_windows.values()),
+            input_evidence=[],
+            missing_inputs=missing_inputs,
+        )
+    insufficient_inputs = [
+        key for key, required in required_windows.items() if len(observations[key]) < required
+    ]
+    if insufficient_inputs:
+        return _blocked_status_metric(
+            metric_key=output_metric_key,
+            status="insufficient_history",
+            missing_reason="history_points_insufficient",
+            dependency_keys=list(required_windows),
+            window="labor deterioration windows",
+            calculation="labor_deterioration_status",
+            points_used=sum(len(rows) for rows in observations.values()),
+            points_required=sum(required_windows.values()),
+            input_evidence=[],
+            missing_inputs=insufficient_inputs,
+        )
+
+    unrate_window = observations["unemployment_rate"][-12:]
+    unrate_gap = unrate_window[-1]["value"] - min(item["value"] for item in unrate_window)
+    initial_window = observations["initial_jobless_claims"][-8:]
+    continuing_window = observations["continuing_claims"][-8:]
+    initial_latest_4w = _average(initial_window[-4:])
+    initial_prior_4w = _average(initial_window[:4])
+    continuing_latest_4w = _average(continuing_window[-4:])
+    continuing_prior_4w = _average(continuing_window[:4])
+    payroll_window = observations["nonfarm_payrolls"][-2:]
+    payroll_change = payroll_window[-1]["value"] - payroll_window[-2]["value"]
+
+    signals = {
+        "unemployment_gap": unrate_gap >= 0.3,
+        "initial_claims_rising": initial_latest_4w > initial_prior_4w * 1.10,
+        "continuing_claims_rising": continuing_latest_4w > continuing_prior_4w * 1.10,
+        "payrolls_contracting": payroll_change < 0,
+    }
+    signal_count = sum(1 for value in signals.values() if value)
+    status = "pressure" if signal_count >= 2 else "watch" if signal_count == 1 else "ok"
+    latest_candidates = [
+        observations["unemployment_rate"][-1],
+        observations["initial_jobless_claims"][-1],
+        observations["continuing_claims"][-1],
+        observations["nonfarm_payrolls"][-1],
+    ]
+    latest = max(latest_candidates, key=lambda item: item["date"])
+    dependency_observations = (
+        unrate_window
+        + initial_window
+        + continuing_window
+        + payroll_window
+    )
+    input_evidence = [
+        {"metric_key": "unemployment_rate_12m_low_gap", "value": round(unrate_gap, 4)},
+        {"metric_key": "initial_claims_4w_avg", "value": round(initial_latest_4w, 4)},
+        {"metric_key": "continuing_claims_4w_avg", "value": round(continuing_latest_4w, 4)},
+        {"metric_key": "nonfarm_payrolls_monthly_change", "value": round(payroll_change, 4)},
+    ]
+    return _status_metric(
+        metric_key=output_metric_key,
+        value=status,
+        status=status,
+        dependency_keys=list(required_windows),
+        window="UNRATE 12 observations; ICSA/CCSA 8 observations; PAYEMS 2 observations",
+        calculation="labor_deterioration_status",
+        points_used=len(dependency_observations),
+        points_required=sum(required_windows.values()),
+        observation_date=latest["observation_date"],
+        generated_at=latest.get("generated_at"),
+        interpretation_hint=(
+            "Derived from market history: combines unemployment-rate gap, claims "
+            "4-week average direction, and payroll monthly change. Single-month "
+            "unemployment increases do not determine recession; claims increases "
+            "are labor-pressure observations, not crisis confirmation."
+            f"{interpretation_hint_suffix or ''}"
+        ),
+        dependency_observations=dependency_observations,
+        input_evidence=input_evidence,
+        missing_inputs=[],
+    )
+
+
 def build_historical_dashboard_candidates(
     *,
     db_path: Path | str | None = None,
@@ -808,6 +1073,8 @@ def metric_to_dict(metric: HistoricalDerivedMetric) -> dict[str, Any]:
         "dependency_observation_dates": metric.dependency_observation_dates,
         "dependency_generated_ats": metric.dependency_generated_ats,
         "dependency_freshness_statuses": metric.dependency_freshness_statuses,
+        "input_evidence": metric.input_evidence,
+        "missing_inputs": metric.missing_inputs,
     }
 
 
@@ -826,6 +1093,16 @@ def _calculate_spec(
             db_path=db_path,
             output_metric_key=output_key,
             unit=spec.get("unit"),
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
+        )
+    if kind == "low_gap":
+        return calculate_low_gap(
+            spec["metric_key"],
+            spec["window_observations"],
+            db_path=db_path,
+            output_metric_key=output_key,
+            unit=spec.get("unit"),
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
         )
     if kind == "period_return":
         return calculate_period_return(
@@ -881,6 +1158,18 @@ def _calculate_spec(
             db_path=db_path,
             output_metric_key=output_key,
             unit=spec.get("unit"),
+        )
+    if kind == "sahm_rule_proxy_status":
+        return calculate_sahm_rule_proxy_status(
+            db_path=db_path,
+            output_metric_key=output_key,
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
+        )
+    if kind == "labor_deterioration_status":
+        return calculate_labor_deterioration_status(
+            db_path=db_path,
+            output_metric_key=output_key,
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
         )
     raise ValueError(f"unsupported historical derived metric kind: {kind}")
 
@@ -1048,6 +1337,100 @@ def _ok_metric(
     )
 
 
+def _status_metric(
+    *,
+    metric_key: str,
+    value: str,
+    status: str,
+    dependency_keys: list[str],
+    window: str | None,
+    calculation: str,
+    points_used: int,
+    points_required: int,
+    observation_date: str | None,
+    generated_at: str | None,
+    interpretation_hint: str,
+    dependency_observations: list[dict[str, Any]],
+    input_evidence: list[dict[str, Any]],
+    missing_inputs: list[str],
+) -> HistoricalDerivedMetric:
+    dependency_metadata = _dependency_metadata(dependency_observations)
+    return HistoricalDerivedMetric(
+        metric_key=metric_key,
+        value=value,
+        value_text=value,
+        unit=None,
+        status=status,
+        source="market_history",
+        source_badge=DERIVED_SOURCE_BADGE,
+        observation_date=observation_date,
+        generated_at=generated_at or _utc_now(),
+        freshness_status=DEFAULT_FRESHNESS_STATUS,
+        missing_reason=None,
+        interpretation_hint=interpretation_hint,
+        ai_context_allowed=_dependency_metadata_complete(dependency_observations),
+        dependency_keys=dependency_keys,
+        window=window,
+        calculation=calculation,
+        history_points_used=points_used,
+        history_points_required=points_required,
+        dependency_source_badges=dependency_metadata["source_badges"],
+        dependency_source_series=dependency_metadata["source_series"],
+        dependency_sources=dependency_metadata["sources"],
+        dependency_observation_dates=dependency_metadata["observation_dates"],
+        dependency_generated_ats=dependency_metadata["generated_ats"],
+        dependency_freshness_statuses=dependency_metadata["freshness_statuses"],
+        input_evidence=input_evidence,
+        missing_inputs=missing_inputs,
+    )
+
+
+def _blocked_status_metric(
+    *,
+    metric_key: str,
+    status: str,
+    missing_reason: str,
+    dependency_keys: list[str],
+    window: str | None,
+    calculation: str,
+    points_used: int,
+    points_required: int,
+    input_evidence: list[dict[str, Any]],
+    missing_inputs: list[str],
+) -> HistoricalDerivedMetric:
+    return HistoricalDerivedMetric(
+        metric_key=metric_key,
+        value=None,
+        value_text=status,
+        unit=None,
+        status=status,
+        source="market_history",
+        source_badge=DERIVED_SOURCE_BADGE,
+        observation_date=None,
+        generated_at=_utc_now(),
+        freshness_status=status,
+        missing_reason=missing_reason,
+        interpretation_hint=(
+            f"Historical derived labor metric requires {calculation} from "
+            f"{', '.join(dependency_keys)}; missing_inputs={missing_inputs}."
+        ),
+        ai_context_allowed=False,
+        dependency_keys=dependency_keys,
+        window=window,
+        calculation=calculation,
+        history_points_used=points_used,
+        history_points_required=points_required,
+        dependency_source_badges=[],
+        dependency_source_series=[],
+        dependency_sources=[],
+        dependency_observation_dates=[],
+        dependency_generated_ats=[],
+        dependency_freshness_statuses=[],
+        input_evidence=input_evidence,
+        missing_inputs=missing_inputs,
+    )
+
+
 def _dependency_metadata(observations: list[dict[str, Any]]) -> dict[str, list[str]]:
     return {
         "source_badges": _ordered_unique_metadata(observations, "source_badge"),
@@ -1091,6 +1474,10 @@ def _dependency_metadata_complete(observations: list[dict[str, Any]]) -> bool:
         if item.get("freshness_status") is None:
             return False
     return True
+
+
+def _average(observations: list[dict[str, Any]]) -> float:
+    return sum(item["value"] for item in observations) / len(observations)
 
 
 def _insufficient_metric(
@@ -1141,6 +1528,10 @@ def _format_value(value: float, unit: str | None) -> str:
         return f"{value:.2f}pp"
     if unit == "raw_pp":
         return f"{value:.2f}pp"
+    if unit == "raw_percent":
+        return f"{value:.2f}%"
+    if unit == "claims":
+        return f"{value:,.0f}"
     return f"{value:.4g}"
 
 

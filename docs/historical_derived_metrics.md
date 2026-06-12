@@ -84,6 +84,26 @@ It does not read raw reports, raw provider responses, holdings, prompts, or outp
 - returns latest value minus threshold
 - returns `insufficient_history` when no latest observation exists
 
+### Labor Deterioration Mini-Pack
+
+Labor derived metrics read only stored official labor observations from
+`market_history` or already compact official evidence. They do not fetch live
+data.
+
+- `unemployment_rate_3m_avg`: latest 3 `UNRATE` observations
+- `unemployment_rate_12m_low_gap`: latest `UNRATE` minus the latest 12-observation low
+- `initial_claims_4w_avg`: latest 4 `ICSA` observations
+- `continuing_claims_4w_avg`: latest 4 `CCSA` observations
+- `sahm_rule_proxy_status`: unemployment-rate recession-warning proxy, not an official recession fact
+- `labor_deterioration_status`: combines unemployment gap, claims direction, and PAYEMS monthly change
+
+`labor_deterioration_status` preserves dependency metadata plus an
+`input_evidence` list and `missing_inputs`. It returns `missing` when a required
+input series is absent, `insufficient_history` when a required window is too
+short, and `ok`/`watch`/`pressure` only when the required windows are complete.
+Single-month unemployment increases do not determine recession, and claims
+increases are labor-pressure observations rather than crisis confirmation.
+
 ## Supported Candidate Metrics
 
 `rate_pressure`:
@@ -133,10 +153,20 @@ It does not read raw reports, raw provider responses, holdings, prompts, or outp
 - `shy_proxy_30d_return`
 - `tlt_vs_shy_30d`
 
+`labor_macro`:
+
+- `unemployment_rate_3m_avg`
+- `unemployment_rate_12m_low_gap`
+- `initial_claims_4w_avg`
+- `continuing_claims_4w_avg`
+- `sahm_rule_proxy_status`
+- `labor_deterioration_status`
+
 ## Status Rules
 
 A derived metric returns `ok` only when its historical dependency window is sufficient.
-Otherwise it returns `insufficient_history`.
+Otherwise it returns `insufficient_history`. `labor_deterioration_status` can
+also return `missing` when a required labor input series is absent.
 
 The service does not fabricate missing observations and does not use the current snapshot as a historical window.
 
@@ -199,6 +229,7 @@ Proxy breadth rows state the local market history and yfinance ETF proxy boundar
 They are not official market breadth, not valuation data, and not crash confirmation signals.
 Market stress derived rows state that drawdown is a market outcome, curve slope is macro context rather than a trading signal, and TLT/GLD/SHY are ETF proxies rather than official asset-class data.
 Curve slope dependency metadata retains the compact source, source badge, source series, observation date, generated_at, and freshness status for DGS2/DGS10/DGS30.
+Labor macro derived rows state that Sahm status is a proxy rather than an official recession fact and that labor deterioration context is not a recession prediction or trading signal.
 
 ## Official Energy History Ingest
 

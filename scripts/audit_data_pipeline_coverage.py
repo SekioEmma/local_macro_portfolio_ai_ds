@@ -723,6 +723,8 @@ def _historical_derived_audit(
             "dependency_source_series": item.dependency_source_series,
             "dependency_observation_dates": item.dependency_observation_dates,
             "dependency_freshness_statuses": item.dependency_freshness_statuses,
+            "input_evidence": item.input_evidence,
+            "missing_inputs": item.missing_inputs,
         }
         for item in all_metrics
     ]
@@ -1007,6 +1009,20 @@ def _official_macro_pack_audit(
     ppi_final_demand_available = _ppi_final_demand_row_available(
         row_by_key.get("ppi_final_demand")
     )
+    labor_keys = (
+        "unemployment_rate",
+        "initial_jobless_claims",
+        "nonfarm_payrolls",
+        "continuing_claims",
+    )
+    labor_derived_keys = (
+        "unemployment_rate_3m_avg",
+        "unemployment_rate_12m_low_gap",
+        "initial_claims_4w_avg",
+        "continuing_claims_4w_avg",
+        "sahm_rule_proxy_status",
+        "labor_deterioration_status",
+    )
     return {
         "official_macro_configured_count": len(configured_keys),
         "official_macro_available_count": len(available_keys),
@@ -1028,11 +1044,11 @@ def _official_macro_pack_audit(
         ),
         "labor_available": all(
             _official_macro_row_available(row_by_key.get(key), metrics[key])
-            for key in ("unemployment_rate", "initial_jobless_claims")
+            for key in labor_keys
         ),
         "labor_missing_count": sum(
             1
-            for key in ("unemployment_rate", "initial_jobless_claims")
+            for key in labor_keys
             if not _official_macro_row_available(row_by_key.get(key), metrics[key])
         ),
         "dgs2_status": status_by_key["dgs2"],
@@ -1054,6 +1070,17 @@ def _official_macro_pack_audit(
         ),
         "unemployment_rate_status": status_by_key["unemployment_rate"],
         "initial_jobless_claims_status": status_by_key["initial_jobless_claims"],
+        "nonfarm_payrolls_status": status_by_key["nonfarm_payrolls"],
+        "continuing_claims_status": status_by_key["continuing_claims"],
+        "labor_derived_statuses": {
+            key: _row_status(row_by_key.get(key)) for key in labor_derived_keys
+        },
+        "labor_deterioration_status": _row_status(
+            row_by_key.get("labor_deterioration_status")
+        ),
+        "labor_deterioration_missing_inputs": _labor_deterioration_missing_inputs(
+            row_by_key.get("labor_deterioration_status")
+        ),
         "suspicious_yoy_count": sum(1 for row in rows if _yoy_metric_suspiciously_large(row)),
         "blocked_due_to_index_level_count": sum(
             1 for row in rows if _blocked_due_to_index_level(row)
@@ -1106,6 +1133,20 @@ def _official_macro_missing_reason(
     if row is not None and row.missing_reason:
         return row.missing_reason
     return metric.missing_reason
+
+
+def _labor_deterioration_missing_inputs(row: DashboardEvidenceRow | None) -> list[str]:
+    if row is None or not row.interpretation_hint:
+        return []
+    marker = "missing_inputs="
+    if marker not in row.interpretation_hint:
+        return []
+    raw = row.interpretation_hint.split(marker, 1)[1].split(".", 1)[0]
+    return [
+        item.strip().strip("'\"[]")
+        for item in raw.split(",")
+        if item.strip().strip("'\"[]")
+    ]
 
 
 def _provider_health_audit(provider_health: dict[str, Any]) -> dict[str, Any]:

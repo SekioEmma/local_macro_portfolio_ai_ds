@@ -197,6 +197,10 @@ fred_series:
     series_id: "PAYEMS"
     name: "All Employees, Total Nonfarm"
     asset_type: "labor_market"
+  continuing_claims:
+    series_id: "CCSA"
+    name: "Continued Claims"
+    asset_type: "labor_market"
   usd_cny:
     series_id: "DEXCHUS"
     name: "Chinese Yuan Renminbi to U.S. Dollar Spot Exchange Rate"
@@ -250,6 +254,11 @@ data_quality:
     max_stale_days: 45
     source_tier: "official_api"
     importance: "required_core"
+  continuing_claims:
+    expected_frequency: "weekly"
+    max_stale_days: 21
+    source_tier: "official_api"
+    importance: "deepseek_market_data_package"
   usd_cny:
     expected_frequency: "daily"
     max_stale_days: 10
@@ -642,6 +651,24 @@ deepseek_market_data_package:
       source_tier: "official_or_public_data_api"
       interpretation_hint: "FRED ICSA is a weekly initial unemployment claims observation."
       risk_relevance: "High-frequency labor-market stress context; not a standalone trading signal."
+    nonfarm_payrolls:
+      provider: "fred"
+      series_id: "PAYEMS"
+      name: "All Employees, Total Nonfarm"
+      unit: "thousand persons"
+      frequency: "monthly"
+      source_tier: "official_or_public_data_api"
+      interpretation_hint: "FRED PAYEMS is a monthly nonfarm payroll employment level; one observation is not a recession call."
+      risk_relevance: "Payroll momentum context; not a standalone trading signal."
+    continuing_claims:
+      provider: "fred"
+      series_id: "CCSA"
+      name: "Continued Claims"
+      unit: "claims"
+      frequency: "weekly"
+      source_tier: "official_or_public_data_api"
+      interpretation_hint: "FRED CCSA is a weekly continuing unemployment claims observation."
+      risk_relevance: "Labor-market pressure context; claims pressure is not a crisis confirmation."
   unavailable_or_research_needed:
     valuation_proxy:
       status: "not_available"
