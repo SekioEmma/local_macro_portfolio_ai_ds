@@ -314,6 +314,26 @@ Top-level `proxy_breadth` fields:
 These fields report proxy evidence only.
 They do not satisfy true valuation, true advance/decline breadth, or systemic-crisis confirmation.
 
+## Market Stress Derived Fields
+
+The audit includes a `market_stress_derived` block for local-only drawdown,
+curve-slope, and cross-asset ETF proxy derived rows. It does not call yfinance,
+FRED, DeepSeek, Tavily, or any live provider.
+
+Top-level `market_stress_derived` fields:
+
+- `market_stress_derived_available`: whether any D8 row has sufficient local history
+- `market_stress_derived_metric_count`: number of D8 rows in Evidence Table
+- `market_stress_derived_ok_count`: D8 rows with sufficient history
+- `market_stress_derived_insufficient_history_count`: D8 rows blocked by insufficient history
+- `drawdown_available`: whether S&P 500/Nasdaq drawdown rows are available
+- `curve_slope_available`: whether DGS curve-slope rows are available
+- `cross_asset_proxy_available`: whether TLT/GLD/SHY proxy rows are available
+- `market_stress_ai_context_allowed_count`: D8 rows eligible for AI factual context under derived/proxy boundaries
+
+Drawdown is a market result, not a cause. Curve slope is macro background, not a
+trading signal. TLT/GLD/SHY are ETF proxies, not official asset-class data.
+
 ## Dashboard Derived Integration Fields
 
 The audit includes a `dashboard_derived_integration` block for values that are actually surfaced in Dashboard evidence rows from historical derived metrics.

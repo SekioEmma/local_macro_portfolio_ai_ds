@@ -244,9 +244,9 @@ def test_audit_reports_historical_derived_block_when_db_missing(monkeypatch, tmp
     historical_derived = result["historical_derived"]
 
     assert historical_derived["historical_derived_available"] is False
-    assert historical_derived["derived_metric_count"] == 23
+    assert historical_derived["derived_metric_count"] == 33
     assert historical_derived["derived_metric_ok_count"] == 0
-    assert historical_derived["derived_metric_insufficient_history_count"] == 23
+    assert historical_derived["derived_metric_insufficient_history_count"] == 33
     assert "initialize_and_ingest_market_history" in historical_derived["recommended_history_actions"]
 
 
@@ -274,8 +274,9 @@ def test_audit_reports_historical_derived_ok_and_blocked_counts(monkeypatch, tmp
     rate = historical_derived["derived_metrics_by_module"]["rate_pressure"]
 
     assert historical_derived["historical_derived_available"] is True
-    assert historical_derived["derived_metric_ok_count"] == 2
+    assert historical_derived["derived_metric_ok_count"] == 3
     assert rate["ok_count"] == 2
+    assert historical_derived["derived_metrics_by_module"]["market_stress_derived"]["ok_count"] == 1
     assert historical_derived["dashboard_insufficient_history_still_blocked_count"] >= 1
     assert any(
         item["metric_key"] == "dgs10_5d_avg" and item["status"] == "ok"
@@ -451,6 +452,96 @@ def test_audit_reports_proxy_breadth_coverage(monkeypatch, tmp_path):
     assert proxy["proxy_insufficient_history_metric_keys"] == []
     assert "spy_vs_rsp_30d" in proxy["proxy_metric_keys"]
     assert "hyg_vs_lqd_60d" in proxy["proxy_metric_keys"]
+
+
+def test_audit_reports_market_stress_derived_coverage(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-03-02T00:00:00+00:00",
+            "status": "ok",
+        },
+    )
+    for metric_key, source_series, values in (
+        ("sp500", "^GSPC", [95.0, 100.0, 120.0, 96.0]),
+        ("nasdaq100", "^NDX", [90.0, 100.0, 150.0, 120.0]),
+    ):
+        for observation_date, value in zip(
+            ["2025-08-01", "2025-11-01", "2026-01-01", "2026-03-02"],
+            values,
+        ):
+            _insert_market_observation(
+                db_path,
+                metric_key,
+                observation_date,
+                value,
+                source_badge="unofficial_fallback",
+                provider="yfinance",
+                source_series=source_series,
+                metric_kind="index",
+                ai_context_allowed=False,
+            )
+    for metric_key, source_series, value in (
+        ("dgs2", "DGS2", 4.25),
+        ("dgs10", "DGS10", 4.75),
+        ("dgs30", "DGS30", 5.10),
+    ):
+        _insert_market_observation(
+            db_path,
+            metric_key,
+            "2026-03-02",
+            value,
+            source_badge="official",
+            provider="FRED",
+            source_series=source_series,
+        )
+    for metric_key, source_series, start, end in (
+        ("tlt_proxy", "TLT", 100.0, 105.0),
+        ("gld_proxy", "GLD", 100.0, 102.0),
+        ("shy_proxy", "SHY", 100.0, 100.5),
+    ):
+        _insert_market_observation(
+            db_path,
+            metric_key,
+            "2026-01-31",
+            start,
+            source_badge="proxy",
+            provider="yfinance",
+            source_series=source_series,
+            metric_kind="proxy",
+            ai_context_allowed=False,
+        )
+        _insert_market_observation(
+            db_path,
+            metric_key,
+            "2026-03-02",
+            end,
+            source_badge="proxy",
+            provider="yfinance",
+            source_series=source_series,
+            metric_kind="proxy",
+            ai_context_allowed=False,
+        )
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    stress = result["market_stress_derived"]
+
+    assert stress["market_stress_derived_available"] is True
+    assert stress["market_stress_derived_metric_count"] == 10
+    assert stress["market_stress_derived_ok_count"] == 10
+    assert stress["market_stress_derived_insufficient_history_count"] == 0
+    assert stress["drawdown_available"] is True
+    assert stress["curve_slope_available"] is True
+    assert stress["cross_asset_proxy_available"] is True
+    assert stress["market_stress_ai_context_allowed_count"] == 10
+    assert "tlt_vs_shy_30d" in stress["market_stress_metric_keys"]
 
 
 def test_audit_reports_energy_history_and_real_yield_status(monkeypatch, tmp_path):

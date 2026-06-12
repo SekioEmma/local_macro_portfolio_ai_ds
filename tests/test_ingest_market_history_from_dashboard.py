@@ -55,7 +55,9 @@ def test_ingest_second_write_updates_existing_rows(monkeypatch, tmp_path):
 
     assert first["inserted_count"] >= 2
     assert second["updated_count"] >= 2
-    assert sum(store.count_observations_by_metric(db_path=db_path).values()) == first["inserted_count"]
+    assert sum(store.count_observations_by_metric(db_path=db_path).values()) == (
+        first["inserted_count"] + second["inserted_count"]
+    )
 
 
 def test_observation_from_evidence_row_skips_portfolio_and_missing(monkeypatch, tmp_path):

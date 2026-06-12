@@ -52,6 +52,25 @@ It does not read raw reports, raw provider responses, holdings, prompts, or outp
 - returns numerator return minus denominator return
 - returns `insufficient_history` when either dependency lacks history
 
+### Drawdown
+
+`calculate_drawdown(metric_key, window_days)`:
+
+- finds the latest observation
+- finds a sufficient lookback window using the nearest observation on or before the window start
+- returns `latest / lookback_peak - 1`
+- treats drawdown as a market outcome, not a cause, model score, or trading signal
+- returns `insufficient_history` when the window is unavailable
+
+### Latest Spread
+
+`calculate_latest_spread(numerator_metric_key, denominator_metric_key)`:
+
+- reads the latest numeric observation for each dependency
+- returns latest numerator minus latest denominator
+- is used for curve slope context such as 10Y-2Y and 30Y-10Y
+- returns `insufficient_history` when either dependency is missing
+
 ### Threshold Distance
 
 `calculate_distance_to_threshold(metric_key, threshold)`:
@@ -95,6 +114,19 @@ It does not read raw reports, raw provider responses, holdings, prompts, or outp
 - `qqq_vs_spy_60d`
 - `hyg_vs_lqd_30d`
 - `hyg_vs_lqd_60d`
+
+`market_stress_derived`:
+
+- `sp500_drawdown_3m`
+- `sp500_drawdown_6m`
+- `nasdaq100_drawdown_3m`
+- `nasdaq100_drawdown_6m`
+- `dgs10_dgs2_curve_slope`
+- `dgs30_dgs10_curve_slope`
+- `tlt_proxy_30d_return`
+- `gld_proxy_30d_return`
+- `shy_proxy_30d_return`
+- `tlt_vs_shy_30d`
 
 ## Status Rules
 
@@ -159,6 +191,7 @@ Equity rows state the local market history and yfinance unofficial/proxy boundar
 WTI/Brent rows state official FRED/EIA daily oil history and remain derived energy-pressure inputs, not real-time oil quotes, inflation forecasts, or commodity trading signals.
 Proxy breadth rows state the local market history and yfinance ETF proxy boundary.
 They are not official market breadth, not valuation data, and not crash confirmation signals.
+Market stress derived rows state that drawdown is a market outcome, curve slope is macro context rather than a trading signal, and TLT/GLD/SHY are ETF proxies rather than official asset-class data.
 
 ## Official Energy History Ingest
 

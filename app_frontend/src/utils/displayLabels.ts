@@ -5,6 +5,7 @@ const moduleLabels: Record<string, string> = {
   inflation_energy_pressure: "通胀与能源压力",
   equity_trend: "权益趋势",
   breadth_concentration_proxy: "宽度/集中度代理",
+  market_stress_derived: "市场压力派生",
   portfolio_deviation: "组合偏离",
   labor_macro: "劳动力宏观"
 };
@@ -61,7 +62,17 @@ const missingReasonLabels: Record<string, string> = {
 const metricLabels: Record<string, string> = {
   ppi_final_demand: "PPI 最终需求",
   ppi_final_demand_yoy: "PPI 最终需求同比",
-  ppi_final_demand_mom: "PPI 最终需求环比"
+  ppi_final_demand_mom: "PPI 最终需求环比",
+  sp500_drawdown_3m: "标普500 3个月回撤",
+  sp500_drawdown_6m: "标普500 6个月回撤",
+  nasdaq100_drawdown_3m: "纳指100 3个月回撤",
+  nasdaq100_drawdown_6m: "纳指100 6个月回撤",
+  dgs10_dgs2_curve_slope: "10Y-2Y 曲线斜率",
+  dgs30_dgs10_curve_slope: "30Y-10Y 曲线斜率",
+  tlt_proxy_30d_return: "TLT 代理30日回报",
+  gld_proxy_30d_return: "GLD 代理30日回报",
+  shy_proxy_30d_return: "SHY 代理30日回报",
+  tlt_vs_shy_30d: "TLT-SHY 30日相对回报"
 };
 
 export function getModuleLabel(moduleKey: string) {

@@ -68,6 +68,34 @@ CREDIT_PROXY_METRIC_KEYS = {
     "hyg_vs_lqd_30d",
     "hyg_vs_lqd_60d",
 }
+MARKET_STRESS_DERIVED_METRIC_KEYS = {
+    "sp500_drawdown_3m",
+    "sp500_drawdown_6m",
+    "nasdaq100_drawdown_3m",
+    "nasdaq100_drawdown_6m",
+    "dgs10_dgs2_curve_slope",
+    "dgs30_dgs10_curve_slope",
+    "tlt_proxy_30d_return",
+    "gld_proxy_30d_return",
+    "shy_proxy_30d_return",
+    "tlt_vs_shy_30d",
+}
+DRAWDOWN_METRIC_KEYS = {
+    "sp500_drawdown_3m",
+    "sp500_drawdown_6m",
+    "nasdaq100_drawdown_3m",
+    "nasdaq100_drawdown_6m",
+}
+CURVE_SLOPE_METRIC_KEYS = {
+    "dgs10_dgs2_curve_slope",
+    "dgs30_dgs10_curve_slope",
+}
+CROSS_ASSET_PROXY_METRIC_KEYS = {
+    "tlt_proxy_30d_return",
+    "gld_proxy_30d_return",
+    "shy_proxy_30d_return",
+    "tlt_vs_shy_30d",
+}
 
 
 def build_coverage_audit(
@@ -111,6 +139,7 @@ def build_coverage_audit(
         db_path=dashboard_market_history_db_path,
     )
     proxy_breadth = _proxy_breadth_audit(rows)
+    market_stress_derived = _market_stress_derived_audit(rows)
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
@@ -140,6 +169,7 @@ def build_coverage_audit(
         "energy_history": energy_history,
         "yfinance_history": yfinance_history,
         "proxy_breadth": proxy_breadth,
+        "market_stress_derived": market_stress_derived,
         "valuation_research": valuation_research,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
@@ -800,6 +830,30 @@ def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
         ),
         "proxy_metric_keys": sorted(row.metric_key for row in proxy_rows),
         "proxy_insufficient_history_metric_keys": sorted(
+            row.metric_key for row in insufficient_rows
+        ),
+    }
+
+
+def _market_stress_derived_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    stress_rows = [row for row in rows if row.metric_key in MARKET_STRESS_DERIVED_METRIC_KEYS]
+    ok_rows = [row for row in stress_rows if row.status == "ok" and _has_value(row)]
+    insufficient_rows = [row for row in stress_rows if row.status == "insufficient_history"]
+    return {
+        "market_stress_derived_available": bool(ok_rows),
+        "market_stress_derived_metric_count": len(stress_rows),
+        "market_stress_derived_ok_count": len(ok_rows),
+        "market_stress_derived_insufficient_history_count": len(insufficient_rows),
+        "drawdown_available": any(row.metric_key in DRAWDOWN_METRIC_KEYS for row in ok_rows),
+        "curve_slope_available": any(row.metric_key in CURVE_SLOPE_METRIC_KEYS for row in ok_rows),
+        "cross_asset_proxy_available": any(
+            row.metric_key in CROSS_ASSET_PROXY_METRIC_KEYS for row in ok_rows
+        ),
+        "market_stress_ai_context_allowed_count": sum(
+            1 for row in stress_rows if row.ai_context_allowed
+        ),
+        "market_stress_metric_keys": sorted(row.metric_key for row in stress_rows),
+        "market_stress_insufficient_history_metric_keys": sorted(
             row.metric_key for row in insufficient_rows
         ),
     }

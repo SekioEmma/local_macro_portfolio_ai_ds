@@ -150,6 +150,102 @@ def test_proxy_breadth_metrics_block_without_sufficient_history(tmp_path):
     assert spy.missing_reason == "history_points_insufficient"
 
 
+def test_drawdown_metrics_calculate_from_local_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "sp500", "2025-11-01", 100.0, source_series="^GSPC")
+    _insert(db_path, "sp500", "2026-01-01", 120.0, source_series="^GSPC")
+    _insert(db_path, "sp500", "2026-02-01", 90.0, source_series="^GSPC")
+    _insert(db_path, "sp500", "2026-03-02", 96.0, source_series="^GSPC")
+
+    result = derived.calculate_drawdown(
+        "sp500",
+        90,
+        db_path=db_path,
+        output_metric_key="sp500_drawdown_3m",
+    )
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, 96.0 / 120.0 - 1.0)
+    assert result.dependency_source_badges == ["official"]
+    assert "market outcome" in result.interpretation_hint
+    assert "trading signal" in result.interpretation_hint
+
+
+def test_drawdown_metrics_block_without_sufficient_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "sp500", "2026-03-02", 96.0, source_series="^GSPC")
+
+    result = derived.calculate_drawdown("sp500", 90, db_path=db_path)
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert result.missing_reason == "history_points_insufficient"
+
+
+def test_curve_slope_calculates_from_latest_dgs_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "dgs2", "2026-03-02", 4.25, source_series="DGS2")
+    _insert(db_path, "dgs10", "2026-03-02", 4.75, source_series="DGS10")
+
+    result = derived.calculate_latest_spread(
+        "dgs10",
+        "dgs2",
+        db_path=db_path,
+        output_metric_key="dgs10_dgs2_curve_slope",
+    )
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, 0.50)
+    assert result.value_text == "0.50pp"
+    assert result.dependency_source_badges == ["official"]
+    assert result.dependency_source_series == ["DGS10", "DGS2"]
+    assert "macro context" in result.interpretation_hint
+    assert "not a trading signal" in result.interpretation_hint
+
+
+def test_curve_slope_blocks_when_dependency_missing(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "dgs10", "2026-03-02", 4.75, source_series="DGS10")
+
+    result = derived.calculate_latest_spread(
+        "dgs10",
+        "dgs2",
+        db_path=db_path,
+        output_metric_key="dgs10_dgs2_curve_slope",
+    )
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert "dgs2" in result.missing_reason
+
+
+def test_cross_asset_proxy_metrics_preserve_proxy_dependency_metadata(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_cross_asset_proxy_series(db_path)
+
+    stress = {
+        item.metric_key: item
+        for item in derived.build_historical_dashboard_candidates(db_path=db_path)[
+            "market_stress_derived"
+        ]
+    }
+
+    assert math.isclose(stress["tlt_proxy_30d_return"].value, 105.0 / 100.0 - 1.0)
+    assert math.isclose(stress["gld_proxy_30d_return"].value, 102.0 / 100.0 - 1.0)
+    assert math.isclose(stress["shy_proxy_30d_return"].value, 100.5 / 100.0 - 1.0)
+    assert math.isclose(
+        stress["tlt_vs_shy_30d"].value,
+        (105.0 / 100.0 - 1.0) - (100.5 / 100.0 - 1.0),
+    )
+    for key in ("tlt_proxy_30d_return", "gld_proxy_30d_return", "shy_proxy_30d_return", "tlt_vs_shy_30d"):
+        assert stress[key].source_badge == "derived"
+        assert stress[key].dependency_source_badges == ["proxy"]
+        assert stress[key].ai_context_allowed is True
+        assert "ETF proxy" in stress[key].interpretation_hint
+    assert "relative return proxy" in stress["tlt_vs_shy_30d"].interpretation_hint
+    assert "not an official bond-risk indicator" in stress["tlt_vs_shy_30d"].interpretation_hint
+
+
 def test_ppi_final_demand_yoy_requires_official_history(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     dates = [
@@ -221,6 +317,7 @@ def test_build_historical_dashboard_candidates_groups_supported_metrics(tmp_path
         "breadth_concentration_proxy",
         "equity_trend",
         "inflation_energy_pressure",
+        "market_stress_derived",
         "rate_pressure",
     }
     assert rate_metrics["dgs10_5d_avg"].status == "ok"
@@ -233,7 +330,7 @@ def test_flattened_metrics_are_compact_and_safe(tmp_path):
     payloads = [derived.metric_to_dict(item) for item in metrics]
     text = str(payloads)
 
-    assert len(payloads) == 23
+    assert len(payloads) == 33
     assert all(item["source_badge"] == "derived" for item in payloads)
     assert "raw_provider_response" not in text
     assert "api_key" not in text.lower()
@@ -326,3 +423,13 @@ def _insert_proxy(db_path, metric_key, observation_date, value, *, source_series
         },
         db_path=db_path,
     )
+
+
+def _insert_cross_asset_proxy_series(db_path):
+    for metric_key, source_series, start, end in (
+        ("tlt_proxy", "TLT", 100.0, 105.0),
+        ("gld_proxy", "GLD", 100.0, 102.0),
+        ("shy_proxy", "SHY", 100.0, 100.5),
+    ):
+        _insert_proxy(db_path, metric_key, "2026-01-31", start, source_series=source_series)
+        _insert_proxy(db_path, metric_key, "2026-03-02", end, source_series=source_series)

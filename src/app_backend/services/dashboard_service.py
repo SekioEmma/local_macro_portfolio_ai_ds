@@ -33,6 +33,7 @@ DASHBOARD_MODULE_KEYS = (
     "inflation_energy_pressure",
     "equity_trend",
     "breadth_concentration_proxy",
+    "market_stress_derived",
     "portfolio_deviation",
 )
 REPORT_FILES = {
@@ -108,6 +109,16 @@ DERIVED_METRIC_KEYS = {
     "qqq_vs_spy_60d",
     "hyg_vs_lqd_30d",
     "hyg_vs_lqd_60d",
+    "sp500_drawdown_3m",
+    "sp500_drawdown_6m",
+    "nasdaq100_drawdown_3m",
+    "nasdaq100_drawdown_6m",
+    "dgs10_dgs2_curve_slope",
+    "dgs30_dgs10_curve_slope",
+    "tlt_proxy_30d_return",
+    "gld_proxy_30d_return",
+    "shy_proxy_30d_return",
+    "tlt_vs_shy_30d",
 }
 EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
     "sp500_30d_return",
@@ -136,6 +147,18 @@ PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS = {
     "qqq_vs_spy_60d",
     "hyg_vs_lqd_30d",
     "hyg_vs_lqd_60d",
+}
+MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS = {
+    "sp500_drawdown_3m",
+    "sp500_drawdown_6m",
+    "nasdaq100_drawdown_3m",
+    "nasdaq100_drawdown_6m",
+    "dgs10_dgs2_curve_slope",
+    "dgs30_dgs10_curve_slope",
+    "tlt_proxy_30d_return",
+    "gld_proxy_30d_return",
+    "shy_proxy_30d_return",
+    "tlt_vs_shy_30d",
 }
 EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
     " Derived from local market history; underlying source includes yfinance "
@@ -198,6 +221,13 @@ CORE_METRIC_KEYS = {
         "spy_vs_rsp_30d",
         "qqq_vs_spy_30d",
         "hyg_vs_lqd_30d",
+    },
+    "market_stress_derived": {
+        "sp500_drawdown_3m",
+        "nasdaq100_drawdown_3m",
+        "dgs10_dgs2_curve_slope",
+        "dgs30_dgs10_curve_slope",
+        "tlt_vs_shy_30d",
     },
     "portfolio_deviation": {
         "max_deviation_asset",
@@ -290,6 +320,18 @@ METRIC_SPECS = {
         ("qqq_vs_spy_60d", "QQQ vs SPY 60D", "pp", "pp", "insufficient_history"),
         ("hyg_vs_lqd_30d", "HYG vs LQD 30D", "pp", "pp", "insufficient_history"),
         ("hyg_vs_lqd_60d", "HYG vs LQD 60D", "pp", "pp", "insufficient_history"),
+    ],
+    "market_stress_derived": [
+        ("sp500_drawdown_3m", "S&P 500 3M drawdown", "percent", "signed_percent", "insufficient_history"),
+        ("sp500_drawdown_6m", "S&P 500 6M drawdown", "percent", "signed_percent", "insufficient_history"),
+        ("nasdaq100_drawdown_3m", "Nasdaq 100 3M drawdown", "percent", "signed_percent", "insufficient_history"),
+        ("nasdaq100_drawdown_6m", "Nasdaq 100 6M drawdown", "percent", "signed_percent", "insufficient_history"),
+        ("dgs10_dgs2_curve_slope", "10Y-2Y curve slope", "pp", "pp", "insufficient_history"),
+        ("dgs30_dgs10_curve_slope", "30Y-10Y curve slope", "pp", "pp", "insufficient_history"),
+        ("tlt_proxy_30d_return", "TLT proxy 30D return", "percent", "signed_percent", "insufficient_history"),
+        ("gld_proxy_30d_return", "GLD proxy 30D return", "percent", "signed_percent", "insufficient_history"),
+        ("shy_proxy_30d_return", "SHY proxy 30D return", "percent", "signed_percent", "insufficient_history"),
+        ("tlt_vs_shy_30d", "TLT vs SHY 30D", "pp", "pp", "insufficient_history"),
     ],
     "portfolio_deviation": [
         ("max_deviation_asset", "Max deviation asset", None, "text", "missing"),
@@ -693,6 +735,17 @@ def _build_modules(
                 market_history_db_path=market_history_db_path,
             ),
         ),
+        "market_stress_derived": _market_module(
+            key="market_stress_derived",
+            label="market stress derived",
+            reports=market_temperature_metadata_reports,
+            signal_terms=("drawdown", "curve", "tlt_proxy", "gld_proxy", "shy_proxy"),
+            key_metrics=_key_metrics_for_module(
+                "market_stress_derived",
+                market_temperature_metadata_reports,
+                market_history_db_path=market_history_db_path,
+            ),
+        ),
         "portfolio_deviation": _portfolio_module(portfolio),
     }
 
@@ -738,6 +791,19 @@ def _market_module(
             summary=(
                 "proxy breadth and concentration metrics available; yfinance ETF "
                 "proxy boundary applies"
+            ),
+            source_badge="derived",
+            updated_at=_latest_metric_generated_at(key_metrics),
+            key_metrics=key_metrics,
+        )
+    if key == "market_stress_derived" and _market_stress_historical_derived_metrics_available(key_metrics):
+        return _module(
+            key=key,
+            status="ok",
+            label=label,
+            summary=(
+                "local drawdown, curve slope, and cross-asset proxy metrics "
+                "available; descriptive boundaries apply"
             ),
             source_badge="derived",
             updated_at=_latest_metric_generated_at(key_metrics),
@@ -908,6 +974,15 @@ def _key_metrics_for_module(
             hint_suffix="",
             fallback_source="local_market_history",
             required_dependency_source_badges={"proxy"},
+            db_path=market_history_db_path,
+        )
+    if module_key == "market_stress_derived":
+        return _apply_historical_derived_metrics(
+            metrics,
+            module_key="market_stress_derived",
+            metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
+            hint_suffix="",
+            fallback_source="local_market_history",
             db_path=market_history_db_path,
         )
     return metrics
@@ -1235,6 +1310,8 @@ def _format_historical_derived_value(value: float, unit: str | None) -> str:
         return f"{value:+.2f}%"
     if unit == "pp":
         return f"{value:+.2f}pp"
+    if unit == "raw_pp":
+        return f"{value:+.2f}pp"
     return f"{value:.4g}"
 
 
@@ -1264,6 +1341,18 @@ def _proxy_historical_derived_metrics_available(
 ) -> bool:
     return any(
         metric.metric_key in PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS
+        and metric.status == "ok"
+        and metric.source_badge == "derived"
+        and metric.value is not None
+        for metric in metrics
+    )
+
+
+def _market_stress_historical_derived_metrics_available(
+    metrics: list[DashboardMetric],
+) -> bool:
+    return any(
+        metric.metric_key in MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS
         and metric.status == "ok"
         and metric.source_badge == "derived"
         and metric.value is not None

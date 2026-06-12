@@ -115,7 +115,7 @@ def observation_from_evidence_row(
         "source": row.source,
         "source_badge": row.source_badge,
         "provider": row.source,
-        "source_series": None,
+        "source_series": row.source_series,
         "generated_at": row.generated_at,
         "fetched_at": row.generated_at,
         "freshness_status": row.freshness_status,

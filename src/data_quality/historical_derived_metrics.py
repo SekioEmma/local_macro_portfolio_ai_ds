@@ -11,10 +11,23 @@ from data_quality import market_history_store
 DEFAULT_FRESHNESS_STATUS = "historical"
 DERIVED_SOURCE_BADGE = "derived"
 PROXY_BREADTH_MODULE = "breadth_concentration_proxy"
+MARKET_STRESS_DERIVED_MODULE = "market_stress_derived"
 PROXY_BREADTH_HINT_SUFFIX = (
     " Derived from local market history; underlying source includes yfinance ETF "
     "proxy observations. This is not official market breadth, not valuation data, "
     "and not a crash confirmation signal."
+)
+EQUITY_DRAWDOWN_HINT_SUFFIX = (
+    " Drawdown is derived from local market history as a market outcome, not a "
+    "cause, model score, or trading signal."
+)
+CURVE_SLOPE_HINT_SUFFIX = (
+    " Curve slope is derived from local Treasury yield history as macro context; "
+    "it is not a trading signal."
+)
+CROSS_ASSET_PROXY_HINT_SUFFIX = (
+    " Derived from local market history; TLT/GLD/SHY are yfinance ETF proxy "
+    "observations, not official asset-class data or trading advice."
 )
 
 
@@ -228,6 +241,90 @@ DERIVED_METRIC_SPECS: dict[str, dict[str, Any]] = {
         "unit": "pp",
         "interpretation_hint_suffix": PROXY_BREADTH_HINT_SUFFIX,
     },
+    "sp500_drawdown_3m": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "drawdown",
+        "metric_key": "sp500",
+        "window_days": 90,
+        "unit": "percent",
+        "interpretation_hint_suffix": EQUITY_DRAWDOWN_HINT_SUFFIX,
+    },
+    "sp500_drawdown_6m": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "drawdown",
+        "metric_key": "sp500",
+        "window_days": 180,
+        "unit": "percent",
+        "interpretation_hint_suffix": EQUITY_DRAWDOWN_HINT_SUFFIX,
+    },
+    "nasdaq100_drawdown_3m": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "drawdown",
+        "metric_key": "nasdaq100",
+        "window_days": 90,
+        "unit": "percent",
+        "interpretation_hint_suffix": EQUITY_DRAWDOWN_HINT_SUFFIX,
+    },
+    "nasdaq100_drawdown_6m": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "drawdown",
+        "metric_key": "nasdaq100",
+        "window_days": 180,
+        "unit": "percent",
+        "interpretation_hint_suffix": EQUITY_DRAWDOWN_HINT_SUFFIX,
+    },
+    "dgs10_dgs2_curve_slope": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "latest_spread",
+        "numerator_metric_key": "dgs10",
+        "denominator_metric_key": "dgs2",
+        "unit": "raw_pp",
+        "interpretation_hint_suffix": CURVE_SLOPE_HINT_SUFFIX,
+    },
+    "dgs30_dgs10_curve_slope": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "latest_spread",
+        "numerator_metric_key": "dgs30",
+        "denominator_metric_key": "dgs10",
+        "unit": "raw_pp",
+        "interpretation_hint_suffix": CURVE_SLOPE_HINT_SUFFIX,
+    },
+    "tlt_proxy_30d_return": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "period_return",
+        "metric_key": "tlt_proxy",
+        "window_days": 30,
+        "unit": "percent",
+        "interpretation_hint_suffix": CROSS_ASSET_PROXY_HINT_SUFFIX,
+    },
+    "gld_proxy_30d_return": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "period_return",
+        "metric_key": "gld_proxy",
+        "window_days": 30,
+        "unit": "percent",
+        "interpretation_hint_suffix": CROSS_ASSET_PROXY_HINT_SUFFIX,
+    },
+    "shy_proxy_30d_return": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "period_return",
+        "metric_key": "shy_proxy",
+        "window_days": 30,
+        "unit": "percent",
+        "interpretation_hint_suffix": CROSS_ASSET_PROXY_HINT_SUFFIX,
+    },
+    "tlt_vs_shy_30d": {
+        "module": MARKET_STRESS_DERIVED_MODULE,
+        "kind": "relative_return",
+        "numerator_metric_key": "tlt_proxy",
+        "denominator_metric_key": "shy_proxy",
+        "window_days": 30,
+        "unit": "pp",
+        "interpretation_hint_suffix": (
+            f"{CROSS_ASSET_PROXY_HINT_SUFFIX} This is a relative return proxy, "
+            "not an official bond-risk indicator."
+        ),
+    },
 }
 
 
@@ -415,6 +512,130 @@ def calculate_relative_return(
     )
 
 
+def calculate_drawdown(
+    metric_key: str,
+    window_days: int,
+    *,
+    db_path: Path | str | None = None,
+    output_metric_key: str | None = None,
+    unit: str | None = "percent",
+    interpretation_hint_suffix: str | None = None,
+) -> HistoricalDerivedMetric:
+    if interpretation_hint_suffix is None:
+        interpretation_hint_suffix = EQUITY_DRAWDOWN_HINT_SUFFIX
+    observations = _numeric_observations(metric_key, db_path=db_path)
+    required = 2
+    if len(observations) < required:
+        return _insufficient_metric(
+            metric_key=output_metric_key or f"{metric_key}_drawdown_{window_days}d",
+            dependency_keys=[metric_key],
+            window=f"{window_days}D",
+            calculation="drawdown",
+            points_used=len(observations),
+            points_required=required,
+            missing_reason="history_points_insufficient",
+        )
+    latest = observations[-1]
+    target_date = latest["date"] - timedelta(days=window_days)
+    start = _latest_on_or_before(observations, target_date)
+    if start is None or start["date"] >= latest["date"]:
+        return _insufficient_metric(
+            metric_key=output_metric_key or f"{metric_key}_drawdown_{window_days}d",
+            dependency_keys=[metric_key],
+            window=f"{window_days}D",
+            calculation="drawdown",
+            points_used=len(observations),
+            points_required=required,
+            missing_reason="window_start_observation_missing",
+        )
+    window = [item for item in observations if item["date"] >= start["date"]]
+    peak = max(item["value"] for item in window)
+    if peak == 0:
+        return _insufficient_metric(
+            metric_key=output_metric_key or f"{metric_key}_drawdown_{window_days}d",
+            dependency_keys=[metric_key],
+            window=f"{window_days}D",
+            calculation="drawdown",
+            points_used=len(observations),
+            points_required=required,
+            missing_reason="window_peak_value_zero",
+        )
+    value = latest["value"] / peak - 1.0
+    peak_observation = max(window, key=lambda item: item["value"])
+    return _ok_metric(
+        metric_key=output_metric_key or f"{metric_key}_drawdown_{window_days}d",
+        value=value,
+        unit=unit,
+        dependency_keys=[metric_key],
+        window=f"{window_days}D",
+        calculation="latest_value / lookback_peak_value - 1",
+        points_used=len(window),
+        points_required=required,
+        observation_date=latest["observation_date"],
+        generated_at=latest.get("generated_at"),
+        interpretation_hint=(
+            f"Derived from market history: latest {metric_key} divided by the "
+            f"highest {metric_key} observation in the {window_days}D lookback, minus 1."
+            f"{interpretation_hint_suffix or ''}"
+        ),
+        dependency_observations=[peak_observation, latest],
+    )
+
+
+def calculate_latest_spread(
+    numerator_metric_key: str,
+    denominator_metric_key: str,
+    *,
+    db_path: Path | str | None = None,
+    output_metric_key: str | None = None,
+    unit: str | None = "raw_pp",
+    interpretation_hint_suffix: str | None = None,
+) -> HistoricalDerivedMetric:
+    if interpretation_hint_suffix is None:
+        interpretation_hint_suffix = CURVE_SLOPE_HINT_SUFFIX
+    numerator = _latest_numeric_observation(numerator_metric_key, db_path=db_path)
+    denominator = _latest_numeric_observation(denominator_metric_key, db_path=db_path)
+    metric_key = output_metric_key or f"{numerator_metric_key}_{denominator_metric_key}_spread"
+    missing = []
+    if numerator is None:
+        missing.append(f"{numerator_metric_key}:latest_observation_missing")
+    if denominator is None:
+        missing.append(f"{denominator_metric_key}:latest_observation_missing")
+    if missing:
+        return _insufficient_metric(
+            metric_key=metric_key,
+            dependency_keys=[numerator_metric_key, denominator_metric_key],
+            window="latest",
+            calculation="latest_spread",
+            points_used=sum(1 for item in (numerator, denominator) if item is not None),
+            points_required=2,
+            missing_reason="; ".join(missing),
+        )
+    assert numerator is not None and denominator is not None
+    value = numerator["value"] - denominator["value"]
+    dependency_observations = [numerator, denominator]
+    return _ok_metric(
+        metric_key=metric_key,
+        value=value,
+        unit=unit,
+        dependency_keys=[numerator_metric_key, denominator_metric_key],
+        window="latest",
+        calculation=f"latest {numerator_metric_key} - latest {denominator_metric_key}",
+        points_used=2,
+        points_required=2,
+        observation_date=max(
+            item for item in [numerator["observation_date"], denominator["observation_date"]] if item
+        ),
+        generated_at=_utc_now(),
+        interpretation_hint=(
+            f"Derived from market history: latest {numerator_metric_key} minus "
+            f"latest {denominator_metric_key}."
+            f"{interpretation_hint_suffix or ''}"
+        ),
+        dependency_observations=dependency_observations,
+    )
+
+
 def calculate_observation_yoy(
     metric_key: str,
     window_observations: int,
@@ -595,6 +816,24 @@ def _calculate_spec(
             unit=spec.get("unit"),
             interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
         )
+    if kind == "drawdown":
+        return calculate_drawdown(
+            spec["metric_key"],
+            spec["window_days"],
+            db_path=db_path,
+            output_metric_key=output_key,
+            unit=spec.get("unit"),
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
+        )
+    if kind == "latest_spread":
+        return calculate_latest_spread(
+            spec["numerator_metric_key"],
+            spec["denominator_metric_key"],
+            db_path=db_path,
+            output_metric_key=output_key,
+            unit=spec.get("unit"),
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
+        )
     if kind == "observation_yoy":
         return calculate_observation_yoy(
             spec["metric_key"],
@@ -652,6 +891,15 @@ def _latest_on_or_before(
 ) -> dict[str, Any] | None:
     candidates = [item for item in observations if item["date"] <= target_date]
     return candidates[-1] if candidates else None
+
+
+def _latest_numeric_observation(
+    metric_key: str,
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    observations = _numeric_observations(metric_key, db_path=db_path)
+    return observations[-1] if observations else None
 
 
 def _ok_metric(
@@ -794,6 +1042,8 @@ def _format_value(value: float, unit: str | None) -> str:
     if unit == "percent":
         return f"{value * 100:.2f}%"
     if unit == "pp":
+        return f"{value:.2f}pp"
+    if unit == "raw_pp":
         return f"{value:.2f}pp"
     return f"{value:.4g}"
 

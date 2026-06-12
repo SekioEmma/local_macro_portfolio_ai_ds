@@ -14,6 +14,7 @@ MODULE_KEYS = {
     "inflation_energy_pressure",
     "equity_trend",
     "breadth_concentration_proxy",
+    "market_stress_derived",
     "portfolio_deviation",
 }
 EVIDENCE_MODULE_KEYS = MODULE_KEYS | {"labor_macro"}

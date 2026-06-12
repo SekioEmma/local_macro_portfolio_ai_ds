@@ -121,6 +121,78 @@ def test_proxy_breadth_metrics_stay_blocked_when_history_missing(monkeypatch, tm
     assert spy["ai_context_allowed"] is False
 
 
+def test_market_stress_derived_metrics_surface_in_evidence_table(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "sp500", "2025-08-01", 95.0, source_series="^GSPC")
+    _insert(db_path, "sp500", "2025-11-01", 100.0, source_series="^GSPC")
+    _insert(db_path, "sp500", "2026-01-01", 120.0, source_series="^GSPC")
+    _insert(db_path, "sp500", "2026-03-02", 96.0, source_series="^GSPC")
+    _insert(db_path, "nasdaq100", "2025-08-01", 90.0, source_series="^NDX")
+    _insert(db_path, "nasdaq100", "2025-11-01", 100.0, source_series="^NDX")
+    _insert(db_path, "nasdaq100", "2026-01-01", 150.0, source_series="^NDX")
+    _insert(db_path, "nasdaq100", "2026-03-02", 120.0, source_series="^NDX")
+    _insert_official_rate(db_path, "dgs2", "2026-03-02", 4.25, source_series="DGS2")
+    _insert_official_rate(db_path, "dgs10", "2026-03-02", 4.75, source_series="DGS10")
+    _insert_official_rate(db_path, "dgs30", "2026-03-02", 5.10, source_series="DGS30")
+    _insert_cross_asset_proxy_series(db_path)
+    _write_market_report(tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    summary = TestClient(app).get("/api/dashboard/summary").json()
+    module = summary["modules"]["market_stress_derived"]
+    evidence = TestClient(app).get(
+        "/api/dashboard/evidence-table?module=market_stress_derived"
+    ).json()
+
+    assert module["status"] == "ok"
+    assert evidence["row_count"] == 10
+    assert _row(evidence, "sp500_drawdown_3m")["value_text"] == "-20.00%"
+    assert _row(evidence, "nasdaq100_drawdown_3m")["value_text"] == "-20.00%"
+    assert _row(evidence, "dgs10_dgs2_curve_slope")["value_text"] == "+0.50pp"
+    assert _row(evidence, "dgs30_dgs10_curve_slope")["value_text"] == "+0.35pp"
+    assert _row(evidence, "tlt_proxy_30d_return")["value_text"] == "+5.00%"
+    assert _row(evidence, "tlt_vs_shy_30d")["value_text"] == "+4.50pp"
+    for row in evidence["rows"]:
+        assert row["source"] == "local_market_history"
+        assert row["source_badge"] == "derived"
+        assert row["freshness_status"] == "historical"
+        assert row["observation_date"] == "2026-03-02"
+        assert row["ai_context_allowed"] is True
+    assert "market outcome" in _row(evidence, "sp500_drawdown_3m")["interpretation_hint"]
+    assert "not a trading signal" in _row(evidence, "dgs10_dgs2_curve_slope")[
+        "interpretation_hint"
+    ]
+    assert "ETF proxy" in _row(evidence, "tlt_proxy_30d_return")["interpretation_hint"]
+    assert "not an official bond-risk indicator" in _row(evidence, "tlt_vs_shy_30d")[
+        "interpretation_hint"
+    ]
+    assert _row(evidence, "tlt_proxy_30d_return")["source_series"] == "TLT"
+    assert _row(evidence, "dgs10_dgs2_curve_slope")["source_series"] == "DGS10, DGS2"
+
+
+def test_market_stress_derived_metrics_block_when_history_missing(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "sp500", "2026-03-02", 96.0, source_series="^GSPC")
+    _write_market_report(tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    evidence = TestClient(app).get(
+        "/api/dashboard/evidence-table?module=market_stress_derived"
+    ).json()
+    drawdown = _row(evidence, "sp500_drawdown_3m")
+    curve = _row(evidence, "dgs10_dgs2_curve_slope")
+
+    assert drawdown["status"] == "insufficient_history"
+    assert drawdown["source_badge"] == "missing"
+    assert drawdown["ai_context_allowed"] is False
+    assert curve["status"] == "insufficient_history"
+    assert curve["ai_context_allowed"] is False
+
+
 def test_rate_and_oil_metrics_are_not_replaced_by_equity_history(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
@@ -463,6 +535,43 @@ def _insert_official_energy(db_path, metric_key, observation_date, value, *, sou
         },
         db_path=db_path,
     )
+
+
+def _insert_official_rate(db_path, metric_key, observation_date, value, *, source_series):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": metric_key,
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "percent",
+            "status": "ok",
+            "source": f"FRED:{source_series}",
+            "source_badge": "official",
+            "provider": "FRED",
+            "source_series": source_series,
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "historical",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {
+                "provider": "FRED",
+                "source_series": source_series,
+            },
+        },
+        db_path=db_path,
+    )
+
+
+def _insert_cross_asset_proxy_series(db_path):
+    for metric_key, source_series, start, end in (
+        ("tlt_proxy", "TLT", 100.0, 105.0),
+        ("gld_proxy", "GLD", 100.0, 102.0),
+        ("shy_proxy", "SHY", 100.0, 100.5),
+    ):
+        _insert_proxy(db_path, metric_key, "2026-01-31", start, source_series=source_series)
+        _insert_proxy(db_path, metric_key, "2026-03-02", end, source_series=source_series)
 
 
 def _insert_official_ppifis(db_path, observation_date, value):
