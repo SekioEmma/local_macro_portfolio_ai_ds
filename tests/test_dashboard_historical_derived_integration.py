@@ -223,6 +223,90 @@ def test_oil_historical_derived_requires_official_history(monkeypatch, tmp_path)
     assert wti["ai_context_allowed"] is False
 
 
+def test_ppifis_history_surfaces_final_demand_and_yoy(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    values = [
+        150.0,
+        151.0,
+        152.0,
+        153.0,
+        154.0,
+        155.0,
+        156.0,
+        157.0,
+        158.0,
+        159.0,
+        160.0,
+        161.0,
+        162.0,
+    ]
+    dates = [
+        "2025-01-01",
+        "2025-02-01",
+        "2025-03-01",
+        "2025-04-01",
+        "2025-05-01",
+        "2025-06-01",
+        "2025-07-01",
+        "2025-08-01",
+        "2025-09-01",
+        "2025-10-01",
+        "2025-11-01",
+        "2025-12-01",
+        "2026-01-01",
+    ]
+    for observation_date, value in zip(dates, values):
+        _insert_official_ppifis(db_path, observation_date, value)
+    _write_market_report(tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table?module=inflation_energy_pressure").json()
+    index_row = _row(data, "ppi_final_demand")
+    yoy_row = _row(data, "ppi_final_demand_yoy")
+
+    assert index_row["status"] == "ok"
+    assert index_row["value"] == 162.0
+    assert index_row["source"] == "FRED"
+    assert index_row["source_badge"] == "official"
+    assert index_row["source_series"] == "PPIFIS"
+    assert index_row["observation_date"] == "2026-01-01"
+    assert index_row["generated_at"] == "2026-01-01T00:00:00+00:00"
+    assert index_row["freshness_status"] == "historical"
+    assert index_row["ai_context_allowed"] is True
+    assert "PPIACO" in index_row["interpretation_hint"]
+
+    assert yoy_row["status"] == "ok"
+    assert yoy_row["value_text"] == "+8.00%"
+    assert yoy_row["source_badge"] == "derived"
+    assert yoy_row["source_series"] == "PPIFIS"
+    assert yoy_row["ai_context_allowed"] is True
+    assert "PPIFIS" in yoy_row["interpretation_hint"]
+    assert "PPIACO" in yoy_row["interpretation_hint"]
+
+
+def test_ppifis_yoy_stays_blocked_with_insufficient_history(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_official_ppifis(db_path, "2026-01-01", 162.0)
+    _write_market_report(tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table?module=inflation_energy_pressure").json()
+    index_row = _row(data, "ppi_final_demand")
+    yoy_row = _row(data, "ppi_final_demand_yoy")
+
+    assert index_row["status"] == "ok"
+    assert index_row["source_series"] == "PPIFIS"
+    assert yoy_row["status"] == "insufficient_history"
+    assert yoy_row["value"] is None
+    assert yoy_row["source_badge"] == "missing"
+    assert yoy_row["ai_context_allowed"] is False
+    assert "+162.00%" not in json.dumps(data)
+
+
 def test_equity_history_insufficient_keeps_dashboard_insufficient(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
@@ -375,6 +459,34 @@ def _insert_official_energy(db_path, metric_key, observation_date, value, *, sou
                 "provider": "FRED",
                 "source_series": source_series,
                 "source_detail": "EIA daily crude oil price series distributed through FRED",
+            },
+        },
+        db_path=db_path,
+    )
+
+
+def _insert_official_ppifis(db_path, observation_date, value):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": "ppi_final_demand",
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "index",
+            "status": "ok",
+            "source": "FRED",
+            "source_badge": "official",
+            "provider": "FRED",
+            "source_series": "PPIFIS",
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "historical",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {
+                "provider": "FRED",
+                "source_series": "PPIFIS",
+                "source_detail": "Headline PPI Final Demand index relayed by FRED; distinct from PPIACO.",
             },
         },
         db_path=db_path,

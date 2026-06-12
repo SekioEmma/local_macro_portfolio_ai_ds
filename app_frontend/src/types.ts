@@ -53,6 +53,7 @@ export type DashboardMetric = {
   status: string;
   source: string | null;
   source_badge: string;
+  source_series: string | null;
   observation_date: string | null;
   generated_at: string | null;
   freshness_status: string;
@@ -89,6 +90,7 @@ export type DashboardEvidenceRow = {
   status: string;
   source: string | null;
   source_badge: string;
+  source_series: string | null;
   observation_date: string | null;
   generated_at: string | null;
   freshness_status: string;

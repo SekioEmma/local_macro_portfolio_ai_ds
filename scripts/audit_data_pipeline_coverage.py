@@ -112,7 +112,7 @@ def build_coverage_audit(
     )
     proxy_breadth = _proxy_breadth_audit(rows)
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
-    official_macro = _official_macro_pack_audit(rows)
+    official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
     provider_health = _provider_health_audit(summary.provider_health)
     module_coverage = _module_coverage(summary.modules, rows, last_good)
@@ -531,6 +531,8 @@ def _recommendations(
         recommendations.append("fill_official_macro_compact_reports")
     if official_macro and not official_macro.get("ppi_final_demand_available"):
         recommendations.append("confirm_and_ingest_ppi_final_demand_ppifis")
+    if official_macro and official_macro.get("ppifis_history_observation_count", 0) < 13:
+        recommendations.append("ingest_official_ppifis_history")
     if valuation_research and valuation_research.get("source_research_document_exists"):
         recommendations.append("design_manual_or_citation_valuation_context_gate")
     return sorted(set(recommendations))
@@ -745,6 +747,7 @@ def _energy_history_audit(
     rows_by_key = {row.metric_key: row for row in rows}
     wti_count = int(observations.get("wti") or 0)
     brent_count = int(observations.get("brent") or 0)
+    ppifis_count = int(observations.get("ppi_final_demand") or 0)
     actions: list[str] = []
     if wti_count == 0 or brent_count == 0:
         actions.append("run_official_energy_history_ingest_live")
@@ -765,6 +768,7 @@ def _energy_history_audit(
             rows_by_key.get("dgs30_breakout_confirmed")
         ),
         "ppi_final_demand_status": _row_status(rows_by_key.get("ppi_final_demand")),
+        "ppifis_history_observation_count": ppifis_count,
         "recommended_history_actions": sorted(set(actions)),
     }
 
@@ -878,8 +882,14 @@ def _valuation_doc_has_public_research_candidate(doc_path: Path) -> bool:
     return "public_research" in text and "cape" in text
 
 
-def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+def _official_macro_pack_audit(
+    rows: list[DashboardEvidenceRow],
+    historical_store: dict[str, Any],
+) -> dict[str, Any]:
     row_by_key = {row.metric_key: row for row in rows}
+    observations = historical_store.get("observations_by_metric", {})
+    latest = historical_store.get("latest_observation_by_metric", {})
+    ppifis_count = int(observations.get("ppi_final_demand") or 0)
     metrics = official_macro_pack.OFFICIAL_MACRO_METRICS
     configured_keys = sorted(metrics)
     available_keys = sorted(
@@ -952,6 +962,9 @@ def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
         "ppi_final_demand_available": ppi_final_demand_available,
         "ppi_final_demand_status": status_by_key["ppi_final_demand"],
         "ppi_final_demand_yoy_status": status_by_key["ppi_final_demand_yoy"],
+        "ppifis_history_observation_count": ppifis_count,
+        "ppifis_latest_observation_date": latest.get("ppi_final_demand"),
+        "ppifis_history_sufficient_for_yoy": ppifis_count >= 13,
         "ppi_final_demand_ai_context_allowed": bool(
             row_by_key.get("ppi_final_demand")
             and row_by_key["ppi_final_demand"].ai_context_allowed

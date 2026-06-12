@@ -43,6 +43,7 @@ class DashboardMetric(BaseModel):
     status: str
     source: str | None
     source_badge: str
+    source_series: str | None = None
     observation_date: str | None
     generated_at: str | None
     freshness_status: str
@@ -85,6 +86,7 @@ class DashboardEvidenceRow(BaseModel):
     status: str
     source: str | None
     source_badge: str
+    source_series: str | None = None
     observation_date: str | None
     generated_at: str | None
     freshness_status: str

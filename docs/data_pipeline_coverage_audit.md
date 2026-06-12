@@ -356,15 +356,20 @@ coverage and Dashboard status checks:
 - `real_yield_pressure_status_status`
 - `dgs30_breakout_confirmed_status`
 - `ppi_final_demand_status`
+- `ppifis_history_observation_count`
 - `recommended_history_actions`
 
 WTI/Brent history should be filled through `scripts/ingest_official_energy_history.py`.
 The script writes compact FRED/EIA observations into `market_history`; it must not
 commit the SQLite DB.
+PPIFIS history should be filled through `scripts/ingest_official_ppifis_history.py`.
+The dry-run path does not fetch or write; live write mode stores only normalized
+official FRED `PPIFIS` observations and never raw provider payloads.
 `ppi_final_demand_status` is now audited against the verified FRED `PPIFIS`
 official relay for headline PPI Final Demand. It is available only when the
 Evidence Table row has value, source/source_badge, observation_date,
-generated_at, freshness, interpretation hint, and AI-context eligibility.
+generated_at, freshness, interpretation hint, `source_series=PPIFIS`, and
+AI-context eligibility.
 
 ## Official Macro Pack Fields
 
@@ -386,6 +391,9 @@ Top-level `official_macro_pack` fields:
 - `ppi_final_demand_available`: true only when official `PPIFIS` evidence is complete
 - `ppi_final_demand_status`: Dashboard/Evidence status for the `PPIFIS` index row
 - `ppi_final_demand_yoy_status`: derived/compact YoY status; index level must not be treated as YoY
+- `ppifis_history_observation_count`: local `market_history` row count for `ppi_final_demand`
+- `ppifis_latest_observation_date`: latest local `PPIFIS` observation date
+- `ppifis_history_sufficient_for_yoy`: true when at least 13 local `PPIFIS` observations are present
 - `details`: compact per-metric source, series, frequency, dashboard, and missing status metadata
 
 The official macro pack does not treat PPIACO as final demand PPI.

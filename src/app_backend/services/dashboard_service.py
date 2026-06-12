@@ -504,6 +504,7 @@ def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidence
         status=metric.status,
         source=metric.source,
         source_badge=metric.source_badge,
+        source_series=metric.source_series,
         observation_date=metric.observation_date,
         generated_at=metric.generated_at,
         freshness_status=metric.freshness_status,
@@ -875,6 +876,10 @@ def _key_metrics_for_module(
             db_path=market_history_db_path,
         )
     if module_key == "inflation_energy_pressure":
+        metrics = _apply_ppi_final_demand_history(
+            metrics,
+            db_path=market_history_db_path,
+        )
         metrics = _apply_historical_derived_metrics(
             metrics,
             module_key="inflation_energy_pressure",
@@ -969,6 +974,7 @@ def _build_metric(
         status = "stale"
 
     source = _metric_source(payload, report, quality_metadata)
+    source_series = _metric_source_series(payload, quality_metadata, official_macro)
     source_badge = _metric_source_badge(payload, report, module_key, metric_key, quality_metadata)
     if (
         official_macro
@@ -1006,6 +1012,7 @@ def _build_metric(
             status="insufficient_history",
             source=source,
             source_badge="missing",
+            source_series=source_series,
             observation_date=None,
             generated_at=generated_at,
             freshness_status="insufficient_history",
@@ -1027,6 +1034,7 @@ def _build_metric(
         status=status,
         source=source,
         source_badge=source_badge,
+        source_series=source_series,
         observation_date=observation_date,
         generated_at=generated_at,
         freshness_status=freshness_status,
@@ -1081,6 +1089,88 @@ def _apply_historical_derived_metrics(
     ]
 
 
+def _apply_ppi_final_demand_history(
+    metrics: list[DashboardMetric],
+    *,
+    db_path: Path | str | None = None,
+) -> list[DashboardMetric]:
+    target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
+    latest = _latest_ppifis_observation(target_db_path)
+    if latest is None:
+        return metrics
+    return [
+        _ppi_final_demand_history_metric(metric, latest)
+        if metric.metric_key == "ppi_final_demand"
+        else metric
+        for metric in metrics
+    ]
+
+
+def _latest_ppifis_observation(db_path: Path | str | None) -> dict[str, Any] | None:
+    rows = market_history_store.list_market_observations(
+        metric_key="ppi_final_demand",
+        limit=100,
+        db_path=db_path,
+    )
+    for row in rows:
+        if row.get("status") != "ok":
+            continue
+        if row.get("source_badge") != "official":
+            continue
+        if row.get("provider") != "FRED":
+            continue
+        if row.get("source_series") != "PPIFIS":
+            continue
+        if row.get("value_numeric") is None:
+            continue
+        return row
+    return None
+
+
+def _ppi_final_demand_history_metric(
+    original: DashboardMetric,
+    observation: dict[str, Any],
+) -> DashboardMetric:
+    official_macro = official_macro_pack.get_official_macro_metric("ppi_final_demand")
+    interpretation_hint = (
+        official_macro.interpretation_hint
+        if official_macro
+        else (
+            "PPI Final Demand is the official headline final demand PPI index relayed "
+            "by FRED PPIFIS; it is distinct from PPIACO and not consensus surprise data."
+        )
+    )
+    value = float(observation["value_numeric"])
+    generated_at = _string_or_none(observation.get("generated_at"))
+    freshness_status = str(observation.get("freshness_status") or "historical")
+    ai_context_allowed = bool(observation.get("ai_context_allowed")) and _ai_context_allowed(
+        status="ok",
+        source="FRED",
+        source_badge="official",
+        observation_date=_string_or_none(observation.get("observation_date")),
+        generated_at=generated_at,
+        freshness_status=freshness_status,
+        interpretation_hint=interpretation_hint,
+    )
+    return DashboardMetric(
+        metric_key=original.metric_key,
+        display_name=original.display_name,
+        value=value,
+        value_text=_format_value(value, "number", "ok"),
+        unit=original.unit,
+        status="ok",
+        source="FRED",
+        source_badge="official",
+        source_series="PPIFIS",
+        observation_date=_string_or_none(observation.get("observation_date")),
+        generated_at=generated_at,
+        freshness_status=freshness_status,
+        missing_reason=None,
+        interpretation_hint=interpretation_hint,
+        ai_context_allowed=ai_context_allowed,
+    )
+
+
 def _historical_derived_metric(
     original: DashboardMetric,
     candidate: historical_derived_metrics.HistoricalDerivedMetric | None,
@@ -1121,6 +1211,7 @@ def _historical_derived_metric(
         status="ok",
         source=fallback_source,
         source_badge="derived",
+        source_series=", ".join(candidate.dependency_source_series or []) or None,
         observation_date=candidate.observation_date,
         generated_at=candidate.generated_at,
         freshness_status=candidate.freshness_status,
@@ -1814,6 +1905,7 @@ def _derived_metric_response(
         status="ok",
         source=source,
         source_badge="derived",
+        source_series=_metric_source_series(payload, None, None),
         observation_date=observation_date,
         generated_at=generated_at,
         freshness_status=freshness_status,
@@ -1851,6 +1943,7 @@ def _blocked_dependency_metric(
         status=normalized_status,
         source=None,
         source_badge="research_needed" if normalized_status == "research_needed" else "missing",
+        source_series=None,
         observation_date=None,
         generated_at=generated_at,
         freshness_status="missing"
@@ -1889,6 +1982,7 @@ def _missing_metric(
         status=normalized_status,
         source=source,
         source_badge=normalized_source_badge,
+        source_series=None,
         observation_date=None,
         generated_at=generated_at,
         freshness_status="unknown",
@@ -2048,6 +2142,24 @@ def _metric_source(
     if source is None and report.name == "portfolio_snapshot":
         source = "local"
     return _string_or_none(source)
+
+
+def _metric_source_series(
+    payload: dict[str, Any],
+    quality_metadata: dict[str, Any] | None = None,
+    official_macro: official_macro_pack.OfficialMacroMetric | None = None,
+) -> str | None:
+    source_series = payload.get("source_series")
+    if source_series is None and isinstance(payload.get("metadata"), dict):
+        source_series = payload["metadata"].get("source_series")
+    if source_series is None and quality_metadata:
+        source_series = quality_metadata.get("source_series")
+    if source_series is None and official_macro:
+        source_series = official_macro.source_series
+    text = _string_or_none(source_series)
+    if text and ":" in text:
+        return text.split(":")[-1]
+    return text
 
 
 def _metric_source_badge(

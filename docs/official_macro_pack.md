@@ -20,6 +20,12 @@ The initial configured metrics are:
 
 `PPIFIS` was selected after source research against the FRED series page for "Producer Price Index by Commodity: Final Demand". `PPIACO` remains a separate all-commodities PPI series and must not be used to fill PPI Final Demand.
 
+`scripts/ingest_official_ppifis_history.py` can ingest FRED `PPIFIS` observations
+into local `market_history` when run with `--live --write`. Its default
+`--dry-run` path does not fetch or write. Stored rows use `source=FRED`,
+`source_badge=official`, `source_series=PPIFIS`, `metric_kind=raw`, and
+`freshness_status=historical`.
+
 ## Dashboard Scope
 
 Dashboard and Evidence Table rows are enabled for:
@@ -42,7 +48,7 @@ Rows with compact values use:
 
 Missing rows stay blocked from AI factual context. They include a configured source label, `source_badge=missing`, a `missing_reason`, and an interpretation hint.
 
-`ppi_final_demand` can enter AI factual context only when the row has a value, `source`/`source_badge`, `observation_date`, `generated_at`, non-stale freshness, and an interpretation hint. `ppi_final_demand_yoy` is blocked as `insufficient_history` unless it is explicitly provided as a YoY compact metric or derived from enough official `PPIFIS` index history.
+`ppi_final_demand` can enter AI factual context only when the row has a value, `source`/`source_badge`, `source_series=PPIFIS`, `observation_date`, `generated_at`, non-stale freshness, and an interpretation hint. `ppi_final_demand_yoy` is blocked as `insufficient_history` unless it is explicitly provided as a YoY compact metric or derived from enough official `PPIFIS` index history.
 
 PPI Final Demand hints must state:
 
