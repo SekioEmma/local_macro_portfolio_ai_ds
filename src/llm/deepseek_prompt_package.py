@@ -176,8 +176,7 @@ def build_deepseek_prompt_package(
             "组合表述必须区分长期目标配置和当前本地持仓快照。",
             "不得把长期目标中的权益权重写成当前权益高配。",
             "如果说权益是组合收益主引擎，必须明确这是长期目标配置逻辑，不等于当前快照高配。",
-            "如果说当前组合方向，必须使用本地快照方向：sp500 当前相对目标低配、nasdaq100 当前相对目标低配、short_bond 当前相对目标高配、gold 当前相对目标高配。",
-            "可以写当前快照显示 sp500/nasdaq100 低配、short_bond/gold 高配；不得写偏离主要由市场价格下跌、权益市值收缩、利率重定价自然造成。",
+            *_snapshot_direction_rules(facts["validator_facts"]["allocation_direction"]),
             "不得写“组合自然呈现防御型偏斜”“反映利率压力/风险偏好收缩”等把当前偏离归因于宏观或市场因素的表述。",
             "如果讨论宏观含义，只能写这种偏离会影响组合对利率、权益和黄金风险的暴露；不能写偏离由某个宏观因素造成。",
             "除非 context 提供 performance attribution、transaction history 或 cashflow decomposition，否则不能判断偏离成因；推荐表述：当前数据包只能确认相对目标配置的方向和幅度；偏离成因可能来自建仓进度、价格变动、现金流和既有DCA路径等多因素，当前 context 不支持归因分解。",
@@ -369,6 +368,40 @@ def _extract_facts(context_json: dict[str, Any], *, context_mode: str) -> dict[s
         "provided_market_data_values": _provided_market_data_values(financial_conditions, market_data_package),
     }
     return {"prompt_facts": prompt_facts, "validator_facts": validator_facts}
+
+
+def _snapshot_direction_rules(direction: dict[str, Any]) -> list[str]:
+    if not direction:
+        return [
+            "如果说当前组合方向，当前 context 未提供可核验的配置偏离方向，不得自行判断高配/低配。",
+            "不得在缺少 allocation_direction / deviation_flags 时写出任何资产相对目标高配或低配。",
+        ]
+
+    direction_text = "、".join(
+        f"{asset} 当前相对目标{_allocation_direction_label(flag)}"
+        for asset, flag in sorted(direction.items())
+        if _allocation_direction_label(flag)
+    )
+    if not direction_text:
+        return [
+            "如果说当前组合方向，当前 context 未提供可核验的配置偏离方向，不得自行判断高配/低配。",
+            "不得在缺少 allocation_direction / deviation_flags 时写出任何资产相对目标高配或低配。",
+        ]
+    return [
+        f"如果说当前组合方向，必须使用本地快照提供的 allocation_direction / deviation_flags：{direction_text}。",
+        "可以描述当前快照显示的相对目标配置方向；不得把这些偏离归因于市场价格下跌、权益市值收缩、利率重定价或其他宏观/市场因素。",
+    ]
+
+
+def _allocation_direction_label(flag: Any) -> str | None:
+    normalized = str(flag).strip().lower()
+    if normalized == "underweight":
+        return "低配"
+    if normalized == "overweight":
+        return "高配"
+    if normalized in {"within_threshold", "neutral"}:
+        return "接近目标"
+    return None
 
 
 def _financial_conditions_for_prompt(financial_conditions: dict[str, Any]) -> dict[str, Any]:

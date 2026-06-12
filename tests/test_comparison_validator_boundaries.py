@@ -36,11 +36,12 @@ def test_exact_metric_keys_are_required_for_body_metric_claims():
     missing = _validate(REGRESSION_CASES["DGS10 rolling averages missing exact evidence keys"])
     exact = _validate(REGRESSION_CASES["DGS10 rolling averages with exact evidence keys"])
 
-    assert missing["hard_flags"]["unsupported_market_data_claim"] or missing["soft_flags"][
+    assert missing["hard_flags"]["unsupported_market_data_claim"] or missing["hard_flags"][
         "body_metric_not_in_evidence_table"
     ]
+    assert missing["has_hard_flag"] is True
     assert exact["hard_flags"]["unsupported_market_data_claim"] == []
-    assert exact["soft_flags"]["body_metric_not_in_evidence_table"] == []
+    assert exact["hard_flags"]["body_metric_not_in_evidence_table"] == []
 
 
 def test_portfolio_attribution_confusion_boundary():

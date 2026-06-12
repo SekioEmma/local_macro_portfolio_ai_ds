@@ -361,10 +361,10 @@ def main() -> int:
         REGRESSION_CASES["DGS10 rolling averages missing exact evidence keys"],
         SYNTHETIC_FACTS,
     )
-    missing_keys_flags = missing_keys_result.get("soft_flags", {})
+    missing_keys_hard = missing_keys_result.get("hard_flags", {})
     if not (
-        missing_keys_result.get("hard_flags", {}).get("unsupported_market_data_claim")
-        or missing_keys_flags.get("body_metric_not_in_evidence_table")
+        missing_keys_hard.get("unsupported_market_data_claim")
+        or missing_keys_hard.get("body_metric_not_in_evidence_table")
     ):
         failures.append(
             "regression case did not flag DGS10 rolling averages missing exact metric_key evidence rows"
@@ -375,20 +375,19 @@ def main() -> int:
         SYNTHETIC_FACTS,
     )
     exact_keys_hard = exact_keys_result.get("hard_flags", {})
-    exact_keys_soft = exact_keys_result.get("soft_flags", {})
     if exact_keys_hard.get("unsupported_market_data_claim"):
         failures.append("regression case raised unsupported_market_data_claim with exact DGS10 rolling keys")
-    if exact_keys_soft.get("body_metric_not_in_evidence_table"):
+    if exact_keys_hard.get("body_metric_not_in_evidence_table"):
         failures.append("regression case raised body_metric_not_in_evidence_table with exact DGS10 rolling keys")
 
     missing_oil_result = validate_comparison_answer(
         REGRESSION_CASES["oil metrics missing exact evidence keys"],
         SYNTHETIC_FACTS,
     )
-    missing_oil_flags = missing_oil_result.get("soft_flags", {})
+    missing_oil_hard = missing_oil_result.get("hard_flags", {})
     if not (
-        missing_oil_result.get("hard_flags", {}).get("unsupported_market_data_claim")
-        or missing_oil_flags.get("body_metric_not_in_evidence_table")
+        missing_oil_hard.get("unsupported_market_data_claim")
+        or missing_oil_hard.get("body_metric_not_in_evidence_table")
     ):
         failures.append("regression case did not flag oil metrics missing exact metric_key evidence rows")
 
@@ -397,20 +396,19 @@ def main() -> int:
         SYNTHETIC_FACTS,
     )
     exact_oil_hard = exact_oil_result.get("hard_flags", {})
-    exact_oil_soft = exact_oil_result.get("soft_flags", {})
     if exact_oil_hard.get("unsupported_market_data_claim"):
         failures.append("regression case raised unsupported_market_data_claim with exact oil metric keys")
-    if exact_oil_soft.get("body_metric_not_in_evidence_table"):
+    if exact_oil_hard.get("body_metric_not_in_evidence_table"):
         failures.append("regression case raised body_metric_not_in_evidence_table with exact oil metric keys")
 
     brent_under_wti_result = validate_comparison_answer(
         REGRESSION_CASES["Brent under WTI label"],
         SYNTHETIC_FACTS,
     )
-    brent_under_wti_soft = brent_under_wti_result.get("soft_flags", {})
+    brent_under_wti_hard = brent_under_wti_result.get("hard_flags", {})
     if not (
-        brent_under_wti_result.get("hard_flags", {}).get("unsupported_market_data_claim")
-        or brent_under_wti_soft.get("body_metric_not_in_evidence_table")
+        brent_under_wti_hard.get("unsupported_market_data_claim")
+        or brent_under_wti_hard.get("body_metric_not_in_evidence_table")
     ):
         failures.append("regression case did not flag Brent values written under WTI label")
 
@@ -419,10 +417,9 @@ def main() -> int:
         SYNTHETIC_FACTS,
     )
     brent_exact_hard = brent_exact_result.get("hard_flags", {})
-    brent_exact_soft = brent_exact_result.get("soft_flags", {})
     if brent_exact_hard.get("unsupported_market_data_claim"):
         failures.append("regression case raised unsupported_market_data_claim with exact Brent metric keys")
-    if brent_exact_soft.get("body_metric_not_in_evidence_table"):
+    if brent_exact_hard.get("body_metric_not_in_evidence_table"):
         failures.append("regression case raised body_metric_not_in_evidence_table with exact Brent metric keys")
 
     real_yield_driver_result = validate_comparison_answer(
@@ -436,10 +433,10 @@ def main() -> int:
         REGRESSION_CASES["PPI YoY missing exact evidence key"],
         SYNTHETIC_FACTS,
     )
-    ppi_missing_soft = ppi_missing_result.get("soft_flags", {})
+    ppi_missing_hard = ppi_missing_result.get("hard_flags", {})
     if not (
-        ppi_missing_result.get("hard_flags", {}).get("unsupported_market_data_claim")
-        or ppi_missing_soft.get("body_metric_not_in_evidence_table")
+        ppi_missing_hard.get("unsupported_market_data_claim")
+        or ppi_missing_hard.get("body_metric_not_in_evidence_table")
     ):
         failures.append("regression case did not flag PPI YoY missing exact metric_key evidence row")
 
@@ -448,10 +445,9 @@ def main() -> int:
         SYNTHETIC_FACTS,
     )
     ppi_exact_hard = ppi_exact_result.get("hard_flags", {})
-    ppi_exact_soft = ppi_exact_result.get("soft_flags", {})
     if ppi_exact_hard.get("unsupported_market_data_claim"):
         failures.append("regression case raised unsupported_market_data_claim with exact PPI YoY metric key")
-    if ppi_exact_soft.get("body_metric_not_in_evidence_table"):
+    if ppi_exact_hard.get("body_metric_not_in_evidence_table"):
         failures.append("regression case raised body_metric_not_in_evidence_table with exact PPI YoY metric key")
 
     allocation_bad_result = validate_comparison_answer(
@@ -494,22 +490,21 @@ def main() -> int:
         SYNTHETIC_FACTS,
     )
     exact_market_hard = exact_market_result.get("hard_flags", {})
-    exact_market_soft = exact_market_result.get("soft_flags", {})
     if exact_market_hard.get("unsupported_market_data_claim"):
         failures.append("regression case raised unsupported_market_data_claim with exact DGS/oil/high_yield keys")
     if exact_market_hard.get("dgs_breakout_confirmation_conflict"):
         failures.append("regression case raised dgs_breakout_confirmation_conflict with exact DGS keys")
-    if exact_market_soft.get("body_metric_not_in_evidence_table"):
+    if exact_market_hard.get("body_metric_not_in_evidence_table"):
         failures.append("regression case raised body_metric_not_in_evidence_table with exact DGS/oil/high_yield keys")
 
     missing_market_result = validate_comparison_answer(
         REGRESSION_CASES["DGS oil high yield missing exact evidence keys"],
         SYNTHETIC_FACTS,
     )
-    missing_market_soft = missing_market_result.get("soft_flags", {})
+    missing_market_hard = missing_market_result.get("hard_flags", {})
     if not (
-        missing_market_result.get("hard_flags", {}).get("unsupported_market_data_claim")
-        or missing_market_soft.get("body_metric_not_in_evidence_table")
+        missing_market_hard.get("unsupported_market_data_claim")
+        or missing_market_hard.get("body_metric_not_in_evidence_table")
     ):
         failures.append("regression case did not flag missing exact DGS/oil/high_yield evidence keys")
 

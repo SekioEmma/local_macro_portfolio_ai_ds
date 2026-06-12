@@ -78,6 +78,15 @@ def _ensure_snapshot_files() -> None:
             )
             continue
 
+        _run_snapshot_generator(script_path)
+        if not _snapshot_is_fresh(output_path):
+            raise RuntimeError(
+                f"Snapshot was not refreshed within max_age_seconds: {output_path}"
+            )
+
+
+def _run_snapshot_generator(script_path: Path) -> None:
+    try:
         subprocess.run(
             [sys.executable, str(script_path)],
             cwd=str(PROJECT_ROOT),
@@ -85,10 +94,18 @@ def _ensure_snapshot_files() -> None:
             capture_output=True,
             text=True,
         )
-        if not _snapshot_is_fresh(output_path):
-            raise RuntimeError(
-                f"Snapshot was not refreshed within max_age_seconds: {output_path}"
-            )
+    except subprocess.CalledProcessError as exc:
+        print(
+            f"Snapshot generator failed: {script_path.relative_to(PROJECT_ROOT)}",
+            file=sys.stderr,
+        )
+        if exc.stdout:
+            print("generator stdout:", file=sys.stderr)
+            print(exc.stdout, file=sys.stderr, end="" if exc.stdout.endswith("\n") else "\n")
+        if exc.stderr:
+            print("generator stderr:", file=sys.stderr)
+            print(exc.stderr, file=sys.stderr, end="" if exc.stderr.endswith("\n") else "\n")
+        raise
 
 
 def _snapshot_is_fresh(path: Path) -> bool:

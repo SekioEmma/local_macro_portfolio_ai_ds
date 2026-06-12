@@ -127,11 +127,11 @@ def validate_comparison_answer(answer_text: str, validator_facts: dict[str, Any]
         "dgs_breakout_confirmation_conflict": _dgs_breakout_confirmation_conflicts(answer_text, facts),
         "unsupported_inflation_trend_or_surprise": _unsupported_inflation_trend_or_surprise(answer_text, facts),
         "stale_data_used_as_current": _stale_data_used_as_current(answer_text, facts),
+        "body_metric_not_in_evidence_table": _body_metric_not_in_evidence_table(answer_text, facts),
     }
     soft_flags = {
         "too_template_like": _too_template_like(answer_text),
         "evidence_table_absent": _evidence_table_absent(answer_text),
-        "body_metric_not_in_evidence_table": _body_metric_not_in_evidence_table(answer_text, facts),
         "hypothesis_written_as_confirmed_fact": _hypothesis_written_as_confirmed_fact(answer_text),
         "deterministic_short_bond_loss": _deterministic_short_bond_loss(answer_text),
         "real_yield_gold_logic_too_linear": _real_yield_gold_logic_too_linear(answer_text),
