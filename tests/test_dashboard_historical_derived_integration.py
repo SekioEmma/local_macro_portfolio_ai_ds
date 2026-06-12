@@ -193,6 +193,73 @@ def test_market_stress_derived_metrics_block_when_history_missing(monkeypatch, t
     assert curve["ai_context_allowed"] is False
 
 
+def test_market_stress_curve_slope_uses_compact_dgs_fallback(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert(db_path, "sp500", "2025-08-01", 95.0, source_series="^GSPC")
+    _insert(db_path, "sp500", "2026-03-02", 96.0, source_series="^GSPC")
+    _insert_cross_asset_proxy_series(db_path)
+    _write_market_report(tmp_path, extra=_compact_dgs_payload())
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    evidence = TestClient(app).get(
+        "/api/dashboard/evidence-table?module=market_stress_derived"
+    ).json()
+    dgs10_dgs2 = _row(evidence, "dgs10_dgs2_curve_slope")
+    dgs30_dgs10 = _row(evidence, "dgs30_dgs10_curve_slope")
+
+    assert dgs10_dgs2["status"] == "ok"
+    assert dgs10_dgs2["value_text"] == "+0.50pp"
+    assert dgs30_dgs10["status"] == "ok"
+    assert dgs30_dgs10["value_text"] == "+0.35pp"
+    assert dgs10_dgs2["source_badge"] == "derived"
+    assert dgs10_dgs2["source_series"] == "DGS10, DGS2"
+    assert dgs30_dgs10["source_series"] == "DGS30, DGS10"
+    assert dgs10_dgs2["observation_date"] == "2026-03-02"
+    assert dgs10_dgs2["freshness_status"] == "historical"
+    assert dgs10_dgs2["ai_context_allowed"] is True
+    assert "compact/dashboard official DGS fallback" in dgs10_dgs2["interpretation_hint"]
+    assert "not a trading signal" in dgs10_dgs2["interpretation_hint"]
+
+
+def test_market_stress_curve_slope_blocks_when_compact_dgs_value_missing(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    payload = _compact_dgs_payload()
+    payload["dgs10"]["value"] = None
+    _write_market_report(tmp_path, extra=payload)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    evidence = TestClient(app).get(
+        "/api/dashboard/evidence-table?module=market_stress_derived"
+    ).json()
+    curve = _row(evidence, "dgs10_dgs2_curve_slope")
+
+    assert curve["status"] == "insufficient_history"
+    assert curve["source_badge"] == "missing"
+    assert curve["ai_context_allowed"] is False
+
+
+def test_market_stress_curve_slope_blocks_when_compact_dgs_metadata_missing(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    db_path = tmp_path / "market_history.sqlite3"
+    payload = _compact_dgs_payload()
+    payload["dgs2"].pop("source")
+    _write_market_report(tmp_path, extra=payload)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_MARKET_HISTORY_DB_PATH", db_path)
+
+    evidence = TestClient(app).get(
+        "/api/dashboard/evidence-table?module=market_stress_derived"
+    ).json()
+    curve = _row(evidence, "dgs10_dgs2_curve_slope")
+
+    assert curve["status"] == "insufficient_history"
+    assert curve["ai_context_allowed"] is False
+
+
 def test_rate_and_oil_metrics_are_not_replaced_by_equity_history(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
@@ -427,6 +494,29 @@ def _write_market_report(tmp_path, *, extra=None):
         json.dumps(payload),
         encoding="utf-8",
     )
+
+
+def _compact_dgs_payload():
+    return {
+        "dgs2": _compact_dgs_metric(4.25, "DGS2"),
+        "dgs10": _compact_dgs_metric(4.75, "DGS10"),
+        "dgs30": _compact_dgs_metric(5.10, "DGS30"),
+    }
+
+
+def _compact_dgs_metric(value, source_series):
+    return {
+        "value": value,
+        "unit": "percent",
+        "status": "ok",
+        "source": f"FRED:{source_series}",
+        "source_badge": "official",
+        "source_series": source_series,
+        "observation_date": "2026-03-02",
+        "generated_at": "2026-03-02T00:00:00+00:00",
+        "freshness_status": "fresh",
+        "interpretation_hint": "FRED daily constant maturity yield; not intraday high.",
+    }
 
 
 def _insert(db_path, metric_key, observation_date, value, *, source_series):

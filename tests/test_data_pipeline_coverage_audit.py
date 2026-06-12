@@ -544,6 +544,40 @@ def test_audit_reports_market_stress_derived_coverage(monkeypatch, tmp_path):
     assert "tlt_vs_shy_30d" in stress["market_stress_metric_keys"]
 
 
+def test_audit_reports_curve_slope_available_from_compact_dgs_fallback(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-03-02T00:00:00+00:00",
+            "status": "ok",
+            "dgs2": _compact_dgs_metric(4.25, "DGS2"),
+            "dgs10": _compact_dgs_metric(4.75, "DGS10"),
+            "dgs30": _compact_dgs_metric(5.10, "DGS30"),
+        },
+    )
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    stress = result["market_stress_derived"]
+    slope_details = {
+        item["metric_key"]: item
+        for item in result["historical_derived"]["derived_metric_details"]
+        if item["metric_key"] in {"dgs10_dgs2_curve_slope", "dgs30_dgs10_curve_slope"}
+    }
+
+    assert stress["curve_slope_available"] is True
+    assert "dgs10_dgs2_curve_slope" not in stress["market_stress_insufficient_history_metric_keys"]
+    assert slope_details["dgs10_dgs2_curve_slope"]["status"] == "ok"
+    assert slope_details["dgs10_dgs2_curve_slope"]["dependency_source_series"] == ["DGS10", "DGS2"]
+    assert slope_details["dgs30_dgs10_curve_slope"]["dependency_source_series"] == ["DGS30", "DGS10"]
+
+
 def test_audit_reports_energy_history_and_real_yield_status(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     reports_dir = tmp_path / "reports"
@@ -992,6 +1026,21 @@ def _module(key, status):
 
 def _write_json(path, payload):
     path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _compact_dgs_metric(value, source_series):
+    return {
+        "value": value,
+        "unit": "percent",
+        "status": "ok",
+        "source": f"FRED:{source_series}",
+        "source_badge": "official",
+        "source_series": source_series,
+        "observation_date": "2026-03-02",
+        "generated_at": "2026-03-02T00:00:00+00:00",
+        "freshness_status": "fresh",
+        "interpretation_hint": "FRED daily constant maturity yield; not intraday high.",
+    }
 
 
 def _insert_market_observation(

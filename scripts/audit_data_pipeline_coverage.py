@@ -707,7 +707,10 @@ def _historical_derived_audit(
     db_path: Path | str | None = None,
 ) -> dict[str, Any]:
     db_exists = Path(db_path).exists() if db_path is not None else market_history_store.get_default_market_history_db_path().exists()
-    by_module = historical_derived_metrics.build_historical_dashboard_candidates(db_path=db_path)
+    by_module = historical_derived_metrics.build_historical_dashboard_candidates(
+        db_path=db_path,
+        fallback_observations=_compact_dgs_fallback_observations(rows),
+    )
     all_metrics = [item for items in by_module.values() for item in items]
     details = [
         {
@@ -717,6 +720,9 @@ def _historical_derived_audit(
             "history_points_used": item.history_points_used,
             "history_points_required": item.history_points_required,
             "missing_reason": item.missing_reason,
+            "dependency_source_series": item.dependency_source_series,
+            "dependency_observation_dates": item.dependency_observation_dates,
+            "dependency_freshness_statuses": item.dependency_freshness_statuses,
         }
         for item in all_metrics
     ]
@@ -801,6 +807,29 @@ def _energy_history_audit(
         "ppifis_history_observation_count": ppifis_count,
         "recommended_history_actions": sorted(set(actions)),
     }
+
+
+def _compact_dgs_fallback_observations(
+    rows: list[DashboardEvidenceRow],
+) -> dict[str, dict[str, Any]]:
+    observations: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if row.metric_key not in {"dgs2", "dgs10", "dgs30"}:
+            continue
+        source_series = row.source_series
+        if source_series is None and row.source_badge == "official":
+            source_series = row.metric_key.upper()
+        observations[row.metric_key] = {
+            "value": row.value,
+            "source": row.source,
+            "source_badge": row.source_badge,
+            "source_series": source_series,
+            "observation_date": row.observation_date,
+            "generated_at": row.generated_at,
+            "freshness_status": row.freshness_status,
+            "ai_context_allowed": row.ai_context_allowed,
+        }
+    return observations
 
 
 def _row_status(row: DashboardEvidenceRow | None) -> str:

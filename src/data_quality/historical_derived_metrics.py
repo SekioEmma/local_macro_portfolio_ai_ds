@@ -54,6 +54,9 @@ class HistoricalDerivedMetric:
     dependency_source_badges: list[str] | None = None
     dependency_source_series: list[str] | None = None
     dependency_sources: list[str] | None = None
+    dependency_observation_dates: list[str] | None = None
+    dependency_generated_ats: list[str] | None = None
+    dependency_freshness_statuses: list[str] | None = None
 
 
 DERIVED_METRIC_SPECS: dict[str, dict[str, Any]] = {
@@ -587,14 +590,22 @@ def calculate_latest_spread(
     denominator_metric_key: str,
     *,
     db_path: Path | str | None = None,
+    fallback_observations: dict[str, dict[str, Any]] | None = None,
     output_metric_key: str | None = None,
     unit: str | None = "raw_pp",
     interpretation_hint_suffix: str | None = None,
 ) -> HistoricalDerivedMetric:
     if interpretation_hint_suffix is None:
         interpretation_hint_suffix = CURVE_SLOPE_HINT_SUFFIX
-    numerator = _latest_numeric_observation(numerator_metric_key, db_path=db_path)
-    denominator = _latest_numeric_observation(denominator_metric_key, db_path=db_path)
+    fallback_observations = fallback_observations or {}
+    numerator = _latest_usable_spread_observation(numerator_metric_key, db_path=db_path) or _fallback_observation(
+        numerator_metric_key,
+        fallback_observations,
+    )
+    denominator = _latest_usable_spread_observation(denominator_metric_key, db_path=db_path) or _fallback_observation(
+        denominator_metric_key,
+        fallback_observations,
+    )
     metric_key = output_metric_key or f"{numerator_metric_key}_{denominator_metric_key}_spread"
     missing = []
     if numerator is None:
@@ -614,6 +625,9 @@ def calculate_latest_spread(
     assert numerator is not None and denominator is not None
     value = numerator["value"] - denominator["value"]
     dependency_observations = [numerator, denominator]
+    source_text = "market history"
+    if any(item.get("observation_source") == "compact_dashboard" for item in dependency_observations):
+        source_text = "market history with compact/dashboard official DGS fallback"
     return _ok_metric(
         metric_key=metric_key,
         value=value,
@@ -626,9 +640,11 @@ def calculate_latest_spread(
         observation_date=max(
             item for item in [numerator["observation_date"], denominator["observation_date"]] if item
         ),
-        generated_at=_utc_now(),
+        generated_at=max(
+            item for item in [numerator.get("generated_at"), denominator.get("generated_at")] if item
+        ),
         interpretation_hint=(
-            f"Derived from market history: latest {numerator_metric_key} minus "
+            f"Derived from {source_text}: latest {numerator_metric_key} minus "
             f"latest {denominator_metric_key}."
             f"{interpretation_hint_suffix or ''}"
         ),
@@ -736,11 +752,17 @@ def calculate_distance_to_threshold(
 def build_historical_dashboard_candidates(
     *,
     db_path: Path | str | None = None,
+    fallback_observations: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, list[HistoricalDerivedMetric]]:
     candidates: dict[str, list[HistoricalDerivedMetric]] = {}
     for output_key, spec in DERIVED_METRIC_SPECS.items():
         module = spec["module"]
-        item = _calculate_spec(output_key, spec, db_path=db_path)
+        item = _calculate_spec(
+            output_key,
+            spec,
+            db_path=db_path,
+            fallback_observations=fallback_observations,
+        )
         candidates.setdefault(module, []).append(item)
     return candidates
 
@@ -748,10 +770,14 @@ def build_historical_dashboard_candidates(
 def flatten_historical_dashboard_candidates(
     *,
     db_path: Path | str | None = None,
+    fallback_observations: dict[str, dict[str, Any]] | None = None,
 ) -> list[HistoricalDerivedMetric]:
     return [
         item
-        for items in build_historical_dashboard_candidates(db_path=db_path).values()
+        for items in build_historical_dashboard_candidates(
+            db_path=db_path,
+            fallback_observations=fallback_observations,
+        ).values()
         for item in items
     ]
 
@@ -779,6 +805,9 @@ def metric_to_dict(metric: HistoricalDerivedMetric) -> dict[str, Any]:
         "dependency_source_badges": metric.dependency_source_badges,
         "dependency_source_series": metric.dependency_source_series,
         "dependency_sources": metric.dependency_sources,
+        "dependency_observation_dates": metric.dependency_observation_dates,
+        "dependency_generated_ats": metric.dependency_generated_ats,
+        "dependency_freshness_statuses": metric.dependency_freshness_statuses,
     }
 
 
@@ -787,6 +816,7 @@ def _calculate_spec(
     spec: dict[str, Any],
     *,
     db_path: Path | str | None,
+    fallback_observations: dict[str, dict[str, Any]] | None,
 ) -> HistoricalDerivedMetric:
     kind = spec["kind"]
     if kind == "rolling_average":
@@ -830,6 +860,7 @@ def _calculate_spec(
             spec["numerator_metric_key"],
             spec["denominator_metric_key"],
             db_path=db_path,
+            fallback_observations=fallback_observations,
             output_metric_key=output_key,
             unit=spec.get("unit"),
             interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
@@ -879,6 +910,7 @@ def _numeric_observations(
                 "source": observation.get("source"),
                 "source_badge": observation.get("source_badge"),
                 "source_series": observation.get("source_series"),
+                "freshness_status": observation.get("freshness_status"),
                 "ai_context_allowed": observation.get("ai_context_allowed"),
             }
         )
@@ -900,6 +932,62 @@ def _latest_numeric_observation(
 ) -> dict[str, Any] | None:
     observations = _numeric_observations(metric_key, db_path=db_path)
     return observations[-1] if observations else None
+
+
+def _latest_usable_spread_observation(
+    metric_key: str,
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    latest = _latest_numeric_observation(metric_key, db_path=db_path)
+    if latest is None:
+        return None
+    if not _dependency_metadata_complete([latest]):
+        return None
+    return latest
+
+
+def _fallback_observation(
+    metric_key: str,
+    fallback_observations: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    raw = fallback_observations.get(metric_key)
+    if not isinstance(raw, dict):
+        return None
+    value = raw.get("value")
+    parsed_date = _parse_date(raw.get("observation_date"))
+    if value is None or parsed_date is None:
+        return None
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        return None
+    required_metadata = (
+        "source",
+        "source_badge",
+        "source_series",
+        "observation_date",
+        "generated_at",
+        "freshness_status",
+    )
+    if any(raw.get(field) in (None, "") for field in required_metadata):
+        return None
+    if raw.get("source_badge") != "official":
+        return None
+    if str(raw.get("freshness_status")).lower() in {"unknown", "missing"}:
+        return None
+    return {
+        "value": numeric_value,
+        "date": parsed_date,
+        "observation_date": raw.get("observation_date"),
+        "generated_at": raw.get("generated_at"),
+        "source": raw.get("source"),
+        "source_badge": raw.get("source_badge"),
+        "source_series": raw.get("source_series"),
+        "freshness_status": raw.get("freshness_status"),
+        "ai_context_allowed": raw.get("ai_context_allowed"),
+        "observation_source": "compact_dashboard",
+    }
 
 
 def _ok_metric(
@@ -954,33 +1042,36 @@ def _ok_metric(
         dependency_sources=dependency_sources
         if dependency_sources is not None
         else dependency_metadata["sources"],
+        dependency_observation_dates=dependency_metadata["observation_dates"],
+        dependency_generated_ats=dependency_metadata["generated_ats"],
+        dependency_freshness_statuses=dependency_metadata["freshness_statuses"],
     )
 
 
 def _dependency_metadata(observations: list[dict[str, Any]]) -> dict[str, list[str]]:
     return {
-        "source_badges": sorted(
-            {
-                str(item.get("source_badge"))
-                for item in observations
-                if item.get("source_badge") is not None
-            }
-        ),
-        "source_series": sorted(
-            {
-                str(item.get("source_series"))
-                for item in observations
-                if item.get("source_series") is not None
-            }
-        ),
-        "sources": sorted(
-            {
-                str(item.get("source"))
-                for item in observations
-                if item.get("source") is not None
-            }
-        ),
+        "source_badges": _ordered_unique_metadata(observations, "source_badge"),
+        "source_series": _ordered_unique_metadata(observations, "source_series"),
+        "sources": _ordered_unique_metadata(observations, "source"),
+        "observation_dates": _ordered_unique_metadata(observations, "observation_date"),
+        "generated_ats": _ordered_unique_metadata(observations, "generated_at"),
+        "freshness_statuses": _ordered_unique_metadata(observations, "freshness_status"),
     }
+
+
+def _ordered_unique_metadata(observations: list[dict[str, Any]], key: str) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for item in observations:
+        value = item.get(key)
+        if value is None:
+            continue
+        text = str(value)
+        if text in seen:
+            continue
+        seen.add(text)
+        values.append(text)
+    return values
 
 
 def _dependency_metadata_complete(observations: list[dict[str, Any]]) -> bool:
@@ -996,6 +1087,8 @@ def _dependency_metadata_complete(observations: list[dict[str, Any]]) -> bool:
         if item.get("observation_date") is None:
             return False
         if item.get("generated_at") is None:
+            return False
+        if item.get("freshness_status") is None:
             return False
     return True
 
@@ -1035,6 +1128,9 @@ def _insufficient_metric(
         dependency_source_badges=[],
         dependency_source_series=[],
         dependency_sources=[],
+        dependency_observation_dates=[],
+        dependency_generated_ats=[],
+        dependency_freshness_statuses=[],
     )
 
 

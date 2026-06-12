@@ -983,6 +983,7 @@ def _key_metrics_for_module(
             metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
             hint_suffix="",
             fallback_source="local_market_history",
+            fallback_observations=_compact_dgs_fallback_observations(reports),
             db_path=market_history_db_path,
         )
     return metrics
@@ -1138,6 +1139,7 @@ def _apply_historical_derived_metrics(
     metric_keys: set[str],
     hint_suffix: str,
     fallback_source: str,
+    fallback_observations: dict[str, dict[str, Any]] | None = None,
     required_dependency_source_badges: set[str] | None = None,
     replace_existing: bool = False,
     db_path: Path | str | None = None,
@@ -1147,6 +1149,7 @@ def _apply_historical_derived_metrics(
         item.metric_key: item
         for item in historical_derived_metrics.build_historical_dashboard_candidates(
             db_path=target_db_path,
+            fallback_observations=fallback_observations,
         ).get(module_key, [])
         if item.metric_key in metric_keys
     }
@@ -1294,6 +1297,40 @@ def _historical_derived_metric(
         interpretation_hint=hint,
         ai_context_allowed=ai_context_allowed,
     )
+
+
+def _compact_dgs_fallback_observations(
+    reports: tuple[ReportState, ...],
+) -> dict[str, dict[str, Any]]:
+    observations: dict[str, dict[str, Any]] = {}
+    for metric_key in ("dgs2", "dgs10", "dgs30"):
+        found = _find_metric(metric_key, reports)
+        if found is None:
+            continue
+        value, payload, report = found
+        quality_metadata = _metric_quality_metadata(report, metric_key) or _first_metric_quality_metadata(reports, metric_key)
+        official_macro = official_macro_pack.get_official_macro_metric(metric_key)
+        numeric_value = _to_float(value)
+        source_badge = _metric_source_badge(payload, report, "rate_pressure", metric_key, quality_metadata)
+        source_series = _metric_source_series(payload, quality_metadata, official_macro=official_macro)
+        if source_series is None and source_badge == "official" and metric_key in {"dgs2", "dgs10", "dgs30"}:
+            source_series = metric_key.upper()
+        observations[metric_key] = {
+            "value": numeric_value if isinstance(numeric_value, float) else None,
+            "source": _metric_source(payload, report, quality_metadata),
+            "source_badge": source_badge,
+            "source_series": source_series,
+            "observation_date": _metric_observation_date(payload, quality_metadata),
+            "generated_at": _metric_generated_at(payload, report),
+            "freshness_status": _metric_freshness(
+                payload,
+                report,
+                metric_key=metric_key,
+                quality_metadata=quality_metadata,
+            ),
+            "ai_context_allowed": not _dependency_unusable(found),
+        }
+    return observations
 
 
 def _dashboard_historical_derived_value(

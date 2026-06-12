@@ -70,6 +70,11 @@ It does not read raw reports, raw provider responses, holdings, prompts, or outp
 - returns latest numerator minus latest denominator
 - is used for curve slope context such as 10Y-2Y and 30Y-10Y
 - returns `insufficient_history` when either dependency is missing
+- for Treasury curve slope dashboard/audit integration, prefers `market_history`
+  latest observations and can fall back to current compact/dashboard official DGS
+  evidence when a DGS dependency is absent from history
+- compact fallback requires each DGS dependency to include numeric value, source,
+  source badge, source series, observation date, generated_at, and freshness status
 
 ### Threshold Distance
 
@@ -142,10 +147,11 @@ Derived metrics use `source_badge=derived`.
 `insufficient_history` results always use `ai_context_allowed=false`.
 `ok` results include dependency keys, calculation name, window, points used, points required, and an interpretation hint.
 
-Dashboard integration is currently limited to selected `equity_trend` candidates.
-Only OK S&P 500/Nasdaq 30D/60D returns and `nasdaq_vs_sp500_30d` may be surfaced in Dashboard rows.
+Dashboard integration includes selected `equity_trend` candidates.
+OK S&P 500/Nasdaq 30D/60D returns and `nasdaq_vs_sp500_30d` may be surfaced in Dashboard rows.
 Oil candidates may be surfaced only when their local history dependencies are official FRED/EIA rows.
-Rate candidates remain read-only audit candidates unless an explicit compact rule exists.
+Treasury curve slope rows may be surfaced when market history provides the DGS dependencies or when complete compact/dashboard official DGS evidence provides the missing dependency.
+The slope row remains `source_badge=derived`; compact fallback does not promote the derived slope into official evidence.
 
 ## Current Non-goals
 
@@ -192,6 +198,7 @@ WTI/Brent rows state official FRED/EIA daily oil history and remain derived ener
 Proxy breadth rows state the local market history and yfinance ETF proxy boundary.
 They are not official market breadth, not valuation data, and not crash confirmation signals.
 Market stress derived rows state that drawdown is a market outcome, curve slope is macro context rather than a trading signal, and TLT/GLD/SHY are ETF proxies rather than official asset-class data.
+Curve slope dependency metadata retains the compact source, source badge, source series, observation date, generated_at, and freshness status for DGS2/DGS10/DGS30.
 
 ## Official Energy History Ingest
 

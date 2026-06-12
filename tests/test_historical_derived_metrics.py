@@ -219,6 +219,98 @@ def test_curve_slope_blocks_when_dependency_missing(tmp_path):
     assert "dgs2" in result.missing_reason
 
 
+def test_curve_slope_uses_compact_official_fallback_when_history_missing(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    fallback = {
+        "dgs2": _compact_dgs_observation("dgs2", 4.25, "DGS2"),
+        "dgs10": _compact_dgs_observation("dgs10", 4.75, "DGS10"),
+        "dgs30": _compact_dgs_observation("dgs30", 5.10, "DGS30"),
+    }
+
+    result = derived.calculate_latest_spread(
+        "dgs30",
+        "dgs10",
+        db_path=db_path,
+        fallback_observations=fallback,
+        output_metric_key="dgs30_dgs10_curve_slope",
+    )
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, 0.35)
+    assert result.source_badge == "derived"
+    assert result.dependency_source_badges == ["official"]
+    assert set(result.dependency_source_series) == {"DGS30", "DGS10"}
+    assert result.dependency_observation_dates == ["2026-03-02"]
+    assert result.dependency_generated_ats == ["2026-03-02T00:00:00+00:00"]
+    assert result.dependency_freshness_statuses == ["fresh"]
+    assert result.ai_context_allowed is True
+    assert "compact/dashboard official DGS fallback" in result.interpretation_hint
+    assert "not a trading signal" in result.interpretation_hint
+
+
+def test_curve_slope_compact_fallback_blocks_when_value_missing(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    fallback = {
+        "dgs2": _compact_dgs_observation("dgs2", 4.25, "DGS2"),
+        "dgs10": _compact_dgs_observation("dgs10", None, "DGS10"),
+    }
+
+    result = derived.calculate_latest_spread(
+        "dgs10",
+        "dgs2",
+        db_path=db_path,
+        fallback_observations=fallback,
+        output_metric_key="dgs10_dgs2_curve_slope",
+    )
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert "dgs10:latest_observation_missing" in result.missing_reason
+
+
+def test_curve_slope_compact_fallback_blocks_when_metadata_missing(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    fallback = {
+        "dgs2": _compact_dgs_observation("dgs2", 4.25, "DGS2"),
+        "dgs10": _compact_dgs_observation("dgs10", 4.75, None),
+    }
+
+    result = derived.calculate_latest_spread(
+        "dgs10",
+        "dgs2",
+        db_path=db_path,
+        fallback_observations=fallback,
+        output_metric_key="dgs10_dgs2_curve_slope",
+    )
+
+    assert result.status == "insufficient_history"
+    assert result.ai_context_allowed is False
+    assert "dgs10:latest_observation_missing" in result.missing_reason
+
+
+def test_curve_slope_uses_compact_fallback_when_history_metadata_incomplete(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_incomplete_history(db_path, "dgs10", "2026-03-02", 4.70)
+    _insert_incomplete_history(db_path, "dgs2", "2026-03-02", 4.10)
+    fallback = {
+        "dgs2": _compact_dgs_observation("dgs2", 4.25, "DGS2"),
+        "dgs10": _compact_dgs_observation("dgs10", 4.75, "DGS10"),
+    }
+
+    result = derived.calculate_latest_spread(
+        "dgs10",
+        "dgs2",
+        db_path=db_path,
+        fallback_observations=fallback,
+        output_metric_key="dgs10_dgs2_curve_slope",
+    )
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, 0.50)
+    assert result.dependency_source_series == ["DGS10", "DGS2"]
+    assert result.ai_context_allowed is True
+
+
 def test_cross_asset_proxy_metrics_preserve_proxy_dependency_metadata(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     _insert_cross_asset_proxy_series(db_path)
@@ -361,6 +453,44 @@ def _insert(db_path, metric_key, observation_date, value, *, source_series=None)
             "source_badge": "official",
             "provider": "test_source",
             "source_series": source_series or metric_key.upper(),
+            "generated_at": f"{observation_date}T00:00:00+00:00",
+            "fetched_at": f"{observation_date}T00:00:00+00:00",
+            "freshness_status": "fresh",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {},
+        },
+        db_path=db_path,
+    )
+
+
+def _compact_dgs_observation(metric_key, value, source_series):
+    return {
+        "metric_key": metric_key,
+        "value": value,
+        "source": f"FRED:{source_series}" if source_series else "FRED",
+        "source_badge": "official",
+        "source_series": source_series,
+        "observation_date": "2026-03-02",
+        "generated_at": "2026-03-02T00:00:00+00:00",
+        "freshness_status": "fresh",
+        "ai_context_allowed": True,
+    }
+
+
+def _insert_incomplete_history(db_path, metric_key, observation_date, value):
+    market_history_store.upsert_market_observation(
+        {
+            "metric_key": metric_key,
+            "observation_date": observation_date,
+            "value": value,
+            "value_text": str(value),
+            "unit": "percent",
+            "status": "ok",
+            "source": "test_source",
+            "source_badge": "official",
+            "provider": "test_source",
+            "source_series": None,
             "generated_at": f"{observation_date}T00:00:00+00:00",
             "fetched_at": f"{observation_date}T00:00:00+00:00",
             "freshness_status": "fresh",
