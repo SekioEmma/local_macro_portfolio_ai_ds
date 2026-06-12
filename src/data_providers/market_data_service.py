@@ -279,7 +279,7 @@ def get_market_data_package(
             "no FedWatch probability",
             "no forward PE / FactSet valuation",
             "no consensus CPI/PPI surprise data",
-            "no PPI final demand confirmed series",
+            "PPI final demand is monthly PPIFIS index data; no consensus surprise data",
             "no market breadth / concentration data",
         ],
         "interpretation_boundaries": [
@@ -715,6 +715,7 @@ def _build_inflation_derived_metrics(inflation_indicators: dict[str, dict], time
         ("headline_pce", "headline_pce"),
         ("core_pce", "core_pce"),
         ("ppi_all_commodities", "ppi_all_commodities"),
+        ("ppi_final_demand", "ppi_final_demand"),
     ):
         source_item = inflation_indicators.get(source_key, {})
         series_id = str(source_item.get("series_id") or "").strip()

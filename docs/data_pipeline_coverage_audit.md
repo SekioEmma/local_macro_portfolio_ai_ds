@@ -361,8 +361,10 @@ coverage and Dashboard status checks:
 WTI/Brent history should be filled through `scripts/ingest_official_energy_history.py`.
 The script writes compact FRED/EIA observations into `market_history`; it must not
 commit the SQLite DB.
-`ppi_final_demand_status` remains `research_needed` until a verified official
-series is configured.
+`ppi_final_demand_status` is now audited against the verified FRED `PPIFIS`
+official relay for headline PPI Final Demand. It is available only when the
+Evidence Table row has value, source/source_badge, observation_date,
+generated_at, freshness, interpretation hint, and AI-context eligibility.
 
 ## Official Macro Pack Fields
 
@@ -381,7 +383,9 @@ Top-level `official_macro_pack` fields:
 - `labor_available`: whether `unemployment_rate` and `initial_jobless_claims` are both available
 - `labor_missing_count`: count of missing labor metrics in the official macro pack
 - `official_macro_missing_reasons`: compact missing reasons by metric key
-- `ppi_final_demand_status`: remains `research_needed` until a verified official series is configured
+- `ppi_final_demand_available`: true only when official `PPIFIS` evidence is complete
+- `ppi_final_demand_status`: Dashboard/Evidence status for the `PPIFIS` index row
+- `ppi_final_demand_yoy_status`: derived/compact YoY status; index level must not be treated as YoY
 - `details`: compact per-metric source, series, frequency, dashboard, and missing status metadata
 
 The official macro pack does not treat PPIACO as final demand PPI.

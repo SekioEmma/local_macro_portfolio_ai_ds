@@ -113,6 +113,7 @@ def build_coverage_audit(
     proxy_breadth = _proxy_breadth_audit(rows)
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows)
+    valuation_research = _valuation_research_audit(rows)
     provider_health = _provider_health_audit(summary.provider_health)
     module_coverage = _module_coverage(summary.modules, rows, last_good)
 
@@ -139,6 +140,7 @@ def build_coverage_audit(
         "energy_history": energy_history,
         "yfinance_history": yfinance_history,
         "proxy_breadth": proxy_breadth,
+        "valuation_research": valuation_research,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
         "provider_health": provider_health,
@@ -158,6 +160,7 @@ def build_coverage_audit(
             yfinance_history,
             dashboard_derived_integration,
             official_macro,
+            valuation_research,
         ),
     }
 
@@ -487,6 +490,7 @@ def _recommendations(
     yfinance_history: dict[str, Any] | None = None,
     dashboard_derived_integration: dict[str, Any] | None = None,
     official_macro: dict[str, Any] | None = None,
+    valuation_research: dict[str, Any] | None = None,
 ) -> list[str]:
     recommendations: list[str] = []
     if metadata_anomalies:
@@ -525,6 +529,10 @@ def _recommendations(
         recommendations.append("check_dashboard_historical_derived_integration")
     if official_macro and official_macro.get("official_macro_missing_count", 0) > 0:
         recommendations.append("fill_official_macro_compact_reports")
+    if official_macro and not official_macro.get("ppi_final_demand_available"):
+        recommendations.append("confirm_and_ingest_ppi_final_demand_ppifis")
+    if valuation_research and valuation_research.get("source_research_document_exists"):
+        recommendations.append("design_manual_or_citation_valuation_context_gate")
     return sorted(set(recommendations))
 
 
@@ -793,6 +801,83 @@ def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
     }
 
 
+VALUATION_BLOCKED_METRIC_KEYS = (
+    "sp500_trailing_pe",
+    "sp500_forward_pe",
+    "cape_shiller_pe",
+    "earnings_yield",
+    "equity_risk_premium_proxy",
+    "nasdaq100_valuation_proxy",
+    "earnings_revision",
+    "eps_growth",
+    "sp500_top10_weight",
+)
+
+
+def _valuation_research_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    doc_path = PROJECT_ROOT / "docs" / "valuation_source_research.md"
+    row_by_key = {row.metric_key: row for row in rows}
+    ppi_row = row_by_key.get("ppi_final_demand")
+    price_only_proxy_keys = sorted(
+        row.metric_key
+        for row in rows
+        if row.metric_key in PROXY_BREADTH_METRIC_KEYS and _has_value(row)
+    )
+    return {
+        "valuation_available": False,
+        "valuation_public_research_candidate_available": _valuation_doc_has_public_research_candidate(
+            doc_path
+        ),
+        "valuation_proxy_available": False,
+        "valuation_blocked_metric_keys": list(VALUATION_BLOCKED_METRIC_KEYS),
+        "missing_for_valuation": [
+            "sp500_trailing_pe_dated_source",
+            "sp500_forward_pe_consensus_source",
+            "cape_redistribution_policy",
+            "earnings_denominator",
+            "earnings_revision_source",
+            "sp500_top10_weight_source",
+        ],
+        "source_research_document_exists": doc_path.exists(),
+        "ppi_final_demand_available": _ppi_final_demand_row_available(ppi_row),
+        "ppi_final_demand_status": ppi_row.status if ppi_row is not None else "missing",
+        "ppi_final_demand_ai_context_allowed": bool(
+            ppi_row is not None and ppi_row.ai_context_allowed
+        ),
+        "price_only_proxy_metric_keys_seen": price_only_proxy_keys,
+        "valuation_gate_boundary": (
+            "Price-only returns and proxy breadth do not satisfy valuation; "
+            "provider integration remains blocked until dated source, license, "
+            "observation date, and AI-context rules are implemented."
+        ),
+    }
+
+
+def _ppi_final_demand_row_available(row: DashboardEvidenceRow | None) -> bool:
+    return bool(
+        row is not None
+        and row.metric_key == "ppi_final_demand"
+        and row.status == "ok"
+        and _has_value(row)
+        and row.source_badge in {"official", "official_fallback"}
+        and row.source
+        and row.observation_date
+        and row.generated_at
+        and row.freshness_status not in BAD_FRESHNESS
+        and row.ai_context_allowed
+    )
+
+
+def _valuation_doc_has_public_research_candidate(doc_path: Path) -> bool:
+    if not doc_path.exists():
+        return False
+    try:
+        text = doc_path.read_text(encoding="utf-8").lower()
+    except OSError:
+        return False
+    return "public_research" in text and "cape" in text
+
+
 def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
     row_by_key = {row.metric_key: row for row in rows}
     metrics = official_macro_pack.OFFICIAL_MACRO_METRICS
@@ -826,6 +911,9 @@ def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
         for key in configured_keys
     }
     rate_macro_keys = ("dgs2", "dgs30")
+    ppi_final_demand_available = _ppi_final_demand_row_available(
+        row_by_key.get("ppi_final_demand")
+    )
     return {
         "official_macro_configured_count": len(configured_keys),
         "official_macro_available_count": len(available_keys),
@@ -861,7 +949,13 @@ def _official_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
         "core_cpi_yoy_status": status_by_key["core_cpi_yoy"],
         "core_pce_yoy_status": status_by_key["core_pce_yoy"],
         "ppiaco_yoy_status": status_by_key["ppiaco_yoy"],
-        "ppi_final_demand_status": official_macro_pack.ppi_final_demand_status(),
+        "ppi_final_demand_available": ppi_final_demand_available,
+        "ppi_final_demand_status": status_by_key["ppi_final_demand"],
+        "ppi_final_demand_yoy_status": status_by_key["ppi_final_demand_yoy"],
+        "ppi_final_demand_ai_context_allowed": bool(
+            row_by_key.get("ppi_final_demand")
+            and row_by_key["ppi_final_demand"].ai_context_allowed
+        ),
         "unemployment_rate_status": status_by_key["unemployment_rate"],
         "initial_jobless_claims_status": status_by_key["initial_jobless_claims"],
         "suspicious_yoy_count": sum(1 for row in rows if _yoy_metric_suspiciously_large(row)),
@@ -880,13 +974,11 @@ def _official_macro_row_available(
     row: DashboardEvidenceRow | None,
     metric: official_macro_pack.OfficialMacroMetric,
 ) -> bool:
-    if metric.status_when_missing == "research_needed":
-        return False
     return bool(
         row is not None
         and row.status == "ok"
         and _has_value(row)
-        and row.source_badge == "official"
+        and row.source_badge in {"official", "official_fallback", "derived"}
         and row.source
         and (row.observation_date or row.generated_at)
         and row.freshness_status not in BAD_FRESHNESS
@@ -1345,6 +1437,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Proxy Breadth", ""])
     for key, value in audit["proxy_breadth"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Valuation Research", ""])
+    for key, value in audit["valuation_research"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Dashboard Derived Integration", ""])
     for key, value in audit["dashboard_derived_integration"].items():

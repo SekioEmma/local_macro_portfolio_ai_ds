@@ -120,6 +120,9 @@ OIL_HISTORICAL_DERIVED_METRIC_KEYS = {
     "wti_30d_change",
     "brent_30d_change",
 }
+PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS = {
+    "ppi_final_demand_yoy",
+}
 PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS = {
     "spy_proxy_30d_return",
     "spy_proxy_60d_return",
@@ -148,7 +151,12 @@ METRIC_ALIASES = {
     "wti_30d_change": ("wti_oil_30d_change",),
     "brent_30d_change": ("brent_oil_30d_change",),
 }
-INFLATION_YOY_METRIC_KEYS = {"core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy"}
+INFLATION_YOY_METRIC_KEYS = {
+    "core_cpi_yoy",
+    "core_pce_yoy",
+    "ppiaco_yoy",
+    "ppi_final_demand_yoy",
+}
 INDEX_LEVEL_YOY_MISSING_REASON = (
     "Only index level is available; YoY requires historical comparison."
 )
@@ -173,6 +181,8 @@ CORE_METRIC_KEYS = {
         "core_cpi_yoy",
         "core_pce_yoy",
         "ppiaco_yoy",
+        "ppi_final_demand",
+        "ppi_final_demand_yoy",
         "wti_30d_change",
         "brent_30d_change",
     },
@@ -237,7 +247,14 @@ METRIC_SPECS = {
         ("core_cpi_yoy", "Core CPI YoY", "percent", "signed_percent", "missing"),
         ("core_pce_yoy", "Core PCE YoY", "percent", "signed_percent", "missing"),
         ("ppiaco_yoy", "PPIACO YoY", "percent", "signed_percent", "missing"),
-        ("ppi_final_demand", "PPI final demand", "percent", "signed_percent", "research_needed"),
+        ("ppi_final_demand", "PPI final demand", "index", "number", "missing"),
+        (
+            "ppi_final_demand_yoy",
+            "PPI final demand YoY",
+            "percent",
+            "signed_percent",
+            "insufficient_history",
+        ),
         ("wti_30d_change", "WTI 30D change", "percent", "signed_percent", "insufficient_history"),
         ("brent_30d_change", "Brent 30D change", "percent", "signed_percent", "insufficient_history"),
     ],
@@ -473,6 +490,9 @@ def _labor_macro_evidence_rows(
 
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
     ai_context_allowed = _evidence_ai_context_allowed(metric)
+    blocked_reason = _ppi_observation_date_blocked_reason(metric)
+    if blocked_reason is not None:
+        ai_context_allowed = False
     return DashboardEvidenceRow(
         row_id=f"{module_key}:{metric.metric_key}",
         module=module_key,
@@ -491,7 +511,7 @@ def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidence
         interpretation_hint=metric.interpretation_hint,
         blocked_reason=None
         if ai_context_allowed
-        else _ai_context_blocked_reason(
+        else blocked_reason or _ai_context_blocked_reason(
             status=metric.status,
             value=metric.value,
             source=metric.source,
@@ -529,6 +549,8 @@ def _evidence_value_text(metric: DashboardMetric) -> str:
 
 
 def _evidence_ai_context_allowed(metric: DashboardMetric) -> bool:
+    if _ppi_observation_date_blocked_reason(metric) is not None:
+        return False
     return _ai_context_allowed(
         status=metric.status,
         source=metric.source,
@@ -538,6 +560,12 @@ def _evidence_ai_context_allowed(metric: DashboardMetric) -> bool:
         freshness_status=metric.freshness_status,
         interpretation_hint=metric.interpretation_hint,
     ) and bool(metric.ai_context_allowed)
+
+
+def _ppi_observation_date_blocked_reason(metric: DashboardMetric) -> str | None:
+    if metric.metric_key in {"ppi_final_demand", "ppi_final_demand_yoy"} and not metric.observation_date:
+        return "observation_date_missing"
+    return None
 
 
 def _evidence_row_matches(
@@ -847,11 +875,21 @@ def _key_metrics_for_module(
             db_path=market_history_db_path,
         )
     if module_key == "inflation_energy_pressure":
-        return _apply_historical_derived_metrics(
+        metrics = _apply_historical_derived_metrics(
             metrics,
             module_key="inflation_energy_pressure",
             metric_keys=OIL_HISTORICAL_DERIVED_METRIC_KEYS,
             hint_suffix=OIL_HISTORICAL_DERIVED_HINT_SUFFIX,
+            fallback_source="local_market_history",
+            required_dependency_source_badges={"official"},
+            replace_existing=True,
+            db_path=market_history_db_path,
+        )
+        return _apply_historical_derived_metrics(
+            metrics,
+            module_key="inflation_energy_pressure",
+            metric_keys=PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS,
+            hint_suffix="",
             fallback_source="local_market_history",
             required_dependency_source_badges={"official"},
             replace_existing=True,
@@ -914,6 +952,13 @@ def _build_metric(
     interpretation_hint = _metric_interpretation_hint(metric_key, payload)
     quality_metadata = _metric_quality_metadata(report, metric_key) or _first_metric_quality_metadata(reports, metric_key)
     status = _metric_status(payload)
+    if (
+        official_macro
+        and official_macro.source_series
+        and status == "research_needed"
+        and official_macro.status_when_missing != "research_needed"
+    ):
+        status = official_macro.status_when_missing
     freshness_status = _metric_freshness(
         payload,
         report,
@@ -925,6 +970,13 @@ def _build_metric(
 
     source = _metric_source(payload, report, quality_metadata)
     source_badge = _metric_source_badge(payload, report, module_key, metric_key, quality_metadata)
+    if (
+        official_macro
+        and official_macro.source_series
+        and status in AI_BLOCKED_METRIC_STATUSES
+        and status != "research_needed"
+    ):
+        source_badge = "missing"
     if official_macro and source is None and source_badge == "missing":
         source = official_macro.source
         source_badge = official_macro.source_badge
@@ -932,6 +984,14 @@ def _build_metric(
         source_badge = official_macro.source_badge
     if official_macro and source is None:
         source = official_macro.source
+    if (
+        official_macro
+        and official_macro.source_series
+        and value is None
+        and status in AI_BLOCKED_METRIC_STATUSES
+        and status != "research_needed"
+    ):
+        source_badge = "missing"
     observation_date = _metric_observation_date(payload, quality_metadata)
     generated_at = _metric_generated_at(payload, report)
     missing_reason = _string_or_none(payload.get("missing_reason")) if isinstance(payload, dict) else None
@@ -980,6 +1040,10 @@ def _build_metric(
             generated_at=generated_at,
             freshness_status=freshness_status,
             interpretation_hint=interpretation_hint,
+        )
+        and not (
+            metric_key in {"ppi_final_demand", "ppi_final_demand_yoy"}
+            and not observation_date
         ),
     )
 
@@ -2229,6 +2293,14 @@ def _metric_interpretation_hint(metric_key: str, payload: dict[str, Any]) -> str
     if metric_key == "ppiaco_yoy" and hint:
         if "final demand" not in hint.lower():
             return f"{hint} PPIACO is not final demand PPI."
+        return hint
+    if metric_key in {"ppi_final_demand", "ppi_final_demand_yoy"} and hint:
+        text = hint.lower()
+        if "ppiaco" not in text or "consensus" not in text:
+            return (
+                f"{hint} PPI Final Demand is distinct from PPIACO and must not be "
+                "described as above or below consensus without consensus data."
+            )
         return hint
     return hint or _interpretation_hint(metric_key)
 

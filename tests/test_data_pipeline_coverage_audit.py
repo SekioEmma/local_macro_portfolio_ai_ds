@@ -47,6 +47,8 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "real_yield_pressure_status_status" in result["energy_history"]
     assert "proxy_breadth" in result
     assert "breadth_proxy_available" in result["proxy_breadth"]
+    assert "valuation_research" in result
+    assert result["valuation_research"]["valuation_available"] is False
     assert result["module_coverage"]
     assert "recommendations" in result
 
@@ -242,9 +244,9 @@ def test_audit_reports_historical_derived_block_when_db_missing(monkeypatch, tmp
     historical_derived = result["historical_derived"]
 
     assert historical_derived["historical_derived_available"] is False
-    assert historical_derived["derived_metric_count"] == 22
+    assert historical_derived["derived_metric_count"] == 23
     assert historical_derived["derived_metric_ok_count"] == 0
-    assert historical_derived["derived_metric_insufficient_history_count"] == 22
+    assert historical_derived["derived_metric_insufficient_history_count"] == 23
     assert "initialize_and_ingest_market_history" in historical_derived["recommended_history_actions"]
 
 
@@ -519,7 +521,7 @@ def test_audit_reports_energy_history_and_real_yield_status(monkeypatch, tmp_pat
     assert energy["brent_30d_change_status"] == "ok"
     assert energy["real_yield_pressure_status_status"] == "pressure"
     assert energy["dgs30_breakout_confirmed_status"] == "research_needed"
-    assert energy["ppi_final_demand_status"] == "research_needed"
+    assert energy["ppi_final_demand_status"] == "missing"
 
 
 def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
@@ -575,7 +577,7 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
     result = audit.build_coverage_audit(reports_dir=tmp_path)
     official = result["official_macro_pack"]
 
-    assert official["official_macro_configured_count"] == 10
+    assert official["official_macro_configured_count"] == 11
     assert official["real_yield_available"] is True
     assert official["inflation_core_available"] is True
     assert official["labor_available"] is False
@@ -585,7 +587,10 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
     assert official["core_cpi_yoy_status"] == "ok"
     assert official["core_pce_yoy_status"] == "ok"
     assert official["ppiaco_yoy_status"] == "ok"
-    assert official["ppi_final_demand_status"] == "research_needed"
+    assert official["ppi_final_demand_available"] is False
+    assert official["ppi_final_demand_status"] == "missing"
+    assert official["ppi_final_demand_yoy_status"] == "insufficient_history"
+    assert official["ppi_final_demand_ai_context_allowed"] is False
     assert official["unemployment_rate_status"] == "missing"
     assert official["initial_jobless_claims_status"] == "missing"
     assert official["suspicious_yoy_count"] == 0
@@ -593,6 +598,50 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
     assert "ppi_final_demand" in official["missing_metric_keys"]
     assert "official_macro_pack" in result
     assert "add_official_macro_pack" not in result["recommendations"]
+
+
+def test_audit_reports_ppi_final_demand_and_valuation_gates(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    db_path = tmp_path / "market_history.sqlite3"
+    _write_json(
+        reports_dir / "market_snapshot.json",
+        {
+            "generated_at": "2026-03-02T00:00:00+00:00",
+            "status": "ok",
+            "market_data_package": {
+                "inflation_indicators": {
+                    "ppi_final_demand": {
+                        "value": 157.659,
+                        "status": "ok",
+                        "source": "FRED:PPIFIS",
+                        "source_tier": "official_or_public_data_api",
+                        "observation_date": "2026-01-01",
+                        "freshness": "normal_lag",
+                    }
+                }
+            },
+        },
+    )
+    _insert_proxy_series(db_path)
+
+    result = audit.build_coverage_audit(
+        reports_dir=reports_dir,
+        market_history_db_path=db_path,
+    )
+    valuation = result["valuation_research"]
+    official = result["official_macro_pack"]
+
+    assert valuation["ppi_final_demand_available"] is True
+    assert valuation["ppi_final_demand_ai_context_allowed"] is True
+    assert valuation["valuation_available"] is False
+    assert valuation["valuation_proxy_available"] is False
+    assert valuation["valuation_public_research_candidate_available"] is True
+    assert "sp500_forward_pe" in valuation["valuation_blocked_metric_keys"]
+    assert "spy_vs_rsp_30d" in valuation["price_only_proxy_metric_keys_seen"]
+    assert official["ppi_final_demand_available"] is True
+    assert official["ppi_final_demand_status"] == "ok"
 
 
 def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path):

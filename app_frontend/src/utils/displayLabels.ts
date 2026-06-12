@@ -51,7 +51,17 @@ const missingReasonLabels: Record<string, string> = {
   "Only index level is available; YoY requires historical comparison.":
     "只有指数水平；YoY 需要历史同比比较。",
   "PPI final demand series is not configured; do not use PPIACO as final demand.":
-    "PPI final demand 尚未配置；不能用 PPIACO 代替。"
+    "PPI final demand 尚未配置；不能用 PPIACO 代替。",
+  "FRED PPIFIS PPI final demand compact observation is missing; do not use PPIACO as final demand.":
+    "PPI 最终需求官方观测值缺失，不能用 PPIACO 替代。",
+  "PPI final demand YoY requires at least 13 monthly PPIFIS observations; do not use index level as YoY.":
+    "PPI 最终需求同比需要至少 13 个月 PPIFIS 历史，不能把指数水平当同比。"
+};
+
+const metricLabels: Record<string, string> = {
+  ppi_final_demand: "PPI 最终需求",
+  ppi_final_demand_yoy: "PPI 最终需求同比",
+  ppi_final_demand_mom: "PPI 最终需求环比"
 };
 
 export function getModuleLabel(moduleKey: string) {
@@ -77,6 +87,10 @@ export function getAiContextLabel(aiContextAllowed: boolean) {
 export function getMissingReasonLabel(reason: string | null | undefined) {
   if (!reason) return "";
   return missingReasonLabels[reason] || reason;
+}
+
+export function getMetricLabel(metricKey: string) {
+  return metricLabels[metricKey] || metricKey;
 }
 
 export function formatCompactHint(text: string | null | undefined) {

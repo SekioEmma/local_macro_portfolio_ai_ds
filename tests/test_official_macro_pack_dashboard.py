@@ -20,8 +20,10 @@ def test_official_macro_pack_definitions_are_stable():
     assert metrics["ppiaco_yoy"].source_series == "PPIACO"
     assert metrics["unemployment_rate"].source_series == "UNRATE"
     assert metrics["initial_jobless_claims"].source_series == "ICSA"
-    assert metrics["ppi_final_demand"].status_when_missing == "research_needed"
-    assert metrics["ppi_final_demand"].source_series is None
+    assert metrics["ppi_final_demand"].status_when_missing == "missing"
+    assert metrics["ppi_final_demand"].source_series == "PPIFIS"
+    assert metrics["ppi_final_demand_yoy"].status_when_missing == "insufficient_history"
+    assert metrics["ppi_final_demand_yoy"].source_series == "PPIFIS"
 
 
 def test_official_macro_values_surface_with_provenance(monkeypatch, tmp_path):
@@ -148,7 +150,7 @@ def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_pa
         assert row["ai_context_allowed"] is False
 
 
-def test_ppi_boundary_preserves_research_needed(monkeypatch, tmp_path):
+def test_ppi_boundary_preserves_missing_final_demand(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     _write_market(tmp_path, {"ppiaco_yoy": _metric(1.6)})
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
@@ -158,10 +160,83 @@ def test_ppi_boundary_preserves_research_needed(monkeypatch, tmp_path):
     final_demand = _row(data, "inflation_energy_pressure", "ppi_final_demand")
 
     assert "not final demand PPI" in ppiaco["interpretation_hint"]
-    assert final_demand["status"] == "research_needed"
-    assert final_demand["source_badge"] == "research_needed"
+    assert final_demand["status"] == "missing"
+    assert final_demand["source_badge"] == "missing"
     assert "do not use PPIACO as final demand" in final_demand["missing_reason"]
     assert final_demand["ai_context_allowed"] is False
+
+
+def test_ppi_final_demand_official_metadata_allows_ai_context(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_market(
+        tmp_path,
+        {
+            "market_data_package": {
+                "inflation_indicators": {
+                    "ppi_final_demand": _metric(
+                        157.659,
+                        unit="index",
+                        source="FRED:PPIFIS",
+                        source_tier="official_or_public_data_api",
+                    ),
+                    "ppi_final_demand_yoy_pct": _metric(
+                        2.64,
+                        unit="percent",
+                        source="FRED:PPIFIS",
+                        source_tier="official_or_public_data_api",
+                    ),
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table").json()
+    index_row = _row(data, "inflation_energy_pressure", "ppi_final_demand")
+    yoy_row = _row(data, "inflation_energy_pressure", "ppi_final_demand_yoy")
+
+    assert index_row["status"] == "ok"
+    assert index_row["source"] == "FRED:PPIFIS"
+    assert index_row["source_badge"] == "official"
+    assert index_row["observation_date"] == "2026-01-01"
+    assert index_row["generated_at"] == "2026-01-01T00:00:00+00:00"
+    assert index_row["ai_context_allowed"] is True
+    assert "PPIACO" in index_row["interpretation_hint"]
+    assert "consensus" in index_row["interpretation_hint"]
+    assert yoy_row["status"] == "ok"
+    assert yoy_row["value_text"] == "+2.64%"
+    assert yoy_row["source_badge"] == "official"
+    assert yoy_row["ai_context_allowed"] is True
+
+
+def test_ppi_final_demand_missing_metadata_blocks_ai_context(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_market(
+        tmp_path,
+        {
+            "market_data_package": {
+                "inflation_indicators": {
+                    "ppi_final_demand": {
+                        "value": 157.659,
+                        "status": "ok",
+                        "source": "FRED:PPIFIS",
+                        "source_tier": "official_or_public_data_api",
+                        "freshness_status": "fresh",
+                    }
+                }
+            }
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table").json()
+    row = _row(data, "inflation_energy_pressure", "ppi_final_demand")
+
+    assert row["status"] == "ok"
+    assert row["source_badge"] == "official"
+    assert row["observation_date"] is None
+    assert row["ai_context_allowed"] is False
+    assert row["blocked_reason"] == "observation_date_missing"
 
 
 def test_core_inflation_index_levels_are_not_displayed_as_yoy(monkeypatch, tmp_path):
@@ -190,6 +265,26 @@ def test_core_inflation_index_levels_are_not_displayed_as_yoy(monkeypatch, tmp_p
         )
     assert "+335.42%" not in json.dumps(data)
     assert "+129.63%" not in json.dumps(data)
+
+
+def test_ppi_final_demand_index_level_is_not_displayed_as_yoy(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_market(
+        tmp_path,
+        {
+            "ppi_final_demand_yoy": _metric(157.659, unit="index", source="FRED:PPIFIS"),
+        },
+    )
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+
+    data = TestClient(app).get("/api/dashboard/evidence-table").json()
+    row = _row(data, "inflation_energy_pressure", "ppi_final_demand_yoy")
+
+    assert row["status"] == "insufficient_history"
+    assert row["value"] is None
+    assert row["source_badge"] == "missing"
+    assert row["ai_context_allowed"] is False
+    assert "+157.66%" not in json.dumps(data)
 
 
 def test_core_inflation_yoy_decimal_and_percent_format_correctly(monkeypatch, tmp_path):
@@ -259,7 +354,7 @@ def test_official_macro_yoy_aliases_surface_existing_compact_fields(monkeypatch,
         "ppiaco_yoy",
     )["interpretation_hint"]
     final_demand = _row(data, "inflation_energy_pressure", "ppi_final_demand")
-    assert final_demand["status"] == "research_needed"
+    assert final_demand["status"] == "missing"
     assert final_demand["ai_context_allowed"] is False
 
 
@@ -283,8 +378,8 @@ def test_official_macro_response_avoids_raw_and_consensus_words(monkeypatch, tmp
     assert "must_not_leak" not in body
     assert "RAW_HOLDING" not in body
     assert "API_SECRET_PLACEHOLDER_MUST_NOT_APPEAR" not in body
-    assert "consensus" not in lower_body
-    assert "surprise" not in lower_body
+    assert "above expectations" not in lower_body
+    assert "below expectations" not in lower_body
 
 
 def _metric(value, *, unit=None, source=None, source_tier=None):

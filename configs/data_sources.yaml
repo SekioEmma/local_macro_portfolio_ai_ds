@@ -181,6 +181,10 @@ fred_series:
     series_id: "PPIACO"
     name: "Producer Price Index by Commodity: All Commodities"
     asset_type: "inflation"
+  ppi_final_demand:
+    series_id: "PPIFIS"
+    name: "Producer Price Index by Commodity: Final Demand"
+    asset_type: "inflation"
   wti_oil:
     series_id: "DCOILWTICO"
     name: "Crude Oil Prices: West Texas Intermediate"
@@ -594,13 +598,14 @@ deepseek_market_data_package:
       interpretation_hint: "PPIACO is all commodities PPI, not final demand PPI."
       risk_relevance: "Upstream price-pressure context; not a consensus-surprise measure."
     ppi_final_demand:
-      provider: "research_needed"
-      name: "PPI Final Demand"
+      provider: "fred"
+      series_id: "PPIFIS"
+      name: "Producer Price Index by Commodity: Final Demand"
       unit: "index"
-      source_tier: "research_needed"
-      interpretation_hint: "PPI final demand series is not configured until the series id is verified."
-      risk_relevance: "Prevents the model from treating PPIACO as final demand PPI."
-      unavailable_reason: "Series id research needed; do not guess."
+      frequency: "monthly"
+      source_tier: "official_or_public_data_api"
+      interpretation_hint: "PPI Final Demand is the official headline final demand PPI index relayed by FRED; it is distinct from PPIACO, monthly/low-frequency, and must not be described as above or below consensus without consensus data."
+      risk_relevance: "Headline producer-price final demand context; not a real-time inflation or trading signal."
   oil_and_energy:
     wti_oil:
       provider: "fred"

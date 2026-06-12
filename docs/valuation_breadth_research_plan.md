@@ -112,7 +112,7 @@ These should remain blocked until a reliable dated source is selected:
 - 52-week highs/lows breadth
 - top 10 S&P 500 weight
 - FedWatch probability
-- PPI final demand, unless a verified series/config is added later
+- PPI final demand YoY history, unless enough verified `PPIFIS` index history is present
 - CAPE / Shiller PE, until source and redistribution boundary are documented
 - SKEW / tail risk, until source and freshness policy are documented
 
@@ -180,6 +180,13 @@ Do not add live yfinance calls beyond the existing manual ingest script.
 
 Research S&P 500 trailing PE, forward PE, CAPE, earnings yield, and Nasdaq 100 valuation sources.
 Document source freshness, licensing/redistribution boundary, and whether each can be `public_research` or must remain manual/search-derived.
+
+V2 gate status:
+
+- `docs/valuation_source_research.md` documents candidate sources and blocks provider integration.
+- `valuation_available` remains false until a dated valuation metric with source, license boundary, observation date, freshness, and AI-context policy exists.
+- `valuation_proxy_available` remains false; SPY/QQQ/RSP returns and proxy breadth are price-only context, not valuation.
+- CAPE/Shiller is only a `public_research` candidate for a later phase.
 
 ### Step V3: SKEW and tail-risk research
 

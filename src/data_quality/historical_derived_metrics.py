@@ -115,6 +115,17 @@ DERIVED_METRIC_SPECS: dict[str, dict[str, Any]] = {
         "window_days": 30,
         "unit": "percent",
     },
+    "ppi_final_demand_yoy": {
+        "module": "inflation_energy_pressure",
+        "kind": "observation_yoy",
+        "metric_key": "ppi_final_demand",
+        "window_observations": 13,
+        "unit": "percent",
+        "interpretation_hint_suffix": (
+            " PPIFIS is the FRED official relay for headline PPI Final Demand; "
+            "it is distinct from PPIACO, monthly/low-frequency, and not consensus surprise data."
+        ),
+    },
     "spy_proxy_30d_return": {
         "module": PROXY_BREADTH_MODULE,
         "kind": "period_return",
@@ -294,6 +305,11 @@ def calculate_rolling_average(
     output_metric_key: str | None = None,
     unit: str | None = "percent",
 ) -> HistoricalDerivedMetric:
+    if metric_key == "ppi_final_demand" and not interpretation_hint_suffix:
+        interpretation_hint_suffix = (
+            " PPIFIS is the FRED official relay for headline PPI Final Demand; "
+            "it is distinct from PPIACO, monthly/low-frequency, and not consensus surprise data."
+        )
     observations = _numeric_observations(metric_key, db_path=db_path)
     if len(observations) < window_observations:
         return _insufficient_metric(
@@ -396,6 +412,64 @@ def calculate_relative_return(
             set((numerator.dependency_sources or []) + (denominator.dependency_sources or []))
         ),
         ai_context_allowed=numerator.ai_context_allowed and denominator.ai_context_allowed,
+    )
+
+
+def calculate_observation_yoy(
+    metric_key: str,
+    window_observations: int,
+    *,
+    db_path: Path | str | None = None,
+    output_metric_key: str | None = None,
+    unit: str | None = "percent",
+    interpretation_hint_suffix: str | None = None,
+) -> HistoricalDerivedMetric:
+    if metric_key == "ppi_final_demand" and not interpretation_hint_suffix:
+        interpretation_hint_suffix = (
+            " PPIFIS is the FRED official relay for headline PPI Final Demand; "
+            "it is distinct from PPIACO, monthly/low-frequency, and not consensus surprise data."
+        )
+    observations = _numeric_observations(metric_key, db_path=db_path)
+    if len(observations) < window_observations:
+        return _insufficient_metric(
+            metric_key=output_metric_key or f"{metric_key}_yoy",
+            dependency_keys=[metric_key],
+            window=f"{window_observations} monthly observations",
+            calculation="observation_yoy",
+            points_used=len(observations),
+            points_required=window_observations,
+            missing_reason="history_points_insufficient",
+        )
+    latest = observations[-1]
+    prior = observations[-window_observations]
+    if prior["value"] == 0:
+        return _insufficient_metric(
+            metric_key=output_metric_key or f"{metric_key}_yoy",
+            dependency_keys=[metric_key],
+            window=f"{window_observations} monthly observations",
+            calculation="observation_yoy",
+            points_used=len(observations),
+            points_required=window_observations,
+            missing_reason="prior_year_value_zero",
+        )
+    value = latest["value"] / prior["value"] - 1.0
+    return _ok_metric(
+        metric_key=output_metric_key or f"{metric_key}_yoy",
+        value=value,
+        unit=unit,
+        dependency_keys=[metric_key],
+        window="12M",
+        calculation="(latest_index / same_month_prior_year_index) - 1",
+        points_used=len(observations),
+        points_required=window_observations,
+        observation_date=latest["observation_date"],
+        generated_at=latest.get("generated_at"),
+        interpretation_hint=(
+            f"Derived from market history: latest {metric_key} index divided by "
+            f"the observation 12 monthly observations earlier, minus 1."
+            f"{interpretation_hint_suffix or ''}"
+        ),
+        dependency_observations=[prior, latest],
     )
 
 
@@ -516,6 +590,15 @@ def _calculate_spec(
             spec["numerator_metric_key"],
             spec["denominator_metric_key"],
             spec["window_days"],
+            db_path=db_path,
+            output_metric_key=output_key,
+            unit=spec.get("unit"),
+            interpretation_hint_suffix=spec.get("interpretation_hint_suffix"),
+        )
+    if kind == "observation_yoy":
+        return calculate_observation_yoy(
+            spec["metric_key"],
+            spec["window_observations"],
             db_path=db_path,
             output_metric_key=output_key,
             unit=spec.get("unit"),

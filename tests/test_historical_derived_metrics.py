@@ -150,6 +150,40 @@ def test_proxy_breadth_metrics_block_without_sufficient_history(tmp_path):
     assert spy.missing_reason == "history_points_insufficient"
 
 
+def test_ppi_final_demand_yoy_requires_official_history(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    dates = [
+        "2025-01-01",
+        "2025-02-01",
+        "2025-03-01",
+        "2025-04-01",
+        "2025-05-01",
+        "2025-06-01",
+        "2025-07-01",
+        "2025-08-01",
+        "2025-09-01",
+        "2025-10-01",
+        "2025-11-01",
+        "2025-12-01",
+        "2026-01-01",
+    ]
+    for observation_date, value in zip(dates, [150.0, 151.0, 152.0, 153.0, 154.0, 155.0, 156.0, 157.0, 158.0, 159.0, 160.0, 161.0, 162.0]):
+        _insert(db_path, "ppi_final_demand", observation_date, value, source_series="PPIFIS")
+
+    result = derived.calculate_observation_yoy(
+        "ppi_final_demand",
+        13,
+        db_path=db_path,
+        output_metric_key="ppi_final_demand_yoy",
+    )
+
+    assert result.status == "ok"
+    assert math.isclose(result.value, 162.0 / 150.0 - 1.0)
+    assert result.dependency_source_badges == ["official"]
+    assert result.dependency_source_series == ["PPIFIS"]
+    assert "PPI Final Demand" in result.interpretation_hint
+
+
 def test_distance_to_threshold_with_latest_observation(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "dgs30", "2026-01-01", 4.8)
@@ -199,7 +233,7 @@ def test_flattened_metrics_are_compact_and_safe(tmp_path):
     payloads = [derived.metric_to_dict(item) for item in metrics]
     text = str(payloads)
 
-    assert len(payloads) == 22
+    assert len(payloads) == 23
     assert all(item["source_badge"] == "derived" for item in payloads)
     assert "raw_provider_response" not in text
     assert "api_key" not in text.lower()
