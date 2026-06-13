@@ -4,7 +4,13 @@ import json
 import socket
 
 from app_backend.services import ai_context_service
+from app_backend.services import dashboard_context
+from app_backend.services import dashboard_filters
 from app_backend.services import dashboard_service
+
+
+def test_dashboard_pipeline_context_import_is_reexported():
+    assert dashboard_service.DashboardPipelineContext is dashboard_context.DashboardPipelineContext
 
 
 def test_dashboard_pipeline_context_starts_empty():
@@ -173,6 +179,78 @@ def test_evidence_filters_still_work_with_context_summary(monkeypatch, tmp_path)
     assert all(row.source_badge == "official" for row in evidence.rows)
     assert all(row.ai_context_allowed is True for row in evidence.rows)
     assert context.evidence_table is None
+
+
+def test_extracted_evidence_filters_match_service_filtering(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_reports(tmp_path)
+    filters = {
+        "module": "rate_pressure",
+        "status": "ok",
+        "source_badge": "official",
+        "ai_context_allowed": True,
+    }
+    unfiltered = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        write_last_good=False,
+    )
+
+    expected_rows = dashboard_filters.apply_evidence_filters(
+        unfiltered.rows,
+        **filters,
+    )
+    filtered = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        write_last_good=False,
+        **filters,
+    )
+
+    assert filtered.row_count == len(expected_rows)
+    assert _stable(filtered.rows) == _stable(expected_rows)
+
+
+def test_unfiltered_context_row_order_matches_legacy(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _write_reports(tmp_path)
+
+    legacy = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        write_last_good=False,
+    )
+    context = dashboard_service.DashboardPipelineContext()
+    shared = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=tmp_path,
+        write_last_good=False,
+        context=context,
+    )
+
+    assert [row.row_id for row in shared.rows] == [row.row_id for row in legacy.rows]
+    assert shared.row_count == legacy.row_count
+
+
+def test_write_last_good_true_does_not_reuse_context_evidence(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    _write_reports(first_dir, dgs10=4.1)
+    _write_reports(second_dir, dgs10=5.2)
+    first = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=first_dir,
+        write_last_good=False,
+    )
+    context = dashboard_service.DashboardPipelineContext(evidence_table=first)
+
+    second = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=second_dir,
+        write_last_good=True,
+        context=context,
+    )
+
+    assert second is not first
+    assert _row(second, "rate_pressure", "dgs10").value == 5.2
+    assert context.evidence_table is first
 
 
 def test_no_process_level_stale_cache_between_contexts(monkeypatch, tmp_path):

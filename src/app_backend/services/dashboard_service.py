@@ -14,6 +14,11 @@ from app_backend.schemas.responses import (
     DashboardModule,
     DashboardSummaryResponse,
 )
+from app_backend.services.dashboard_context import DashboardPipelineContext
+from app_backend.services.dashboard_filters import (
+    apply_evidence_filters,
+    evidence_row_matches,
+)
 from app_backend.services import provider_service
 from data_quality import financial_stress_composite
 from data_quality import historical_derived_metrics
@@ -467,12 +472,6 @@ class PortfolioDeviationCompact:
     notes: list[str]
 
 
-@dataclass
-class DashboardPipelineContext:
-    summary: DashboardSummaryResponse | None = None
-    evidence_table: DashboardEvidenceTableResponse | None = None
-
-
 def build_dashboard_summary(
     reports_dir: Path | str | None = None,
     market_history_db_path: Path | str | None = None,
@@ -568,17 +567,13 @@ def build_dashboard_evidence_table(
     )
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
-    filtered_rows = [
-        row
-        for row in all_rows
-        if _evidence_row_matches(
-            row,
-            module=module,
-            status=status,
-            source_badge=source_badge,
-            ai_context_allowed=ai_context_allowed,
-        )
-    ]
+    filtered_rows = apply_evidence_filters(
+        all_rows,
+        module=module,
+        status=status,
+        source_badge=source_badge,
+        ai_context_allowed=ai_context_allowed,
+    )
 
     evidence_table = DashboardEvidenceTableResponse(
         generated_at=summary.generated_at,
@@ -853,15 +848,13 @@ def _evidence_row_matches(
     source_badge: str | None,
     ai_context_allowed: bool | None,
 ) -> bool:
-    if module is not None and row.module != module:
-        return False
-    if status is not None and row.status != status:
-        return False
-    if source_badge is not None and row.source_badge != source_badge:
-        return False
-    if ai_context_allowed is not None and row.ai_context_allowed != ai_context_allowed:
-        return False
-    return True
+    return evidence_row_matches(
+        row,
+        module=module,
+        status=status,
+        source_badge=source_badge,
+        ai_context_allowed=ai_context_allowed,
+    )
 
 
 def _evidence_filters(

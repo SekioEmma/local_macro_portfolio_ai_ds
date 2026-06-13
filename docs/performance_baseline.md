@@ -76,6 +76,19 @@ estimated_rebuilds_avoided: 2
 This is request-scoped result sharing only. Separate frontend HTTP requests
 still rebuild independently; cross-request cache is outside M3.
 
+### M4a extraction note
+
+M4a split two low-risk helpers out of `dashboard_service.py`:
+
+- `dashboard_context.py` owns `DashboardPipelineContext`.
+- `dashboard_filters.py` owns post-build evidence row filtering.
+
+This is a service-structure change only. It does not change the benchmark
+contract, row counts, D10/D11/D13/D14 logic, AI-context gates, or last-good
+write policy. The benchmark should still report `pipeline_context_available:
+true`, `summary_reused_by_evidence: true`, `evidence_reused_by_manifest:
+true`, and `estimated_rebuilds_avoided: 2`.
+
 ### M1 baseline
 
 Observed timings with 33,803 observations / 45 metrics in local `market_history.sqlite3` (June 2026 baseline):
