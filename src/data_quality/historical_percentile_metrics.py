@@ -105,7 +105,13 @@ def build_historical_percentile_rows(
     *,
     db_path: str | None = None,
 ) -> list[dict[str, Any]]:
-    return [build_metric_payload(spec, db_path=db_path) for spec in PERCENTILE_METRIC_SPECS]
+    unique_source_keys = list(dict.fromkeys(spec.source_metric_key for spec in PERCENTILE_METRIC_SPECS))
+    prefetched = market_history_store.list_market_observations_batch(
+        unique_source_keys,
+        limit_per_key=market_history_store.MAX_LIMIT,
+        db_path=db_path,
+    )
+    return [build_metric_payload(spec, db_path=db_path, prefetched=prefetched) for spec in PERCENTILE_METRIC_SPECS]
 
 
 class EvidenceIndex:
@@ -175,9 +181,10 @@ def build_metric_payload(
     spec: PercentileMetricSpec,
     *,
     db_path: str | None = None,
+    prefetched: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     generated_at = datetime.now(timezone.utc).isoformat()
-    latest_any = _latest_numeric_observation(spec.source_metric_key, db_path=db_path)
+    latest_any = _latest_numeric_observation(spec.source_metric_key, db_path=db_path, prefetched=prefetched)
     if latest_any is not None and (
         latest_any.get("status") in BAD_STATUSES
         or latest_any.get("freshness_status") == "stale"
@@ -190,7 +197,7 @@ def build_metric_payload(
             generated_at,
             latest=latest_any,
         )
-    observations = _usable_observations(spec.source_metric_key, db_path=db_path)
+    observations = _usable_observations(spec.source_metric_key, db_path=db_path, prefetched=prefetched)
     if not observations:
         return _blocked_payload(spec, "missing", "latest_input_missing", 0, generated_at)
     latest = observations[-1]
@@ -395,12 +402,20 @@ def _blocked_payload(
     }
 
 
-def _usable_observations(metric_key: str, *, db_path: str | None) -> list[dict[str, Any]]:
-    rows = market_history_store.list_market_observations(
-        metric_key=metric_key,
-        limit=market_history_store.MAX_LIMIT,
-        db_path=db_path,
-    )
+def _usable_observations(
+    metric_key: str,
+    *,
+    db_path: str | None,
+    prefetched: dict[str, list[dict[str, Any]]] | None = None,
+) -> list[dict[str, Any]]:
+    if prefetched is not None:
+        rows = prefetched.get(metric_key, [])
+    else:
+        rows = market_history_store.list_market_observations(
+            metric_key=metric_key,
+            limit=market_history_store.MAX_LIMIT,
+            db_path=db_path,
+        )
     observations: list[dict[str, Any]] = []
     for row in reversed(rows):
         value = _to_float(row.get("value_numeric"))
@@ -415,12 +430,20 @@ def _usable_observations(metric_key: str, *, db_path: str | None) -> list[dict[s
     return observations
 
 
-def _latest_numeric_observation(metric_key: str, *, db_path: str | None) -> dict[str, Any] | None:
-    rows = market_history_store.list_market_observations(
-        metric_key=metric_key,
-        limit=market_history_store.MAX_LIMIT,
-        db_path=db_path,
-    )
+def _latest_numeric_observation(
+    metric_key: str,
+    *,
+    db_path: str | None,
+    prefetched: dict[str, list[dict[str, Any]]] | None = None,
+) -> dict[str, Any] | None:
+    if prefetched is not None:
+        rows = prefetched.get(metric_key, [])
+    else:
+        rows = market_history_store.list_market_observations(
+            metric_key=metric_key,
+            limit=market_history_store.MAX_LIMIT,
+            db_path=db_path,
+        )
     for row in rows:
         value = _to_float(row.get("value_numeric"))
         parsed_date = _parse_date(row.get("observation_date"))

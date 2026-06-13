@@ -25,6 +25,34 @@ These are wall-clock times on a local development machine with a populated
 `market_history.sqlite3`. Times vary with DB size and hardware; treat these
 as order-of-magnitude baselines, not SLAs.
 
+### M2 observed run
+
+Observed after M2 with 33,803 observations / 45 metrics in local
+`market_history.sqlite3`:
+
+| Path | M1 observed ms | M2 observed ms | Notes |
+|---|---:|---:|---|
+| `build_dashboard_summary` | 736 | 857.97 | reads JSON reports + labor fallback DB queries |
+| `build_dashboard_evidence_table` | 1479 | 1399.42 | includes `build_dashboard_summary` internally |
+| `build_ai_context_manifest` | 1449 | 1518.81 | calls `build_dashboard_evidence_table` internally |
+| `build_historical_percentile_rows` (D13) | 557 | **253.69** | now uses one batch read for all unique source metrics |
+| `build_liquidity_funding_rows` (D14) | 34 | 76.24 | now uses one batch read; D14 was not the main bottleneck in this local run |
+| `build_coverage_audit` (audit) | 3929 | 4491.97 | calls summary + evidence_table independently |
+| evidence_row_count | 118 rows | 118 rows | row count unchanged |
+| included_facts_count | 95 | 95 | unchanged |
+| included_model_outputs_count | 15 | 15 | unchanged |
+
+M2 benchmark fields observed in the same run:
+
+```text
+d13_query_strategy: batch
+d14_query_strategy: batch
+market_history_batch_api_available: true
+market_history_index_metric_date_available: true
+```
+
+### M1 baseline
+
 Observed timings with 33,803 observations / 45 metrics in local `market_history.sqlite3` (June 2026 baseline):
 
 | Path | Observed ms | Notes |
@@ -164,22 +192,23 @@ Any M2/M3 optimization work **must not**:
 
 ---
 
-## Recommended M2
+## Implemented M2
 
 **Batch DB reads for D13 and D14.**
 
-Replace the per-metric `list_market_observations(metric_key=...)` loop with a
+M2 replaced the per-metric `list_market_observations(metric_key=...)` loop with a
 single `SELECT * FROM market_observations WHERE metric_key IN (?, ...) ...`
 query, then partition results by `metric_key` in Python. This reduces D13 from
-22 queries + 22 connection cycles to 1 query + 1 connection, and D14 from 9 to 1.
+23 specs / repeated connection cycles to 1 batch query + 1 connection, and D14
+from 9 raw metric reads to 1 batch query.
 
-Estimated impact: reduces evidence table build time by ~50–70% on a populated DB.
+Observed impact is listed above for this local run only; it is not an SLA.
 
 Implementation notes:
 - Add `list_market_observations_batch(metric_keys, limit_per_key, db_path)` to
   `market_history_store.py`.
-- Add schema-level unit test confirming no financial row values change.
-- Add index migration test: `CREATE INDEX IF NOT EXISTS idx_market_observations_metric_key_date ON market_observations (metric_key, observation_date DESC)` inside `_run_migrations` under a new schema version.
+- Add schema-level unit tests confirming D13/D14 financial row semantics do not change.
+- Add index migration test: `CREATE INDEX IF NOT EXISTS idx_market_observations_metric_date ON market_observations (metric_key, observation_date DESC)` inside `_run_migrations` under schema version 2.
 - Do not change any public function signatures already used by ingest scripts.
 
 ---

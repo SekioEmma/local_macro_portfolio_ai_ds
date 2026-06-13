@@ -86,10 +86,12 @@ def _check_db_indices(db_path: Path) -> dict[str, Any]:
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='market_observations'"
         ).fetchone()
     explicit_names = [r["name"] for r in idx_rows if not r["name"].startswith("sqlite_autoindex")]
-    has_explicit = any(
-        r["sql"] and "metric_key" in r["sql"]
+    has_metric_date_index = any(
+        r["name"] == "idx_market_observations_metric_date"
+        and r["sql"]
+        and "metric_key" in r["sql"]
+        and "observation_date" in r["sql"]
         for r in idx_rows
-        if not r["name"].startswith("sqlite_autoindex")
     )
     table_sql = table_row["sql"] if table_row else ""
     unique_covers = (
@@ -97,21 +99,22 @@ def _check_db_indices(db_path: Path) -> dict[str, Any]:
         and "observation_date" in table_sql
         and "UNIQUE" in table_sql
     )
-    if unique_covers and not has_explicit:
+    if unique_covers and not has_metric_date_index:
         note = (
             "UNIQUE(metric_key, observation_date, source_badge, source_series) provides an "
             "implicit 4-column composite index. SQLite can use this for WHERE metric_key=? "
             "queries and ORDER BY observation_date within a metric_key range scan. "
             "No dedicated (metric_key, observation_date) covering index exists."
         )
-    elif has_explicit:
-        note = "explicit metric_key index found"
+    elif has_metric_date_index:
+        note = "explicit idx_market_observations_metric_date index found"
     else:
         note = "no metric_key index found; queries may do full table scans"
     return {
         "db_exists": True,
         "explicit_index_names": explicit_names,
-        "has_explicit_metric_key_index": has_explicit,
+        "has_explicit_metric_key_index": has_metric_date_index,
+        "has_metric_date_index": has_metric_date_index,
         "unique_constraint_covers_metric_key_observation_date": unique_covers,
         "note": note,
     }
@@ -155,13 +158,13 @@ def run_benchmark(
     included_facts_count = len(manifest.included_facts)
     included_model_outputs_count = len(manifest.included_model_outputs)
 
-    # 4. D13: build_historical_percentile_rows (isolated; 22 individual DB queries)
+    # 4. D13: build_historical_percentile_rows (M2: single batch query)
     db_path_str = str(db_path) if db_path.exists() else None
     t0 = time.perf_counter()
     d13_rows = historical_percentile_metrics.build_historical_percentile_rows(db_path=db_path_str)
     d13_build_ms = _ms(t0)
 
-    # 5. D14: build_liquidity_funding_rows (isolated; 9 individual DB queries)
+    # 5. D14: build_liquidity_funding_rows (M2: single batch query)
     t0 = time.perf_counter()
     d14_rows = liquidity_funding_stress.build_liquidity_funding_rows(db_path=db_path)
     d14_build_ms = _ms(t0)
@@ -211,11 +214,15 @@ def run_benchmark(
         "d11_build_ms": d11_build_ms,
         "d11_isolation_note": "partial: D13+D14+D10 dicts as input; base_rows from dashboard_service internals excluded",
         "d13_build_ms": d13_build_ms,
+        "d13_query_strategy": "batch",
         "d14_build_ms": d14_build_ms,
+        "d14_query_strategy": "batch",
         "audit_total_ms": audit_total_ms,
         "evidence_row_count": evidence_row_count,
         "included_facts_count": included_facts_count,
         "included_model_outputs_count": included_model_outputs_count,
+        "market_history_batch_api_available": True,
+        "market_history_index_metric_date_available": db_index_audit.get("has_explicit_metric_key_index", False),
         "slowest_sections": [{"section": k, "ms": v} for k, v in slowest],
         "db_index_audit": db_index_audit,
         "call_path_audit": _call_path_audit(),
@@ -224,9 +231,10 @@ def run_benchmark(
             "dashboard_evidence_table_ms includes an internal build_dashboard_summary call",
             "ai_context_manifest_ms includes a full build_dashboard_evidence_table call",
             "audit_total_ms includes build_dashboard_summary + build_dashboard_evidence_table",
-            f"d13_spec_count={len(historical_percentile_metrics.PERCENTILE_METRIC_SPECS)} (one DB query per spec)",
-            f"d14_raw_metric_count={len(liquidity_funding_stress.RAW_METRIC_KEYS)} (one DB query per raw metric)",
+            f"d13_spec_count={len(historical_percentile_metrics.PERCENTILE_METRIC_SPECS)} (M2: one batch query for all unique source metrics)",
+            f"d14_raw_metric_count={len(liquidity_funding_stress.RAW_METRIC_KEYS)} (M2: one batch query for all raw metrics)",
             "D10 and D11 in-memory timing uses D13+D14 dict rows as input; actual pipeline also includes base_rows",
+            "m2_optimization: D13/D14 now use list_market_observations_batch; single DB connection per build call",
         ],
     }
     return _guard_output(result)
@@ -235,28 +243,29 @@ def run_benchmark(
 def _call_path_audit() -> dict[str, Any]:
     return {
         "confirmed_facts": [
+            "M2: D13 build_historical_percentile_rows now uses list_market_observations_batch: single DB connect + single query for all unique source metrics",
+            "M2: D14 build_liquidity_funding_rows now uses list_market_observations_batch: single DB connect + single query for all raw metrics",
+            f"M2: idx_market_observations_metric_date index (metric_key, observation_date DESC) added via schema migration version 2",
             "build_dashboard_evidence_table calls build_dashboard_summary internally: both paths share no cached result",
             "ai_context_service.build_ai_context_manifest calls build_dashboard_evidence_table (write_last_good=False): full pipeline rebuilt on every manifest request",
             "audit_data_pipeline_coverage.build_coverage_audit calls both build_dashboard_summary and build_dashboard_evidence_table independently",
-            f"D13 build_historical_percentile_rows issues one list_market_observations DB query per PERCENTILE_METRIC_SPEC ({len(historical_percentile_metrics.PERCENTILE_METRIC_SPECS)} specs = up to {len(historical_percentile_metrics.PERCENTILE_METRIC_SPECS)} separate queries)",
-            f"D14 build_liquidity_funding_rows issues one list_market_observations DB query per RAW_METRIC_KEY ({len(liquidity_funding_stress.RAW_METRIC_KEYS)} raw metrics = up to {len(liquidity_funding_stress.RAW_METRIC_KEYS)} separate queries)",
-            "market_history_store.list_market_observations opens a new sqlite3.connect() connection per call (no connection pooling)",
             "D10 financial_stress_composite.build_financial_stress_rows is pure in-memory after row assembly (no DB queries)",
             "D11 pullback_systemic_checklist.build_pullback_checklist_rows is pure in-memory after row assembly (no DB queries)",
             "No @lru_cache or @cache decorators exist on any query function or builder",
-            "UNIQUE(metric_key, observation_date, source_badge, source_series) implicit index covers metric_key-leading queries",
             "Evidence table filters (module/status/source_badge/ai_context_allowed) are applied post-build: the full pipeline always runs regardless of filter",
         ],
-        "suspected_risks": [
+        "resolved_hotspots": [
+            f"D13 N+1 resolved: was {len(historical_percentile_metrics.PERCENTILE_METRIC_SPECS)} separate DB queries; now 1 batch query",
+            f"D14 N+1 resolved: was {len(liquidity_funding_stress.RAW_METRIC_KEYS)} separate DB queries; now 1 batch query",
+            "D13/D14 connection-per-call resolved: was 32 connect/close cycles; now 2 (one per batch call)",
+            "Missing (metric_key, observation_date DESC) covering index resolved: added as idx_market_observations_metric_date via schema v2",
+        ],
+        "remaining_hotspots_for_m3": [
             "build_dashboard_evidence_table calls build_dashboard_summary internally: a combined summary+evidence request rebuilds the dashboard summary twice",
-            "If /summary and /evidence-table are requested concurrently by the frontend, two full pipeline builds run in parallel without shared cache",
             "ai_context_manifest rebuild: manifest call triggers a third full pipeline rebuild independent of any prior /evidence-table call",
             "audit rebuild: running build_coverage_audit after a manifest call can trigger a fourth full pipeline build in the same process lifecycle",
-            "D13 N+1: 22 separate single-metric SELECT queries instead of one batch SELECT WHERE metric_key IN (...)",
-            "D14 N+1: 9 separate single-metric SELECT queries instead of one batch SELECT",
             "get_market_history_summary issues get_latest_observation per distinct metric (N+1 for summary stats)",
-            "No dedicated (metric_key, observation_date) two-column covering index; relies on 4-column UNIQUE implicit index",
-            "Each list_market_observations call opens and closes its own sqlite3 connection; repeated for every metric in D13 and D14 per request",
+            "No request-scoped cache: each HTTP request rebuilds all rows from scratch",
         ],
     }
 

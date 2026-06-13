@@ -99,7 +99,12 @@ def build_liquidity_funding_rows(
     config_path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
     config = load_liquidity_funding_config(config_path)
-    raw_rows = [_raw_row(metric_key, config.get(metric_key), db_path=db_path) for metric_key in RAW_METRIC_KEYS]
+    prefetched = market_history_store.list_market_observations_batch(
+        list(RAW_METRIC_KEYS),
+        limit_per_key=100,
+        db_path=db_path,
+    )
+    raw_rows = [_raw_row(metric_key, config.get(metric_key), db_path=db_path, prefetched=prefetched) for metric_key in RAW_METRIC_KEYS]
     by_key = {row["metric_key"]: row for row in raw_rows}
     spread_rows = [
         _spread_row("sofr_effr_spread", "SOFR-EFFR spread", by_key.get("sofr"), by_key.get("effr")),
@@ -253,6 +258,7 @@ def _raw_row(
     item: dict[str, Any] | None,
     *,
     db_path: Path | str | None,
+    prefetched: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     if not item or item.get("status") == "research_needed" or not item.get("source_series"):
         display = (item or {}).get("display_name") or metric_key
@@ -274,7 +280,7 @@ def _raw_row(
             ai_context_allowed=False,
             missing_inputs=[metric_key],
         )
-    observation = _latest_observation(metric_key, item, db_path=db_path)
+    observation = _latest_observation(metric_key, item, db_path=db_path, prefetched=prefetched)
     if observation is None:
         return _metric(
             metric_key=metric_key,
@@ -319,8 +325,12 @@ def _latest_observation(
     item: dict[str, Any],
     *,
     db_path: Path | str | None,
+    prefetched: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any] | None:
-    rows = market_history_store.list_market_observations(metric_key=metric_key, limit=100, db_path=db_path)
+    if prefetched is not None:
+        rows = prefetched.get(metric_key, [])
+    else:
+        rows = market_history_store.list_market_observations(metric_key=metric_key, limit=100, db_path=db_path)
     expected_series = item.get("source_series")
     expected_badge = item.get("source_badge")
     for row in rows:

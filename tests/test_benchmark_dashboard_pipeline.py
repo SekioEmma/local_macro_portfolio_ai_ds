@@ -78,11 +78,15 @@ EXPECTED_KEYS = {
     "d10_build_ms",
     "d11_build_ms",
     "d13_build_ms",
+    "d13_query_strategy",
     "d14_build_ms",
+    "d14_query_strategy",
     "audit_total_ms",
     "evidence_row_count",
     "included_facts_count",
     "included_model_outputs_count",
+    "market_history_batch_api_available",
+    "market_history_index_metric_date_available",
     "slowest_sections",
     "notes",
     "call_path_audit",
@@ -317,11 +321,14 @@ def test_benchmark_call_path_audit_structure(monkeypatch, tmp_path):
     )
     audit = result["call_path_audit"]
     assert "confirmed_facts" in audit
-    assert "suspected_risks" in audit
+    assert "resolved_hotspots" in audit
+    assert "remaining_hotspots_for_m3" in audit
     assert isinstance(audit["confirmed_facts"], list)
-    assert isinstance(audit["suspected_risks"], list)
+    assert isinstance(audit["resolved_hotspots"], list)
+    assert isinstance(audit["remaining_hotspots_for_m3"], list)
     assert len(audit["confirmed_facts"]) > 0
-    assert len(audit["suspected_risks"]) > 0
+    assert len(audit["resolved_hotspots"]) > 0
+    assert len(audit["remaining_hotspots_for_m3"]) > 0
 
 
 # ---------------------------------------------------------------------------

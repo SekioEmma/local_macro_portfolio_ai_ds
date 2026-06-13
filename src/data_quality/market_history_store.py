@@ -12,7 +12,7 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MARKET_HISTORY_DB_PATH = PROJECT_ROOT / "data" / "market_history" / "market_history.sqlite3"
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 MAX_LIMIT = 5000
 BLOCKED_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
 BLOCKED_STATUSES = {
@@ -203,6 +203,81 @@ def list_market_observations(
     return [_row_to_observation(row) for row in rows]
 
 
+def list_market_observations_batch(
+    metric_keys: list[str] | tuple[str, ...] | set[str],
+    *,
+    limit_per_key: int | None = None,
+    db_path: Path | str | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Fetch observations for multiple metric_keys in a single DB round-trip.
+
+    Returns a dict mapping metric_key -> list of observation dicts, each list
+    sorted by observation_date DESC (matching list_market_observations semantics).
+    Missing metric keys map to empty lists. Empty metric_keys returns {}.
+    """
+    keys = list(dict.fromkeys(metric_keys))
+    if not keys:
+        return {}
+    path = Path(db_path) if db_path is not None else get_default_market_history_db_path()
+    if not path.exists():
+        return {key: [] for key in keys}
+    per_key_limit = _bounded_limit(limit_per_key) if limit_per_key is not None else MAX_LIMIT
+    with connect_market_history_db(path) as connection:
+        rows = _batch_query(connection, keys, per_key_limit)
+    result: dict[str, list[dict[str, Any]]] = {key: [] for key in keys}
+    for row in rows:
+        key = row["metric_key"]
+        if key in result:
+            result[key].append(_row_to_observation(row))
+    return result
+
+
+def _batch_query(
+    connection: sqlite3.Connection,
+    keys: list[str],
+    per_key_limit: int,
+) -> list[sqlite3.Row]:
+    placeholders = ",".join("?" for _ in keys)
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT * FROM (
+                SELECT
+                    *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY metric_key
+                        ORDER BY observation_date DESC, id DESC
+                    ) AS _rn
+                FROM market_observations
+                WHERE metric_key IN ({placeholders})
+            )
+            WHERE _rn <= ?
+            ORDER BY metric_key ASC, observation_date DESC, id DESC
+            """,
+            (*keys, per_key_limit),
+        ).fetchall()
+        # Strip the _rn column added by the window function
+        return rows
+    except sqlite3.OperationalError:
+        # Fallback for SQLite < 3.25 (no window functions): fetch all then slice in Python
+        all_rows = connection.execute(
+            f"""
+            SELECT * FROM market_observations
+            WHERE metric_key IN ({placeholders})
+            ORDER BY metric_key ASC, observation_date DESC, id DESC
+            """,
+            tuple(keys),
+        ).fetchall()
+        seen: dict[str, int] = {}
+        result = []
+        for row in all_rows:
+            key = row["metric_key"]
+            seen[key] = seen.get(key, 0) + 1
+            if seen[key] <= per_key_limit:
+                result.append(row)
+        return result
+
+
 def get_latest_observation(
     metric_key: str,
     *,
@@ -304,7 +379,21 @@ def _run_migrations(connection: sqlite3.Connection) -> None:
         INSERT OR IGNORE INTO schema_migrations (version, applied_at)
         VALUES (?, ?)
         """,
-        (CURRENT_SCHEMA_VERSION, _utc_now()),
+        (1, _utc_now()),
+    )
+    # Version 2: add (metric_key, observation_date DESC) covering index for batch reads.
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_market_observations_metric_date
+        ON market_observations (metric_key, observation_date DESC)
+        """
+    )
+    connection.execute(
+        """
+        INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+        VALUES (?, ?)
+        """,
+        (2, _utc_now()),
     )
     connection.commit()
 
