@@ -102,19 +102,32 @@ Object.assign(metricLabels, {
   pullback_interpretation_boundary: "Pullback interpretation boundary",
   high_yield_spread_percentile: "High-yield spread percentile",
   high_yield_spread_zscore: "High-yield spread z-score",
+  high_yield_spread_robust_zscore: "High-yield spread robust z-score",
   investment_grade_spread_percentile: "Investment-grade spread percentile",
   investment_grade_spread_zscore: "Investment-grade spread z-score",
+  investment_grade_spread_robust_zscore:
+    "Investment-grade spread robust z-score",
   vix_percentile: "VIX percentile",
   vix_zscore: "VIX z-score",
+  vix_robust_zscore: "VIX robust z-score",
   dgs30_percentile: "30Y Treasury yield percentile",
   dgs30_zscore: "30Y Treasury yield z-score",
+  dgs30_robust_zscore: "30Y Treasury yield robust z-score",
   dfii10_percentile: "10Y real yield percentile",
   dfii10_zscore: "10Y real yield z-score",
+  dfii10_robust_zscore: "10Y real yield robust z-score",
   sp500_drawdown_3m_percentile: "S&P 500 3M drawdown percentile",
+  sp500_drawdown_3m_robust_zscore: "S&P 500 3M drawdown robust z-score",
   nasdaq100_drawdown_3m_percentile: "Nasdaq 100 3M drawdown percentile",
+  nasdaq100_drawdown_3m_robust_zscore:
+    "Nasdaq 100 3M drawdown robust z-score",
   initial_claims_4w_avg_percentile: "Initial claims 4W average percentile",
+  initial_claims_4w_avg_robust_zscore:
+    "Initial claims 4W average robust z-score",
   continuing_claims_4w_avg_percentile:
-    "Continuing claims 4W average percentile"
+    "Continuing claims 4W average percentile",
+  continuing_claims_4w_avg_robust_zscore:
+    "Continuing claims 4W average robust z-score"
 });
 
 export function getModuleLabel(moduleKey: string) {

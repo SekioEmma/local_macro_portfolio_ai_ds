@@ -1,61 +1,64 @@
-import math
+from datetime import date, timedelta
 
 from data_quality import historical_percentile_metrics as percentile
 from data_quality import market_history_store
 
 
-def test_percentile_and_zscore_with_sufficient_history(tmp_path):
+def test_percentile_zscore_and_robust_zscore_with_5y_history(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
-    for day in range(1, 61):
-        _insert(db_path, "high_yield_spread", f"2026-01-{day:02d}", float(day))
+    _insert_series(db_path, "high_yield_spread", date(2020, 1, 1), 1900)
 
     pct = percentile.build_metric_payload(
-        percentile.PercentileMetricSpec(
-            "high_yield_spread_percentile",
-            "high_yield_spread",
-            "HY percentile",
-            "percentile",
-            "higher_is_more_stress",
-            60,
-            "percentile",
-        ),
+        _spec("high_yield_spread_percentile", "high_yield_spread", "percentile"),
         db_path=str(db_path),
     )
     z = percentile.build_metric_payload(
-        percentile.PercentileMetricSpec(
-            "high_yield_spread_zscore",
-            "high_yield_spread",
-            "HY z",
-            "zscore",
-            "higher_is_more_stress",
-            60,
-            "zscore",
-        ),
+        _spec("high_yield_spread_zscore", "high_yield_spread", "zscore"),
+        db_path=str(db_path),
+    )
+    robust = percentile.build_metric_payload(
+        _spec("high_yield_spread_robust_zscore", "high_yield_spread", "robust_zscore"),
         db_path=str(db_path),
     )
 
-    assert pct["status"] == "stress"
-    assert pct["value"] > 95
-    assert z["status"] == "stress"
-    assert z["value"] > 1.0
-    assert z["source_badge"] == "derived"
-    assert z["ai_context_allowed"] is True
+    assert pct["lookback_window"] == "5Y rolling"
+    assert pct["history_quality_status"] == "sufficient"
+    assert pct["percentile_band"] == "extreme"
+    assert z["zscore_band"] in {"elevated", "high"}
+    assert robust["robust_zscore"] is not None
+    assert robust["robust_zscore_band"] in {"elevated", "high"}
+    assert robust["ai_context_allowed"] is True
+    assert robust["trigger_eligibility"] == "hard_trigger_allowed"
 
 
-def test_insufficient_history_blocks_ai_context(tmp_path):
+def test_3y_fallback_is_limited_history(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
-    _insert(db_path, "vix", "2026-01-01", 20.0)
+    _insert_series(db_path, "vix", date(2022, 1, 1), 1200)
+
+    row = percentile.build_metric_payload(_spec("vix_percentile", "vix"), db_path=str(db_path))
+
+    assert row["lookback_window"] == "3Y rolling limited_history"
+    assert row["history_quality_status"] == "limited_history"
+    assert row["ai_context_allowed"] is True
+
+
+def test_less_than_3y_history_blocks_ai_context(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_series(db_path, "vix", date(2024, 1, 1), 500)
 
     row = percentile.build_metric_payload(_spec("vix_percentile", "vix"), db_path=str(db_path))
 
     assert row["status"] == "insufficient_history"
+    assert row["lookback_window"] == "all_available_limited"
     assert row["ai_context_allowed"] is False
-    assert row["missing_reason"] == "insufficient_history_for_percentile"
-    assert row["component_contributions"]["observation_count"] == 1
+    assert row["trigger_eligibility"] == "not_eligible"
 
 
 def test_missing_input_blocks_ai_context(tmp_path):
-    row = percentile.build_metric_payload(_spec("vix_percentile", "vix"), db_path=str(tmp_path / "missing.sqlite3"))
+    row = percentile.build_metric_payload(
+        _spec("vix_percentile", "vix"),
+        db_path=str(tmp_path / "missing.sqlite3"),
+    )
 
     assert row["status"] == "missing"
     assert row["source_badge"] == "missing"
@@ -64,97 +67,130 @@ def test_missing_input_blocks_ai_context(tmp_path):
 
 def test_stale_latest_input_blocks_ai_context(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
-    for day in range(1, 60):
-        _insert(db_path, "vix", f"2026-01-{day:02d}", float(day))
+    _insert_series(db_path, "vix", date(2020, 1, 1), 100)
     _insert(db_path, "vix", "2026-03-01", 80.0, freshness_status="stale")
 
     row = percentile.build_metric_payload(_spec("vix_percentile", "vix"), db_path=str(db_path))
 
     assert row["status"] == "stale"
     assert row["ai_context_allowed"] is False
-    assert row["missing_reason"] == "latest_input_stale"
+    assert row["missing_reason"] == "latest_input_unusable"
 
 
-def test_higher_is_more_stress_status_mapping(tmp_path):
+def test_lower_is_more_stress_band_for_drawdown_uses_damage_direction(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
-    for day in range(1, 61):
-        _insert(db_path, "vix", f"2026-01-{day:02d}", float(day))
-
-    row = percentile.build_metric_payload(_spec("vix_percentile", "vix"), db_path=str(db_path))
-
-    assert row["status"] == "stress"
-
-
-def test_lower_is_more_stress_status_mapping_for_drawdown(tmp_path):
-    db_path = tmp_path / "market_history.sqlite3"
-    for day in range(1, 61):
-        _insert(db_path, "sp500_drawdown_3m", f"2026-01-{day:02d}", float(day) * -1.0)
+    start = date(2020, 1, 1)
+    for index in range(1900):
+        value = -1.0 * (index + 1)
+        _insert(db_path, "sp500_drawdown_3m", (start + timedelta(days=index)).isoformat(), value)
 
     row = percentile.build_metric_payload(
-        percentile.PercentileMetricSpec(
+        _spec(
             "sp500_drawdown_3m_percentile",
             "sp500_drawdown_3m",
-            "S&P drawdown percentile",
             "percentile",
-            "lower_is_more_stress",
-            60,
-            "percentile",
+            direction="lower_is_more_stress",
         ),
         db_path=str(db_path),
     )
 
     assert row["status"] == "stress"
-    assert row["value"] < 5
+    assert row["percentile_band"] == "extreme"
+    assert row["value"] < 10
+    assert "lower values represent higher damage/severity" in row["interpretation_hint"]
 
 
-def test_output_preserves_metadata_and_boundary(tmp_path):
+def test_robust_zscore_zero_mad_is_not_available(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
-    for day in range(1, 61):
-        _insert(db_path, "dfii10", f"2026-01-{day:02d}", float(day), source_series="DFII10")
-
-    row = percentile.build_metric_payload(_spec("dfii10_percentile", "dfii10"), db_path=str(db_path))
-
-    assert row["input_evidence"][0]["metric_key"] == "dfii10"
-    assert row["input_evidence"][0]["source_series"] == "DFII10"
-    assert row["component_contributions"]["lookback_window"] == "all_available"
-    assert row["component_contributions"]["observation_count"] == 60
-    assert row["component_contributions"]["percentile_direction"] == "higher_is_more_stress"
-    assert "not crash probability" in row["interpretation_boundary"]
-    assert "buy/sell" in row["interpretation_boundary"]
-
-
-def test_constant_history_blocks_zscore(tmp_path):
-    db_path = tmp_path / "market_history.sqlite3"
-    for day in range(1, 61):
-        _insert(db_path, "dgs30", f"2026-01-{day:02d}", 5.0)
+    _insert_series(db_path, "dgs30", date(2020, 1, 1), 1900, constant=5.0)
 
     row = percentile.build_metric_payload(
-        percentile.PercentileMetricSpec(
-            "dgs30_zscore",
-            "dgs30",
-            "DGS30 z",
-            "zscore",
-            "higher_is_more_stress",
-            60,
-            "zscore",
+        _spec("dgs30_robust_zscore", "dgs30", "robust_zscore"),
+        db_path=str(db_path),
+    )
+
+    assert row["status"] == "not_available"
+    assert row["ai_context_allowed"] is False
+    assert row["missing_reason"] == "robust_zscore_not_available_zero_mad"
+
+
+def test_proxy_source_becomes_proxy_auxiliary_only(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_series(
+        db_path,
+        "nasdaq100_drawdown_3m",
+        date(2020, 1, 1),
+        1900,
+        source_badge="proxy",
+        source="yfinance",
+        source_series="QQQ",
+    )
+
+    row = percentile.build_metric_payload(
+        _spec(
+            "nasdaq100_drawdown_3m_robust_zscore",
+            "nasdaq100_drawdown_3m",
+            "robust_zscore",
+            direction="lower_is_more_stress",
         ),
         db_path=str(db_path),
     )
 
-    assert row["status"] == "insufficient_history"
-    assert row["ai_context_allowed"] is False
+    assert row["ai_context_allowed"] is True
+    assert row["trigger_eligibility"] == "proxy_auxiliary_only"
+    assert row["ai_context_tier"] == "auxiliary_context"
 
 
-def _spec(metric_key, source_metric_key):
+def test_interpretation_boundary_excludes_probability_and_trading_instruction(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    _insert_series(db_path, "dfii10", date(2020, 1, 1), 1900, source_series="DFII10")
+
+    row = percentile.build_metric_payload(
+        _spec("dfii10_percentile", "dfii10"),
+        db_path=str(db_path),
+    )
+
+    text = f"{row['interpretation_boundary']} {row['interpretation_hint']}".lower()
+    assert "not crash probability" in text
+    assert "not probabilities" in text
+    assert "trading instructions" in text
+    assert "recession probability" not in text
+
+
+def _spec(metric_key, source_metric_key, kind="percentile", direction="higher_is_more_stress"):
     return percentile.PercentileMetricSpec(
         metric_key,
         source_metric_key,
         metric_key,
-        "percentile",
-        "higher_is_more_stress",
+        kind,
+        direction,
         60,
-        "percentile",
+        kind,
     )
+
+
+def _insert_series(
+    db_path,
+    metric_key,
+    start_date,
+    count,
+    *,
+    constant=None,
+    source="FRED",
+    source_badge="official",
+    source_series=None,
+):
+    for index in range(count):
+        value = constant if constant is not None else float(index + 1)
+        _insert(
+            db_path,
+            metric_key,
+            (start_date + timedelta(days=index)).isoformat(),
+            value,
+            source=source,
+            source_badge=source_badge,
+            source_series=source_series,
+        )
 
 
 def _insert(
@@ -163,6 +199,8 @@ def _insert(
     observation_date,
     value,
     *,
+    source="FRED",
+    source_badge="official",
     source_series=None,
     status="ok",
     freshness_status="historical",
@@ -173,9 +211,9 @@ def _insert(
             "observation_date": observation_date,
             "value": value,
             "status": status,
-            "source": "FRED",
-            "source_badge": "official",
-            "provider": "FRED",
+            "source": source,
+            "source_badge": source_badge,
+            "provider": source,
             "source_series": source_series or metric_key.upper(),
             "generated_at": "2026-01-01T00:00:00+00:00",
             "fetched_at": "2026-01-01T00:00:00+00:00",

@@ -55,8 +55,22 @@ class DashboardMetric(BaseModel):
     missing_inputs: list[str] | None = None
     interpretation_boundary: str | None = None
     lookback_window: str | None = None
+    lookback_start: str | None = None
+    lookback_end: str | None = None
     observation_count: int | None = None
+    minimum_observation_count: int | None = None
+    history_quality_status: str | None = None
+    percentile: float | None = None
+    percentile_band: str | None = None
+    zscore: float | None = None
+    zscore_band: str | None = None
+    robust_zscore: float | None = None
+    robust_zscore_band: str | None = None
     percentile_direction: str | None = None
+    frequency_class: str | None = None
+    transform_class: str | None = None
+    ai_context_tier: str | None = None
+    trigger_eligibility: str | None = None
 
 
 class DashboardModule(BaseModel):
@@ -106,8 +120,22 @@ class DashboardEvidenceRow(BaseModel):
     missing_inputs: list[str] | None = None
     interpretation_boundary: str | None = None
     lookback_window: str | None = None
+    lookback_start: str | None = None
+    lookback_end: str | None = None
     observation_count: int | None = None
+    minimum_observation_count: int | None = None
+    history_quality_status: str | None = None
+    percentile: float | None = None
+    percentile_band: str | None = None
+    zscore: float | None = None
+    zscore_band: str | None = None
+    robust_zscore: float | None = None
+    robust_zscore_band: str | None = None
     percentile_direction: str | None = None
+    frequency_class: str | None = None
+    transform_class: str | None = None
+    ai_context_tier: str | None = None
+    trigger_eligibility: str | None = None
 
 
 class DashboardEvidenceTableResponse(BaseModel):

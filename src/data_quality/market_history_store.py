@@ -13,7 +13,7 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MARKET_HISTORY_DB_PATH = PROJECT_ROOT / "data" / "market_history" / "market_history.sqlite3"
 CURRENT_SCHEMA_VERSION = 1
-MAX_LIMIT = 500
+MAX_LIMIT = 5000
 BLOCKED_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}
 BLOCKED_STATUSES = {
     "missing",

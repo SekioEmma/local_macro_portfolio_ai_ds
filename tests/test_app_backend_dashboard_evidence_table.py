@@ -79,7 +79,7 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     )
     assert percentile["status"] in {"missing", "insufficient_history"}
     assert percentile["ai_context_allowed"] is False
-    assert percentile["lookback_window"] == "all_available"
+    assert percentile["lookback_window"] == "5Y rolling"
     assert percentile["percentile_direction"] == "higher_is_more_stress"
 
 

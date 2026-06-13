@@ -18,11 +18,13 @@ if str(SRC_ROOT) not in sys.path:
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import ai_context_service  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
+from data_providers import market_data_service  # noqa: E402
 from data_providers import yfinance_history_provider  # noqa: E402
 from data_quality import historical_derived_metrics  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
 from data_quality import market_history_store  # noqa: E402
 from data_quality import official_macro_pack  # noqa: E402
+import ingest_core_risk_history  # noqa: E402
 
 
 STATUS_KEYS = (
@@ -117,18 +119,44 @@ PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS = {
 HISTORICAL_RISK_PERCENTILE_METRIC_KEYS = {
     "high_yield_spread_percentile",
     "high_yield_spread_zscore",
+    "high_yield_spread_robust_zscore",
     "investment_grade_spread_percentile",
     "investment_grade_spread_zscore",
+    "investment_grade_spread_robust_zscore",
     "vix_percentile",
     "vix_zscore",
+    "vix_robust_zscore",
     "dgs30_percentile",
     "dgs30_zscore",
+    "dgs30_robust_zscore",
     "dfii10_percentile",
     "dfii10_zscore",
+    "dfii10_robust_zscore",
     "sp500_drawdown_3m_percentile",
+    "sp500_drawdown_3m_robust_zscore",
     "nasdaq100_drawdown_3m_percentile",
+    "nasdaq100_drawdown_3m_robust_zscore",
     "initial_claims_4w_avg_percentile",
+    "initial_claims_4w_avg_robust_zscore",
     "continuing_claims_4w_avg_percentile",
+    "continuing_claims_4w_avg_robust_zscore",
+}
+CORE_RISK_RAW_METRIC_KEYS = {
+    "high_yield_spread",
+    "investment_grade_spread",
+    "vix",
+    "dgs30",
+    "dfii10",
+    "sp500",
+    "nasdaq100",
+    "initial_jobless_claims",
+    "continuing_claims",
+}
+CORE_RISK_DERIVED_METRIC_KEYS = {
+    "sp500_drawdown_3m",
+    "nasdaq100_drawdown_3m",
+    "initial_claims_4w_avg",
+    "continuing_claims_4w_avg",
 }
 
 
@@ -177,6 +205,10 @@ def build_coverage_audit(
     financial_stress_composite = _financial_stress_composite_audit(rows)
     pullback_systemic_risk_checklist = _pullback_systemic_checklist_audit(rows)
     historical_risk_percentile = _historical_risk_percentile_audit(rows)
+    core_risk_history = _core_risk_history_audit(
+        db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
+        historical_risk_percentile=historical_risk_percentile,
+    )
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
@@ -211,6 +243,7 @@ def build_coverage_audit(
         "financial_stress_composite": financial_stress_composite,
         "pullback_systemic_risk_checklist": pullback_systemic_risk_checklist,
         "historical_risk_percentile": historical_risk_percentile,
+        "core_risk_history": core_risk_history,
         "valuation_research": valuation_research,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
@@ -230,6 +263,7 @@ def build_coverage_audit(
             historical_derived,
             energy_history,
             yfinance_history,
+            core_risk_history,
             dashboard_derived_integration,
             official_macro,
             valuation_research,
@@ -561,6 +595,7 @@ def _recommendations(
     historical_derived: dict[str, Any] | None = None,
     energy_history: dict[str, Any] | None = None,
     yfinance_history: dict[str, Any] | None = None,
+    core_risk_history: dict[str, Any] | None = None,
     dashboard_derived_integration: dict[str, Any] | None = None,
     official_macro: dict[str, Any] | None = None,
     valuation_research: dict[str, Any] | None = None,
@@ -595,6 +630,8 @@ def _recommendations(
         recommendations.extend(energy_history.get("recommended_history_actions", []))
     if yfinance_history:
         recommendations.extend(yfinance_history.get("recommendations", []))
+    if core_risk_history and not core_risk_history.get("history_sufficient_for_d13"):
+        recommendations.append("run_core_risk_history_backfill_live_write")
     if dashboard_derived_integration and dashboard_derived_integration.get(
         "equity_derived_still_insufficient_count",
         0,
@@ -1051,24 +1088,182 @@ def _historical_risk_percentile_audit(rows: list[DashboardEvidenceRow]) -> dict[
     insufficient_rows = [
         row for row in percentile_rows if row.status == "insufficient_history"
     ]
+    missing_rows = [row for row in percentile_rows if row.status == "missing"]
+    robust_rows = [row for row in percentile_rows if row.robust_zscore is not None]
+    percentile_band_rows = [row for row in percentile_rows if row.percentile_band]
+    limited_rows = [
+        row for row in percentile_rows if row.history_quality_status == "limited_history"
+    ]
+    blocked_rows = [row for row in percentile_rows if not row.ai_context_allowed]
     return {
         "historical_risk_percentile_available": bool(ok_rows),
+        "configured_count": len(percentile_rows),
+        "computed_count": len(ok_rows),
+        "insufficient_history_count": len(insufficient_rows),
+        "missing_count": len(missing_rows),
+        "robust_zscore_computed_count": len(robust_rows),
+        "percentile_band_count": len(percentile_band_rows),
+        "ai_context_allowed_count": sum(
+            1 for row in percentile_rows if row.ai_context_allowed
+        ),
+        "hard_trigger_allowed_count": sum(
+            1 for row in percentile_rows if row.trigger_eligibility == "hard_trigger_allowed"
+        ),
+        "auxiliary_only_count": sum(
+            1 for row in percentile_rows if row.trigger_eligibility == "auxiliary_only"
+        ),
+        "proxy_auxiliary_only_count": sum(
+            1 for row in percentile_rows if row.trigger_eligibility == "proxy_auxiliary_only"
+        ),
+        "not_eligible_count": sum(
+            1 for row in percentile_rows if row.trigger_eligibility == "not_eligible"
+        ),
+        "limited_history_count": len(limited_rows),
+        "blocked_rows": [
+            {
+                "metric_key": row.metric_key,
+                "status": row.status,
+                "blocked_reason": row.blocked_reason,
+                "missing_reason": row.missing_reason,
+                "history_quality_status": row.history_quality_status,
+                "observation_count": row.observation_count,
+            }
+            for row in blocked_rows
+        ],
+        "ai_context_allowed_metric_keys": sorted(
+            row.metric_key for row in percentile_rows if row.ai_context_allowed
+        ),
+        "auxiliary_metric_keys": sorted(
+            row.metric_key
+            for row in percentile_rows
+            if row.trigger_eligibility in {"auxiliary_only", "proxy_auxiliary_only"}
+        ),
+        "metric_keys": sorted(
+            row.metric_key for row in percentile_rows
+        ),
+        "insufficient_history_metric_keys": sorted(
+            row.metric_key for row in insufficient_rows
+        ),
+        "source_badges": sorted(
+            {row.source_badge for row in percentile_rows}
+        ),
         "historical_risk_percentile_metric_count": len(percentile_rows),
         "historical_risk_percentile_computed_count": len(ok_rows),
         "historical_risk_percentile_insufficient_history_count": len(insufficient_rows),
         "historical_risk_percentile_ai_context_allowed_count": sum(
             1 for row in percentile_rows if row.ai_context_allowed
         ),
-        "historical_risk_percentile_metric_keys": sorted(
-            row.metric_key for row in percentile_rows
-        ),
-        "historical_risk_percentile_insufficient_history_metric_keys": sorted(
-            row.metric_key for row in insufficient_rows
-        ),
-        "historical_risk_percentile_source_badges": sorted(
-            {row.source_badge for row in percentile_rows}
-        ),
     }
+
+
+def _core_risk_history_audit(
+    *,
+    db_path: Path | str | None,
+    historical_risk_percentile: dict[str, Any],
+) -> dict[str, Any]:
+    path = Path(db_path) if db_path is not None else market_history_store.get_default_market_history_db_path()
+    mappings, missing_mappings = ingest_core_risk_history.load_official_mappings(
+        market_data_service.load_data_source_config(str(DEFAULT_YFINANCE_HISTORY_CONFIG.parent / "data_sources.yaml"))
+        if (DEFAULT_YFINANCE_HISTORY_CONFIG.parent / "data_sources.yaml").exists()
+        else {}
+    )
+    yfinance_mappings = (
+        ingest_core_risk_history.load_yfinance_core_mappings(DEFAULT_YFINANCE_HISTORY_CONFIG)
+        if DEFAULT_YFINANCE_HISTORY_CONFIG.exists()
+        else {}
+    )
+    if not path.exists():
+        return {
+            "raw_history_counts": {},
+            "derived_history_counts": {},
+            "missing_source_mappings": missing_mappings,
+            "history_sufficient_for_d13": False,
+            "official_count": 0,
+            "unofficial_fallback_count": 0,
+            "proxy_count": 0,
+            "derived_count": 0,
+            "missing_history_source_metrics": sorted(CORE_RISK_RAW_METRIC_KEYS),
+            "history_sufficiency_reason": "market_history_db_missing",
+            "planned_official_series": mappings,
+            "planned_proxy_unofficial_series": yfinance_mappings,
+        }
+    try:
+        with market_history_store.connect_market_history_db(path) as connection:
+            raw_rows = connection.execute(
+                """
+                SELECT metric_key, source_badge, COUNT(*) AS count
+                FROM market_observations
+                WHERE metric_key IN ({})
+                GROUP BY metric_key, source_badge
+                """.format(",".join("?" for _ in CORE_RISK_RAW_METRIC_KEYS)),
+                tuple(sorted(CORE_RISK_RAW_METRIC_KEYS)),
+            ).fetchall()
+            derived_rows = connection.execute(
+                """
+                SELECT metric_key, source_badge, COUNT(*) AS count
+                FROM market_observations
+                WHERE metric_key IN ({})
+                GROUP BY metric_key, source_badge
+                """.format(",".join("?" for _ in CORE_RISK_DERIVED_METRIC_KEYS)),
+                tuple(sorted(CORE_RISK_DERIVED_METRIC_KEYS)),
+            ).fetchall()
+    except Exception as exc:
+        return {
+            "raw_history_counts": {},
+            "derived_history_counts": {},
+            "missing_source_mappings": missing_mappings,
+            "history_sufficient_for_d13": False,
+            "official_count": 0,
+            "unofficial_fallback_count": 0,
+            "proxy_count": 0,
+            "derived_count": 0,
+            "missing_history_source_metrics": sorted(CORE_RISK_RAW_METRIC_KEYS),
+            "history_sufficiency_reason": f"market_history_read_error:{exc.__class__.__name__}",
+            "planned_official_series": mappings,
+            "planned_proxy_unofficial_series": yfinance_mappings,
+        }
+    raw_counts = _metric_count_map(raw_rows)
+    derived_counts = _metric_count_map(derived_rows)
+    badge_counts = _badge_count_map(list(raw_rows) + list(derived_rows))
+    missing_history = sorted(
+        metric
+        for metric in CORE_RISK_RAW_METRIC_KEYS.union(CORE_RISK_DERIVED_METRIC_KEYS)
+        if raw_counts.get(metric, 0) + derived_counts.get(metric, 0) == 0
+    )
+    computed = int(historical_risk_percentile.get("computed_count") or 0)
+    configured = int(historical_risk_percentile.get("configured_count") or 0)
+    return {
+        "raw_history_counts": raw_counts,
+        "derived_history_counts": derived_counts,
+        "missing_source_mappings": missing_mappings,
+        "history_sufficient_for_d13": bool(configured and computed == configured),
+        "official_count": badge_counts.get("official", 0),
+        "unofficial_fallback_count": badge_counts.get("unofficial_fallback", 0),
+        "proxy_count": badge_counts.get("proxy", 0),
+        "derived_count": badge_counts.get("derived", 0),
+        "missing_history_source_metrics": missing_history,
+        "history_sufficiency_reason": (
+            "all_configured_d13_rows_computed"
+            if configured and computed == configured
+            else f"computed={computed}; configured={configured}; missing_history={missing_history}"
+        ),
+        "planned_official_series": mappings,
+        "planned_proxy_unofficial_series": yfinance_mappings,
+    }
+
+
+def _metric_count_map(rows: list[Any]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for row in rows:
+        result[str(row["metric_key"])] = result.get(str(row["metric_key"]), 0) + int(row["count"])
+    return dict(sorted(result.items()))
+
+
+def _badge_count_map(rows: list[Any]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for row in rows:
+        result[str(row["source_badge"])] = result.get(str(row["source_badge"]), 0) + int(row["count"])
+    return dict(sorted(result.items()))
 
 
 VALUATION_BLOCKED_METRIC_KEYS = (
@@ -1802,6 +1997,12 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## yfinance History", ""])
     for key, value in audit["yfinance_history"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Core Risk History", ""])
+    for key, value in audit["core_risk_history"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Historical Risk Percentile", ""])
+    for key, value in audit["historical_risk_percentile"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Proxy Breadth", ""])
     for key, value in audit["proxy_breadth"].items():

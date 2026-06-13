@@ -65,8 +65,22 @@ export type DashboardMetric = {
   missing_inputs?: string[] | null;
   interpretation_boundary?: string | null;
   lookback_window?: string | null;
+  lookback_start?: string | null;
+  lookback_end?: string | null;
   observation_count?: number | null;
+  minimum_observation_count?: number | null;
+  history_quality_status?: string | null;
+  percentile?: number | null;
+  percentile_band?: string | null;
+  zscore?: number | null;
+  zscore_band?: string | null;
+  robust_zscore?: number | null;
+  robust_zscore_band?: string | null;
   percentile_direction?: string | null;
+  frequency_class?: string | null;
+  transform_class?: string | null;
+  ai_context_tier?: string | null;
+  trigger_eligibility?: string | null;
 };
 
 export type DashboardSummaryResponse = {
@@ -110,8 +124,22 @@ export type DashboardEvidenceRow = {
   missing_inputs?: string[] | null;
   interpretation_boundary?: string | null;
   lookback_window?: string | null;
+  lookback_start?: string | null;
+  lookback_end?: string | null;
   observation_count?: number | null;
+  minimum_observation_count?: number | null;
+  history_quality_status?: string | null;
+  percentile?: number | null;
+  percentile_band?: string | null;
+  zscore?: number | null;
+  zscore_band?: string | null;
+  robust_zscore?: number | null;
+  robust_zscore_band?: string | null;
   percentile_direction?: string | null;
+  frequency_class?: string | null;
+  transform_class?: string | null;
+  ai_context_tier?: string | null;
+  trigger_eligibility?: string | null;
 };
 
 export type DashboardEvidenceFilters = {
