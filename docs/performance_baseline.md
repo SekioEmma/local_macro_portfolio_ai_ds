@@ -89,6 +89,24 @@ write policy. The benchmark should still report `pipeline_context_available:
 true`, `summary_reused_by_evidence: true`, `evidence_reused_by_manifest:
 true`, and `estimated_rebuilds_avoided: 2`.
 
+### M5 audit modularization note
+
+M5 split audit section helpers out of `scripts/audit_data_pipeline_coverage.py`
+into `scripts/audit_sections/` while keeping the CLI entry point and audit JSON
+contract unchanged.
+
+This is a no-logic-change extraction. It does not change D10/D11/D13/D14
+semantics, D12 manifest privacy policy, dashboard APIs, benchmark fields, or
+the local read-only audit boundary. The benchmark command remains:
+
+```bash
+python scripts/benchmark_dashboard_pipeline.py
+```
+
+Future M5b work could add section-level timing inside the extracted audit
+helpers. Future M6 work could clean frontend labels and types after the audit
+module contract remains stable.
+
 ### M1 baseline
 
 Observed timings with 33,803 observations / 45 metrics in local `market_history.sqlite3` (June 2026 baseline):

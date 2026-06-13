@@ -1,9 +1,244 @@
 import json
 import socket
+import subprocess
+import sys
 
 from app_backend.schemas.responses import DashboardEvidenceRow, DashboardMetric, DashboardModule
 import audit_data_pipeline_coverage as audit
 from data_quality import market_history_store
+
+
+EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
+    "ai_context_allowed_by_module",
+    "ai_context_manifest",
+    "blocked_reason_counts",
+    "core_risk_history",
+    "coverage_summary",
+    "dashboard_derived_integration",
+    "dashboard_overall_degraded_reasons",
+    "data_sufficiency_assessment",
+    "derived_dependency_anomalies",
+    "energy_history",
+    "financial_stress_composite",
+    "generated_at",
+    "historical_derived",
+    "historical_risk_percentile",
+    "historical_store",
+    "last_good_cache",
+    "liquidity_funding_history",
+    "liquidity_funding_stress",
+    "market_stress_derived",
+    "metadata_anomalies",
+    "module_coverage",
+    "module_coverage_summary",
+    "official_macro_pack",
+    "overall_status",
+    "portfolio_compact",
+    "provider_health",
+    "proxy_breadth",
+    "pullback_systemic_risk_checklist",
+    "recommendations",
+    "source_badge_distribution",
+    "top_insufficient_history_metrics",
+    "top_missing_metrics",
+    "top_research_needed_metrics",
+    "valuation_research",
+    "yfinance_history",
+}
+
+EXPECTED_D10_KEYS = {
+    "credit_percentile_context_available",
+    "d14_used_as_confirmation_only",
+    "equity_percentile_context_available",
+    "financial_stress_ai_context_allowed",
+    "financial_stress_composite_available",
+    "financial_stress_contribution_groups",
+    "financial_stress_dominant_pressure_source",
+    "financial_stress_has_interpretation_boundary",
+    "financial_stress_metric_count",
+    "financial_stress_missing_inputs",
+    "financial_stress_score",
+    "financial_stress_score_status",
+    "financial_stress_source_badge",
+    "financial_stress_status",
+    "funding_liquidity_component_status",
+    "funding_liquidity_context_available",
+    "funding_liquidity_context_metric_count",
+    "funding_liquidity_contribution",
+    "labor_percentile_context_available",
+    "official_reference_not_replacing_d10",
+    "percentile_context_available",
+    "percentile_context_metric_count",
+    "percentile_context_missing_metric_keys",
+    "rates_percentile_context_available",
+}
+
+EXPECTED_D11_KEYS = {
+    "credit_percentile_used_as_auxiliary",
+    "d14_alone_not_systemic_trigger",
+    "liquidity_missing_critical_input_removed_when_available",
+    "liquidity_still_missing_until_d14",
+    "liquidity_still_missing_when_d14_insufficient",
+    "pullback_ai_context_allowed",
+    "pullback_checklist_item_count",
+    "pullback_classification",
+    "pullback_classification_status",
+    "pullback_has_interpretation_boundary",
+    "pullback_liquidity_funding_context_available",
+    "pullback_liquidity_funding_metric_count",
+    "pullback_metric_count",
+    "pullback_missing_critical_inputs",
+    "pullback_percentile_context_available",
+    "pullback_percentile_context_metric_count",
+    "pullback_source_badge",
+    "pullback_systemic_risk_checklist_available",
+    "systemic_not_triggered_by_percentile_only",
+    "systemic_requires_credit_and_funding_and_transmission",
+}
+
+EXPECTED_D13_KEYS = {
+    "ai_context_allowed_count",
+    "ai_context_allowed_metric_keys",
+    "auxiliary_metric_keys",
+    "auxiliary_only_count",
+    "blocked_rows",
+    "configured_count",
+    "computed_count",
+    "d13_credit_percentile_status",
+    "hard_trigger_allowed_count",
+    "historical_risk_percentile_ai_context_allowed_count",
+    "historical_risk_percentile_available",
+    "historical_risk_percentile_computed_count",
+    "historical_risk_percentile_insufficient_history_count",
+    "historical_risk_percentile_metric_count",
+    "insufficient_history_count",
+    "insufficient_history_metric_keys",
+    "limited_history_count",
+    "metric_keys",
+    "missing_count",
+    "not_eligible_count",
+    "percentile_band_count",
+    "proxy_auxiliary_only_count",
+    "robust_zscore_computed_count",
+    "source_badges",
+}
+
+EXPECTED_D14_KEYS = {
+    "ai_context_allowed_count",
+    "cp_spread_available",
+    "d14_cp_spread_available",
+    "d14_eligible_fact_count",
+    "d14_integration_ready",
+    "d14_reference_indices_available",
+    "d14_status_rows_available",
+    "derived_count",
+    "derived_metric_count",
+    "insufficient_evidence_count",
+    "liquidity_funding_available",
+    "liquidity_funding_boundary_available",
+    "liquidity_funding_status",
+    "missing_source_mappings",
+    "official_count",
+    "official_fallback_count",
+    "official_stress_reference_available",
+    "ok_count",
+    "policy_plumbing_available",
+    "pressure_count",
+    "raw_metric_count",
+    "research_needed_count",
+    "stress_count",
+    "watch_count",
+}
+
+EXPECTED_MANIFEST_KEYS = {
+    "excluded_d13_insufficient_history_count",
+    "excluded_d14_ineligible_count",
+    "excluded_facts_count",
+    "excluded_model_outputs_count",
+    "included_d10_d11_model_outputs_with_liquidity_context",
+    "included_d10_d11_model_outputs_with_percentile_context",
+    "included_d13_fact_count",
+    "included_d14_boundary_count",
+    "included_d14_fact_count",
+    "included_facts_count",
+    "included_model_output_keys",
+    "included_model_outputs_count",
+    "manifest_available",
+    "portfolio_context_mode",
+    "returns_credentials",
+    "returns_holdings_line_items",
+    "returns_provider_payloads",
+    "risk_boundary_count",
+    "search_derived_default",
+}
+
+EXPECTED_HISTORICAL_STORE_KEYS = {
+    "dashboard_metrics_with_history_count",
+    "insufficient_history_rows_count",
+    "latest_observation_by_metric",
+    "market_history_available",
+    "market_history_db_exists",
+    "market_history_metric_count",
+    "market_history_observation_count",
+    "market_history_schema_version",
+    "metrics_insufficient_history_but_store_empty",
+    "observations_by_metric",
+    "recommended_history_actions",
+}
+
+
+def test_audit_cli_structural_contract_and_privacy_flags():
+    completed = subprocess.run(
+        [sys.executable, "scripts/audit_data_pipeline_coverage.py"],
+        check=True,
+        capture_output=True,
+        cwd=".",
+        text=True,
+    )
+
+    result = json.loads(completed.stdout)
+    body = completed.stdout.lower()
+
+    assert set(result) == EXPECTED_AUDIT_TOP_LEVEL_KEYS
+    assert set(result["financial_stress_composite"]) == EXPECTED_D10_KEYS
+    assert set(result["pullback_systemic_risk_checklist"]) == EXPECTED_D11_KEYS
+    assert set(result["historical_risk_percentile"]) == EXPECTED_D13_KEYS
+    assert set(result["liquidity_funding_stress"]) == EXPECTED_D14_KEYS
+    assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
+    assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
+    assert result["ai_context_manifest"]["returns_credentials"] is False
+    assert result["ai_context_manifest"]["returns_holdings_line_items"] is False
+    assert result["ai_context_manifest"]["returns_provider_payloads"] is False
+    assert '"raw_provider"' not in body
+    assert '"raw_holdings"' not in body
+    assert "must_not_leak" not in body
+    assert "api_key" not in body
+
+
+def test_private_state_paths_are_not_tracked():
+    completed = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            ".env",
+            "data/holdings/current_holdings.csv",
+            "data/private",
+            "outputs/reports",
+            "outputs/analyst_memos",
+            "data/app_state",
+            "data/cache",
+            "data/market_history",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    tracked_paths = [
+        line for line in completed.stdout.splitlines() if line and not line.endswith("/.gitkeep")
+    ]
+
+    assert tracked_paths == []
 
 
 def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
