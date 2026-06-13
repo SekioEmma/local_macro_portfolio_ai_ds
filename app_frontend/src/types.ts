@@ -64,6 +64,9 @@ export type DashboardMetric = {
   component_contributions?: Record<string, unknown> | null;
   missing_inputs?: string[] | null;
   interpretation_boundary?: string | null;
+  lookback_window?: string | null;
+  observation_count?: number | null;
+  percentile_direction?: string | null;
 };
 
 export type DashboardSummaryResponse = {
@@ -106,6 +109,9 @@ export type DashboardEvidenceRow = {
   component_contributions?: Record<string, unknown> | null;
   missing_inputs?: string[] | null;
   interpretation_boundary?: string | null;
+  lookback_window?: string | null;
+  observation_count?: number | null;
+  percentile_direction?: string | null;
 };
 
 export type DashboardEvidenceFilters = {

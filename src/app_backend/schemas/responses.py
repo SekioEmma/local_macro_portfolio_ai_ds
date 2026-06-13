@@ -54,6 +54,9 @@ class DashboardMetric(BaseModel):
     component_contributions: dict[str, Any] | None = None
     missing_inputs: list[str] | None = None
     interpretation_boundary: str | None = None
+    lookback_window: str | None = None
+    observation_count: int | None = None
+    percentile_direction: str | None = None
 
 
 class DashboardModule(BaseModel):
@@ -102,6 +105,9 @@ class DashboardEvidenceRow(BaseModel):
     component_contributions: dict[str, Any] | None = None
     missing_inputs: list[str] | None = None
     interpretation_boundary: str | None = None
+    lookback_window: str | None = None
+    observation_count: int | None = None
+    percentile_direction: str | None = None
 
 
 class DashboardEvidenceTableResponse(BaseModel):

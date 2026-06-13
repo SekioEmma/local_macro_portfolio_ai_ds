@@ -21,6 +21,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "labor_macro",
     "financial_stress_composite",
     "pullback_systemic_risk_checklist",
+    "historical_risk_percentile",
 }
 
 
@@ -71,6 +72,15 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     }
     assert "valuation" in pullback["missing_inputs"]
     assert "This checklist is not crash probability." in pullback["interpretation_boundary"]
+    percentile = _row(
+        data,
+        "historical_risk_percentile",
+        "high_yield_spread_percentile",
+    )
+    assert percentile["status"] in {"missing", "insufficient_history"}
+    assert percentile["ai_context_allowed"] is False
+    assert percentile["lookback_window"] == "all_available"
+    assert percentile["percentile_direction"] == "higher_is_more_stress"
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):

@@ -61,7 +61,9 @@ Object.assign(interpretationBoundaries, {
   financial_stress_composite:
     "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Proxy inputs are not official breadth or funding stress.",
   pullback_systemic_risk_checklist:
-    "This checklist is not crash probability. It does not predict market bottom or top. It does not produce buy/sell/hedge instructions. Equity drawdown alone and VIX alone are not systemic risk. Proxy breadth is not true market breadth."
+    "This checklist is not crash probability. It does not predict market bottom or top. It does not produce buy/sell/hedge instructions. Equity drawdown alone and VIX alone are not systemic risk. Proxy breadth is not true market breadth.",
+  historical_risk_percentile:
+    "Historical percentile is relative to available local history, not a forecast. Z-score is a normalization statistic, not crash probability. Short history can make percentile unstable. Different frequencies must not be mixed."
 });
 
 export function ModuleDetailDrawer({

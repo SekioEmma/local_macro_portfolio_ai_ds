@@ -17,6 +17,7 @@ from app_backend.schemas.responses import (
 from app_backend.services import provider_service
 from data_quality import financial_stress_composite
 from data_quality import historical_derived_metrics
+from data_quality import historical_percentile_metrics
 from data_quality import last_good_cache
 from data_quality import market_history_store
 from data_quality import official_macro_pack
@@ -140,6 +141,20 @@ DERIVED_METRIC_KEYS = {
     "pullback_missing_critical_inputs",
     "pullback_supporting_evidence",
     "pullback_interpretation_boundary",
+    "high_yield_spread_percentile",
+    "high_yield_spread_zscore",
+    "investment_grade_spread_percentile",
+    "investment_grade_spread_zscore",
+    "vix_percentile",
+    "vix_zscore",
+    "dgs30_percentile",
+    "dgs30_zscore",
+    "dfii10_percentile",
+    "dfii10_zscore",
+    "sp500_drawdown_3m_percentile",
+    "nasdaq100_drawdown_3m_percentile",
+    "initial_claims_4w_avg_percentile",
+    "continuing_claims_4w_avg_percentile",
 }
 EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
     "sp500_30d_return",
@@ -486,7 +501,10 @@ def build_dashboard_evidence_table(
     pullback_rows = _pullback_systemic_checklist_evidence_rows(
         base_rows + financial_stress_rows
     )
-    all_rows = base_rows + financial_stress_rows + pullback_rows
+    percentile_rows = _historical_risk_percentile_evidence_rows(
+        db_path=dashboard_market_history_db_path
+    )
+    all_rows = base_rows + financial_stress_rows + pullback_rows + percentile_rows
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
     filtered_rows = [
@@ -629,6 +647,19 @@ def _pullback_systemic_checklist_evidence_rows(
     ]
 
 
+def _historical_risk_percentile_evidence_rows(
+    *,
+    db_path: Path | str | None = None,
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = historical_percentile_metrics.build_historical_percentile_rows(
+        db_path=str(db_path) if db_path is not None else None
+    )
+    return [
+        _evidence_row("historical_risk_percentile", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
     ai_context_allowed = _evidence_ai_context_allowed(metric)
     blocked_reason = _ppi_observation_date_blocked_reason(metric)
@@ -668,6 +699,9 @@ def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidence
         component_contributions=metric.component_contributions,
         missing_inputs=metric.missing_inputs,
         interpretation_boundary=metric.interpretation_boundary,
+        lookback_window=metric.lookback_window,
+        observation_count=metric.observation_count,
+        percentile_direction=metric.percentile_direction,
     )
 
 

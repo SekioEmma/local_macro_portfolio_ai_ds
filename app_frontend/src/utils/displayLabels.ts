@@ -77,7 +77,8 @@ const metricLabels: Record<string, string> = {
 
 Object.assign(moduleLabels, {
   financial_stress_composite: "Financial stress composite",
-  pullback_systemic_risk_checklist: "Pullback/systemic risk checklist"
+  pullback_systemic_risk_checklist: "Pullback/systemic risk checklist",
+  historical_risk_percentile: "Historical risk percentile"
 });
 
 Object.assign(statusLabels, {
@@ -98,7 +99,22 @@ Object.assign(metricLabels, {
   pullback_checklist_items: "Pullback checklist items",
   pullback_missing_critical_inputs: "Pullback missing critical inputs",
   pullback_supporting_evidence: "Pullback supporting evidence",
-  pullback_interpretation_boundary: "Pullback interpretation boundary"
+  pullback_interpretation_boundary: "Pullback interpretation boundary",
+  high_yield_spread_percentile: "High-yield spread percentile",
+  high_yield_spread_zscore: "High-yield spread z-score",
+  investment_grade_spread_percentile: "Investment-grade spread percentile",
+  investment_grade_spread_zscore: "Investment-grade spread z-score",
+  vix_percentile: "VIX percentile",
+  vix_zscore: "VIX z-score",
+  dgs30_percentile: "30Y Treasury yield percentile",
+  dgs30_zscore: "30Y Treasury yield z-score",
+  dfii10_percentile: "10Y real yield percentile",
+  dfii10_zscore: "10Y real yield z-score",
+  sp500_drawdown_3m_percentile: "S&P 500 3M drawdown percentile",
+  nasdaq100_drawdown_3m_percentile: "Nasdaq 100 3M drawdown percentile",
+  initial_claims_4w_avg_percentile: "Initial claims 4W average percentile",
+  continuing_claims_4w_avg_percentile:
+    "Continuing claims 4W average percentile"
 });
 
 export function getModuleLabel(moduleKey: string) {

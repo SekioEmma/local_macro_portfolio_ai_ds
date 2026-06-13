@@ -114,6 +114,22 @@ PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS = {
     "pullback_supporting_evidence",
     "pullback_interpretation_boundary",
 }
+HISTORICAL_RISK_PERCENTILE_METRIC_KEYS = {
+    "high_yield_spread_percentile",
+    "high_yield_spread_zscore",
+    "investment_grade_spread_percentile",
+    "investment_grade_spread_zscore",
+    "vix_percentile",
+    "vix_zscore",
+    "dgs30_percentile",
+    "dgs30_zscore",
+    "dfii10_percentile",
+    "dfii10_zscore",
+    "sp500_drawdown_3m_percentile",
+    "nasdaq100_drawdown_3m_percentile",
+    "initial_claims_4w_avg_percentile",
+    "continuing_claims_4w_avg_percentile",
+}
 
 
 def build_coverage_audit(
@@ -160,6 +176,7 @@ def build_coverage_audit(
     market_stress_derived = _market_stress_derived_audit(rows)
     financial_stress_composite = _financial_stress_composite_audit(rows)
     pullback_systemic_risk_checklist = _pullback_systemic_checklist_audit(rows)
+    historical_risk_percentile = _historical_risk_percentile_audit(rows)
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
@@ -193,6 +210,7 @@ def build_coverage_audit(
         "market_stress_derived": market_stress_derived,
         "financial_stress_composite": financial_stress_composite,
         "pullback_systemic_risk_checklist": pullback_systemic_risk_checklist,
+        "historical_risk_percentile": historical_risk_percentile,
         "valuation_research": valuation_research,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
@@ -1022,6 +1040,34 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
         ),
         "returns_credentials": manifest.privacy_policy.get("returns_credentials"),
         "risk_boundary_count": len(manifest.risk_boundaries),
+    }
+
+
+def _historical_risk_percentile_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    percentile_rows = [
+        row for row in rows if row.metric_key in HISTORICAL_RISK_PERCENTILE_METRIC_KEYS
+    ]
+    ok_rows = [row for row in percentile_rows if row.status in {"ok", "watch", "pressure", "stress"} and _has_value(row)]
+    insufficient_rows = [
+        row for row in percentile_rows if row.status == "insufficient_history"
+    ]
+    return {
+        "historical_risk_percentile_available": bool(ok_rows),
+        "historical_risk_percentile_metric_count": len(percentile_rows),
+        "historical_risk_percentile_computed_count": len(ok_rows),
+        "historical_risk_percentile_insufficient_history_count": len(insufficient_rows),
+        "historical_risk_percentile_ai_context_allowed_count": sum(
+            1 for row in percentile_rows if row.ai_context_allowed
+        ),
+        "historical_risk_percentile_metric_keys": sorted(
+            row.metric_key for row in percentile_rows
+        ),
+        "historical_risk_percentile_insufficient_history_metric_keys": sorted(
+            row.metric_key for row in insufficient_rows
+        ),
+        "historical_risk_percentile_source_badges": sorted(
+            {row.source_badge for row in percentile_rows}
+        ),
     }
 
 
