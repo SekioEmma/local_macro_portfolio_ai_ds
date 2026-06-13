@@ -52,6 +52,9 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "financial_stress_composite" in result
     assert "financial_stress_score_status" in result["financial_stress_composite"]
     assert result["financial_stress_composite"]["financial_stress_source_badge"] == "derived"
+    assert "pullback_systemic_risk_checklist" in result
+    assert "pullback_classification" in result["pullback_systemic_risk_checklist"]
+    assert result["pullback_systemic_risk_checklist"]["pullback_source_badge"] == "derived"
     assert result["module_coverage"]
     assert "recommendations" in result
 

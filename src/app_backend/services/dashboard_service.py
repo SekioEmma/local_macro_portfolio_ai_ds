@@ -20,6 +20,7 @@ from data_quality import historical_derived_metrics
 from data_quality import last_good_cache
 from data_quality import market_history_store
 from data_quality import official_macro_pack
+from data_quality import pullback_systemic_checklist
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -134,6 +135,11 @@ DERIVED_METRIC_KEYS = {
     "financial_stress_component_contributions",
     "financial_stress_missing_inputs",
     "financial_stress_interpretation_boundary",
+    "pullback_classification",
+    "pullback_checklist_items",
+    "pullback_missing_critical_inputs",
+    "pullback_supporting_evidence",
+    "pullback_interpretation_boundary",
 }
 EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
     "sp500_30d_return",
@@ -476,7 +482,11 @@ def build_dashboard_evidence_table(
         reports,
         db_path=dashboard_market_history_db_path,
     )
-    all_rows = base_rows + _financial_stress_composite_evidence_rows(base_rows)
+    financial_stress_rows = _financial_stress_composite_evidence_rows(base_rows)
+    pullback_rows = _pullback_systemic_checklist_evidence_rows(
+        base_rows + financial_stress_rows
+    )
+    all_rows = base_rows + financial_stress_rows + pullback_rows
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
     filtered_rows = [
@@ -603,6 +613,18 @@ def _financial_stress_composite_evidence_rows(
     )
     return [
         _evidence_row("financial_stress_composite", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
+def _pullback_systemic_checklist_evidence_rows(
+    rows: list[DashboardEvidenceRow],
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = pullback_systemic_checklist.build_pullback_checklist_rows(
+        [_model_to_dict(row) for row in rows]
+    )
+    return [
+        _evidence_row("pullback_systemic_risk_checklist", DashboardMetric(**payload))
         for payload in metric_payloads
     ]
 

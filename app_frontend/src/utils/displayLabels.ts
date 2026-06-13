@@ -76,7 +76,8 @@ const metricLabels: Record<string, string> = {
 };
 
 Object.assign(moduleLabels, {
-  financial_stress_composite: "Financial stress composite"
+  financial_stress_composite: "Financial stress composite",
+  pullback_systemic_risk_checklist: "Pullback/systemic risk checklist"
 });
 
 Object.assign(statusLabels, {
@@ -92,7 +93,12 @@ Object.assign(metricLabels, {
     "Financial stress component contributions",
   financial_stress_missing_inputs: "Financial stress missing inputs",
   financial_stress_interpretation_boundary:
-    "Financial stress interpretation boundary"
+    "Financial stress interpretation boundary",
+  pullback_classification: "Pullback classification",
+  pullback_checklist_items: "Pullback checklist items",
+  pullback_missing_critical_inputs: "Pullback missing critical inputs",
+  pullback_supporting_evidence: "Pullback supporting evidence",
+  pullback_interpretation_boundary: "Pullback interpretation boundary"
 });
 
 export function getModuleLabel(moduleKey: string) {

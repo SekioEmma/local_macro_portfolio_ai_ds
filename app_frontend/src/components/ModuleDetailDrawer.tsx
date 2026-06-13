@@ -59,7 +59,9 @@ Object.assign(interpretationBoundaries, {
   labor_macro:
     "Sahm rule proxy is a recession-warning proxy, not official recession confirmation. One-month unemployment increases do not confirm recession. Claims increases are labor-pressure observations, not crisis confirmation. Payrolls are revised; do not overstate certainty.",
   financial_stress_composite:
-    "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Proxy inputs are not official breadth or funding stress."
+    "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Proxy inputs are not official breadth or funding stress.",
+  pullback_systemic_risk_checklist:
+    "This checklist is not crash probability. It does not predict market bottom or top. It does not produce buy/sell/hedge instructions. Equity drawdown alone and VIX alone are not systemic risk. Proxy breadth is not true market breadth."
 });
 
 export function ModuleDetailDrawer({

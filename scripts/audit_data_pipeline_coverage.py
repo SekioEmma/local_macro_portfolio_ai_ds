@@ -106,6 +106,13 @@ FINANCIAL_STRESS_COMPOSITE_METRIC_KEYS = {
     "financial_stress_missing_inputs",
     "financial_stress_interpretation_boundary",
 }
+PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS = {
+    "pullback_classification",
+    "pullback_checklist_items",
+    "pullback_missing_critical_inputs",
+    "pullback_supporting_evidence",
+    "pullback_interpretation_boundary",
+}
 
 
 def build_coverage_audit(
@@ -151,6 +158,7 @@ def build_coverage_audit(
     proxy_breadth = _proxy_breadth_audit(rows)
     market_stress_derived = _market_stress_derived_audit(rows)
     financial_stress_composite = _financial_stress_composite_audit(rows)
+    pullback_systemic_risk_checklist = _pullback_systemic_checklist_audit(rows)
     dashboard_derived_integration = _dashboard_derived_integration_audit(rows)
     official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
@@ -182,6 +190,7 @@ def build_coverage_audit(
         "proxy_breadth": proxy_breadth,
         "market_stress_derived": market_stress_derived,
         "financial_stress_composite": financial_stress_composite,
+        "pullback_systemic_risk_checklist": pullback_systemic_risk_checklist,
         "valuation_research": valuation_research,
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
@@ -937,6 +946,49 @@ def _financial_stress_composite_audit(rows: list[DashboardEvidenceRow]) -> dict[
         "financial_stress_source_badge": score.source_badge if score is not None else "missing",
         "financial_stress_has_interpretation_boundary": bool(
             score is not None and getattr(score, "interpretation_boundary", None)
+        ),
+    }
+
+
+def _pullback_systemic_checklist_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    checklist_rows = [
+        row for row in rows if row.metric_key in PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS
+    ]
+    row_by_key = {row.metric_key: row for row in checklist_rows}
+    classification = row_by_key.get("pullback_classification")
+    missing = row_by_key.get("pullback_missing_critical_inputs")
+    items = row_by_key.get("pullback_checklist_items")
+    contributions = (
+        getattr(items, "component_contributions", None) if items is not None else None
+    )
+    checklist_items = (
+        contributions.get("checklist_items", [])
+        if isinstance(contributions, dict)
+        else []
+    )
+    return {
+        "pullback_systemic_risk_checklist_available": bool(
+            classification and _has_value(classification)
+        ),
+        "pullback_metric_count": len(checklist_rows),
+        "pullback_classification": (
+            classification.value if classification is not None else "missing"
+        ),
+        "pullback_classification_status": (
+            classification.status if classification is not None else "missing"
+        ),
+        "pullback_missing_critical_inputs": (
+            missing.value if missing is not None else None
+        ),
+        "pullback_checklist_item_count": len(checklist_items),
+        "pullback_ai_context_allowed": bool(
+            classification is not None and classification.ai_context_allowed
+        ),
+        "pullback_source_badge": (
+            classification.source_badge if classification is not None else "missing"
+        ),
+        "pullback_has_interpretation_boundary": bool(
+            classification is not None and getattr(classification, "interpretation_boundary", None)
         ),
     }
 

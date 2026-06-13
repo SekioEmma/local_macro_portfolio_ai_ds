@@ -17,7 +17,11 @@ MODULE_KEYS = {
     "market_stress_derived",
     "portfolio_deviation",
 }
-EVIDENCE_MODULE_KEYS = MODULE_KEYS | {"labor_macro", "financial_stress_composite"}
+EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
+    "labor_macro",
+    "financial_stress_composite",
+    "pullback_systemic_risk_checklist",
+}
 
 
 def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
@@ -51,6 +55,22 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     assert "Financial stress score is a transparent pressure temperature" in stress_score[
         "interpretation_boundary"
     ]
+    pullback = _row(
+        data,
+        "pullback_systemic_risk_checklist",
+        "pullback_classification",
+    )
+    assert pullback["source_badge"] == "derived"
+    assert pullback["value"] in {
+        "ordinary_pullback",
+        "valuation_drawdown",
+        "macro_pressure",
+        "credit_warning",
+        "systemic_risk_review",
+        "insufficient_evidence",
+    }
+    assert "valuation" in pullback["missing_inputs"]
+    assert "This checklist is not crash probability." in pullback["interpretation_boundary"]
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):
