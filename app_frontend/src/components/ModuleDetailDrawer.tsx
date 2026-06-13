@@ -59,9 +59,9 @@ Object.assign(interpretationBoundaries, {
   labor_macro:
     "Sahm rule proxy is a recession-warning proxy, not official recession confirmation. One-month unemployment increases do not confirm recession. Claims increases are labor-pressure observations, not crisis confirmation. Payrolls are revised; do not overstate certainty.",
   financial_stress_composite:
-    "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Proxy inputs are not official breadth or funding stress.",
+    "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Liquidity/funding evidence is confirmation context only. Official stress indices do not replace the project financial stress composite.",
   pullback_systemic_risk_checklist:
-    "This checklist is not crash probability. It does not predict market bottom or top. It does not produce buy/sell/hedge instructions. Equity drawdown alone and VIX alone are not systemic risk. Proxy breadth is not true market breadth.",
+    "This checklist is not crash probability. It does not predict market bottom or top. It does not produce buy/sell/hedge instructions. D14 cannot alone trigger systemic risk review. Liquidity/funding confirmation can upgrade review only when credit and transmission evidence also confirm. Missing valuation, earnings, and true breadth continue to limit crisis confirmation.",
   historical_risk_percentile:
     "Historical percentile is relative to available local history, not a forecast. Z-score is a normalization statistic, not crash probability. Short history can make percentile unstable. Different frequencies must not be mixed.",
   liquidity_funding_stress:

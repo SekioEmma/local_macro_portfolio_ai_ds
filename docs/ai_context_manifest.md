@@ -26,6 +26,9 @@ Every row keeps its `source_badge`. Proxy and derived evidence is never promoted
 to official evidence.
 D10/D11 model outputs that include percentile context keep the nested D13
 source badge, status, lookback window, band, trigger eligibility, and boundary.
+D10/D11 model outputs that include D14 liquidity/funding context keep nested
+source badge, source series, observation date, status, sanitized input evidence,
+and boundary.
 
 ## Excluded Context
 

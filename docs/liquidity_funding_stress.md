@@ -103,16 +103,18 @@ D10 is the project's transparent composite. D14 external/reference indices are
 comparison evidence for funding and official financial-conditions backdrop.
 They do not become a shadow PCA/HMM/FSI model and do not override D10.
 
-## Why D14 Does Not Yet Change D11
+## D14b Integration
 
-D14 creates the reference data layer only. D11 still keeps liquidity/funding as
-a critical missing input in this task. D14b can later decide how to integrate
-eligible D14 rows into the pullback/systemic checklist.
+D14b consumes eligible D14 rows as a confirmation layer in D10 and D11.
 
-## D14b Plan
+- D10 records `funding_liquidity` inside component contributions and exposes
+  `financial_stress_funding_liquidity_context`.
+- D11 records `pullback_liquidity_funding_context` and checklist item
+  `liquidity_funding_confirmation`.
+- If D14 is usable, D11 no longer treats liquidity as a fully missing critical
+  input. If D14 is insufficient, liquidity remains missing.
 
-D14b can consume the audited D14 rows as auxiliary confirmation evidence for
-ordinary pullback, credit warning, and systemic risk review separation. That
-integration should preserve the same boundaries: no trading instructions, no
-probability claims, no D10 replacement, and no single liquidity/funding metric
-as sufficient systemic-crisis proof.
+The integration preserves the same boundaries: no trading instructions, no
+probability claims, no D10 replacement, and no single liquidity/funding metric as
+sufficient systemic-crisis proof. Systemic review requires credit deterioration,
+funding/liquidity pressure confirmation, and transmission evidence.

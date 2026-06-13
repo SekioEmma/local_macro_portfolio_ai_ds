@@ -110,6 +110,7 @@ FINANCIAL_STRESS_COMPOSITE_METRIC_KEYS = {
     "financial_stress_missing_inputs",
     "financial_stress_interpretation_boundary",
     "financial_stress_percentile_context",
+    "financial_stress_funding_liquidity_context",
 }
 PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS = {
     "pullback_classification",
@@ -118,6 +119,7 @@ PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS = {
     "pullback_supporting_evidence",
     "pullback_interpretation_boundary",
     "pullback_percentile_context",
+    "pullback_liquidity_funding_context",
 }
 HISTORICAL_RISK_PERCENTILE_METRIC_KEYS = {
     "high_yield_spread_percentile",
@@ -1008,6 +1010,11 @@ def _financial_stress_composite_audit(rows: list[DashboardEvidenceRow]) -> dict[
         if isinstance(contributions, dict)
         else {}
     )
+    funding_liquidity = (
+        contributions.get("funding_liquidity", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
     by_group = (
         percentile_context.get("by_group", {})
         if isinstance(percentile_context, dict)
@@ -1049,6 +1056,33 @@ def _financial_stress_composite_audit(rows: list[DashboardEvidenceRow]) -> dict[
             if isinstance(percentile_context, dict)
             else []
         ),
+        "funding_liquidity_context_available": bool(
+            isinstance(funding_liquidity, dict)
+            and funding_liquidity.get("available_count", 0) > 0
+        ),
+        "funding_liquidity_context_metric_count": (
+            funding_liquidity.get("available_count", 0)
+            if isinstance(funding_liquidity, dict)
+            else 0
+        ),
+        "funding_liquidity_component_status": (
+            funding_liquidity.get("component_status")
+            if isinstance(funding_liquidity, dict)
+            else "missing"
+        ),
+        "funding_liquidity_contribution": (
+            funding_liquidity.get("contribution", 0)
+            if isinstance(funding_liquidity, dict)
+            else 0
+        ),
+        "d14_used_as_confirmation_only": bool(
+            isinstance(funding_liquidity, dict)
+            and funding_liquidity.get("d14_used_as_confirmation_only")
+        ),
+        "official_reference_not_replacing_d10": bool(
+            isinstance(funding_liquidity, dict)
+            and funding_liquidity.get("official_reference_not_replacing_d10")
+        ),
     }
 
 
@@ -1070,6 +1104,11 @@ def _pullback_systemic_checklist_audit(rows: list[DashboardEvidenceRow]) -> dict
     )
     percentile_context = (
         contributions.get("pullback_percentile_context", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    liquidity_context = (
+        contributions.get("pullback_liquidity_funding_context", {})
         if isinstance(contributions, dict)
         else {}
     )
@@ -1119,6 +1158,33 @@ def _pullback_systemic_checklist_audit(rows: list[DashboardEvidenceRow]) -> dict
             and percentile_context.get("liquidity_still_missing_until_d14")
             and missing is not None
             and "liquidity" in str(missing.value)
+        ),
+        "pullback_liquidity_funding_context_available": bool(
+            isinstance(liquidity_context, dict)
+            and liquidity_context.get("available_count", 0) > 0
+        ),
+        "pullback_liquidity_funding_metric_count": (
+            liquidity_context.get("available_count", 0)
+            if isinstance(liquidity_context, dict)
+            else 0
+        ),
+        "liquidity_missing_critical_input_removed_when_available": bool(
+            isinstance(liquidity_context, dict)
+            and liquidity_context.get("liquidity_available")
+            and missing is not None
+            and "liquidity" not in str(missing.value)
+        ),
+        "liquidity_still_missing_when_d14_insufficient": bool(
+            isinstance(liquidity_context, dict)
+            and liquidity_context.get("liquidity_still_missing_when_d14_insufficient")
+        ),
+        "systemic_requires_credit_and_funding_and_transmission": bool(
+            isinstance(liquidity_context, dict)
+            and liquidity_context.get("systemic_requires_credit_and_funding_and_transmission")
+        ),
+        "d14_alone_not_systemic_trigger": bool(
+            isinstance(liquidity_context, dict)
+            and liquidity_context.get("d14_alone_not_systemic_trigger")
         ),
     }
 
@@ -1176,6 +1242,26 @@ def _liquidity_funding_stress_audit(rows: list[DashboardEvidenceRow]) -> dict[st
         ),
         "liquidity_funding_status": status.value if status is not None else "missing",
         "liquidity_funding_boundary_available": bool(boundary and boundary.value),
+        "d14_integration_ready": bool(
+            status
+            and _has_value(status)
+            and status.status in {"ok", "watch", "pressure", "stress"}
+        ),
+        "d14_eligible_fact_count": sum(1 for row in lf_rows if row.ai_context_allowed),
+        "d14_status_rows_available": all(
+            _row_has_ok_value(by_key.get(key))
+            for key in (
+                "liquidity_funding_stress_status",
+                "short_term_funding_pressure_status",
+                "official_stress_reference_status",
+                "policy_plumbing_status",
+            )
+        ),
+        "d14_reference_indices_available": all(
+            _row_has_ok_value(by_key.get(key)) for key in ("stl_fsi", "nfci", "anfci")
+        ),
+        "d14_cp_spread_available": _row_has_ok_value(by_key.get("cp_effr_spread"))
+        or _row_has_ok_value(by_key.get("cp_sofr_spread")),
     }
 
 
@@ -1241,6 +1327,17 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
             if row.get("module")
             in {"financial_stress_composite", "pullback_systemic_risk_checklist"}
             and "percentile_context" in json.dumps(row.get("component_contributions", {}))
+        ),
+        "included_d10_d11_model_outputs_with_liquidity_context": sum(
+            1
+            for row in manifest.included_model_outputs
+            if row.get("module")
+            in {"financial_stress_composite", "pullback_systemic_risk_checklist"}
+            and (
+                "funding_liquidity" in json.dumps(row.get("component_contributions", {}))
+                or "pullback_liquidity_funding_context"
+                in json.dumps(row.get("component_contributions", {}))
+            )
         ),
         "excluded_d13_insufficient_history_count": sum(
             1

@@ -121,6 +121,104 @@ def test_percentile_context_is_auxiliary_and_preserved():
     assert "not forecast probability" in context["normalization_boundary"]
 
 
+def test_funding_liquidity_context_is_read_from_d14_rows():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d14("liquidity_funding_stress_status", "ok"),
+        _d14("short_term_funding_pressure_status", "ok"),
+        _d14("official_stress_reference_status", "ok"),
+    ]
+
+    result = _by_key(composite.build_financial_stress_rows(rows))
+    context = result["financial_stress_score"]["component_contributions"][
+        "funding_liquidity"
+    ]
+
+    assert result["financial_stress_funding_liquidity_context"]["status"] == "ok"
+    assert context["available_count"] == 3
+    assert context["status"] == "ok"
+    assert context["d14_used_as_confirmation_only"] is True
+    assert result["financial_stress_status"]["value"] == "ok"
+
+
+def test_d14_unavailable_keeps_original_behavior():
+    base_rows = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+    ]
+    with_unavailable = base_rows + [
+        _d14("liquidity_funding_stress_status", "missing", status="insufficient_evidence"),
+    ]
+
+    base = _by_key(composite.build_financial_stress_rows(base_rows))
+    result = _by_key(composite.build_financial_stress_rows(with_unavailable))
+
+    assert result["financial_stress_status"]["value"] == base["financial_stress_status"]["value"]
+    assert result["financial_stress_score"]["value"] == base["financial_stress_score"]["value"]
+    assert result["financial_stress_funding_liquidity_context"]["status"] == "insufficient_evidence"
+
+
+def test_d14_only_and_on_rrp_only_cannot_trigger_stress():
+    d14_only = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d14("liquidity_funding_stress_status", "stress"),
+        _d14("short_term_funding_pressure_status", "stress"),
+        _d14("official_stress_reference_status", "stress"),
+    ]
+    on_rrp_only = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d14("on_rrp", 2500.0, badge="official"),
+    ]
+
+    assert _by_key(composite.build_financial_stress_rows(d14_only))[
+        "financial_stress_status"
+    ]["value"] != "stress"
+    assert _by_key(composite.build_financial_stress_rows(on_rrp_only))[
+        "financial_stress_status"
+    ]["value"] != "pressure"
+
+
+def test_official_reference_only_does_not_replace_d10_score():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d14("official_stress_reference_status", "stress"),
+        _d14("stl_fsi", 2.5, badge="official_fallback"),
+        _d14("nfci", 1.2, badge="official_fallback"),
+    ]
+
+    result = _by_key(composite.build_financial_stress_rows(rows))
+    context = result["financial_stress_score"]["component_contributions"]["funding_liquidity"]
+
+    assert context["official_reference_not_replacing_d10"] is True
+    assert result["financial_stress_status"]["value"] == "ok"
+    assert result["financial_stress_score"]["value"] < 25
+
+
+def test_cp_spread_and_reference_index_are_funding_confirmation_context():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 5.2),
+        _row("credit_stress", "investment_grade_spread", 1.7),
+        _d14("liquidity_funding_stress_status", "pressure"),
+        _d14("short_term_funding_pressure_status", "pressure"),
+        _d14("official_stress_reference_status", "pressure"),
+        _d14("cp_effr_spread", 1.3),
+        _d14("stl_fsi", 1.1, badge="official_fallback"),
+    ]
+
+    result = _by_key(composite.build_financial_stress_rows(rows))
+    context = result["financial_stress_score"]["component_contributions"][
+        "funding_liquidity"
+    ]
+
+    assert context["cp_reference_confirmation"] is True
+    assert context["component_status"] == "pressure"
+    assert result["financial_stress_funding_liquidity_context"]["status"] == "pressure"
+
+
 def test_extreme_vix_percentile_alone_does_not_trigger_stress():
     rows = [
         _row("credit_stress", "high_yield_spread", 2.5),
@@ -232,6 +330,31 @@ def _d13(metric_key, percentile_band, *, status="ok", robust_band=None):
         "ai_context_tier": "factual_band" if status == "ok" else "excluded",
         "trigger_eligibility": "hard_trigger_allowed" if status == "ok" else "not_eligible",
         "interpretation_boundary": "Historical percentile is relative to available local history, not a forecast.",
+    }
+
+
+def _d14(metric_key, value, *, status="ok", badge="derived"):
+    return {
+        "module": "liquidity_funding_stress",
+        "metric_key": metric_key,
+        "display_name": metric_key,
+        "value": value if status == "ok" else None,
+        "value_text": str(value) if status == "ok" else status,
+        "unit": None,
+        "status": status,
+        "source": "market_history" if badge == "derived" else "FRED",
+        "source_badge": badge,
+        "source_series": metric_key.upper(),
+        "observation_date": "2026-06-01",
+        "generated_at": "2026-06-01T00:00:00+00:00",
+        "freshness_status": "historical" if status == "ok" else status,
+        "missing_reason": None if status == "ok" else "status_inputs_missing",
+        "interpretation_hint": "D14 funding confirmation context",
+        "blocked_reason": None if status == "ok" else f"status_{status}",
+        "ai_context_allowed": status == "ok",
+        "input_evidence": [],
+        "missing_inputs": [] if status == "ok" else [metric_key],
+        "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not trading signals.",
     }
 
 

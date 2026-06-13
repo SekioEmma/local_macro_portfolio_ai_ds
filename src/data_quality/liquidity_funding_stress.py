@@ -46,6 +46,35 @@ BOUNDARY = (
     "instruction is produced."
 )
 NO_TRADING_HINT = " Reference evidence only; no trading instruction, crash probability, or recession probability."
+CONTEXT_FIELDS = (
+    "metric_key",
+    "display_name",
+    "value",
+    "value_text",
+    "status",
+    "source",
+    "source_badge",
+    "source_series",
+    "observation_date",
+    "generated_at",
+    "freshness_status",
+    "input_evidence",
+    "missing_inputs",
+    "interpretation_hint",
+    "interpretation_boundary",
+    "ai_context_allowed",
+    "missing_reason",
+    "blocked_reason",
+)
+BAD_CONTEXT_STATUSES = {
+    "missing",
+    "research_needed",
+    "insufficient_evidence",
+    "insufficient_history",
+    "stale",
+    "not_available",
+}
+BAD_CONTEXT_FRESHNESS = {"missing", "unknown", "stale", "insufficient_history", "insufficient_evidence"}
 
 
 def load_liquidity_funding_config(
@@ -87,6 +116,69 @@ def build_liquidity_funding_rows(
     by_key.update({row["metric_key"]: row for row in status_rows})
     status_rows.append(_liquidity_funding_status(by_key))
     return raw_rows + spread_rows + status_rows + [_boundary_row()]
+
+
+class EvidenceIndex:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = {str(row.get("metric_key")): row for row in rows}
+
+    def by_metric_key(self, metric_key: str) -> dict[str, Any] | None:
+        return self._rows.get(metric_key)
+
+    def d14_context(self, metric_key: str) -> dict[str, Any] | None:
+        row = self.by_metric_key(metric_key)
+        if row is None:
+            return None
+        if row.get("module") != MODULE_KEY:
+            return None
+        return sanitized_d14_context(row)
+
+    def available_d14_context(self, keys: tuple[str, ...] | list[str]) -> list[dict[str, Any]]:
+        return [
+            context
+            for key in keys
+            for context in [self.d14_context(key)]
+            if context is not None and hard_confirmation_context(context)
+        ]
+
+    def missing_d14_context(self, keys: tuple[str, ...] | list[str]) -> list[dict[str, Any]]:
+        missing: list[dict[str, Any]] = []
+        for key in keys:
+            context = self.d14_context(key)
+            if context is None:
+                missing.append(
+                    {
+                        "metric_key": key,
+                        "status": "missing",
+                        "source_badge": "missing",
+                        "missing_reason": "d14_context_row_missing",
+                    }
+                )
+            elif not hard_confirmation_context(context):
+                missing.append(context)
+        return missing
+
+
+def build_evidence_index(rows: list[dict[str, Any]]) -> EvidenceIndex:
+    return EvidenceIndex(rows)
+
+
+def sanitized_d14_context(row: dict[str, Any]) -> dict[str, Any]:
+    return {field: row.get(field) for field in CONTEXT_FIELDS if field in row}
+
+
+def hard_confirmation_context(context: dict[str, Any]) -> bool:
+    if context.get("status") in BAD_CONTEXT_STATUSES:
+        return False
+    if context.get("freshness_status") in BAD_CONTEXT_FRESHNESS:
+        return False
+    if context.get("source_badge") in {"missing", "research_needed", "search-derived"}:
+        return False
+    if context.get("ai_context_allowed") is False:
+        return False
+    if context.get("value") in (None, ""):
+        return False
+    return True
 
 
 def planned_source_mappings(

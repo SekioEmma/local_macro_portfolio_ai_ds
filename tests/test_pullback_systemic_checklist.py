@@ -69,6 +69,11 @@ def test_financial_stress_credit_and_labor_pressure_can_trigger_systemic_review(
         _row("credit_stress", "vix", 38.0, source="CBOE"),
         _row("market_stress_derived", "sp500_drawdown_3m", -22.0, badge="derived"),
         _row("labor_macro", "labor_deterioration_status", "pressure", badge="derived"),
+        _d14("liquidity_funding_stress_status", "pressure"),
+        _d14("short_term_funding_pressure_status", "pressure"),
+        _d14("official_stress_reference_status", "pressure"),
+        _d14("cp_effr_spread", 1.2),
+        _d14("stl_fsi", 1.1, badge="official_fallback"),
     ]
 
     result = _by_key(checklist.build_pullback_checklist_rows(rows))
@@ -114,6 +119,27 @@ def test_missing_critical_inputs_are_always_reported():
     missing = result["pullback_missing_critical_inputs"]["missing_inputs"]
 
     assert {"valuation", "earnings", "true_breadth", "liquidity"} <= set(missing)
+
+
+def test_liquidity_missing_removed_when_d14_usable():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 2.8),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d14("liquidity_funding_stress_status", "ok"),
+        _d14("short_term_funding_pressure_status", "ok"),
+        _d14("official_stress_reference_status", "ok"),
+    ]
+
+    result = _by_key(checklist.build_pullback_checklist_rows(rows))
+    missing = result["pullback_missing_critical_inputs"]["missing_inputs"]
+    context = result["pullback_classification"]["component_contributions"][
+        "pullback_liquidity_funding_context"
+    ]
+
+    assert "liquidity" not in missing
+    assert {"valuation", "earnings", "true_breadth"} <= set(missing)
+    assert context["liquidity_available"] is True
+    assert result["pullback_liquidity_funding_context"]["status"] == "ok"
 
 
 def test_checklist_rows_preserve_input_evidence_and_source_badge():
@@ -171,7 +197,45 @@ def test_percentile_only_cannot_trigger_systemic_and_liquidity_gap_remains():
     assert result["pullback_classification"]["value"] != "systemic_risk_review"
     assert {"liquidity", "valuation", "earnings", "true_breadth"} <= set(missing)
     assert context["systemic_not_triggered_by_percentile_only"] is True
-    assert context["liquidity_still_missing_until_d14"] is True
+    assert context["liquidity_still_missing_until_d14"] is False
+
+
+def test_d14_only_cannot_trigger_systemic():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 2.8),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d14("liquidity_funding_stress_status", "stress"),
+        _d14("short_term_funding_pressure_status", "stress"),
+        _d14("official_stress_reference_status", "stress"),
+    ]
+
+    result = _by_key(checklist.build_pullback_checklist_rows(rows))
+
+    assert result["pullback_classification"]["value"] != "systemic_risk_review"
+
+
+def test_cp_only_and_official_reference_only_cannot_trigger_systemic():
+    cp_only = [
+        _row("financial_stress_composite", "financial_stress_status", "pressure", badge="derived"),
+        _row("credit_stress", "high_yield_spread", 6.8),
+        _row("credit_stress", "investment_grade_spread", 2.2),
+        _d14("short_term_funding_pressure_status", "pressure"),
+        _d14("cp_effr_spread", 1.5),
+    ]
+    reference_only = [
+        _row("financial_stress_composite", "financial_stress_status", "pressure", badge="derived"),
+        _row("credit_stress", "high_yield_spread", 6.8),
+        _row("credit_stress", "investment_grade_spread", 2.2),
+        _d14("official_stress_reference_status", "stress"),
+        _d14("stl_fsi", 2.5, badge="official_fallback"),
+    ]
+
+    assert _by_key(checklist.build_pullback_checklist_rows(cp_only))[
+        "pullback_classification"
+    ]["value"] != "systemic_risk_review"
+    assert _by_key(checklist.build_pullback_checklist_rows(reference_only))[
+        "pullback_classification"
+    ]["value"] != "systemic_risk_review"
 
 
 def test_boundary_does_not_contain_recession_probability_or_trading_advice_claim():
@@ -183,8 +247,8 @@ def test_boundary_does_not_contain_recession_probability_or_trading_advice_claim
     result = _by_key(checklist.build_pullback_checklist_rows(rows))
     boundary = result["pullback_interpretation_boundary"]["value"]
 
-    assert "recession probability" not in boundary.lower()
     assert "This checklist is not crash probability." in boundary
+    assert "D14 does not produce recession probability." in boundary
     assert "It does not produce buy/sell/hedge instructions." in boundary
 
 
@@ -252,6 +316,31 @@ def _d13(metric_key, percentile_band, *, status="ok"):
         "ai_context_tier": "factual_band" if status == "ok" else "excluded",
         "trigger_eligibility": "hard_trigger_allowed" if status == "ok" else "not_eligible",
         "interpretation_boundary": "Historical percentile is relative to available local history, not a forecast.",
+    }
+
+
+def _d14(metric_key, value, *, status="ok", badge="derived"):
+    return {
+        "module": "liquidity_funding_stress",
+        "metric_key": metric_key,
+        "display_name": metric_key,
+        "value": value if status == "ok" else None,
+        "value_text": str(value) if status == "ok" else status,
+        "unit": None,
+        "status": status,
+        "source": "market_history" if badge == "derived" else "FRED",
+        "source_badge": badge,
+        "source_series": metric_key.upper(),
+        "observation_date": "2026-06-01",
+        "generated_at": "2026-06-01T00:00:00+00:00",
+        "freshness_status": "historical" if status == "ok" else status,
+        "missing_reason": None if status == "ok" else "status_inputs_missing",
+        "interpretation_hint": "D14 funding confirmation context",
+        "blocked_reason": None if status == "ok" else f"status_{status}",
+        "ai_context_allowed": status == "ok",
+        "input_evidence": [],
+        "missing_inputs": [] if status == "ok" else [metric_key],
+        "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not trading signals.",
     }
 
 

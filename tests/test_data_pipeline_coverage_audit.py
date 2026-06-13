@@ -58,7 +58,13 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "pullback_classification" in result["pullback_systemic_risk_checklist"]
     assert result["pullback_systemic_risk_checklist"]["pullback_source_badge"] == "derived"
     assert "pullback_percentile_context_available" in result["pullback_systemic_risk_checklist"]
-    assert result["pullback_systemic_risk_checklist"]["liquidity_still_missing_until_d14"] is True
+    assert "pullback_liquidity_funding_context_available" in result["pullback_systemic_risk_checklist"]
+    assert "liquidity_missing_critical_input_removed_when_available" in result[
+        "pullback_systemic_risk_checklist"
+    ]
+    assert result["pullback_systemic_risk_checklist"][
+        "systemic_requires_credit_and_funding_and_transmission"
+    ] is True
     assert "historical_risk_percentile" in result
     assert result["historical_risk_percentile"]["historical_risk_percentile_metric_count"] == 23
     assert result["historical_risk_percentile"]["configured_count"] == 23
@@ -78,6 +84,9 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "excluded_d13_insufficient_history_count" in result["ai_context_manifest"]
     assert "included_d14_fact_count" in result["ai_context_manifest"]
     assert "excluded_d14_ineligible_count" in result["ai_context_manifest"]
+    assert "included_d10_d11_model_outputs_with_liquidity_context" in result[
+        "ai_context_manifest"
+    ]
     assert result["ai_context_manifest"]["returns_holdings_line_items"] is False
     assert result["module_coverage"]
     assert "recommendations" in result

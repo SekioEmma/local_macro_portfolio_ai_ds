@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from data_quality import historical_percentile_metrics
+from data_quality import liquidity_funding_stress
 
 
 PULLBACK_BOUNDARY = (
@@ -13,9 +14,11 @@ PULLBACK_BOUNDARY = (
     "evidence is auxiliary and cannot alone trigger systemic_risk_review. "
     "Equity drawdown percentile alone is not systemic risk. VIX percentile alone "
     "is not systemic risk. Proxy evidence is not true breadth or official funding "
-    "stress. Liquidity/funding remains a critical missing input until D14 is "
-    "implemented. Missing earnings, valuation, liquidity, and true breadth limit "
-    "crisis confirmation."
+    "stress. Liquidity/funding confirmation can upgrade risk review only when "
+    "credit and transmission evidence also confirm. D14 does not predict market "
+    "crashes. D14 does not produce recession probability. D14 does not produce "
+    "buy/sell/hedge instructions. Missing valuation, earnings, and true breadth "
+    "continue to limit crisis confirmation."
 )
 
 INTERPRETATION_HINT = (
@@ -52,6 +55,15 @@ INPUT_KEYS = (
     "initial_claims_4w_avg",
     "continuing_claims_4w_avg",
     "unemployment_rate_12m_low_gap",
+    "liquidity_funding_stress_status",
+    "short_term_funding_pressure_status",
+    "official_stress_reference_status",
+    "policy_plumbing_status",
+    "cp_effr_spread",
+    "cp_sofr_spread",
+    "stl_fsi",
+    "nfci",
+    "anfci",
 )
 
 CORE_CREDIT_INPUTS = ("high_yield_spread", "investment_grade_spread")
@@ -102,7 +114,17 @@ ALWAYS_MISSING_CRITICAL_INPUTS = (
     "valuation",
     "earnings",
     "true_breadth",
-    "liquidity",
+)
+D14_PULLBACK_KEYS = (
+    "liquidity_funding_stress_status",
+    "short_term_funding_pressure_status",
+    "official_stress_reference_status",
+    "policy_plumbing_status",
+    "cp_effr_spread",
+    "cp_sofr_spread",
+    "stl_fsi",
+    "nfci",
+    "anfci",
 )
 BAD_STATUSES = {
     "missing",
@@ -132,8 +154,9 @@ CLASSIFICATION_STATUS = {
 def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     row_by_key = {str(row.get("metric_key")): row for row in rows}
     evidence_index = historical_percentile_metrics.build_evidence_index(rows)
+    liquidity_index = liquidity_funding_stress.build_evidence_index(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
-    input_evidence = [
+    base_input_evidence = [
         _input_snapshot(row_by_key[key]) for key in INPUT_KEYS if key in row_by_key
     ]
     missing_inputs = [
@@ -144,12 +167,25 @@ def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, 
     if core_credit_missing:
         missing_critical_inputs.extend(core_credit_missing)
 
-    checklist_items = _checklist_items(row_by_key, evidence_index)
     percentile_context = _percentile_context(evidence_index)
+    liquidity_funding_context = _liquidity_funding_context(liquidity_index)
+    if not liquidity_funding_context["liquidity_available"]:
+        missing_critical_inputs.append("liquidity")
+    checklist_items = _checklist_items(
+        row_by_key,
+        evidence_index,
+        liquidity_funding_context,
+    )
+    input_evidence = base_input_evidence + [
+        _context_snapshot(item)
+        for item in liquidity_funding_context["available"]
+        if item.get("metric_key") in D14_PULLBACK_KEYS
+    ]
     classification = _classify(
         row_by_key=row_by_key,
         checklist_items=checklist_items,
         core_credit_missing=core_credit_missing,
+        liquidity_funding_context=liquidity_funding_context,
     )
     row_status = CLASSIFICATION_STATUS[classification]
     ai_context_allowed = row_status != "insufficient_evidence"
@@ -174,7 +210,10 @@ def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, 
             "checklist_items": checklist_items,
             "missing_critical_inputs": missing_critical_inputs,
             "pullback_percentile_context": percentile_context,
+            "pullback_liquidity_funding_context": liquidity_funding_context,
             "systemic_not_triggered_by_percentile_only": True,
+            "systemic_requires_credit_and_funding_and_transmission": True,
+            "d14_alone_not_systemic_trigger": True,
         },
         "interpretation_boundary": PULLBACK_BOUNDARY,
     }
@@ -233,12 +272,22 @@ def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, 
             "unit": "json",
             "status": "ok" if percentile_context["available_count"] else "watch",
         },
+        {
+            **common,
+            "metric_key": "pullback_liquidity_funding_context",
+            "display_name": "Pullback liquidity/funding context",
+            "value": _liquidity_funding_context_text(liquidity_funding_context),
+            "value_text": _liquidity_funding_context_text(liquidity_funding_context),
+            "unit": "json",
+            "status": liquidity_funding_context["component_status"],
+        },
     ]
 
 
 def _checklist_items(
     row_by_key: dict[str, dict[str, Any]],
     evidence_index: historical_percentile_metrics.EvidenceIndex,
+    liquidity_funding_context: dict[str, Any],
 ) -> list[dict[str, Any]]:
     return [
         _item(
@@ -307,10 +356,10 @@ def _checklist_items(
             "HYG/LQD is proxy evidence, not official funding stress.",
             evidence_index,
         ),
+        _liquidity_funding_item(liquidity_funding_context),
         _gap_item("valuation_gap"),
         _gap_item("earnings_gap"),
         _gap_item("true_breadth_gap"),
-        _gap_item("liquidity_gap"),
     ]
 
 
@@ -319,6 +368,7 @@ def _classify(
     row_by_key: dict[str, dict[str, Any]],
     checklist_items: list[dict[str, Any]],
     core_credit_missing: list[str],
+    liquidity_funding_context: dict[str, Any],
 ) -> str:
     if core_credit_missing:
         return "insufficient_evidence"
@@ -329,13 +379,21 @@ def _classify(
     rates = _by_item(checklist_items, "rates_real_yield_pressure")
     proxy_only = _proxy_only(row_by_key)
     stress_status = str(row_by_key.get("financial_stress_status", {}).get("value", ""))
+    funding_confirmed = liquidity_funding_context.get("status") in {"pressure", "stress"}
+    transmission_confirmed = _transmission_confirmed(
+        equity=equity,
+        credit=credit,
+        labor=labor,
+        liquidity_funding_context=liquidity_funding_context,
+    )
 
     if proxy_only:
         return "macro_pressure" if equity["status"] == "confirmed" else "ordinary_pullback"
     if (
         stress_status in {"pressure", "stress"}
         and credit["severity"] in {"pressure", "stress"}
-        and labor["severity"] in {"pressure", "stress"}
+        and funding_confirmed
+        and transmission_confirmed
     ):
         return "systemic_risk_review"
     if (
@@ -472,6 +530,34 @@ def _gap_item(key: str) -> dict[str, Any]:
     }
 
 
+def _liquidity_funding_item(context: dict[str, Any]) -> dict[str, Any]:
+    status = context["status"]
+    if not context["liquidity_available"]:
+        item_status = "missing"
+        severity = "watch"
+    elif status in {"pressure", "stress"}:
+        item_status = "confirmed"
+        severity = status
+    elif status == "watch":
+        item_status = "mixed"
+        severity = "watch"
+    else:
+        item_status = "not_confirmed"
+        severity = "none"
+    return {
+        "key": "liquidity_funding_confirmation",
+        "status": item_status,
+        "severity": severity,
+        "evidence": context["available"],
+        "liquidity_funding_evidence": context["available"],
+        "funding_confirmation_note": context["confirmation_note"],
+        "notes": (
+            "Liquidity/funding confirmation can upgrade risk review only when "
+            "credit and transmission evidence also confirm."
+        ),
+    }
+
+
 def _item(
     key: str,
     status_severity: tuple[str, str],
@@ -512,6 +598,23 @@ def _input_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "observation_date": row.get("observation_date"),
         "generated_at": row.get("generated_at"),
         "freshness_status": row.get("freshness_status"),
+    }
+
+
+def _context_snapshot(context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "module": "liquidity_funding_stress",
+        "metric_key": context.get("metric_key"),
+        "value": context.get("value"),
+        "value_text": context.get("value_text"),
+        "status": context.get("status"),
+        "source": context.get("source"),
+        "source_badge": context.get("source_badge"),
+        "source_series": context.get("source_series"),
+        "observation_date": context.get("observation_date"),
+        "generated_at": context.get("generated_at"),
+        "freshness_status": context.get("freshness_status"),
+        "interpretation_boundary": context.get("interpretation_boundary"),
     }
 
 
@@ -557,11 +660,98 @@ def _proxy_only(row_by_key: dict[str, dict[str, Any]]) -> bool:
     return all(row.get("source_badge") in {"proxy", "derived"} for row in usable_rows)
 
 
+def _transmission_confirmed(
+    *,
+    equity: dict[str, Any],
+    credit: dict[str, Any],
+    labor: dict[str, Any],
+    liquidity_funding_context: dict[str, Any],
+) -> bool:
+    if labor["severity"] in {"pressure", "stress"}:
+        return True
+    if (
+        equity["status"] == "confirmed"
+        and credit["severity"] in {"pressure", "stress"}
+    ):
+        return True
+    return bool(liquidity_funding_context.get("cp_reference_transmission_confirmation"))
+
+
 def _items_value_text(items: list[dict[str, Any]]) -> str:
     confirmed = sum(1 for item in items if item["status"] == "confirmed")
     mixed = sum(1 for item in items if item["status"] == "mixed")
     missing = sum(1 for item in items if item["status"] == "missing")
     return f"{len(items)} items; confirmed={confirmed}; mixed={mixed}; missing={missing}"
+
+
+def _liquidity_funding_context(
+    evidence_index: liquidity_funding_stress.EvidenceIndex,
+) -> dict[str, Any]:
+    available = evidence_index.available_d14_context(D14_PULLBACK_KEYS)
+    missing = evidence_index.missing_d14_context(D14_PULLBACK_KEYS)
+    by_key = {item["metric_key"]: item for item in available}
+    status = _context_value(by_key.get("liquidity_funding_stress_status"))
+    cp_status = _context_value(by_key.get("short_term_funding_pressure_status"))
+    reference_status = _context_value(by_key.get("official_stress_reference_status"))
+    liquidity_available = status in {"ok", "watch", "pressure", "stress"}
+    component_status = status if liquidity_available else "insufficient_evidence"
+    return {
+        "available_count": len(available),
+        "missing_count": len(missing),
+        "available": available,
+        "missing": missing,
+        "status": status or "unavailable",
+        "cp_status": cp_status or "unavailable",
+        "official_reference_status": reference_status or "unavailable",
+        "liquidity_available": liquidity_available,
+        "component_status": component_status,
+        "liquidity_available_with_boundaries": liquidity_available,
+        "liquidity_removed_from_missing_when_available": liquidity_available,
+        "liquidity_still_missing_when_d14_insufficient": not liquidity_available,
+        "cp_reference_transmission_confirmation": bool(
+            cp_status in {"pressure", "stress"}
+            and reference_status in {"pressure", "stress"}
+        ),
+        "systemic_requires_credit_and_funding_and_transmission": True,
+        "d14_alone_not_systemic_trigger": True,
+        "cp_only_not_systemic_trigger": True,
+        "official_fsi_only_not_systemic_trigger": True,
+        "on_rrp_alone_not_trigger": True,
+        "confirmation_note": _liquidity_confirmation_note(status),
+        "boundary": (
+            "Liquidity/funding confirmation can upgrade risk review only when credit "
+            "and transmission evidence also confirm. D14 does not predict market "
+            "crashes. D14 does not produce recession probability. D14 does not "
+            "produce buy/sell/hedge instructions. Missing valuation, earnings, and "
+            "true breadth continue to limit crisis confirmation."
+        ),
+    }
+
+
+def _context_value(context: dict[str, Any] | None) -> str | None:
+    if not context:
+        return None
+    value = context.get("value")
+    if value is None:
+        return None
+    return str(value).lower()
+
+
+def _liquidity_confirmation_note(status: str | None) -> str:
+    if status in {"pressure", "stress"}:
+        return "D14 shows funding/liquidity pressure confirmation; systemic review still requires credit and transmission evidence."
+    if status in {"ok", "watch"}:
+        return "D14 does not confirm funding/liquidity pressure; this supports non-systemic interpretation when credit is stable."
+    return "D14 liquidity/funding evidence is insufficient; liquidity remains a critical missing input."
+
+
+def _liquidity_funding_context_text(context: dict[str, Any]) -> str:
+    return (
+        f"D14 liquidity/funding status={context['status']}; "
+        f"{context['available_count']} rows available; "
+        f"{context['missing_count']} missing or blocked; "
+        f"liquidity_available={context['liquidity_available']}"
+    )
 
 
 def _percentile_context(
@@ -579,13 +769,13 @@ def _percentile_context(
             for item in available
         ),
         "systemic_not_triggered_by_percentile_only": True,
-        "liquidity_still_missing_until_d14": True,
+        "liquidity_still_missing_until_d14": False,
         "normalization_boundary": (
             "This checklist is not crash probability. Percentile evidence is auxiliary "
             "and cannot alone trigger systemic_risk_review. Equity drawdown percentile "
             "alone is not systemic risk. VIX percentile alone is not systemic risk. "
-            "Proxy evidence is not true breadth or official funding stress. Liquidity/"
-            "funding remains a critical missing input until D14 is implemented."
+            "Proxy evidence is not true breadth or official funding stress. D14 "
+            "liquidity/funding context is separate confirmation evidence."
         ),
     }
 

@@ -197,6 +197,55 @@ def test_manifest_carries_eligible_d13_and_excludes_insufficient_history(monkeyp
     assert "percentile_context" in stress["component_contributions"]
 
 
+def test_manifest_carries_d10_d11_liquidity_context(monkeypatch):
+    liquidity_context = {
+        "available": [
+            {
+                "metric_key": "liquidity_funding_stress_status",
+                "value": "ok",
+                "status": "ok",
+                "source_badge": "derived",
+                "source_series": "liquidity_funding_stress_status",
+                "observation_date": "2026-06-01",
+                "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not trading signals.",
+            }
+        ],
+        "available_count": 1,
+        "status": "ok",
+        "d14_used_as_confirmation_only": True,
+    }
+    rows = [
+        _evidence_row(
+            "financial_stress_composite",
+            "financial_stress_score",
+            10.0,
+            source_badge="derived",
+            component_contributions={"funding_liquidity": liquidity_context},
+        ),
+        _evidence_row(
+            "pullback_systemic_risk_checklist",
+            "pullback_classification",
+            "ordinary_pullback",
+            source_badge="derived",
+            component_contributions={"pullback_liquidity_funding_context": liquidity_context},
+        ),
+    ]
+    monkeypatch.setattr(
+        dashboard_service,
+        "build_dashboard_evidence_table",
+        lambda **kwargs: SimpleNamespace(generated_at="2026-06-01T00:00:00+00:00", rows=rows),
+    )
+
+    manifest = ai_context_service.build_ai_context_manifest()
+    stress = _model_output({"included_model_outputs": manifest.included_model_outputs}, "financial_stress_score")
+    pullback = _model_output({"included_model_outputs": manifest.included_model_outputs}, "pullback_classification")
+
+    assert "funding_liquidity" in stress["component_contributions"]
+    assert "pullback_liquidity_funding_context" in pullback["component_contributions"]
+    body = json.dumps(manifest.source_summary)
+    assert "raw_provider" not in body
+
+
 def _model_output(data, metric_key):
     for row in data["included_model_outputs"]:
         if row["metric_key"] == metric_key:

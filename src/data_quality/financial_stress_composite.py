@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from data_quality import historical_percentile_metrics
+from data_quality import liquidity_funding_stress
 
 
 FINANCIAL_STRESS_BOUNDARY = (
@@ -14,6 +15,12 @@ FINANCIAL_STRESS_BOUNDARY = (
     "VIX percentile alone is not systemic stress. Equity drawdown percentile "
     "alone is not systemic stress. Credit percentile context is auxiliary unless "
     "core credit evidence is available. "
+    "Liquidity/funding evidence is a confirmation layer, not a trading signal. "
+    "Official stress indices are external reference layers and do not replace "
+    "the project financial stress composite. CP spread can support funding-"
+    "pressure confirmation but cannot alone prove systemic crisis. ON RRP usage "
+    "alone is not a risk trigger. D14 alone cannot produce stress or systemic-"
+    "risk conclusions. "
     "Proxy inputs are not official market breadth or official funding stress. "
     "Missing earnings, true breadth, valuation, and liquidity data limit crisis "
     "confirmation."
@@ -84,6 +91,19 @@ D13_PERCENTILE_KEYS = (
     "high_yield_spread_percentile",
     "investment_grade_spread_percentile",
 )
+D14_FUNDING_KEYS = (
+    "liquidity_funding_stress_status",
+    "short_term_funding_pressure_status",
+    "official_stress_reference_status",
+    "policy_plumbing_status",
+    "cp_effr_spread",
+    "cp_sofr_spread",
+    "stl_fsi",
+    "nfci",
+    "anfci",
+    "sofr_effr_spread",
+    "effr_iorb_spread",
+)
 PERCENTILE_GROUPS = {
     "credit": ("high_yield_spread_percentile", "investment_grade_spread_percentile"),
     "rates": ("dgs30_percentile", "dgs30_robust_zscore", "dfii10_percentile", "dfii10_robust_zscore"),
@@ -128,8 +148,9 @@ STATUS_THRESHOLDS = (
 def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     row_by_key = {str(row.get("metric_key")): row for row in rows}
     evidence_index = historical_percentile_metrics.build_evidence_index(rows)
+    liquidity_index = liquidity_funding_stress.build_evidence_index(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
-    input_evidence = [
+    base_input_evidence = [
         _input_snapshot(row_by_key[key])
         for group_keys in INPUT_GROUPS.values()
         for key in group_keys
@@ -146,9 +167,16 @@ def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
         for group, keys in INPUT_GROUPS.items()
     }
     percentile_context = _percentile_context(evidence_index)
+    funding_liquidity_context = _funding_liquidity_context(liquidity_index)
+    input_evidence = base_input_evidence + [
+        _context_snapshot(item)
+        for item in funding_liquidity_context["available"]
+        if item.get("metric_key") in D14_FUNDING_KEYS
+    ]
     component_contributions_with_context = {
         **component_contributions,
         "percentile_context": percentile_context,
+        "funding_liquidity": funding_liquidity_context,
     }
     has_contributions = any(
         component["inputs"] for component in component_contributions.values()
@@ -191,6 +219,9 @@ def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
     missing_text = "none" if not missing_inputs else ", ".join(missing_inputs)
     contribution_text = _contribution_text(component_contributions)
     percentile_context_text = _percentile_context_text(percentile_context)
+    funding_liquidity_context_text = _funding_liquidity_context_text(
+        funding_liquidity_context
+    )
 
     common = {
         "source": "local_dashboard_evidence",
@@ -270,6 +301,15 @@ def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
             "value_text": percentile_context_text,
             "unit": "json",
             "status": "ok" if percentile_context["available_count"] else "watch",
+        },
+        {
+            **common,
+            "metric_key": "financial_stress_funding_liquidity_context",
+            "display_name": "Financial stress funding/liquidity context",
+            "value": funding_liquidity_context_text,
+            "value_text": funding_liquidity_context_text,
+            "unit": "json",
+            "status": funding_liquidity_context["component_status"],
         },
     ]
 
@@ -452,6 +492,23 @@ def _input_snapshot(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _context_snapshot(context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "module": "liquidity_funding_stress",
+        "metric_key": context.get("metric_key"),
+        "value": context.get("value"),
+        "value_text": context.get("value_text"),
+        "status": context.get("status"),
+        "source": context.get("source"),
+        "source_badge": context.get("source_badge"),
+        "source_series": context.get("source_series"),
+        "observation_date": context.get("observation_date"),
+        "generated_at": context.get("generated_at"),
+        "freshness_status": context.get("freshness_status"),
+        "interpretation_boundary": context.get("interpretation_boundary"),
+    }
+
+
 def _contribution_text(contributions: dict[str, dict[str, Any]]) -> str:
     return "; ".join(
         f"{group}={component['score']:.2f}x{component['weight']}%"
@@ -494,6 +551,108 @@ def _percentile_context_text(context: dict[str, Any]) -> str:
     return (
         f"{context['available_count']} D13 auxiliary percentile rows available; "
         f"{context['missing_count']} missing or blocked"
+    )
+
+
+def _funding_liquidity_context(
+    evidence_index: liquidity_funding_stress.EvidenceIndex,
+) -> dict[str, Any]:
+    available = evidence_index.available_d14_context(D14_FUNDING_KEYS)
+    missing = evidence_index.missing_d14_context(D14_FUNDING_KEYS)
+    by_key = {item["metric_key"]: item for item in available}
+    status_value = _context_value(by_key.get("liquidity_funding_stress_status"))
+    cp_status = _context_value(by_key.get("short_term_funding_pressure_status"))
+    reference_status = _context_value(by_key.get("official_stress_reference_status"))
+    policy_status = _context_value(by_key.get("policy_plumbing_status"))
+    contribution = _funding_contribution_score(
+        status_value=status_value,
+        cp_status=cp_status,
+        reference_status=reference_status,
+        policy_status=policy_status,
+    )
+    component_status = _score_component_status(contribution)
+    return {
+        "available_count": len(available),
+        "missing_count": len(missing),
+        "available": available,
+        "missing": missing,
+        "status": status_value or "unavailable",
+        "cp_status": cp_status or "unavailable",
+        "official_reference_status": reference_status or "unavailable",
+        "policy_plumbing_status": policy_status or "unavailable",
+        "component_status": component_status,
+        "contribution": contribution,
+        "cp_reference_confirmation": bool(
+            cp_status in {"pressure", "stress"}
+            and reference_status in {"watch", "pressure", "stress"}
+        ),
+        "funding_confirmation": bool(status_value in {"pressure", "stress"}),
+        "d14_used_as_confirmation_only": True,
+        "official_reference_not_replacing_d10": True,
+        "d14_alone_cannot_produce_stress": True,
+        "on_rrp_alone_not_trigger": True,
+        "boundary": (
+            "Liquidity/funding evidence is a confirmation layer, not a trading signal. "
+            "Official stress indices are external reference layers and do not replace "
+            "the project financial stress composite. CP spread can support funding-"
+            "pressure confirmation but cannot alone prove systemic crisis. ON RRP "
+            "usage alone is not a risk trigger. D14 alone cannot produce stress or "
+            "systemic-risk conclusions."
+        ),
+    }
+
+
+def _funding_contribution_score(
+    *,
+    status_value: str | None,
+    cp_status: str | None,
+    reference_status: str | None,
+    policy_status: str | None,
+) -> float:
+    if (
+        status_value == "stress"
+        and cp_status == "stress"
+        and reference_status in {"pressure", "stress"}
+        and policy_status in {"pressure", "stress"}
+    ):
+        return 95.0
+    if cp_status in {"pressure", "stress"} and reference_status in {"watch", "pressure", "stress"}:
+        return 75.0
+    if status_value in {"pressure", "stress"}:
+        return 65.0
+    if status_value == "watch" or cp_status == "watch" or reference_status in {"watch", "pressure", "stress"}:
+        return 45.0
+    if status_value == "ok":
+        return 10.0
+    return 0.0
+
+
+def _score_component_status(score: float) -> str:
+    if score >= 90:
+        return "stress"
+    if score >= 65:
+        return "pressure"
+    if score >= 25:
+        return "watch"
+    return "ok" if score > 0 else "insufficient_evidence"
+
+
+def _context_value(context: dict[str, Any] | None) -> str | None:
+    if not context:
+        return None
+    value = context.get("value")
+    if value is None:
+        return None
+    return str(value).lower()
+
+
+def _funding_liquidity_context_text(context: dict[str, Any]) -> str:
+    return (
+        f"D14 funding/liquidity status={context['status']}; "
+        f"component={context['component_status']}; "
+        f"{context['available_count']} rows available; "
+        f"{context['missing_count']} missing or blocked; "
+        "confirmation-only"
     )
 
 
