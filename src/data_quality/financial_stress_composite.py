@@ -3,11 +3,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from data_quality import historical_percentile_metrics
+
 
 FINANCIAL_STRESS_BOUNDARY = (
     "Financial stress score is a transparent pressure temperature, not crash "
     "probability. It does not produce buy/sell/hedge instructions. VIX alone "
     "is not systemic stress. Equity drawdown alone is not systemic stress. "
+    "Percentile bands describe local historical rarity, not forecast probability. "
+    "VIX percentile alone is not systemic stress. Equity drawdown percentile "
+    "alone is not systemic stress. Credit percentile context is auxiliary unless "
+    "core credit evidence is available. "
     "Proxy inputs are not official market breadth or official funding stress. "
     "Missing earnings, true breadth, valuation, and liquidity data limit crisis "
     "confirmation."
@@ -60,6 +66,42 @@ INPUT_GROUPS = {
 }
 
 CORE_CREDIT_INPUTS = ("high_yield_spread", "investment_grade_spread")
+D13_PERCENTILE_KEYS = (
+    "vix_percentile",
+    "vix_robust_zscore",
+    "dgs30_percentile",
+    "dgs30_robust_zscore",
+    "dfii10_percentile",
+    "dfii10_robust_zscore",
+    "sp500_drawdown_3m_percentile",
+    "sp500_drawdown_3m_robust_zscore",
+    "nasdaq100_drawdown_3m_percentile",
+    "nasdaq100_drawdown_3m_robust_zscore",
+    "initial_claims_4w_avg_percentile",
+    "initial_claims_4w_avg_robust_zscore",
+    "continuing_claims_4w_avg_percentile",
+    "continuing_claims_4w_avg_robust_zscore",
+    "high_yield_spread_percentile",
+    "investment_grade_spread_percentile",
+)
+PERCENTILE_GROUPS = {
+    "credit": ("high_yield_spread_percentile", "investment_grade_spread_percentile"),
+    "rates": ("dgs30_percentile", "dgs30_robust_zscore", "dfii10_percentile", "dfii10_robust_zscore"),
+    "equity": (
+        "vix_percentile",
+        "vix_robust_zscore",
+        "sp500_drawdown_3m_percentile",
+        "sp500_drawdown_3m_robust_zscore",
+        "nasdaq100_drawdown_3m_percentile",
+        "nasdaq100_drawdown_3m_robust_zscore",
+    ),
+    "labor": (
+        "initial_claims_4w_avg_percentile",
+        "initial_claims_4w_avg_robust_zscore",
+        "continuing_claims_4w_avg_percentile",
+        "continuing_claims_4w_avg_robust_zscore",
+    ),
+}
 BAD_STATUSES = {
     "missing",
     "research_needed",
@@ -85,6 +127,7 @@ STATUS_THRESHOLDS = (
 
 def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     row_by_key = {str(row.get("metric_key")): row for row in rows}
+    evidence_index = historical_percentile_metrics.build_evidence_index(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
     input_evidence = [
         _input_snapshot(row_by_key[key])
@@ -101,6 +144,11 @@ def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
     component_contributions = {
         group: _component(group, keys, row_by_key)
         for group, keys in INPUT_GROUPS.items()
+    }
+    percentile_context = _percentile_context(evidence_index)
+    component_contributions_with_context = {
+        **component_contributions,
+        "percentile_context": percentile_context,
     }
     has_contributions = any(
         component["inputs"] for component in component_contributions.values()
@@ -142,6 +190,7 @@ def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
     score_text = "--" if score is None else f"{score:.2f}/100"
     missing_text = "none" if not missing_inputs else ", ".join(missing_inputs)
     contribution_text = _contribution_text(component_contributions)
+    percentile_context_text = _percentile_context_text(percentile_context)
 
     common = {
         "source": "local_dashboard_evidence",
@@ -154,7 +203,7 @@ def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
         "interpretation_hint": INTERPRETATION_HINT,
         "ai_context_allowed": ai_context_allowed,
         "input_evidence": input_evidence,
-        "component_contributions": component_contributions,
+        "component_contributions": component_contributions_with_context,
         "missing_inputs": missing_inputs,
         "interpretation_boundary": FINANCIAL_STRESS_BOUNDARY,
     }
@@ -212,6 +261,15 @@ def build_financial_stress_rows(rows: list[dict[str, Any]]) -> list[dict[str, An
             "value_text": FINANCIAL_STRESS_BOUNDARY,
             "unit": "text",
             "status": status,
+        },
+        {
+            **common,
+            "metric_key": "financial_stress_percentile_context",
+            "display_name": "Financial stress percentile context",
+            "value": percentile_context_text,
+            "value_text": percentile_context_text,
+            "unit": "json",
+            "status": "ok" if percentile_context["available_count"] else "watch",
         },
     ]
 
@@ -398,6 +456,44 @@ def _contribution_text(contributions: dict[str, dict[str, Any]]) -> str:
     return "; ".join(
         f"{group}={component['score']:.2f}x{component['weight']}%"
         for group, component in contributions.items()
+    )
+
+
+def _percentile_context(
+    evidence_index: historical_percentile_metrics.EvidenceIndex,
+) -> dict[str, Any]:
+    available = evidence_index.available_d13_context(D13_PERCENTILE_KEYS)
+    missing = evidence_index.missing_d13_context(D13_PERCENTILE_KEYS)
+    by_group: dict[str, dict[str, Any]] = {}
+    for group, keys in PERCENTILE_GROUPS.items():
+        group_available = evidence_index.available_d13_context(keys)
+        group_missing = evidence_index.missing_d13_context(keys)
+        by_group[group] = {
+            "available_count": len(group_available),
+            "missing_count": len(group_missing),
+            "available_metric_keys": [item["metric_key"] for item in group_available],
+            "missing_metric_keys": [item["metric_key"] for item in group_missing],
+        }
+    return {
+        "available_count": len(available),
+        "missing_count": len(missing),
+        "available": available,
+        "missing": missing,
+        "by_group": by_group,
+        "normalization_boundary": (
+            "Percentile bands describe local historical rarity, not forecast probability. "
+            "VIX percentile alone is not systemic stress. Equity drawdown percentile alone "
+            "is not systemic stress. Credit percentile context is auxiliary unless core "
+            "credit evidence is available. Financial stress score remains a pressure "
+            "temperature, not crash probability."
+        ),
+    }
+
+
+def _percentile_context_text(context: dict[str, Any]) -> str:
+    return (
+        f"{context['available_count']} D13 auxiliary percentile rows available; "
+        f"{context['missing_count']} missing or blocked"
     )
 
 

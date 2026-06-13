@@ -136,11 +136,13 @@ DERIVED_METRIC_KEYS = {
     "financial_stress_component_contributions",
     "financial_stress_missing_inputs",
     "financial_stress_interpretation_boundary",
+    "financial_stress_percentile_context",
     "pullback_classification",
     "pullback_checklist_items",
     "pullback_missing_critical_inputs",
     "pullback_supporting_evidence",
     "pullback_interpretation_boundary",
+    "pullback_percentile_context",
     "high_yield_spread_percentile",
     "high_yield_spread_zscore",
     "high_yield_spread_robust_zscore",
@@ -506,12 +508,14 @@ def build_dashboard_evidence_table(
         reports,
         db_path=dashboard_market_history_db_path,
     )
-    financial_stress_rows = _financial_stress_composite_evidence_rows(base_rows)
-    pullback_rows = _pullback_systemic_checklist_evidence_rows(
-        base_rows + financial_stress_rows
-    )
     percentile_rows = _historical_risk_percentile_evidence_rows(
         db_path=dashboard_market_history_db_path
+    )
+    financial_stress_rows = _financial_stress_composite_evidence_rows(
+        base_rows + percentile_rows
+    )
+    pullback_rows = _pullback_systemic_checklist_evidence_rows(
+        base_rows + percentile_rows + financial_stress_rows
     )
     all_rows = base_rows + financial_stress_rows + pullback_rows + percentile_rows
     if write_last_good and _last_good_write_allowed(reports_dir):

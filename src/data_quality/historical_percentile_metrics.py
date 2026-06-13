@@ -33,6 +33,32 @@ BAD_STATUSES = {
     "stale",
 }
 OFFICIAL_BADGES = {"official", "official_fallback"}
+AUXILIARY_CONTEXT_FIELDS = (
+    "metric_key",
+    "display_name",
+    "value_text",
+    "status",
+    "source_badge",
+    "lookback_window",
+    "lookback_start",
+    "lookback_end",
+    "observation_count",
+    "minimum_observation_count",
+    "history_quality_status",
+    "percentile",
+    "percentile_band",
+    "zscore",
+    "zscore_band",
+    "robust_zscore",
+    "robust_zscore_band",
+    "percentile_direction",
+    "frequency_class",
+    "ai_context_tier",
+    "trigger_eligibility",
+    "interpretation_boundary",
+    "missing_reason",
+    "blocked_reason",
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +106,69 @@ def build_historical_percentile_rows(
     db_path: str | None = None,
 ) -> list[dict[str, Any]]:
     return [build_metric_payload(spec, db_path=db_path) for spec in PERCENTILE_METRIC_SPECS]
+
+
+class EvidenceIndex:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = {str(row.get("metric_key")): row for row in rows}
+
+    def by_metric_key(self, metric_key: str) -> dict[str, Any] | None:
+        return self._rows.get(metric_key)
+
+    def d13_context(self, metric_key: str) -> dict[str, Any] | None:
+        row = self.by_metric_key(metric_key)
+        if row is None:
+            return None
+        if row.get("module") != "historical_risk_percentile":
+            return None
+        return sanitized_d13_context(row)
+
+    def available_d13_context(self, keys: tuple[str, ...] | list[str]) -> list[dict[str, Any]]:
+        return [
+            context
+            for key in keys
+            for context in [self.d13_context(key)]
+            if context is not None and _hard_auxiliary_context(context)
+        ]
+
+    def missing_d13_context(self, keys: tuple[str, ...] | list[str]) -> list[dict[str, Any]]:
+        missing: list[dict[str, Any]] = []
+        for key in keys:
+            context = self.d13_context(key)
+            if context is None:
+                missing.append(
+                    {
+                        "metric_key": key,
+                        "status": "missing",
+                        "source_badge": "missing",
+                        "missing_reason": "d13_context_row_missing",
+                    }
+                )
+            elif not _hard_auxiliary_context(context):
+                missing.append(context)
+        return missing
+
+
+def build_evidence_index(rows: list[dict[str, Any]]) -> EvidenceIndex:
+    return EvidenceIndex(rows)
+
+
+def sanitized_d13_context(row: dict[str, Any]) -> dict[str, Any]:
+    return {field: row.get(field) for field in AUXILIARY_CONTEXT_FIELDS if field in row}
+
+
+def _hard_auxiliary_context(context: dict[str, Any]) -> bool:
+    if context.get("status") in BAD_STATUSES:
+        return False
+    if context.get("source_badge") in {"missing", "research_needed", "search-derived"}:
+        return False
+    if context.get("history_quality_status") == INSUFFICIENT_HISTORY_STATUS:
+        return False
+    if context.get("trigger_eligibility") == "not_eligible":
+        return False
+    if not (context.get("percentile_band") or context.get("zscore_band") or context.get("robust_zscore_band")):
+        return False
+    return True
 
 
 def build_metric_payload(

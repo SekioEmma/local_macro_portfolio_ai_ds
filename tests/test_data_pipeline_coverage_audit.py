@@ -52,15 +52,22 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "financial_stress_composite" in result
     assert "financial_stress_score_status" in result["financial_stress_composite"]
     assert result["financial_stress_composite"]["financial_stress_source_badge"] == "derived"
+    assert "percentile_context_available" in result["financial_stress_composite"]
+    assert "percentile_context_missing_metric_keys" in result["financial_stress_composite"]
     assert "pullback_systemic_risk_checklist" in result
     assert "pullback_classification" in result["pullback_systemic_risk_checklist"]
     assert result["pullback_systemic_risk_checklist"]["pullback_source_badge"] == "derived"
+    assert "pullback_percentile_context_available" in result["pullback_systemic_risk_checklist"]
+    assert result["pullback_systemic_risk_checklist"]["liquidity_still_missing_until_d14"] is True
     assert "historical_risk_percentile" in result
     assert result["historical_risk_percentile"]["historical_risk_percentile_metric_count"] == 23
     assert result["historical_risk_percentile"]["configured_count"] == 23
+    assert "d13_credit_percentile_status" in result["historical_risk_percentile"]
     assert "core_risk_history" in result
     assert "ai_context_manifest" in result
     assert result["ai_context_manifest"]["manifest_available"] is True
+    assert "included_d13_fact_count" in result["ai_context_manifest"]
+    assert "excluded_d13_insufficient_history_count" in result["ai_context_manifest"]
     assert result["ai_context_manifest"]["returns_holdings_line_items"] is False
     assert result["module_coverage"]
     assert "recommendations" in result

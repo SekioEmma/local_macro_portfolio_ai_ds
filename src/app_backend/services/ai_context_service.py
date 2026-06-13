@@ -120,6 +120,28 @@ def _row_manifest(row: DashboardEvidenceRow) -> dict[str, Any]:
         "interpretation_boundary": row.interpretation_boundary,
         "ai_context_allowed": row.ai_context_allowed,
     }
+    for field in (
+        "lookback_window",
+        "lookback_start",
+        "lookback_end",
+        "observation_count",
+        "minimum_observation_count",
+        "history_quality_status",
+        "percentile",
+        "percentile_band",
+        "zscore",
+        "zscore_band",
+        "robust_zscore",
+        "robust_zscore_band",
+        "percentile_direction",
+        "frequency_class",
+        "transform_class",
+        "ai_context_tier",
+        "trigger_eligibility",
+    ):
+        value = getattr(row, field, None)
+        if value is not None:
+            payload[field] = value
     if row.module in MODEL_OUTPUT_MODULES:
         payload["input_evidence"] = _safe_input_evidence(row.input_evidence)
         payload["component_contributions"] = row.component_contributions
@@ -142,6 +164,17 @@ def _safe_input_evidence(input_evidence: list[dict[str, Any]] | None) -> list[di
         "observation_date",
         "generated_at",
         "freshness_status",
+        "lookback_window",
+        "lookback_start",
+        "lookback_end",
+        "observation_count",
+        "minimum_observation_count",
+        "history_quality_status",
+        "percentile_band",
+        "zscore_band",
+        "robust_zscore_band",
+        "trigger_eligibility",
+        "interpretation_boundary",
     }
     return [
         {key: value for key, value in item.items() if key in allowed_keys}

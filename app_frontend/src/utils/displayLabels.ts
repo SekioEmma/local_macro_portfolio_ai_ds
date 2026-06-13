@@ -95,11 +95,13 @@ Object.assign(metricLabels, {
   financial_stress_missing_inputs: "Financial stress missing inputs",
   financial_stress_interpretation_boundary:
     "Financial stress interpretation boundary",
+  financial_stress_percentile_context: "Financial stress percentile context",
   pullback_classification: "Pullback classification",
   pullback_checklist_items: "Pullback checklist items",
   pullback_missing_critical_inputs: "Pullback missing critical inputs",
   pullback_supporting_evidence: "Pullback supporting evidence",
   pullback_interpretation_boundary: "Pullback interpretation boundary",
+  pullback_percentile_context: "Pullback percentile context",
   high_yield_spread_percentile: "High-yield spread percentile",
   high_yield_spread_zscore: "High-yield spread z-score",
   high_yield_spread_robust_zscore: "High-yield spread robust z-score",

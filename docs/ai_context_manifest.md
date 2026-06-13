@@ -14,11 +14,16 @@ Both paths return the same manifest.
 ## Included Context
 
 - Ordinary dashboard evidence rows with `ai_context_allowed=true`
+- Eligible D13 `historical_risk_percentile` rows with their lookback window,
+  observation count, percentile band, robust z-score band, trigger eligibility,
+  and interpretation boundary
 - D10 `financial_stress_composite` rows as included model outputs when eligible
 - D11 `pullback_systemic_risk_checklist` rows as included model outputs when eligible
 
 Every row keeps its `source_badge`. Proxy and derived evidence is never promoted
 to official evidence.
+D10/D11 model outputs that include percentile context keep the nested D13
+source badge, status, lookback window, band, trigger eligibility, and boundary.
 
 ## Excluded Context
 

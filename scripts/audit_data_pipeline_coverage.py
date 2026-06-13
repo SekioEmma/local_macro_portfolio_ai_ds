@@ -108,6 +108,7 @@ FINANCIAL_STRESS_COMPOSITE_METRIC_KEYS = {
     "financial_stress_component_contributions",
     "financial_stress_missing_inputs",
     "financial_stress_interpretation_boundary",
+    "financial_stress_percentile_context",
 }
 PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS = {
     "pullback_classification",
@@ -115,6 +116,7 @@ PULLBACK_SYSTEMIC_CHECKLIST_METRIC_KEYS = {
     "pullback_missing_critical_inputs",
     "pullback_supporting_evidence",
     "pullback_interpretation_boundary",
+    "pullback_percentile_context",
 }
 HISTORICAL_RISK_PERCENTILE_METRIC_KEYS = {
     "high_yield_spread_percentile",
@@ -987,6 +989,16 @@ def _financial_stress_composite_audit(rows: list[DashboardEvidenceRow]) -> dict[
     contribution_groups = (
         sorted(contributions.keys()) if isinstance(contributions, dict) else []
     )
+    percentile_context = (
+        contributions.get("percentile_context", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    by_group = (
+        percentile_context.get("by_group", {})
+        if isinstance(percentile_context, dict)
+        else {}
+    )
     return {
         "financial_stress_composite_available": bool(score and _has_value(score)),
         "financial_stress_metric_count": len(stress_rows),
@@ -1004,6 +1016,24 @@ def _financial_stress_composite_audit(rows: list[DashboardEvidenceRow]) -> dict[
         "financial_stress_source_badge": score.source_badge if score is not None else "missing",
         "financial_stress_has_interpretation_boundary": bool(
             score is not None and getattr(score, "interpretation_boundary", None)
+        ),
+        "percentile_context_available": bool(
+            isinstance(percentile_context, dict)
+            and percentile_context.get("available_count", 0) > 0
+        ),
+        "percentile_context_metric_count": (
+            percentile_context.get("available_count", 0)
+            if isinstance(percentile_context, dict)
+            else 0
+        ),
+        "credit_percentile_context_available": _group_context_available(by_group, "credit"),
+        "rates_percentile_context_available": _group_context_available(by_group, "rates"),
+        "equity_percentile_context_available": _group_context_available(by_group, "equity"),
+        "labor_percentile_context_available": _group_context_available(by_group, "labor"),
+        "percentile_context_missing_metric_keys": (
+            [item.get("metric_key") for item in percentile_context.get("missing", [])]
+            if isinstance(percentile_context, dict)
+            else []
         ),
     }
 
@@ -1023,6 +1053,11 @@ def _pullback_systemic_checklist_audit(rows: list[DashboardEvidenceRow]) -> dict
         contributions.get("checklist_items", [])
         if isinstance(contributions, dict)
         else []
+    )
+    percentile_context = (
+        contributions.get("pullback_percentile_context", {})
+        if isinstance(contributions, dict)
+        else {}
     )
     return {
         "pullback_systemic_risk_checklist_available": bool(
@@ -1048,7 +1083,35 @@ def _pullback_systemic_checklist_audit(rows: list[DashboardEvidenceRow]) -> dict
         "pullback_has_interpretation_boundary": bool(
             classification is not None and getattr(classification, "interpretation_boundary", None)
         ),
+        "pullback_percentile_context_available": bool(
+            isinstance(percentile_context, dict)
+            and percentile_context.get("available_count", 0) > 0
+        ),
+        "pullback_percentile_context_metric_count": (
+            percentile_context.get("available_count", 0)
+            if isinstance(percentile_context, dict)
+            else 0
+        ),
+        "credit_percentile_used_as_auxiliary": bool(
+            isinstance(percentile_context, dict)
+            and percentile_context.get("credit_percentile_used_as_auxiliary")
+        ),
+        "systemic_not_triggered_by_percentile_only": bool(
+            isinstance(percentile_context, dict)
+            and percentile_context.get("systemic_not_triggered_by_percentile_only")
+        ),
+        "liquidity_still_missing_until_d14": bool(
+            isinstance(percentile_context, dict)
+            and percentile_context.get("liquidity_still_missing_until_d14")
+            and missing is not None
+            and "liquidity" in str(missing.value)
+        ),
     }
+
+
+def _group_context_available(by_group: dict[str, Any], group: str) -> bool:
+    item = by_group.get(group) if isinstance(by_group, dict) else None
+    return bool(isinstance(item, dict) and item.get("available_count", 0) > 0)
 
 
 def _ai_context_manifest_audit() -> dict[str, Any]:
@@ -1077,6 +1140,24 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
         ),
         "returns_credentials": manifest.privacy_policy.get("returns_credentials"),
         "risk_boundary_count": len(manifest.risk_boundaries),
+        "included_d13_fact_count": sum(
+            1
+            for row in manifest.included_facts
+            if row.get("module") == "historical_risk_percentile"
+        ),
+        "included_d10_d11_model_outputs_with_percentile_context": sum(
+            1
+            for row in manifest.included_model_outputs
+            if row.get("module")
+            in {"financial_stress_composite", "pullback_systemic_risk_checklist"}
+            and "percentile_context" in json.dumps(row.get("component_contributions", {}))
+        ),
+        "excluded_d13_insufficient_history_count": sum(
+            1
+            for row in manifest.excluded_facts
+            if row.get("module") == "historical_risk_percentile"
+            and row.get("status") == "insufficient_history"
+        ),
     }
 
 
@@ -1095,6 +1176,7 @@ def _historical_risk_percentile_audit(rows: list[DashboardEvidenceRow]) -> dict[
         row for row in percentile_rows if row.history_quality_status == "limited_history"
     ]
     blocked_rows = [row for row in percentile_rows if not row.ai_context_allowed]
+    by_key = {row.metric_key: row for row in percentile_rows}
     return {
         "historical_risk_percentile_available": bool(ok_rows),
         "configured_count": len(percentile_rows),
@@ -1147,11 +1229,39 @@ def _historical_risk_percentile_audit(rows: list[DashboardEvidenceRow]) -> dict[
         "source_badges": sorted(
             {row.source_badge for row in percentile_rows}
         ),
+        "d13_credit_percentile_status": {
+            "high_yield_spread": _credit_percentile_status(by_key, "high_yield_spread"),
+            "investment_grade_spread": _credit_percentile_status(by_key, "investment_grade_spread"),
+        },
         "historical_risk_percentile_metric_count": len(percentile_rows),
         "historical_risk_percentile_computed_count": len(ok_rows),
         "historical_risk_percentile_insufficient_history_count": len(insufficient_rows),
         "historical_risk_percentile_ai_context_allowed_count": sum(
             1 for row in percentile_rows if row.ai_context_allowed
+        ),
+    }
+
+
+def _credit_percentile_status(
+    by_key: dict[str, DashboardEvidenceRow],
+    source_metric: str,
+) -> dict[str, Any]:
+    percentile = by_key.get(f"{source_metric}_percentile")
+    zscore = by_key.get(f"{source_metric}_zscore")
+    robust = by_key.get(f"{source_metric}_robust_zscore")
+    anchor = percentile or zscore or robust
+    return {
+        "percentile_available": bool(percentile and percentile.ai_context_allowed),
+        "zscore_available": bool(zscore and zscore.ai_context_allowed),
+        "robust_zscore_available": bool(robust and robust.ai_context_allowed),
+        "observation_count": anchor.observation_count if anchor is not None else 0,
+        "blocked_reason": (
+            anchor.blocked_reason or anchor.missing_reason
+            if anchor is not None and not anchor.ai_context_allowed
+            else None
+        ),
+        "history_quality_status": (
+            anchor.history_quality_status if anchor is not None else "missing"
         ),
     }
 

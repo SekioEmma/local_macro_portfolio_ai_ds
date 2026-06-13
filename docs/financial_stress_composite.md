@@ -11,6 +11,7 @@ existing dashboard evidence rows and does not fetch live data.
 - `financial_stress_component_contributions`
 - `financial_stress_missing_inputs`
 - `financial_stress_interpretation_boundary`
+- `financial_stress_percentile_context`
 
 Every row is `source_badge=derived` and preserves structured input evidence,
 component contributions, missing inputs, and the interpretation boundary.
@@ -35,9 +36,26 @@ Core credit spread inputs are required for a total score. If high-yield or
 investment-grade spread evidence is missing, stale, research-only, or otherwise
 blocked from AI factual context, the composite returns `insufficient_evidence`.
 
+## D13 Auxiliary Percentile Context
+
+D13 `historical_risk_percentile` rows are read only after they already exist in
+the dashboard evidence table. They are not fetched, recalculated, or used to
+replace the core D10 scoring inputs.
+
+The composite records D13 context under `percentile_context` and exposes
+`financial_stress_percentile_context`. This context can explain local historical
+rarity for VIX, rates, real yields, equity drawdown, claims, and credit spreads.
+Missing or insufficient D13 rows remain in missing percentile context and do not
+become hard auxiliary evidence.
+
+VIX percentile, equity drawdown percentile, and claims percentile cannot by
+themselves trigger stress. Credit percentile context is auxiliary unless core raw
+credit evidence is available.
+
 ## Boundaries
 
 The score is not crash probability, recession probability, or trading advice.
 VIX alone cannot trigger stress. Equity drawdown alone cannot trigger stress.
 Proxy-only evidence is capped below stress. Labor deterioration can confirm macro
-pressure, but it cannot by itself confirm systemic crisis.
+pressure, but it cannot by itself confirm systemic crisis. Percentile bands
+describe local historical rarity, not forecast probability.

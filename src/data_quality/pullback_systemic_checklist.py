@@ -3,13 +3,19 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from data_quality import historical_percentile_metrics
+
 
 PULLBACK_BOUNDARY = (
     "This checklist is not crash probability. It does not predict market bottom "
     "or top. It does not produce buy/sell/hedge instructions. Equity drawdown "
-    "alone is not systemic risk. VIX alone is not systemic risk. Proxy breadth "
-    "is not true market breadth. Missing earnings, valuation, liquidity, and "
-    "true breadth limit crisis confirmation."
+    "alone is not systemic risk. VIX alone is not systemic risk. Percentile "
+    "evidence is auxiliary and cannot alone trigger systemic_risk_review. "
+    "Equity drawdown percentile alone is not systemic risk. VIX percentile alone "
+    "is not systemic risk. Proxy evidence is not true breadth or official funding "
+    "stress. Liquidity/funding remains a critical missing input until D14 is "
+    "implemented. Missing earnings, valuation, liquidity, and true breadth limit "
+    "crisis confirmation."
 )
 
 INTERPRETATION_HINT = (
@@ -49,6 +55,49 @@ INPUT_KEYS = (
 )
 
 CORE_CREDIT_INPUTS = ("high_yield_spread", "investment_grade_spread")
+D13_PULLBACK_KEYS = (
+    "vix_percentile",
+    "vix_robust_zscore",
+    "dgs30_percentile",
+    "dgs30_robust_zscore",
+    "dfii10_percentile",
+    "dfii10_robust_zscore",
+    "sp500_drawdown_3m_percentile",
+    "sp500_drawdown_3m_robust_zscore",
+    "nasdaq100_drawdown_3m_percentile",
+    "nasdaq100_drawdown_3m_robust_zscore",
+    "initial_claims_4w_avg_percentile",
+    "initial_claims_4w_avg_robust_zscore",
+    "continuing_claims_4w_avg_percentile",
+    "continuing_claims_4w_avg_robust_zscore",
+    "high_yield_spread_percentile",
+    "investment_grade_spread_percentile",
+)
+ITEM_PERCENTILE_KEYS = {
+    "equity_damage": (
+        "sp500_drawdown_3m_percentile",
+        "sp500_drawdown_3m_robust_zscore",
+        "nasdaq100_drawdown_3m_percentile",
+        "nasdaq100_drawdown_3m_robust_zscore",
+    ),
+    "credit_spread_confirmation": (
+        "high_yield_spread_percentile",
+        "investment_grade_spread_percentile",
+    ),
+    "volatility_confirmation": ("vix_percentile", "vix_robust_zscore"),
+    "rates_real_yield_pressure": (
+        "dgs30_percentile",
+        "dgs30_robust_zscore",
+        "dfii10_percentile",
+        "dfii10_robust_zscore",
+    ),
+    "labor_deterioration": (
+        "initial_claims_4w_avg_percentile",
+        "initial_claims_4w_avg_robust_zscore",
+        "continuing_claims_4w_avg_percentile",
+        "continuing_claims_4w_avg_robust_zscore",
+    ),
+}
 ALWAYS_MISSING_CRITICAL_INPUTS = (
     "valuation",
     "earnings",
@@ -82,6 +131,7 @@ CLASSIFICATION_STATUS = {
 
 def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     row_by_key = {str(row.get("metric_key")): row for row in rows}
+    evidence_index = historical_percentile_metrics.build_evidence_index(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
     input_evidence = [
         _input_snapshot(row_by_key[key]) for key in INPUT_KEYS if key in row_by_key
@@ -94,7 +144,8 @@ def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, 
     if core_credit_missing:
         missing_critical_inputs.extend(core_credit_missing)
 
-    checklist_items = _checklist_items(row_by_key)
+    checklist_items = _checklist_items(row_by_key, evidence_index)
+    percentile_context = _percentile_context(evidence_index)
     classification = _classify(
         row_by_key=row_by_key,
         checklist_items=checklist_items,
@@ -122,6 +173,8 @@ def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, 
         "component_contributions": {
             "checklist_items": checklist_items,
             "missing_critical_inputs": missing_critical_inputs,
+            "pullback_percentile_context": percentile_context,
+            "systemic_not_triggered_by_percentile_only": True,
         },
         "interpretation_boundary": PULLBACK_BOUNDARY,
     }
@@ -171,10 +224,22 @@ def build_pullback_checklist_rows(rows: list[dict[str, Any]]) -> list[dict[str, 
             "unit": "text",
             "status": row_status,
         },
+        {
+            **common,
+            "metric_key": "pullback_percentile_context",
+            "display_name": "Pullback percentile context",
+            "value": _percentile_context_text(percentile_context),
+            "value_text": _percentile_context_text(percentile_context),
+            "unit": "json",
+            "status": "ok" if percentile_context["available_count"] else "watch",
+        },
     ]
 
 
-def _checklist_items(row_by_key: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+def _checklist_items(
+    row_by_key: dict[str, dict[str, Any]],
+    evidence_index: historical_percentile_metrics.EvidenceIndex,
+) -> list[dict[str, Any]]:
     return [
         _item(
             "equity_damage",
@@ -186,18 +251,21 @@ def _checklist_items(row_by_key: dict[str, dict[str, Any]]) -> list[dict[str, An
                 "nasdaq100_drawdown_6m",
             )),
             "Equity drawdown is outcome evidence, not systemic-risk proof by itself.",
+            evidence_index,
         ),
         _item(
             "credit_spread_confirmation",
             _credit_spread_confirmation(row_by_key),
             _evidence(row_by_key, ("high_yield_spread", "investment_grade_spread", "credit_stress_status")),
             "Requires HY and IG spread confirmation for systemic-risk escalation.",
+            evidence_index,
         ),
         _item(
             "volatility_confirmation",
             _volatility_confirmation(row_by_key),
             _evidence(row_by_key, ("vix",)),
             "VIX alone is not systemic risk.",
+            evidence_index,
         ),
         _item(
             "rates_real_yield_pressure",
@@ -210,6 +278,7 @@ def _checklist_items(row_by_key: dict[str, dict[str, Any]]) -> list[dict[str, An
                 "real_yield_pressure_status",
             )),
             "Rates and real yield are macro context, not trading signals.",
+            evidence_index,
         ),
         _item(
             "labor_deterioration",
@@ -222,18 +291,21 @@ def _checklist_items(row_by_key: dict[str, dict[str, Any]]) -> list[dict[str, An
                 "unemployment_rate_12m_low_gap",
             )),
             "Labor deterioration supports macro review but does not alone confirm crisis.",
+            evidence_index,
         ),
         _item(
             "inflation_fed_constraint",
             _inflation_fed_constraint(row_by_key),
             _evidence(row_by_key, ("core_cpi_yoy", "core_pce_yoy", "ppi_final_demand_yoy")),
             "Inflation constraints are macro context and not a market-bottom/top signal.",
+            evidence_index,
         ),
         _item(
             "cross_asset_proxy_confirmation",
             _cross_asset_proxy_confirmation(row_by_key),
             _evidence(row_by_key, ("hyg_vs_lqd_30d", "hyg_vs_lqd_60d")),
             "HYG/LQD is proxy evidence, not official funding stress.",
+            evidence_index,
         ),
         _gap_item("valuation_gap"),
         _gap_item("earnings_gap"),
@@ -405,13 +477,17 @@ def _item(
     status_severity: tuple[str, str],
     evidence: list[dict[str, Any]],
     notes: str,
+    evidence_index: historical_percentile_metrics.EvidenceIndex,
 ) -> dict[str, Any]:
     status, severity = status_severity
+    percentile_evidence = evidence_index.available_d13_context(ITEM_PERCENTILE_KEYS.get(key, ()))
     return {
         "key": key,
         "status": status,
         "severity": severity,
         "evidence": evidence,
+        "percentile_evidence": percentile_evidence,
+        "rarity_note": _rarity_note(percentile_evidence),
         "notes": notes,
     }
 
@@ -486,6 +562,52 @@ def _items_value_text(items: list[dict[str, Any]]) -> str:
     mixed = sum(1 for item in items if item["status"] == "mixed")
     missing = sum(1 for item in items if item["status"] == "missing")
     return f"{len(items)} items; confirmed={confirmed}; mixed={mixed}; missing={missing}"
+
+
+def _percentile_context(
+    evidence_index: historical_percentile_metrics.EvidenceIndex,
+) -> dict[str, Any]:
+    available = evidence_index.available_d13_context(D13_PULLBACK_KEYS)
+    missing = evidence_index.missing_d13_context(D13_PULLBACK_KEYS)
+    return {
+        "available_count": len(available),
+        "missing_count": len(missing),
+        "available": available,
+        "missing": missing,
+        "credit_percentile_used_as_auxiliary": any(
+            item.get("metric_key") in ITEM_PERCENTILE_KEYS["credit_spread_confirmation"]
+            for item in available
+        ),
+        "systemic_not_triggered_by_percentile_only": True,
+        "liquidity_still_missing_until_d14": True,
+        "normalization_boundary": (
+            "This checklist is not crash probability. Percentile evidence is auxiliary "
+            "and cannot alone trigger systemic_risk_review. Equity drawdown percentile "
+            "alone is not systemic risk. VIX percentile alone is not systemic risk. "
+            "Proxy evidence is not true breadth or official funding stress. Liquidity/"
+            "funding remains a critical missing input until D14 is implemented."
+        ),
+    }
+
+
+def _percentile_context_text(context: dict[str, Any]) -> str:
+    return (
+        f"{context['available_count']} D13 auxiliary percentile rows available; "
+        f"{context['missing_count']} missing or blocked"
+    )
+
+
+def _rarity_note(percentile_evidence: list[dict[str, Any]]) -> str | None:
+    if not percentile_evidence:
+        return None
+    bands = [
+        item.get("percentile_band") or item.get("robust_zscore_band") or item.get("zscore_band")
+        for item in percentile_evidence
+    ]
+    bands = [str(band) for band in bands if band]
+    if not bands:
+        return None
+    return f"D13 auxiliary rarity bands: {', '.join(bands)}."
 
 
 def _latest_text(values: Any) -> str | None:

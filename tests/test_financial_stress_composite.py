@@ -101,6 +101,54 @@ def test_contributions_preserve_input_evidence_and_source_badge():
     assert labor_input["source_badge"] == "derived"
 
 
+def test_percentile_context_is_auxiliary_and_preserved():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d13("vix_percentile", "extreme"),
+        _d13("dgs30_percentile", "high"),
+        _d13("high_yield_spread_percentile", None, status="insufficient_history"),
+    ]
+
+    result = _by_key(composite.build_financial_stress_rows(rows))
+    context = result["financial_stress_score"]["component_contributions"]["percentile_context"]
+
+    assert result["financial_stress_percentile_context"]["status"] == "ok"
+    assert context["available_count"] == 2
+    assert "high_yield_spread_percentile" in [
+        item["metric_key"] for item in context["missing"]
+    ]
+    assert "not forecast probability" in context["normalization_boundary"]
+
+
+def test_extreme_vix_percentile_alone_does_not_trigger_stress():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d13("vix_percentile", "extreme"),
+        _d13("vix_robust_zscore", "extreme", robust_band="extreme"),
+    ]
+
+    result = _by_key(composite.build_financial_stress_rows(rows))
+
+    assert result["financial_stress_status"]["value"] == "ok"
+    assert result["financial_stress_score"]["value"] < 25
+
+
+def test_extreme_drawdown_percentile_alone_does_not_trigger_stress():
+    rows = [
+        _row("credit_stress", "high_yield_spread", 2.5),
+        _row("credit_stress", "investment_grade_spread", 0.8),
+        _d13("sp500_drawdown_3m_percentile", "extreme"),
+        _d13("nasdaq100_drawdown_3m_percentile", "extreme"),
+    ]
+
+    result = _by_key(composite.build_financial_stress_rows(rows))
+
+    assert result["financial_stress_status"]["value"] == "ok"
+    assert result["financial_stress_score"]["value"] < 25
+
+
 def test_missing_research_stale_and_insufficient_inputs_are_not_strong_evidence():
     rows = [
         _row("credit_stress", "high_yield_spread", 6.5, status="stale"),
@@ -147,6 +195,43 @@ def _row(
         "interpretation_hint": "test input",
         "blocked_reason": None,
         "ai_context_allowed": status == "ok",
+    }
+
+
+def _d13(metric_key, percentile_band, *, status="ok", robust_band=None):
+    return {
+        "module": "historical_risk_percentile",
+        "metric_key": metric_key,
+        "display_name": metric_key,
+        "value": 95.0 if status == "ok" else None,
+        "value_text": "95 percentile" if status == "ok" else "insufficient history",
+        "unit": "percentile",
+        "status": status,
+        "source": "local_market_history",
+        "source_badge": "derived",
+        "source_series": metric_key.upper(),
+        "observation_date": "2026-06-01",
+        "generated_at": "2026-06-01T00:00:00+00:00",
+        "freshness_status": "historical" if status == "ok" else "insufficient_history",
+        "missing_reason": None if status == "ok" else "insufficient_history_for_percentile",
+        "interpretation_hint": "D13 auxiliary context",
+        "blocked_reason": None if status == "ok" else "status_insufficient_history",
+        "ai_context_allowed": status == "ok",
+        "lookback_window": "5Y rolling",
+        "lookback_start": "2021-06-01",
+        "lookback_end": "2026-06-01",
+        "observation_count": 1200 if status == "ok" else 20,
+        "minimum_observation_count": 60,
+        "history_quality_status": "sufficient" if status == "ok" else "insufficient_history",
+        "percentile": 95.0 if percentile_band else None,
+        "percentile_band": percentile_band,
+        "zscore_band": None,
+        "robust_zscore_band": robust_band,
+        "percentile_direction": "higher_is_more_stress",
+        "frequency_class": "daily_or_weekly_market",
+        "ai_context_tier": "factual_band" if status == "ok" else "excluded",
+        "trigger_eligibility": "hard_trigger_allowed" if status == "ok" else "not_eligible",
+        "interpretation_boundary": "Historical percentile is relative to available local history, not a forecast.",
     }
 
 

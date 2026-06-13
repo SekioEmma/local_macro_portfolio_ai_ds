@@ -1,9 +1,12 @@
 import json
 import socket
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from app_backend.schemas.responses import DashboardEvidenceRow
 from app_backend.main import app
+from app_backend.services import ai_context_service
 from app_backend.services import dashboard_service
 
 
@@ -123,11 +126,123 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
     ]
 
 
+def test_manifest_carries_eligible_d13_and_excludes_insufficient_history(monkeypatch):
+    rows = [
+        _evidence_row(
+            "historical_risk_percentile",
+            "vix_percentile",
+            95.0,
+            status="stress",
+            ai_context_allowed=True,
+            percentile_band="extreme",
+            robust_zscore_band="high",
+        ),
+        _evidence_row(
+            "historical_risk_percentile",
+            "high_yield_spread_percentile",
+            None,
+            status="insufficient_history",
+            ai_context_allowed=False,
+            percentile_band=None,
+            freshness_status="insufficient_history",
+            missing_reason="insufficient_history_for_percentile",
+        ),
+        _evidence_row(
+            "financial_stress_composite",
+            "financial_stress_score",
+            10.0,
+            source_badge="derived",
+            component_contributions={
+                "percentile_context": {
+                    "available": [
+                        {
+                            "metric_key": "vix_percentile",
+                            "source_badge": "derived",
+                            "lookback_window": "5Y rolling",
+                            "percentile_band": "extreme",
+                            "trigger_eligibility": "auxiliary_only",
+                            "interpretation_boundary": "not a forecast",
+                        }
+                    ]
+                }
+            },
+        ),
+    ]
+    monkeypatch.setattr(
+        dashboard_service,
+        "build_dashboard_evidence_table",
+        lambda **kwargs: SimpleNamespace(generated_at="2026-06-01T00:00:00+00:00", rows=rows),
+    )
+
+    manifest = ai_context_service.build_ai_context_manifest()
+    included_d13 = [row for row in manifest.included_facts if row["metric_key"] == "vix_percentile"]
+    excluded_d13 = [
+        row
+        for row in manifest.excluded_facts
+        if row["metric_key"] == "high_yield_spread_percentile"
+    ]
+    stress = _model_output({"included_model_outputs": manifest.included_model_outputs}, "financial_stress_score")
+
+    assert included_d13
+    assert included_d13[0]["source_badge"] == "derived"
+    assert included_d13[0]["lookback_window"] == "5Y rolling"
+    assert included_d13[0]["percentile_band"] == "extreme"
+    assert included_d13[0]["robust_zscore_band"] == "high"
+    assert included_d13[0]["trigger_eligibility"] == "auxiliary_only"
+    assert excluded_d13[0]["excluded_reason"] == "status_insufficient_history"
+    assert "percentile_context" in stress["component_contributions"]
+
+
 def _model_output(data, metric_key):
     for row in data["included_model_outputs"]:
         if row["metric_key"] == metric_key:
             return row
     raise AssertionError(f"missing model output {metric_key}")
+
+
+def _evidence_row(
+    module,
+    metric_key,
+    value,
+    *,
+    status="ok",
+    source_badge="derived",
+    ai_context_allowed=True,
+    percentile_band=None,
+    robust_zscore_band=None,
+    freshness_status="historical",
+    missing_reason=None,
+    component_contributions=None,
+):
+    return DashboardEvidenceRow(
+        row_id=f"{module}:{metric_key}",
+        module=module,
+        metric_key=metric_key,
+        display_name=metric_key,
+        value=value,
+        value_text=str(value) if value is not None else "insufficient history",
+        unit=None,
+        status=status,
+        source="local_market_history",
+        source_badge=source_badge,
+        source_series=metric_key.upper(),
+        observation_date="2026-06-01",
+        generated_at="2026-06-01T00:00:00+00:00",
+        freshness_status=freshness_status,
+        missing_reason=missing_reason,
+        interpretation_hint="test",
+        blocked_reason=None if ai_context_allowed else f"status_{status}",
+        ai_context_allowed=ai_context_allowed,
+        component_contributions=component_contributions,
+        interpretation_boundary="Historical percentile is relative to local history, not a forecast.",
+        lookback_window="5Y rolling" if module == "historical_risk_percentile" else None,
+        observation_count=1200 if module == "historical_risk_percentile" else None,
+        minimum_observation_count=60 if module == "historical_risk_percentile" else None,
+        history_quality_status="sufficient" if ai_context_allowed else "insufficient_history",
+        percentile_band=percentile_band,
+        robust_zscore_band=robust_zscore_band,
+        trigger_eligibility="auxiliary_only" if ai_context_allowed else "not_eligible",
+    )
 
 
 def _write_reports(tmp_path):
