@@ -22,6 +22,7 @@ from data_providers import market_data_service  # noqa: E402
 from data_providers import yfinance_history_provider  # noqa: E402
 from data_quality import historical_derived_metrics  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
+from data_quality import liquidity_funding_stress as d14_liquidity_funding  # noqa: E402
 from data_quality import market_history_store  # noqa: E402
 from data_quality import official_macro_pack  # noqa: E402
 import ingest_core_risk_history  # noqa: E402
@@ -143,6 +144,9 @@ HISTORICAL_RISK_PERCENTILE_METRIC_KEYS = {
     "continuing_claims_4w_avg_percentile",
     "continuing_claims_4w_avg_robust_zscore",
 }
+LIQUIDITY_FUNDING_RAW_METRIC_KEYS = set(d14_liquidity_funding.RAW_METRIC_KEYS)
+LIQUIDITY_FUNDING_DERIVED_METRIC_KEYS = set(d14_liquidity_funding.DERIVED_METRIC_KEYS)
+LIQUIDITY_FUNDING_METRIC_KEYS = set(d14_liquidity_funding.ALL_METRIC_KEYS)
 CORE_RISK_RAW_METRIC_KEYS = {
     "high_yield_spread",
     "investment_grade_spread",
@@ -207,6 +211,10 @@ def build_coverage_audit(
     financial_stress_composite = _financial_stress_composite_audit(rows)
     pullback_systemic_risk_checklist = _pullback_systemic_checklist_audit(rows)
     historical_risk_percentile = _historical_risk_percentile_audit(rows)
+    liquidity_funding = _liquidity_funding_stress_audit(rows)
+    liquidity_funding_history = _liquidity_funding_history_audit(
+        db_path=_audit_market_history_db_path(reports_dir, market_history_db_path)
+    )
     core_risk_history = _core_risk_history_audit(
         db_path=_audit_market_history_db_path(reports_dir, market_history_db_path),
         historical_risk_percentile=historical_risk_percentile,
@@ -245,6 +253,8 @@ def build_coverage_audit(
         "financial_stress_composite": financial_stress_composite,
         "pullback_systemic_risk_checklist": pullback_systemic_risk_checklist,
         "historical_risk_percentile": historical_risk_percentile,
+        "liquidity_funding_stress": liquidity_funding,
+        "liquidity_funding_history": liquidity_funding_history,
         "core_risk_history": core_risk_history,
         "valuation_research": valuation_research,
         "dashboard_derived_integration": dashboard_derived_integration,
@@ -265,6 +275,7 @@ def build_coverage_audit(
             historical_derived,
             energy_history,
             yfinance_history,
+            liquidity_funding_history,
             core_risk_history,
             dashboard_derived_integration,
             official_macro,
@@ -597,6 +608,7 @@ def _recommendations(
     historical_derived: dict[str, Any] | None = None,
     energy_history: dict[str, Any] | None = None,
     yfinance_history: dict[str, Any] | None = None,
+    liquidity_funding_history: dict[str, Any] | None = None,
     core_risk_history: dict[str, Any] | None = None,
     dashboard_derived_integration: dict[str, Any] | None = None,
     official_macro: dict[str, Any] | None = None,
@@ -632,6 +644,8 @@ def _recommendations(
         recommendations.extend(energy_history.get("recommended_history_actions", []))
     if yfinance_history:
         recommendations.extend(yfinance_history.get("recommendations", []))
+    if liquidity_funding_history:
+        recommendations.extend(liquidity_funding_history.get("recommendations", []))
     if core_risk_history and not core_risk_history.get("history_sufficient_for_d13"):
         recommendations.append("run_core_risk_history_backfill_live_write")
     if dashboard_derived_integration and dashboard_derived_integration.get(
@@ -1114,6 +1128,82 @@ def _group_context_available(by_group: dict[str, Any], group: str) -> bool:
     return bool(isinstance(item, dict) and item.get("available_count", 0) > 0)
 
 
+def _liquidity_funding_stress_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    lf_rows = [
+        row
+        for row in rows
+        if row.module == "liquidity_funding_stress"
+        or row.metric_key in LIQUIDITY_FUNDING_METRIC_KEYS
+    ]
+    by_key = {row.metric_key: row for row in lf_rows}
+    status = by_key.get("liquidity_funding_stress_status")
+    boundary = by_key.get("liquidity_funding_interpretation_boundary")
+    missing_mappings = sorted(
+        row.metric_key for row in lf_rows if row.status == "research_needed"
+    )
+    return {
+        "liquidity_funding_available": bool(status and _has_value(status)),
+        "raw_metric_count": sum(
+            1 for row in lf_rows if row.metric_key in LIQUIDITY_FUNDING_RAW_METRIC_KEYS
+        ),
+        "derived_metric_count": sum(
+            1 for row in lf_rows if row.metric_key in LIQUIDITY_FUNDING_DERIVED_METRIC_KEYS
+        ),
+        "ok_count": sum(1 for row in lf_rows if row.status == "ok"),
+        "watch_count": sum(1 for row in lf_rows if row.status == "watch"),
+        "pressure_count": sum(1 for row in lf_rows if row.status == "pressure"),
+        "stress_count": sum(1 for row in lf_rows if row.status == "stress"),
+        "research_needed_count": sum(
+            1 for row in lf_rows if row.status == "research_needed"
+        ),
+        "insufficient_evidence_count": sum(
+            1 for row in lf_rows if row.status == "insufficient_evidence"
+        ),
+        "ai_context_allowed_count": sum(1 for row in lf_rows if row.ai_context_allowed),
+        "official_count": sum(1 for row in lf_rows if row.source_badge == "official"),
+        "official_fallback_count": sum(
+            1 for row in lf_rows if row.source_badge == "official_fallback"
+        ),
+        "derived_count": sum(1 for row in lf_rows if row.source_badge == "derived"),
+        "missing_source_mappings": missing_mappings,
+        "cp_spread_available": _row_has_ok_value(by_key.get("cp_effr_spread"))
+        or _row_has_ok_value(by_key.get("cp_sofr_spread")),
+        "policy_plumbing_available": _row_has_ok_value(
+            by_key.get("policy_plumbing_status")
+        ),
+        "official_stress_reference_available": _row_has_ok_value(
+            by_key.get("official_stress_reference_status")
+        ),
+        "liquidity_funding_status": status.value if status is not None else "missing",
+        "liquidity_funding_boundary_available": bool(boundary and boundary.value),
+    }
+
+
+def _liquidity_funding_history_audit(
+    *,
+    db_path: Path | str | None,
+) -> dict[str, Any]:
+    summary = d14_liquidity_funding.latest_history_summary(db_path=db_path)
+    raw_counts = summary["raw_history_counts"]
+    derived_counts = summary["derived_history_counts"]
+    history_missing = [
+        key
+        for key, count in {**raw_counts, **derived_counts}.items()
+        if count == 0
+    ]
+    recommendations = []
+    if history_missing:
+        recommendations.append("run_liquidity_funding_history_live_write")
+    return {
+        "raw_history_counts": raw_counts,
+        "derived_history_counts": derived_counts,
+        "latest_observation_by_metric": summary["latest_observation_by_metric"],
+        "missing_history_metric_keys": sorted(history_missing),
+        "source_badge_distribution": summary["source_badge_distribution"],
+        "recommendations": recommendations,
+    }
+
+
 def _ai_context_manifest_audit() -> dict[str, Any]:
     manifest = ai_context_service.build_ai_context_manifest()
     source_summary = manifest.source_summary
@@ -1157,6 +1247,22 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
             for row in manifest.excluded_facts
             if row.get("module") == "historical_risk_percentile"
             and row.get("status") == "insufficient_history"
+        ),
+        "included_d14_fact_count": sum(
+            1
+            for row in manifest.included_facts
+            if row.get("module") == "liquidity_funding_stress"
+        ),
+        "excluded_d14_ineligible_count": sum(
+            1
+            for row in manifest.excluded_facts
+            if row.get("module") == "liquidity_funding_stress"
+        ),
+        "included_d14_boundary_count": sum(
+            1
+            for row in manifest.included_facts
+            if row.get("module") == "liquidity_funding_stress"
+            and row.get("interpretation_boundary")
         ),
     }
 
@@ -2113,6 +2219,12 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Historical Risk Percentile", ""])
     for key, value in audit["historical_risk_percentile"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Liquidity/Funding Stress", ""])
+    for key, value in audit["liquidity_funding_stress"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Liquidity/Funding History", ""])
+    for key, value in audit["liquidity_funding_history"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Proxy Breadth", ""])
     for key, value in audit["proxy_breadth"].items():

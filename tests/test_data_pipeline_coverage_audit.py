@@ -63,11 +63,21 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert result["historical_risk_percentile"]["historical_risk_percentile_metric_count"] == 23
     assert result["historical_risk_percentile"]["configured_count"] == 23
     assert "d13_credit_percentile_status" in result["historical_risk_percentile"]
+    assert "liquidity_funding_stress" in result
+    assert "liquidity_funding_available" in result["liquidity_funding_stress"]
+    assert result["liquidity_funding_stress"]["raw_metric_count"] == 9
+    assert result["liquidity_funding_stress"]["derived_metric_count"] == 9
+    assert "ofr_fsi" in result["liquidity_funding_stress"]["missing_source_mappings"]
+    assert "liquidity_funding_history" in result
+    assert "raw_history_counts" in result["liquidity_funding_history"]
+    assert "missing_history_metric_keys" in result["liquidity_funding_history"]
     assert "core_risk_history" in result
     assert "ai_context_manifest" in result
     assert result["ai_context_manifest"]["manifest_available"] is True
     assert "included_d13_fact_count" in result["ai_context_manifest"]
     assert "excluded_d13_insufficient_history_count" in result["ai_context_manifest"]
+    assert "included_d14_fact_count" in result["ai_context_manifest"]
+    assert "excluded_d14_ineligible_count" in result["ai_context_manifest"]
     assert result["ai_context_manifest"]["returns_holdings_line_items"] is False
     assert result["module_coverage"]
     assert "recommendations" in result

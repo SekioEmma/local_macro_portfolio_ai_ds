@@ -78,7 +78,8 @@ const metricLabels: Record<string, string> = {
 Object.assign(moduleLabels, {
   financial_stress_composite: "Financial stress composite",
   pullback_systemic_risk_checklist: "Pullback/systemic risk checklist",
-  historical_risk_percentile: "Historical risk percentile"
+  historical_risk_percentile: "Historical risk percentile",
+  liquidity_funding_stress: "Liquidity/funding stress"
 });
 
 Object.assign(statusLabels, {
@@ -129,7 +130,26 @@ Object.assign(metricLabels, {
   continuing_claims_4w_avg_percentile:
     "Continuing claims 4W average percentile",
   continuing_claims_4w_avg_robust_zscore:
-    "Continuing claims 4W average robust z-score"
+    "Continuing claims 4W average robust z-score",
+  sofr: "SOFR",
+  effr: "Effective federal funds rate",
+  iorb: "Interest on reserve balances",
+  on_rrp: "ON RRP usage",
+  commercial_paper_rate: "Commercial paper rate",
+  ofr_fsi: "OFR financial stress index",
+  stl_fsi: "St. Louis Fed financial stress index",
+  nfci: "Chicago Fed NFCI",
+  anfci: "Chicago Fed adjusted NFCI",
+  sofr_effr_spread: "SOFR-EFFR spread",
+  effr_iorb_spread: "EFFR-IORB spread",
+  cp_effr_spread: "CP-EFFR spread",
+  cp_sofr_spread: "CP-SOFR spread",
+  policy_plumbing_status: "Policy plumbing status",
+  short_term_funding_pressure_status: "Short-term funding pressure status",
+  official_stress_reference_status: "Official stress reference status",
+  liquidity_funding_stress_status: "Liquidity/funding stress status",
+  liquidity_funding_interpretation_boundary:
+    "Liquidity/funding interpretation boundary"
 });
 
 export function getModuleLabel(moduleKey: string) {

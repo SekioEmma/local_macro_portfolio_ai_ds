@@ -123,6 +123,10 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
         "Financial stress score is pressure temperature, not prediction.",
         "Pullback checklist is risk review, not forecast.",
         "Portfolio deviation cannot be attributed to macro factors.",
+        "Liquidity/funding stress rows are reference evidence, not trading signals.",
+        "Official stress indices do not replace the project financial stress composite.",
+        "Commercial paper spread cannot alone prove systemic crisis.",
+        "ON RRP usage alone is not a risk trigger.",
     ]
 
 

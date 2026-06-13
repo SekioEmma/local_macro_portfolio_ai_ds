@@ -19,6 +19,7 @@ from data_quality import financial_stress_composite
 from data_quality import historical_derived_metrics
 from data_quality import historical_percentile_metrics
 from data_quality import last_good_cache
+from data_quality import liquidity_funding_stress
 from data_quality import market_history_store
 from data_quality import official_macro_pack
 from data_quality import pullback_systemic_checklist
@@ -143,6 +144,15 @@ DERIVED_METRIC_KEYS = {
     "pullback_supporting_evidence",
     "pullback_interpretation_boundary",
     "pullback_percentile_context",
+    "sofr_effr_spread",
+    "effr_iorb_spread",
+    "cp_effr_spread",
+    "cp_sofr_spread",
+    "policy_plumbing_status",
+    "short_term_funding_pressure_status",
+    "official_stress_reference_status",
+    "liquidity_funding_stress_status",
+    "liquidity_funding_interpretation_boundary",
     "high_yield_spread_percentile",
     "high_yield_spread_zscore",
     "high_yield_spread_robust_zscore",
@@ -517,7 +527,16 @@ def build_dashboard_evidence_table(
     pullback_rows = _pullback_systemic_checklist_evidence_rows(
         base_rows + percentile_rows + financial_stress_rows
     )
-    all_rows = base_rows + financial_stress_rows + pullback_rows + percentile_rows
+    liquidity_funding_rows = _liquidity_funding_stress_evidence_rows(
+        db_path=dashboard_market_history_db_path
+    )
+    all_rows = (
+        base_rows
+        + financial_stress_rows
+        + pullback_rows
+        + percentile_rows
+        + liquidity_funding_rows
+    )
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
     filtered_rows = [
@@ -669,6 +688,19 @@ def _historical_risk_percentile_evidence_rows(
     )
     return [
         _evidence_row("historical_risk_percentile", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
+def _liquidity_funding_stress_evidence_rows(
+    *,
+    db_path: Path | str | None = None,
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = liquidity_funding_stress.build_liquidity_funding_rows(
+        db_path=db_path
+    )
+    return [
+        _evidence_row("liquidity_funding_stress", DashboardMetric(**payload))
         for payload in metric_payloads
     ]
 

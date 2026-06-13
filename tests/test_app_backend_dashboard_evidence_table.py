@@ -22,6 +22,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "financial_stress_composite",
     "pullback_systemic_risk_checklist",
     "historical_risk_percentile",
+    "liquidity_funding_stress",
 }
 
 
@@ -81,6 +82,13 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     assert percentile["ai_context_allowed"] is False
     assert percentile["lookback_window"] == "5Y rolling"
     assert percentile["percentile_direction"] == "higher_is_more_stress"
+    liquidity = _row(
+        data,
+        "liquidity_funding_stress",
+        "liquidity_funding_interpretation_boundary",
+    )
+    assert liquidity["source_badge"] == "derived"
+    assert "not trading signals" in liquidity["interpretation_boundary"]
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):

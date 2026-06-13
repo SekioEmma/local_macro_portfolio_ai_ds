@@ -149,6 +149,13 @@ export type DashboardEvidenceFilters = {
   ai_context_allowed?: boolean;
 };
 
+export type DashboardEvidenceModuleKey =
+  | "financial_stress_composite"
+  | "historical_risk_percentile"
+  | "liquidity_funding_stress"
+  | "pullback_systemic_risk_checklist"
+  | string;
+
 export type DashboardEvidenceTableResponse = {
   generated_at: string | null;
   overall_status: string;

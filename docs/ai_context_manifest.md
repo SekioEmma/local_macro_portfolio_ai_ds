@@ -17,6 +17,8 @@ Both paths return the same manifest.
 - Eligible D13 `historical_risk_percentile` rows with their lookback window,
   observation count, percentile band, robust z-score band, trigger eligibility,
   and interpretation boundary
+- Eligible D14 `liquidity_funding_stress` rows with source badge, source series,
+  observation date, sanitized input evidence, and interpretation boundary
 - D10 `financial_stress_composite` rows as included model outputs when eligible
 - D11 `pullback_systemic_risk_checklist` rows as included model outputs when eligible
 
@@ -29,6 +31,8 @@ source badge, status, lookback window, band, trigger eligibility, and boundary.
 
 Rows are excluded when they are missing, research-only, insufficient history,
 insufficient evidence, stale, blocked from AI context, or search-derived.
+D14 `research_needed`, `missing`, `insufficient_evidence`, and `stale` rows are
+excluded from included facts while remaining visible in evidence/audit surfaces.
 
 The manifest explicitly excludes credentials, provider payloads, prompt text,
 holdings details, holdings line items, report file contents, search results, and
@@ -51,3 +55,7 @@ portfolio deviation remain excluded.
 - Financial stress score is pressure temperature, not prediction.
 - Pullback checklist is risk review, not forecast.
 - Portfolio deviation cannot be attributed to macro factors.
+- Liquidity/funding stress rows are reference evidence, not trading signals.
+- Official stress indices do not replace the project financial stress composite.
+- Commercial paper spread cannot alone prove systemic crisis.
+- ON RRP usage alone is not a risk trigger.

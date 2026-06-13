@@ -11,6 +11,7 @@ MODEL_OUTPUT_MODULES = {
     "financial_stress_composite",
     "pullback_systemic_risk_checklist",
 }
+D14_FACT_MODULES = {"liquidity_funding_stress"}
 EXCLUDED_STATUSES = {
     "missing",
     "research_needed",
@@ -31,6 +32,10 @@ RISK_BOUNDARIES = [
     "Financial stress score is pressure temperature, not prediction.",
     "Pullback checklist is risk review, not forecast.",
     "Portfolio deviation cannot be attributed to macro factors.",
+    "Liquidity/funding stress rows are reference evidence, not trading signals.",
+    "Official stress indices do not replace the project financial stress composite.",
+    "Commercial paper spread cannot alone prove systemic crisis.",
+    "ON RRP usage alone is not a risk trigger.",
 ]
 
 
@@ -143,6 +148,10 @@ def _row_manifest(row: DashboardEvidenceRow) -> dict[str, Any]:
         if value is not None:
             payload[field] = value
     if row.module in MODEL_OUTPUT_MODULES:
+        payload["input_evidence"] = _safe_input_evidence(row.input_evidence)
+        payload["component_contributions"] = row.component_contributions
+        payload["missing_inputs"] = row.missing_inputs
+    if row.module in D14_FACT_MODULES:
         payload["input_evidence"] = _safe_input_evidence(row.input_evidence)
         payload["component_contributions"] = row.component_contributions
         payload["missing_inputs"] = row.missing_inputs
