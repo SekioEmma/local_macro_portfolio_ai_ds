@@ -107,6 +107,22 @@ Future M5b work could add section-level timing inside the extracted audit
 helpers. Future M6 work could clean frontend labels and types after the audit
 module contract remains stable.
 
+### M6 frontend registry note
+
+M6 organized frontend display labels and module boundary copy into lightweight
+registry files under `app_frontend/src/utils/`. This is a display-layer cleanup
+only. It does not change dashboard APIs, evidence row content, audit JSON,
+backend source/freshness/AI-context gates, D10/D11/D13/D14 logic, or benchmark
+contracts.
+
+The benchmark should continue to report the M2/M3/M4a/M5 fields, including
+`d13_query_strategy`, `d14_query_strategy`, `pipeline_context_available`,
+`summary_reused_by_evidence`, `evidence_reused_by_manifest`, and
+`estimated_rebuilds_avoided`.
+
+Future M6b work could add a frontend test runner or component snapshots. D15
+regime classification remains deferred.
+
 ### M1 baseline
 
 Observed timings with 33,803 observations / 45 metrics in local `market_history.sqlite3` (June 2026 baseline):

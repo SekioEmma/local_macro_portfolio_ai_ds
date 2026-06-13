@@ -1,5 +1,6 @@
 import type { DashboardEvidenceRow } from "../types";
 import {
+  formatEvidenceValueText,
   getAiContextLabel,
   getFreshnessLabel,
   getSourceBadgeLabel
@@ -41,7 +42,9 @@ export function EvidenceRowsTable({ rows, compact = false }: EvidenceRowsTablePr
             <tr key={row.row_id}>
               <td>{row.metric_key}</td>
               <td>{row.display_name}</td>
-              <td className="value-cell">{safeValueText(row.value_text, row.status)}</td>
+              <td className="value-cell">
+                {formatEvidenceValueText(row.value_text, row.status)}
+              </td>
               <td>
                 <MetricBadge status={row.status} />
               </td>
@@ -102,14 +105,4 @@ function AiContextChip({ row }: { row: DashboardEvidenceRow }) {
       {aiContextLabel(row)}
     </span>
   );
-}
-
-function safeValueText(valueText: string, status: string) {
-  const text = valueText.trim();
-  if (text && text !== "--") return text;
-  if (status === "research_needed") return "research needed";
-  if (status === "insufficient_history") return "insufficient history";
-  if (status === "not_available") return "not available";
-  if (status === "stale") return "stale";
-  return "missing";
 }

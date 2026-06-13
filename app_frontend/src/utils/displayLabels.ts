@@ -1,159 +1,7 @@
-const moduleLabels: Record<string, string> = {
-  credit_stress: "信用压力",
-  rate_pressure: "利率压力",
-  real_yield_pressure: "实际收益率压力",
-  inflation_energy_pressure: "通胀与能源压力",
-  equity_trend: "权益趋势",
-  breadth_concentration_proxy: "宽度/集中度代理",
-  market_stress_derived: "市场压力派生",
-  portfolio_deviation: "组合偏离",
-  labor_macro: "劳动力宏观"
-};
-
-const statusLabels: Record<string, string> = {
-  ok: "正常",
-  watch: "观察",
-  pressure: "承压",
-  stress: "压力显著",
-  missing: "缺失",
-  unknown: "未知",
-  insufficient_history: "历史不足",
-  research_needed: "需研究数据源",
-  not_available: "不可用",
-  stale: "过期",
-  degraded: "降级",
-  error: "错误",
-  not_run_yet: "未运行"
-};
-
-const sourceBadgeLabels: Record<string, string> = {
-  official: "官方",
-  official_fallback: "官方备用",
-  unofficial_fallback: "非官方备用",
-  proxy: "代理指标",
-  derived: "派生",
-  local: "本地",
-  "search-derived": "搜索派生",
-  missing: "来源缺失",
-  research_needed: "待研究"
-};
-
-const freshnessLabels: Record<string, string> = {
-  fresh: "新鲜",
-  historical: "历史数据",
-  normal_lag: "正常滞后",
-  stale: "过期",
-  unknown: "新鲜度未知",
-  missing: "新鲜度缺失",
-  insufficient_history: "历史不足"
-};
-
-const missingReasonLabels: Record<string, string> = {
-  "Only index level is available; YoY requires historical comparison.":
-    "只有指数水平；YoY 需要历史同比比较。",
-  "PPI final demand series is not configured; do not use PPIACO as final demand.":
-    "PPI final demand 尚未配置；不能用 PPIACO 代替。",
-  "FRED PPIFIS PPI final demand compact observation is missing; do not use PPIACO as final demand.":
-    "PPI 最终需求官方观测值缺失，不能用 PPIACO 替代。",
-  "PPI final demand YoY requires at least 13 monthly PPIFIS observations; do not use index level as YoY.":
-    "PPI 最终需求同比需要至少 13 个月 PPIFIS 历史，不能把指数水平当同比。"
-};
-
-const metricLabels: Record<string, string> = {
-  ppi_final_demand: "PPI 最终需求",
-  ppi_final_demand_yoy: "PPI 最终需求同比",
-  ppi_final_demand_mom: "PPI 最终需求环比",
-  sp500_drawdown_3m: "标普500 3个月回撤",
-  sp500_drawdown_6m: "标普500 6个月回撤",
-  nasdaq100_drawdown_3m: "纳指100 3个月回撤",
-  nasdaq100_drawdown_6m: "纳指100 6个月回撤",
-  dgs10_dgs2_curve_slope: "10Y-2Y 曲线斜率",
-  dgs30_dgs10_curve_slope: "30Y-10Y 曲线斜率",
-  tlt_proxy_30d_return: "TLT 代理30日回报",
-  gld_proxy_30d_return: "GLD 代理30日回报",
-  shy_proxy_30d_return: "SHY 代理30日回报",
-  tlt_vs_shy_30d: "TLT-SHY 30日相对回报"
-};
-
-Object.assign(moduleLabels, {
-  financial_stress_composite: "Financial stress composite",
-  pullback_systemic_risk_checklist: "Pullback/systemic risk checklist",
-  historical_risk_percentile: "Historical risk percentile",
-  liquidity_funding_stress: "Liquidity/funding stress"
-});
-
-Object.assign(statusLabels, {
-  insufficient_evidence: "Insufficient evidence"
-});
-
-Object.assign(metricLabels, {
-  financial_stress_score: "Financial stress score",
-  financial_stress_status: "Financial stress status",
-  financial_stress_dominant_pressure_source:
-    "Financial stress dominant pressure source",
-  financial_stress_component_contributions:
-    "Financial stress component contributions",
-  financial_stress_missing_inputs: "Financial stress missing inputs",
-  financial_stress_interpretation_boundary:
-    "Financial stress interpretation boundary",
-  financial_stress_percentile_context: "Financial stress percentile context",
-  financial_stress_funding_liquidity_context:
-    "Financial stress funding/liquidity context",
-  pullback_classification: "Pullback classification",
-  pullback_checklist_items: "Pullback checklist items",
-  pullback_missing_critical_inputs: "Pullback missing critical inputs",
-  pullback_supporting_evidence: "Pullback supporting evidence",
-  pullback_interpretation_boundary: "Pullback interpretation boundary",
-  pullback_percentile_context: "Pullback percentile context",
-  pullback_liquidity_funding_context: "Pullback liquidity/funding context",
-  high_yield_spread_percentile: "High-yield spread percentile",
-  high_yield_spread_zscore: "High-yield spread z-score",
-  high_yield_spread_robust_zscore: "High-yield spread robust z-score",
-  investment_grade_spread_percentile: "Investment-grade spread percentile",
-  investment_grade_spread_zscore: "Investment-grade spread z-score",
-  investment_grade_spread_robust_zscore:
-    "Investment-grade spread robust z-score",
-  vix_percentile: "VIX percentile",
-  vix_zscore: "VIX z-score",
-  vix_robust_zscore: "VIX robust z-score",
-  dgs30_percentile: "30Y Treasury yield percentile",
-  dgs30_zscore: "30Y Treasury yield z-score",
-  dgs30_robust_zscore: "30Y Treasury yield robust z-score",
-  dfii10_percentile: "10Y real yield percentile",
-  dfii10_zscore: "10Y real yield z-score",
-  dfii10_robust_zscore: "10Y real yield robust z-score",
-  sp500_drawdown_3m_percentile: "S&P 500 3M drawdown percentile",
-  sp500_drawdown_3m_robust_zscore: "S&P 500 3M drawdown robust z-score",
-  nasdaq100_drawdown_3m_percentile: "Nasdaq 100 3M drawdown percentile",
-  nasdaq100_drawdown_3m_robust_zscore:
-    "Nasdaq 100 3M drawdown robust z-score",
-  initial_claims_4w_avg_percentile: "Initial claims 4W average percentile",
-  initial_claims_4w_avg_robust_zscore:
-    "Initial claims 4W average robust z-score",
-  continuing_claims_4w_avg_percentile:
-    "Continuing claims 4W average percentile",
-  continuing_claims_4w_avg_robust_zscore:
-    "Continuing claims 4W average robust z-score",
-  sofr: "SOFR",
-  effr: "Effective federal funds rate",
-  iorb: "Interest on reserve balances",
-  on_rrp: "ON RRP usage",
-  commercial_paper_rate: "Commercial paper rate",
-  ofr_fsi: "OFR financial stress index",
-  stl_fsi: "St. Louis Fed financial stress index",
-  nfci: "Chicago Fed NFCI",
-  anfci: "Chicago Fed adjusted NFCI",
-  sofr_effr_spread: "SOFR-EFFR spread",
-  effr_iorb_spread: "EFFR-IORB spread",
-  cp_effr_spread: "CP-EFFR spread",
-  cp_sofr_spread: "CP-SOFR spread",
-  policy_plumbing_status: "Policy plumbing status",
-  short_term_funding_pressure_status: "Short-term funding pressure status",
-  official_stress_reference_status: "Official stress reference status",
-  liquidity_funding_stress_status: "Liquidity/funding stress status",
-  liquidity_funding_interpretation_boundary:
-    "Liquidity/funding interpretation boundary"
-});
+import { moduleLabels } from "./moduleRegistry";
+import { metricLabels } from "./metricRegistry";
+import { sourceBadgeLabels } from "./sourceBadgeRegistry";
+import { freshnessLabels, missingReasonLabels, statusLabels } from "./statusRegistry";
 
 export function getModuleLabel(moduleKey: string) {
   return moduleLabels[moduleKey] || moduleKey;
@@ -182,6 +30,16 @@ export function getMissingReasonLabel(reason: string | null | undefined) {
 
 export function getMetricLabel(metricKey: string) {
   return metricLabels[metricKey] || metricKey;
+}
+
+export function formatEvidenceValueText(valueText: string, status: string) {
+  const text = valueText.trim();
+  if (text && text !== "--") return text;
+  if (status === "research_needed") return "research needed";
+  if (status === "insufficient_history") return "insufficient history";
+  if (status === "not_available") return "not available";
+  if (status === "stale") return "stale";
+  return "missing";
 }
 
 export function formatCompactHint(text: string | null | undefined) {

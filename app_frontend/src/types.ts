@@ -3,6 +3,7 @@ export type ApiResult<T> = {
   error: string | null;
 };
 
+// App shell and diagnostics API responses.
 export type StatusResponse = {
   app_name: string;
   mode: string;
@@ -32,6 +33,7 @@ export type ProviderHealthResponse = {
   error_summary: string | null;
 };
 
+// Dashboard summary and evidence API responses.
 export type DashboardModule = {
   key: string;
   status: string;
@@ -189,6 +191,7 @@ export type AIContextManifestResponse = {
   source_summary: Record<string, unknown>;
 };
 
+// Local app-state API responses.
 export type StorageStatusResponse = {
   storage_mode: string;
   database_exists: boolean;
