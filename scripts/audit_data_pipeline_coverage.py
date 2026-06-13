@@ -16,6 +16,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
+from app_backend.services import ai_context_service  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
 from data_providers import yfinance_history_provider  # noqa: E402
 from data_quality import historical_derived_metrics  # noqa: E402
@@ -163,6 +164,7 @@ def build_coverage_audit(
     official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
     provider_health = _provider_health_audit(summary.provider_health)
+    ai_context_manifest = _ai_context_manifest_audit()
     module_coverage = _module_coverage(summary.modules, rows, last_good)
 
     return {
@@ -195,6 +197,7 @@ def build_coverage_audit(
         "dashboard_derived_integration": dashboard_derived_integration,
         "official_macro_pack": official_macro,
         "provider_health": provider_health,
+        "ai_context_manifest": ai_context_manifest,
         "metadata_anomalies": metadata_anomalies,
         "derived_dependency_anomalies": dependency_anomalies,
         "blocked_reason_counts": _blocked_reason_counts(rows),
@@ -990,6 +993,35 @@ def _pullback_systemic_checklist_audit(rows: list[DashboardEvidenceRow]) -> dict
         "pullback_has_interpretation_boundary": bool(
             classification is not None and getattr(classification, "interpretation_boundary", None)
         ),
+    }
+
+
+def _ai_context_manifest_audit() -> dict[str, Any]:
+    manifest = ai_context_service.build_ai_context_manifest()
+    source_summary = manifest.source_summary
+    return {
+        "manifest_available": True,
+        "included_facts_count": source_summary.get("included_facts_count", 0),
+        "excluded_facts_count": source_summary.get("excluded_facts_count", 0),
+        "included_model_outputs_count": source_summary.get(
+            "included_model_outputs_count", 0
+        ),
+        "excluded_model_outputs_count": source_summary.get(
+            "excluded_model_outputs_count", 0
+        ),
+        "included_model_output_keys": sorted(
+            row.get("metric_key") for row in manifest.included_model_outputs
+        ),
+        "portfolio_context_mode": manifest.portfolio_context_policy.get("mode"),
+        "search_derived_default": manifest.search_policy.get("search_derived_default"),
+        "returns_holdings_line_items": manifest.privacy_policy.get(
+            "returns_holdings_line_items"
+        ),
+        "returns_provider_payloads": manifest.privacy_policy.get(
+            "returns_provider_payloads"
+        ),
+        "returns_credentials": manifest.privacy_policy.get("returns_credentials"),
+        "risk_boundary_count": len(manifest.risk_boundaries),
     }
 
 

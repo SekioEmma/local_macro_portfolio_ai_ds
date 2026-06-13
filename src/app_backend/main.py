@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app_backend.schemas.responses import (
+    AIContextManifestResponse,
     AppSettingsResponse,
     CreateFavoriteAnswerRequest,
     CreateRefreshRunRequest,
@@ -16,7 +17,12 @@ from app_backend.schemas.responses import (
     StorageStatusResponse,
     UpdateAppSettingsRequest,
 )
-from app_backend.services import dashboard_service, provider_service, storage_service
+from app_backend.services import (
+    ai_context_service,
+    dashboard_service,
+    provider_service,
+    storage_service,
+)
 from app_backend.services.status_service import build_status
 
 
@@ -63,6 +69,16 @@ def get_dashboard_evidence_table(
         source_badge=source_badge,
         ai_context_allowed=ai_context_allowed,
     )
+
+
+@app.get("/api/ai/context-preview", response_model=AIContextManifestResponse)
+def get_ai_context_preview() -> AIContextManifestResponse:
+    return ai_context_service.build_ai_context_manifest()
+
+
+@app.get("/api/context/manifest", response_model=AIContextManifestResponse)
+def get_context_manifest() -> AIContextManifestResponse:
+    return ai_context_service.build_ai_context_manifest()
 
 
 @app.get("/api/app/storage", response_model=StorageStatusResponse)

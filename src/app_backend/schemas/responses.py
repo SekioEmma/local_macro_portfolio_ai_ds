@@ -114,6 +114,21 @@ class DashboardEvidenceTableResponse(BaseModel):
     next_actions: list[str]
 
 
+class AIContextManifestResponse(BaseModel):
+    generated_at: str | None
+    included_facts: list[dict[str, Any]]
+    excluded_facts: list[dict[str, Any]]
+    included_model_outputs: list[dict[str, Any]]
+    excluded_model_outputs: list[dict[str, Any]]
+    portfolio_context_policy: dict[str, Any]
+    privacy_policy: dict[str, Any]
+    search_policy: dict[str, Any]
+    model_destination: dict[str, Any]
+    persistence_policy: dict[str, Any]
+    risk_boundaries: list[str]
+    source_summary: dict[str, Any]
+
+
 class StorageStatusResponse(BaseModel):
     storage_mode: str
     database_exists: bool

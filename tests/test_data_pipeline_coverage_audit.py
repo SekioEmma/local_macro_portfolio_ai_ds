@@ -55,6 +55,9 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "pullback_systemic_risk_checklist" in result
     assert "pullback_classification" in result["pullback_systemic_risk_checklist"]
     assert result["pullback_systemic_risk_checklist"]["pullback_source_badge"] == "derived"
+    assert "ai_context_manifest" in result
+    assert result["ai_context_manifest"]["manifest_available"] is True
+    assert result["ai_context_manifest"]["returns_holdings_line_items"] is False
     assert result["module_coverage"]
     assert "recommendations" in result
 

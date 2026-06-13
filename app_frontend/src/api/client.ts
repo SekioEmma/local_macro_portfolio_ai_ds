@@ -1,5 +1,6 @@
 import type {
   ApiResult,
+  AIContextManifestResponse,
   AppSettings,
   AppSettingsResponse,
   DashboardEvidenceFilters,
@@ -44,6 +45,12 @@ export function fetchDashboardEvidenceTable(
   return requestJson<DashboardEvidenceTableResponse>(
     `/api/dashboard/evidence-table${suffix}`
   );
+}
+
+export function fetchAIContextManifest(): Promise<
+  ApiResult<AIContextManifestResponse>
+> {
+  return requestJson<AIContextManifestResponse>("/api/ai/context-preview");
 }
 
 export function fetchStorageStatus(): Promise<ApiResult<StorageStatusResponse>> {

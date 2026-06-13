@@ -133,6 +133,21 @@ export type DashboardEvidenceTableResponse = {
   next_actions: string[];
 };
 
+export type AIContextManifestResponse = {
+  generated_at: string | null;
+  included_facts: Array<Record<string, unknown>>;
+  excluded_facts: Array<Record<string, unknown>>;
+  included_model_outputs: Array<Record<string, unknown>>;
+  excluded_model_outputs: Array<Record<string, unknown>>;
+  portfolio_context_policy: Record<string, unknown>;
+  privacy_policy: Record<string, unknown>;
+  search_policy: Record<string, unknown>;
+  model_destination: Record<string, unknown>;
+  persistence_policy: Record<string, unknown>;
+  risk_boundaries: string[];
+  source_summary: Record<string, unknown>;
+};
+
 export type StorageStatusResponse = {
   storage_mode: string;
   database_exists: boolean;
