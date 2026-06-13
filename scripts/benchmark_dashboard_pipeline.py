@@ -157,6 +157,41 @@ def run_benchmark(
     ai_context_manifest_ms = _ms(t0)
     included_facts_count = len(manifest.included_facts)
     included_model_outputs_count = len(manifest.included_model_outputs)
+    legacy_total_ms = round(
+        dashboard_summary_ms + dashboard_evidence_table_ms + ai_context_manifest_ms,
+        2,
+    )
+
+    # 3b. shared request-scoped context path: summary -> evidence -> manifest.
+    shared_context = dashboard_service.DashboardPipelineContext()
+    t0 = time.perf_counter()
+    shared_summary = dashboard_service.build_dashboard_summary(
+        reports_dir=reports_dir,
+        market_history_db_path=market_history_db_path,
+        context=shared_context,
+    )
+    shared_dashboard_summary_ms = _ms(t0)
+    summary_reused_by_evidence_before = shared_context.summary is shared_summary
+    t0 = time.perf_counter()
+    shared_evidence = dashboard_service.build_dashboard_evidence_table(
+        reports_dir=reports_dir,
+        market_history_db_path=market_history_db_path,
+        write_last_good=False,
+        context=shared_context,
+    )
+    shared_dashboard_evidence_table_ms = _ms(t0)
+    summary_reused_by_evidence = summary_reused_by_evidence_before and shared_context.summary is shared_summary
+    evidence_cached_before_manifest = shared_context.evidence_table is shared_evidence
+    t0 = time.perf_counter()
+    shared_manifest = ai_context_service.build_ai_context_manifest(context=shared_context)
+    shared_ai_context_manifest_ms = _ms(t0)
+    evidence_reused_by_manifest = evidence_cached_before_manifest and shared_context.evidence_table is shared_evidence
+    shared_context_total_ms = round(
+        shared_dashboard_summary_ms
+        + shared_dashboard_evidence_table_ms
+        + shared_ai_context_manifest_ms,
+        2,
+    )
 
     # 4. D13: build_historical_percentile_rows (M2: single batch query)
     db_path_str = str(db_path) if db_path.exists() else None
@@ -209,6 +244,25 @@ def run_benchmark(
         "dashboard_summary_ms": dashboard_summary_ms,
         "dashboard_evidence_table_ms": dashboard_evidence_table_ms,
         "ai_context_manifest_ms": ai_context_manifest_ms,
+        "legacy_separate_calls": {
+            "dashboard_summary_ms": dashboard_summary_ms,
+            "dashboard_evidence_table_ms": dashboard_evidence_table_ms,
+            "ai_context_manifest_ms": ai_context_manifest_ms,
+        },
+        "legacy_total_ms": legacy_total_ms,
+        "shared_context_calls": {
+            "shared_summary_evidence_manifest_total_ms": shared_context_total_ms,
+            "shared_dashboard_summary_ms": shared_dashboard_summary_ms,
+            "shared_dashboard_evidence_table_ms": shared_dashboard_evidence_table_ms,
+            "shared_ai_context_manifest_ms": shared_ai_context_manifest_ms,
+            "summary_reused_by_evidence": summary_reused_by_evidence,
+            "evidence_reused_by_manifest": evidence_reused_by_manifest,
+        },
+        "shared_context_total_ms": shared_context_total_ms,
+        "pipeline_context_available": True,
+        "summary_reused_by_evidence": summary_reused_by_evidence,
+        "evidence_reused_by_manifest": evidence_reused_by_manifest,
+        "estimated_rebuilds_avoided": int(summary_reused_by_evidence) + int(evidence_reused_by_manifest),
         "d10_build_ms": d10_build_ms,
         "d10_isolation_note": "partial: D13+D14 dicts as input; base_rows from dashboard_service internals excluded",
         "d11_build_ms": d11_build_ms,
@@ -221,6 +275,9 @@ def run_benchmark(
         "evidence_row_count": evidence_row_count,
         "included_facts_count": included_facts_count,
         "included_model_outputs_count": included_model_outputs_count,
+        "shared_evidence_row_count": shared_evidence.row_count,
+        "shared_included_facts_count": len(shared_manifest.included_facts),
+        "shared_included_model_outputs_count": len(shared_manifest.included_model_outputs),
         "market_history_batch_api_available": True,
         "market_history_index_metric_date_available": db_index_audit.get("has_explicit_metric_key_index", False),
         "slowest_sections": [{"section": k, "ms": v} for k, v in slowest],
@@ -235,6 +292,7 @@ def run_benchmark(
             f"d14_raw_metric_count={len(liquidity_funding_stress.RAW_METRIC_KEYS)} (M2: one batch query for all raw metrics)",
             "D10 and D11 in-memory timing uses D13+D14 dict rows as input; actual pipeline also includes base_rows",
             "m2_optimization: D13/D14 now use list_market_observations_batch; single DB connection per build call",
+            "m3_shared_context: explicit DashboardPipelineContext can reuse summary in evidence and evidence in manifest within one call chain",
         ],
     }
     return _guard_output(result)
@@ -246,6 +304,9 @@ def _call_path_audit() -> dict[str, Any]:
             "M2: D13 build_historical_percentile_rows now uses list_market_observations_batch: single DB connect + single query for all unique source metrics",
             "M2: D14 build_liquidity_funding_rows now uses list_market_observations_batch: single DB connect + single query for all raw metrics",
             f"M2: idx_market_observations_metric_date index (metric_key, observation_date DESC) added via schema migration version 2",
+            "M3: DashboardPipelineContext is explicit request-scoped state, not process-level or disk cache",
+            "M3: build_dashboard_evidence_table can reuse a context summary when supplied",
+            "M3: build_ai_context_manifest can reuse a context evidence table when supplied",
             "build_dashboard_evidence_table calls build_dashboard_summary internally: both paths share no cached result",
             "ai_context_service.build_ai_context_manifest calls build_dashboard_evidence_table (write_last_good=False): full pipeline rebuilt on every manifest request",
             "audit_data_pipeline_coverage.build_coverage_audit calls both build_dashboard_summary and build_dashboard_evidence_table independently",
@@ -259,13 +320,13 @@ def _call_path_audit() -> dict[str, Any]:
             f"D14 N+1 resolved: was {len(liquidity_funding_stress.RAW_METRIC_KEYS)} separate DB queries; now 1 batch query",
             "D13/D14 connection-per-call resolved: was 32 connect/close cycles; now 2 (one per batch call)",
             "Missing (metric_key, observation_date DESC) covering index resolved: added as idx_market_observations_metric_date via schema v2",
+            "Summary/evidence/manifest same-call-chain rebuilds can be avoided with explicit DashboardPipelineContext",
         ],
         "remaining_hotspots_for_m3": [
-            "build_dashboard_evidence_table calls build_dashboard_summary internally: a combined summary+evidence request rebuilds the dashboard summary twice",
-            "ai_context_manifest rebuild: manifest call triggers a third full pipeline rebuild independent of any prior /evidence-table call",
+            "Frontend parallel /summary and /evidence-table requests are still separate HTTP requests without shared cache",
             "audit rebuild: running build_coverage_audit after a manifest call can trigger a fourth full pipeline build in the same process lifecycle",
             "get_market_history_summary issues get_latest_observation per distinct metric (N+1 for summary stats)",
-            "No request-scoped cache: each HTTP request rebuilds all rows from scratch",
+            "No cross-request cache: separate HTTP requests still rebuild independently",
         ],
     }
 

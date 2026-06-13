@@ -39,8 +39,16 @@ RISK_BOUNDARIES = [
 ]
 
 
-def build_ai_context_manifest() -> AIContextManifestResponse:
-    evidence = dashboard_service.build_dashboard_evidence_table(write_last_good=False)
+def build_ai_context_manifest(
+    context: dashboard_service.DashboardPipelineContext | None = None,
+) -> AIContextManifestResponse:
+    if context is not None and context.evidence_table is not None:
+        evidence = context.evidence_table
+    else:
+        evidence = dashboard_service.build_dashboard_evidence_table(
+            write_last_good=False,
+            context=context,
+        )
     included_facts: list[dict[str, Any]] = []
     excluded_facts: list[dict[str, Any]] = []
     included_model_outputs: list[dict[str, Any]] = []

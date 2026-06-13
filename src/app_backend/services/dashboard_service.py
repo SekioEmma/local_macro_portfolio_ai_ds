@@ -467,10 +467,19 @@ class PortfolioDeviationCompact:
     notes: list[str]
 
 
+@dataclass
+class DashboardPipelineContext:
+    summary: DashboardSummaryResponse | None = None
+    evidence_table: DashboardEvidenceTableResponse | None = None
+
+
 def build_dashboard_summary(
     reports_dir: Path | str | None = None,
     market_history_db_path: Path | str | None = None,
+    context: DashboardPipelineContext | None = None,
 ) -> DashboardSummaryResponse:
+    if context is not None and context.summary is not None:
+        return context.summary
     base_dir = Path(reports_dir) if reports_dir is not None else DEFAULT_REPORTS_DIR
     dashboard_market_history_db_path = _dashboard_market_history_db_path(
         base_dir,
@@ -485,7 +494,7 @@ def build_dashboard_summary(
     data_freshness = _data_freshness(reports, provider_health)
     next_actions = _next_actions(modules, provider_health)
 
-    return DashboardSummaryResponse(
+    summary = DashboardSummaryResponse(
         generated_at=_first_generated_at(reports, provider_health),
         overall_status=_overall_status(modules, provider_health),
         overall_risk_level=_overall_risk_level(reports),
@@ -495,6 +504,9 @@ def build_dashboard_summary(
         data_freshness=data_freshness,
         next_actions=next_actions,
     )
+    if context is not None:
+        context.summary = summary
+    return summary
 
 
 def build_dashboard_evidence_table(
@@ -505,12 +517,27 @@ def build_dashboard_evidence_table(
     source_badge: str | None = None,
     ai_context_allowed: bool | None = None,
     write_last_good: bool = True,
+    context: DashboardPipelineContext | None = None,
 ) -> DashboardEvidenceTableResponse:
+    if (
+        context is not None
+        and context.evidence_table is not None
+        and module is None
+        and status is None
+        and source_badge is None
+        and ai_context_allowed is None
+        and write_last_good is False
+    ):
+        return context.evidence_table
     base_dir = Path(reports_dir) if reports_dir is not None else DEFAULT_REPORTS_DIR
-    summary = build_dashboard_summary(
-        reports_dir=reports_dir,
-        market_history_db_path=market_history_db_path,
-    )
+    if context is not None and context.summary is not None:
+        summary = context.summary
+    else:
+        summary = build_dashboard_summary(
+            reports_dir=reports_dir,
+            market_history_db_path=market_history_db_path,
+            context=context,
+        )
     reports = _load_dashboard_reports(base_dir)
     dashboard_market_history_db_path = _dashboard_market_history_db_path(
         base_dir,
@@ -553,7 +580,7 @@ def build_dashboard_evidence_table(
         )
     ]
 
-    return DashboardEvidenceTableResponse(
+    evidence_table = DashboardEvidenceTableResponse(
         generated_at=summary.generated_at,
         overall_status=summary.overall_status,
         row_count=len(filtered_rows),
@@ -568,6 +595,16 @@ def build_dashboard_evidence_table(
         ),
         next_actions=summary.next_actions,
     )
+    if (
+        context is not None
+        and module is None
+        and status is None
+        and source_badge is None
+        and ai_context_allowed is None
+        and write_last_good is False
+    ):
+        context.evidence_table = evidence_table
+    return evidence_table
 
 
 def _load_dashboard_reports(base_dir: Path) -> dict[str, ReportState]:

@@ -75,6 +75,14 @@ EXPECTED_KEYS = {
     "dashboard_summary_ms",
     "dashboard_evidence_table_ms",
     "ai_context_manifest_ms",
+    "legacy_separate_calls",
+    "legacy_total_ms",
+    "shared_context_calls",
+    "shared_context_total_ms",
+    "pipeline_context_available",
+    "summary_reused_by_evidence",
+    "evidence_reused_by_manifest",
+    "estimated_rebuilds_avoided",
     "d10_build_ms",
     "d11_build_ms",
     "d13_build_ms",
@@ -85,6 +93,9 @@ EXPECTED_KEYS = {
     "evidence_row_count",
     "included_facts_count",
     "included_model_outputs_count",
+    "shared_evidence_row_count",
+    "shared_included_facts_count",
+    "shared_included_model_outputs_count",
     "market_history_batch_api_available",
     "market_history_index_metric_date_available",
     "slowest_sections",
@@ -150,6 +161,23 @@ def test_benchmark_output_has_expected_keys(monkeypatch, tmp_path):
     )
     missing = EXPECTED_KEYS - result.keys()
     assert not missing, f"Benchmark output missing keys: {missing}"
+
+
+def test_benchmark_output_has_m3_context_fields(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    result = bench.run_benchmark(
+        reports_dir=_minimal_reports_dir(tmp_path),
+        market_history_db_path=tmp_path / "absent.sqlite3",
+    )
+
+    assert result["pipeline_context_available"] is True
+    assert result["summary_reused_by_evidence"] is True
+    assert result["evidence_reused_by_manifest"] is True
+    assert result["estimated_rebuilds_avoided"] == 2
+    assert result["legacy_total_ms"] >= 0
+    assert result["shared_context_total_ms"] >= 0
+    assert result["shared_context_calls"]["summary_reused_by_evidence"] is True
+    assert result["shared_context_calls"]["evidence_reused_by_manifest"] is True
 
 
 def test_benchmark_slowest_sections_is_list(monkeypatch, tmp_path):

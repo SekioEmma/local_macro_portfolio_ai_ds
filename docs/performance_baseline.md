@@ -51,6 +51,31 @@ market_history_batch_api_available: true
 market_history_index_metric_date_available: true
 ```
 
+### M3 observed run
+
+Observed after M3 with the same local `market_history.sqlite3`:
+
+| Path | Legacy separate calls ms | Shared context ms | Notes |
+|---|---:|---:|---|
+| summary + evidence + manifest total | 3051.39 | **1157.83** | explicit `DashboardPipelineContext` avoided 2 same-call-chain rebuilds |
+| `build_dashboard_summary` | 788.21 | 726.53 | first context fill |
+| `build_dashboard_evidence_table` | 1133.59 | 430.45 | reused context summary |
+| `build_ai_context_manifest` | 1129.59 | 0.85 | reused context evidence table |
+
+M3 benchmark fields observed in the same run:
+
+```text
+pipeline_context_available: true
+summary_reused_by_evidence: true
+evidence_reused_by_manifest: true
+legacy_total_ms: 3051.39
+shared_context_total_ms: 1157.83
+estimated_rebuilds_avoided: 2
+```
+
+This is request-scoped result sharing only. Separate frontend HTTP requests
+still rebuild independently; cross-request cache is outside M3.
+
 ### M1 baseline
 
 Observed timings with 33,803 observations / 45 metrics in local `market_history.sqlite3` (June 2026 baseline):
@@ -213,25 +238,28 @@ Implementation notes:
 
 ---
 
-## Recommended M3
+## Implemented M3
 
 **Request-scoped result sharing for summary → evidence → manifest call chain.**
 
-The three call sites (`/summary`, `/evidence-table`, `/ai/context-preview`)
-each rebuild the full pipeline independently. A lightweight
-`_DashboardPipelineResult` dataclass (or `functools.lru_cache` with a per-request
-key) could let the evidence table reuse the already-built summary, and the
-manifest reuse the already-built evidence rows.
+M3 added an explicit `DashboardPipelineContext` service-layer object. When
+callers pass it through one call chain, evidence table can reuse an already-built
+summary and AI context manifest can reuse an already-built evidence table.
 
-Estimated impact: eliminates 2 of the ~3 full rebuilds on a typical page load.
+Observed impact is listed above for this local run only; it is not an SLA.
 
 Implementation notes:
-- Scope cache to a single HTTP request (e.g., pass a mutable context dict into
-  the service functions, or use `starlette.requests.Request.state`).
-- Do not use a process-level cache — report JSON files are mutable and a stale
-  process-level cache would serve outdated data.
-- Do not add caching to the audit script path — audit intentionally rebuilds.
-- Confirm all existing tests still pass and no financial logic changes.
+- The context is explicit, mutable, and caller-owned; there is no process-level
+  global cache and no disk cache.
+- `build_dashboard_evidence_table(..., context=...)` reuses `context.summary`
+  when present.
+- `build_ai_context_manifest(context=...)` reuses `context.evidence_table` when
+  present.
+- Filtered evidence calls are still built and filtered normally; the context
+  stores only unfiltered `write_last_good=False` evidence tables.
+- Audit still rebuilds independently; audit reuse remains a possible M4/M5 item.
+- Frontend parallel `/summary` and `/evidence-table` calls are still separate
+  HTTP requests without cross-request sharing.
 
 ---
 
