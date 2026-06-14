@@ -69,14 +69,20 @@ Stage 3 does not add new financial model behavior. D15 remains Macro Regime
 Review, not a classifier or probability model. D19 remains historical replay,
 not probability modeling or trading backtest.
 
-The next engineering step is Stage 4 D16 Scenario Stress Test v0.
-
 ## D16 Scenario Stress Test v0
 
-D16 is next. It should be a scenario matrix, not a forecast.
+D16 is implemented as a deterministic scenario matrix / current evidence
+transmission review, not a forecast.
 
-It should not output probabilities, asset-direction certainty, return estimates,
-or allocation directives.
+It uses current evidence rows and model outputs to summarize predefined scenario
+support, affected evidence groups, transmission channels, missing inputs,
+severity band, and uncertainty band.
+
+It does not output scenario odds, asset-direction certainty, return estimates,
+allocation directives, action instructions, or portfolio optimization results.
+
+The next engineering step is Stage 5 D17 Growth / Inflation Macro Pack. D17 is
+not implemented in Stage 4.
 
 ## Later Modeling Areas
 

@@ -1,4 +1,5 @@
 from modeling.model_registry import (
+    D16_FORBIDDEN_TERMS,
     D19_FORBIDDEN_TERMS,
     FORBIDDEN_PUBLIC_OUTPUT_KEYS,
     ModelRegistry,
@@ -13,6 +14,7 @@ REQUIRED_MODEL_MODULES = {
     "historical_risk_percentile",
     "liquidity_funding_stress",
     "macro_regime_review",
+    "scenario_stress",
     "historical_validation",
 }
 
@@ -25,6 +27,7 @@ def test_model_registry_registers_all_stage_models():
         "financial_stress_composite",
         "pullback_systemic_risk_checklist",
         "macro_regime_review",
+        "scenario_stress",
         "historical_validation",
     } <= registry.model_output_module_keys()
 
@@ -61,7 +64,19 @@ def test_model_registry_d19_public_keys_exclude_forbidden_backtest_terms():
         assert term not in text
 
 
-def test_model_registry_and_audit_expected_keys_agree_for_d15_d19():
+def test_model_registry_d16_public_keys_exclude_forbidden_terms():
+    registry = ModelRegistry()
+    keys = set(registry.public_output_keys("scenario_stress"))
+    text = " ".join(sorted(keys)).lower()
+
+    assert "scenario_stress_status" in keys
+    assert "scenario_stress_interpretation_boundary" in keys
+    assert not (keys & set(FORBIDDEN_PUBLIC_OUTPUT_KEYS))
+    for term in D16_FORBIDDEN_TERMS:
+        assert term not in text
+
+
+def test_model_registry_and_audit_expected_keys_agree_for_d15_d16_d19():
     registry = ModelRegistry()
 
     assert module_audits.MACRO_REGIME_REVIEW_METRIC_KEYS == set(
@@ -69,6 +84,9 @@ def test_model_registry_and_audit_expected_keys_agree_for_d15_d19():
     )
     assert module_audits.HISTORICAL_VALIDATION_METRIC_KEYS == set(
         registry.public_output_keys("historical_validation")
+    )
+    assert module_audits.SCENARIO_STRESS_METRIC_KEYS == set(
+        registry.public_output_keys("scenario_stress")
     )
 
 

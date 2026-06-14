@@ -22,6 +22,9 @@ def test_ai_context_manifest_includes_and_excludes_expected_rows(monkeypatch, tm
     included_keys = {row["metric_key"] for row in data["included_facts"]}
     excluded = {row["metric_key"]: row for row in data["excluded_facts"]}
     model_keys = {row["metric_key"] for row in data["included_model_outputs"]}
+    excluded_model_keys = {
+        row["metric_key"] for row in data["excluded_model_outputs"]
+    }
 
     assert "high_yield_spread" in included_keys
     assert "vix" in included_keys
@@ -33,6 +36,7 @@ def test_ai_context_manifest_includes_and_excludes_expected_rows(monkeypatch, tm
     assert "financial_stress_score" in model_keys
     assert "pullback_classification" in model_keys
     assert "macro_regime_label" in model_keys
+    assert "scenario_stress_status" in model_keys | excluded_model_keys
     assert "financial_stress_score" not in included_keys
     assert "pullback_classification" not in included_keys
     assert "macro_regime_label" not in included_keys
@@ -137,6 +141,8 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
         "Macro regime review produces no probability or allocation directive.",
         "Historical validation is event-window replay, not future market direction.",
         "Historical validation produces no event odds or allocation directive.",
+        "Scenario stress is a hypothetical scenario matrix, not future market direction.",
+        "Scenario stress produces no event odds or allocation directive.",
     ]
 
 

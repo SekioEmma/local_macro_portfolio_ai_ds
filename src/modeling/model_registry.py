@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-from modeling.metric_lookup import D15_PUBLIC_OUTPUT_KEYS, D19_PUBLIC_OUTPUT_KEYS
+from modeling.metric_lookup import (
+    D15_PUBLIC_OUTPUT_KEYS,
+    D16_PUBLIC_OUTPUT_KEYS,
+    D19_PUBLIC_OUTPUT_KEYS,
+)
 
 
 D10_PUBLIC_OUTPUT_KEYS = (
@@ -80,6 +84,15 @@ D19_FORBIDDEN_TERMS = (
     "f1",
     "probability_calibration",
     "trading_backtest",
+)
+D16_FORBIDDEN_TERMS = (
+    "scenario_probability",
+    "crash_probability",
+    "recession_probability",
+    "market_direction_probability",
+    "expected_return",
+    "trade_signal",
+    "target_allocation",
 )
 
 
@@ -260,6 +273,41 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
             "or forecast. It exposes bands and ranked evidence, not public scores."
         ),
         notes="D15 public keys are band and evidence outputs only.",
+    ),
+    ModelRegistration(
+        model_key="scenario_stress_v0",
+        module_key="scenario_stress",
+        version_prefix="scenario_stress",
+        category="model_output",
+        public_output_keys=D16_PUBLIC_OUTPUT_KEYS,
+        required_input_groups=(
+            "credit",
+            "liquidity_funding",
+            "rates_real_yield",
+            "inflation_energy",
+            "labor_growth",
+            "equity_structure",
+        ),
+        optional_input_groups=("valuation_earnings_breadth", "portfolio_overlay", "historical_validation"),
+        ai_context_policy="model_output",
+        audit_policy="audit_d16_scenario_stress",
+        frontend_registry_policy="model_output_module_label_and_boundary",
+        forbidden_language_policy=(
+            "hypothetical scenario matrix",
+            "current evidence transmission review",
+            "not a forecast",
+            "not event odds",
+            "no asset-direction call",
+            "no allocation directive",
+            "no return estimate",
+            "proxy-only evidence cannot create high severity",
+        ),
+        interpretation_boundary=(
+            "Scenario stress is a hypothetical scenario matrix and current "
+            "evidence transmission review, not a forecast, event-odds model, "
+            "asset-direction call, allocation directive, or return estimate."
+        ),
+        notes="D16 summarizes predefined scenario transmission without odds or actions.",
     ),
     ModelRegistration(
         model_key="historical_validation_v0",

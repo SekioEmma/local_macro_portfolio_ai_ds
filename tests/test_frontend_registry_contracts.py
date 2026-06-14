@@ -18,6 +18,7 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
     assert 'historical_risk_percentile: "Historical risk percentile"' in module_registry
     assert 'liquidity_funding_stress: "Liquidity/funding stress"' in module_registry
     assert 'macro_regime_review: "Macro regime review"' in module_registry
+    assert 'scenario_stress: "Scenario stress"' in module_registry
     assert 'historical_validation: "Historical validation"' in module_registry
     for module_key in ModelRegistry().model_output_module_keys():
         assert f"{module_key}:" in module_registry
@@ -35,10 +36,12 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
         'historical_validation_status: "Historical validation status"'
         in metric_registry
     )
+    assert 'scenario_stress_status: "Scenario stress status"' in metric_registry
 
     assert "event-odds model" in module_registry
     assert "allocation directive" in module_registry
     assert "not a forecast" in module_registry
+    assert "scenario matrix" in module_registry
     assert "reference evidence" in module_registry
     assert "current evidence review" in module_registry
     assert "historical replay" in module_registry

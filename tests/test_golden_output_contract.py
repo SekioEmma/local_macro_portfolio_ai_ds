@@ -46,6 +46,7 @@ D11_KEYS = {
 }
 D15_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("macro_regime_review"))
 D15_FORBIDDEN_FIELDS = set(FORBIDDEN_PUBLIC_OUTPUT_KEYS)
+D16_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("scenario_stress"))
 D19_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("historical_validation"))
 FORBIDDEN_PUBLIC_PHRASES = (
     "crash probability",
@@ -93,6 +94,7 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     assert D10_KEYS <= keys_by_module["financial_stress_composite"]
     assert D11_KEYS <= keys_by_module["pullback_systemic_risk_checklist"]
     assert D15_PUBLIC_KEYS <= keys_by_module["macro_regime_review"]
+    assert D16_PUBLIC_KEYS <= keys_by_module["scenario_stress"]
     assert D19_PUBLIC_KEYS <= keys_by_module["historical_validation"]
 
     stress = _row(rows, "financial_stress_composite", "financial_stress_score")
@@ -137,6 +139,13 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     assert "probability" not in regime_boundary["value"].lower()
     assert "allocation directive" in regime_boundary["value"]
     assert "return estimate" in regime_boundary["value"]
+    scenario_boundary = _row(
+        rows,
+        "scenario_stress",
+        "scenario_stress_interpretation_boundary",
+    )
+    assert "scenario matrix" in scenario_boundary["value"]
+    assert "event-odds model" in scenario_boundary["value"]
     d19_boundary = _row(rows, "historical_validation", "historical_validation_validation_boundary")
     assert "historical replay" in d19_boundary["value"]
     assert "event-window consistency" in d19_boundary["value"]
@@ -220,11 +229,18 @@ def test_golden_audit_contract(tmp_path):
     assert d19["boundary_violation_count"] == 0
     assert d19["public_outputs_expose_probability_language"] is False
     assert d19["public_outputs_expose_trading_language"] is False
+    d16 = result["scenario_stress"]
+    assert d16["scenario_count"] == 7
+    assert d16["public_outputs_expose_probability_language"] is False
+    assert d16["public_outputs_expose_trading_language"] is False
+    assert d16["uses_model_registry"] is True
+    assert d16["uses_evidence_index"] is True
 
     _assert_no_private_tokens(result)
     _assert_no_forbidden_public_phrases(
         {
             "macro_regime_review": result["macro_regime_review"],
+            "scenario_stress": result["scenario_stress"],
             "ai_context_manifest": result["ai_context_manifest"],
         }
     )
@@ -252,12 +268,16 @@ def test_golden_frontend_registry_contract():
     for module_key in MODEL_REGISTRY.model_output_module_keys():
         assert f"{module_key}:" in module_registry
     assert 'macro_regime_review: "Macro regime review"' in module_registry
+    assert 'scenario_stress: "Scenario stress"' in module_registry
     assert 'historical_validation: "Historical validation"' in module_registry
     for metric_key in D15_PUBLIC_KEYS:
+        assert f"{metric_key}:" in metric_registry
+    for metric_key in D16_PUBLIC_KEYS:
         assert f"{metric_key}:" in metric_registry
     for metric_key in D19_PUBLIC_KEYS:
         assert f"{metric_key}:" in metric_registry
     assert "current evidence review" in module_registry
+    assert "scenario matrix" in module_registry
     assert "historical replay" in module_registry
     assert "allocation directive" in module_registry
     assert "return estimate" in module_registry

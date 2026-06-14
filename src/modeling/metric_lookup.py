@@ -34,6 +34,22 @@ D19_PUBLIC_OUTPUT_KEYS = (
     "historical_validation_formula_version",
     "historical_validation_as_of_date",
 )
+D16_PUBLIC_OUTPUT_KEYS = (
+    "scenario_stress_status",
+    "scenario_stress_scenario_count",
+    "scenario_stress_scenarios",
+    "scenario_stress_primary_scenario",
+    "scenario_stress_affected_groups",
+    "scenario_stress_transmission_channels",
+    "scenario_stress_severity_band",
+    "scenario_stress_uncertainty_band",
+    "scenario_stress_supporting_evidence",
+    "scenario_stress_missing_inputs",
+    "scenario_stress_interpretation_boundary",
+    "scenario_stress_model_version",
+    "scenario_stress_formula_version",
+    "scenario_stress_as_of_date",
+)
 D15_FORBIDDEN_PUBLIC_KEYS = (
     "macro_regime_score",
     "support_score_internal",
@@ -205,5 +221,20 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
             boundary_required=metric_key == "historical_validation_validation_boundary",
         )
         for metric_key in D19_PUBLIC_OUTPUT_KEYS
+    ),
+    *(
+        _metric(
+            metric_key,
+            "scenario_stress",
+            "scenario_stress",
+            "boundary" if "boundary" in metric_key else "version" if "version" in metric_key else "model_output",
+            "model_output_only",
+            "metadata_only",
+            public_output=True,
+            ai_context_policy="model_output",
+            status_policy="model_output",
+            boundary_required=metric_key == "scenario_stress_interpretation_boundary",
+        )
+        for metric_key in D16_PUBLIC_OUTPUT_KEYS
     ),
 )

@@ -13,6 +13,7 @@ D10_D11_MODULES = {
     MODEL_REGISTRY.require("pullback_systemic_risk_checklist").module_key,
 }
 D15_MODULE = MODEL_REGISTRY.require("macro_regime_review").module_key
+D16_MODULE = MODEL_REGISTRY.require("scenario_stress").module_key
 
 def _ai_context_manifest_audit() -> dict[str, Any]:
     manifest = ai_context_service.build_ai_context_manifest()
@@ -70,6 +71,16 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
             1
             for row in manifest.excluded_model_outputs
             if row.get("module") == D15_MODULE
+        ),
+        "included_d16_model_output_count": sum(
+            1
+            for row in manifest.included_model_outputs
+            if row.get("module") == D16_MODULE
+        ),
+        "excluded_d16_model_output_count": sum(
+            1
+            for row in manifest.excluded_model_outputs
+            if row.get("module") == D16_MODULE
         ),
         "excluded_d13_insufficient_history_count": sum(
             1

@@ -41,6 +41,7 @@ EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
     "proxy_breadth",
     "pullback_systemic_risk_checklist",
     "recommendations",
+    "scenario_stress",
     "source_badge_distribution",
     "top_insufficient_history_metrics",
     "top_missing_metrics",
@@ -180,9 +181,30 @@ MODEL_REGISTRY = ModelRegistry()
 EXPECTED_D15_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("macro_regime_review")
 )
+EXPECTED_D16_PUBLIC_OUTPUT_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("scenario_stress")
+)
 EXPECTED_D19_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("historical_validation")
 )
+
+EXPECTED_D16_KEYS = {
+    "boundary_available",
+    "configured_public_output_count",
+    "missing_inputs_visible",
+    "missing_public_output_keys",
+    "primary_scenario",
+    "public_output_keys",
+    "public_outputs_expose_probability_language",
+    "public_outputs_expose_trading_language",
+    "scenario_count",
+    "scenario_stress_available",
+    "scenario_stress_metric_count",
+    "severity_band",
+    "uncertainty_band",
+    "uses_evidence_index",
+    "uses_model_registry",
+}
 
 EXPECTED_D19_KEYS = {
     "available_event_count",
@@ -213,6 +235,7 @@ EXPECTED_MANIFEST_KEYS = {
     "included_d14_boundary_count",
     "included_d14_fact_count",
     "included_d15_model_output_count",
+    "included_d16_model_output_count",
     "included_facts_count",
     "included_model_output_keys",
     "included_model_outputs_count",
@@ -224,6 +247,7 @@ EXPECTED_MANIFEST_KEYS = {
     "risk_boundary_count",
     "search_derived_default",
     "excluded_d15_model_output_count",
+    "excluded_d16_model_output_count",
 }
 
 EXPECTED_HISTORICAL_STORE_KEYS = {
@@ -259,6 +283,7 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert set(result["historical_risk_percentile"]) == EXPECTED_D13_KEYS
     assert set(result["liquidity_funding_stress"]) == EXPECTED_D14_KEYS
     assert set(result["macro_regime_review"]) == EXPECTED_D15_KEYS
+    assert set(result["scenario_stress"]) == EXPECTED_D16_KEYS
     assert set(result["historical_validation"]) == EXPECTED_D19_KEYS
     assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
     assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
@@ -270,6 +295,9 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert result["historical_validation"]["public_outputs_expose_probability_language"] is False
     assert result["historical_validation"]["public_outputs_expose_trading_language"] is False
     assert set(result["macro_regime_review"]["public_output_keys"]) == EXPECTED_D15_PUBLIC_OUTPUT_KEYS
+    assert result["scenario_stress"]["public_outputs_expose_probability_language"] is False
+    assert result["scenario_stress"]["public_outputs_expose_trading_language"] is False
+    assert set(result["scenario_stress"]["public_output_keys"]) == EXPECTED_D16_PUBLIC_OUTPUT_KEYS
     assert set(result["historical_validation"]["public_output_keys"]) == EXPECTED_D19_PUBLIC_OUTPUT_KEYS
     assert '"raw_provider"' not in body
     assert '"raw_holdings"' not in body
@@ -370,6 +398,9 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "liquidity_funding_available" in result["liquidity_funding_stress"]
     assert result["liquidity_funding_stress"]["raw_metric_count"] == 9
     assert result["liquidity_funding_stress"]["derived_metric_count"] == 9
+    assert "scenario_stress" in result
+    assert result["scenario_stress"]["scenario_count"] == 7
+    assert result["scenario_stress"]["uses_model_registry"] is True
     assert "ofr_fsi" in result["liquidity_funding_stress"]["missing_source_mappings"]
     assert "liquidity_funding_history" in result
     assert "raw_history_counts" in result["liquidity_funding_history"]

@@ -30,6 +30,7 @@ from data_quality import macro_regime_review
 from data_quality import market_history_store
 from data_quality import official_macro_pack
 from data_quality import pullback_systemic_checklist
+from data_quality import scenario_stress
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -68,6 +69,7 @@ ALLOWED_METRIC_STATUSES = {
     "insufficient_history",
     "not_available",
     "insufficient_evidence",
+    "limited_evidence",
 }
 ALLOWED_SOURCE_BADGES = {
     "official",
@@ -86,6 +88,7 @@ AI_BLOCKED_METRIC_STATUSES = {
     "not_available",
     "insufficient_history",
     "insufficient_evidence",
+    "limited_evidence",
     "stale",
 }
 AI_BLOCKED_FRESHNESS_STATUSES = {
@@ -188,6 +191,20 @@ DERIVED_METRIC_KEYS = {
     "historical_validation_model_version",
     "historical_validation_formula_version",
     "historical_validation_as_of_date",
+    "scenario_stress_status",
+    "scenario_stress_scenario_count",
+    "scenario_stress_scenarios",
+    "scenario_stress_primary_scenario",
+    "scenario_stress_affected_groups",
+    "scenario_stress_transmission_channels",
+    "scenario_stress_severity_band",
+    "scenario_stress_uncertainty_band",
+    "scenario_stress_supporting_evidence",
+    "scenario_stress_missing_inputs",
+    "scenario_stress_interpretation_boundary",
+    "scenario_stress_model_version",
+    "scenario_stress_formula_version",
+    "scenario_stress_as_of_date",
     "high_yield_spread_percentile",
     "high_yield_spread_zscore",
     "high_yield_spread_robust_zscore",
@@ -596,11 +613,21 @@ def build_dashboard_evidence_table(
     historical_validation_rows = _historical_validation_evidence_rows(
         db_path=dashboard_market_history_db_path
     )
+    scenario_stress_rows = _scenario_stress_evidence_rows(
+        base_rows
+        + percentile_rows
+        + liquidity_funding_rows
+        + financial_stress_rows
+        + pullback_rows
+        + macro_regime_rows
+        + historical_validation_rows
+    )
     all_rows = (
         base_rows
         + financial_stress_rows
         + pullback_rows
         + macro_regime_rows
+        + scenario_stress_rows
         + historical_validation_rows
         + percentile_rows
         + liquidity_funding_rows
@@ -800,6 +827,18 @@ def _historical_validation_evidence_rows(
     )
     return [
         _evidence_row("historical_validation", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
+def _scenario_stress_evidence_rows(
+    rows: list[DashboardEvidenceRow],
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = scenario_stress.build_scenario_stress_rows(
+        [_model_to_dict(row) for row in rows]
+    )
+    return [
+        _evidence_row("scenario_stress", DashboardMetric(**payload))
         for payload in metric_payloads
     ]
 

@@ -21,6 +21,7 @@ Object.assign(moduleLabels, {
   financial_stress_composite: "Financial stress composite",
   historical_validation: "Historical validation",
   macro_regime_review: "Macro regime review",
+  scenario_stress: "Scenario stress",
   pullback_systemic_risk_checklist: "Pullback/systemic risk checklist",
   historical_risk_percentile: "Historical risk percentile",
   liquidity_funding_stress: "Liquidity/funding stress"
@@ -54,6 +55,8 @@ Object.assign(interpretationBoundaries, {
     "Historical validation is a read-only historical replay of deterministic evidence rows for event-window consistency and boundary validation. It is not a prediction model, event-odds model, business-cycle call, market direction forecast, allocation directive, or return estimate.",
   macro_regime_review:
     "Macro regime review is a current evidence review, not a prediction model, downside-event model, business-cycle call, or market direction forecast. It is for reference review only and does not produce probability, allocation directive, or return estimate.",
+  scenario_stress:
+    "Scenario stress is a hypothetical scenario matrix and current evidence transmission review, not a forecast, event-odds model, asset-direction call, allocation directive, or return estimate.",
   pullback_systemic_risk_checklist:
     "This checklist is a current evidence review, not an event-odds model. It does not predict market bottom or top. It is reference review only. D14 cannot alone trigger systemic risk review. Liquidity/funding confirmation can upgrade review only when credit and transmission evidence also confirm. Missing valuation, earnings, and true breadth continue to limit crisis confirmation.",
   historical_risk_percentile:
@@ -66,6 +69,7 @@ const moduleCategories: Record<string, ModuleRegistryEntry["category"]> = {
   financial_stress_composite: "model_output",
   historical_validation: "model_output",
   macro_regime_review: "model_output",
+  scenario_stress: "model_output",
   pullback_systemic_risk_checklist: "model_output",
   historical_risk_percentile: "derived",
   liquidity_funding_stress: "derived",

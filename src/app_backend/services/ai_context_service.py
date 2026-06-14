@@ -15,6 +15,7 @@ EXCLUDED_STATUSES = {
     "research_needed",
     "insufficient_history",
     "insufficient_evidence",
+    "limited_evidence",
     "stale",
     "not_available",
 }
@@ -38,6 +39,8 @@ RISK_BOUNDARIES = [
     "Macro regime review produces no probability or allocation directive.",
     "Historical validation is event-window replay, not future market direction.",
     "Historical validation produces no event odds or allocation directive.",
+    "Scenario stress is a hypothetical scenario matrix, not future market direction.",
+    "Scenario stress produces no event odds or allocation directive.",
 ]
 
 

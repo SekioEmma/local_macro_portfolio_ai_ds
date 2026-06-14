@@ -112,6 +112,23 @@ Object.assign(metricLabels, {
   historical_validation_validation_boundary: "Historical validation boundary",
   historical_validation_model_version: "Historical validation model version",
   historical_validation_formula_version: "Historical validation formula version",
-  historical_validation_as_of_date: "Historical validation as-of date"
+  historical_validation_as_of_date: "Historical validation as-of date",
+  scenario_stress_status: "Scenario stress status",
+  scenario_stress_scenario_count: "Scenario stress scenario count",
+  scenario_stress_scenarios: "Scenario stress scenarios",
+  scenario_stress_primary_scenario: "Scenario stress primary scenario",
+  scenario_stress_affected_groups: "Scenario stress affected groups",
+  scenario_stress_transmission_channels:
+    "Scenario stress transmission channels",
+  scenario_stress_severity_band: "Scenario stress severity band",
+  scenario_stress_uncertainty_band: "Scenario stress uncertainty band",
+  scenario_stress_supporting_evidence:
+    "Scenario stress supporting evidence",
+  scenario_stress_missing_inputs: "Scenario stress missing inputs",
+  scenario_stress_interpretation_boundary:
+    "Scenario stress interpretation boundary",
+  scenario_stress_model_version: "Scenario stress model version",
+  scenario_stress_formula_version: "Scenario stress formula version",
+  scenario_stress_as_of_date: "Scenario stress as-of date"
 });
 

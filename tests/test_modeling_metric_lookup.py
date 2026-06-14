@@ -1,6 +1,7 @@
 from modeling.metric_lookup import (
     D15_FORBIDDEN_PUBLIC_KEYS,
     D15_PUBLIC_OUTPUT_KEYS,
+    D16_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
     MetricLookup,
 )
@@ -24,6 +25,19 @@ def test_metric_lookup_registers_d19_public_fields():
     assert lookup.require("historical_validation_status").evidence_group == "historical_validation"
     assert (
         lookup.require("historical_validation_validation_boundary")
+        .interpretation_boundary_required
+        is True
+    )
+
+
+def test_metric_lookup_registers_d16_public_fields():
+    lookup = MetricLookup()
+    public_keys = set(lookup.public_output_keys("scenario_stress"))
+
+    assert set(D16_PUBLIC_OUTPUT_KEYS) <= public_keys
+    assert lookup.require("scenario_stress_status").evidence_group == "scenario_stress"
+    assert (
+        lookup.require("scenario_stress_interpretation_boundary")
         .interpretation_boundary_required
         is True
     )

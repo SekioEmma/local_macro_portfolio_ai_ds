@@ -24,6 +24,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "historical_risk_percentile",
     "liquidity_funding_stress",
     "macro_regime_review",
+    "scenario_stress",
     "historical_validation",
 }
 
@@ -106,6 +107,15 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     }
     assert "macro_regime_score" not in json.dumps(regime)
     assert "current evidence review" in regime["interpretation_boundary"]
+    scenario_stress = _row(data, "scenario_stress", "scenario_stress_status")
+    assert scenario_stress["source_badge"] == "derived"
+    assert scenario_stress["value"] in {
+        "available",
+        "limited_evidence",
+        "insufficient_evidence",
+    }
+    assert "scenario matrix" in scenario_stress["interpretation_boundary"]
+    assert "scenario_probability" not in json.dumps(scenario_stress)
     historical_validation = _row(
         data,
         "historical_validation",

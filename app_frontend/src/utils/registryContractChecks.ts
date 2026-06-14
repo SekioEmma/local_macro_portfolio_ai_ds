@@ -14,6 +14,7 @@ export const registryContractChecks = {
       "Pullback/systemic risk checklist",
     getModuleLabel("historical_risk_percentile") === "Historical risk percentile",
     getModuleLabel("liquidity_funding_stress") === "Liquidity/funding stress",
+    getModuleLabel("scenario_stress") === "Scenario stress",
     getModuleLabel("historical_validation") === "Historical validation",
     getModuleLabel("unknown_module_key") === "unknown_module_key"
   ],
@@ -27,6 +28,7 @@ export const registryContractChecks = {
     getMetricLabel("macro_regime_label") === "Macro regime label",
     getMetricLabel("historical_validation_status") ===
       "Historical validation status",
+    getMetricLabel("scenario_stress_status") === "Scenario stress status",
     getMetricLabel("unknown_metric_key") === "unknown_metric_key"
   ],
   statusAndSourceFallbacks: [
@@ -45,6 +47,7 @@ export const registryContractChecks = {
       "reference evidence"
     ),
     getModuleBoundary("macro_regime_review").includes("current evidence review"),
+    getModuleBoundary("scenario_stress").includes("scenario matrix"),
     getModuleBoundary("historical_validation").includes("historical replay")
   ],
   valueFallbacks: [

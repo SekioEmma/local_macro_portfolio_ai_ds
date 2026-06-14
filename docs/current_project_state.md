@@ -64,6 +64,7 @@ Stage 2.5 D19 local audit baseline:
 - Stage 2 Golden Output Contract and forbidden-language tests.
 - Stage 2.5 D19 Historical Validation v0.
 - Stage 3 EvidenceIndex / MetricLookup / Model Registry v0.
+- Stage 4 D16 Scenario Stress Test v0.
 
 ## Hard Boundaries
 
@@ -75,6 +76,8 @@ Stage 2.5 D19 local audit baseline:
 - D19 is historical replay / event-window consistency validation, not probability
   modeling or trading performance review.
 - Stage 3 is infrastructure and contract consolidation, not new financial model behavior.
+- D16 is a hypothetical scenario matrix / current evidence transmission review,
+  not a forecast, probability model, allocation directive, or return estimate.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -82,6 +85,6 @@ Stage 2.5 D19 local audit baseline:
 
 ## Current Next Step
 
-The current next step is Stage 4 D16 Scenario Stress Test v0.
+The current next step is Stage 5 D17 Growth / Inflation Macro Pack.
 
-D16 is not implemented yet.
+D17 is not implemented yet.

@@ -48,6 +48,9 @@ MACRO_REGIME_REVIEW_METRIC_KEYS = set(
 HISTORICAL_VALIDATION_METRIC_KEYS = set(
     MODEL_REGISTRY.public_output_keys("historical_validation")
 )
+SCENARIO_STRESS_METRIC_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("scenario_stress")
+)
 
 
 def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -499,6 +502,77 @@ def _historical_validation_audit(rows: list[DashboardEvidenceRow]) -> dict[str, 
         "writes_sqlite": bool(privacy_flags.get("writes_sqlite")),
         "fetches_live_provider_data": bool(
             privacy_flags.get("fetches_live_provider_data")
+        ),
+    }
+
+def _scenario_stress_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    stress_rows = [
+        row
+        for row in rows
+        if row.module == "scenario_stress"
+        or row.metric_key in SCENARIO_STRESS_METRIC_KEYS
+    ]
+    by_key = {row.metric_key: row for row in stress_rows}
+    serialized = json.dumps([_row_payload(row) for row in stress_rows], ensure_ascii=False).lower()
+    status = by_key.get("scenario_stress_status")
+    boundary = by_key.get("scenario_stress_interpretation_boundary")
+    missing = by_key.get("scenario_stress_missing_inputs")
+    contributions = (
+        getattr(status, "component_contributions", None)
+        if status is not None
+        else None
+    )
+    return {
+        "scenario_stress_available": bool(
+            status is not None and status.value == "available"
+        ),
+        "scenario_stress_metric_count": len(stress_rows),
+        "configured_public_output_count": len(SCENARIO_STRESS_METRIC_KEYS),
+        "public_output_keys": sorted({row.metric_key for row in stress_rows}),
+        "missing_public_output_keys": sorted(
+            SCENARIO_STRESS_METRIC_KEYS - {row.metric_key for row in stress_rows}
+        ),
+        "scenario_count": _int_value(by_key.get("scenario_stress_scenario_count")),
+        "primary_scenario": (
+            by_key["scenario_stress_primary_scenario"].value
+            if by_key.get("scenario_stress_primary_scenario")
+            else "missing"
+        ),
+        "severity_band": (
+            by_key["scenario_stress_severity_band"].value
+            if by_key.get("scenario_stress_severity_band")
+            else "missing"
+        ),
+        "uncertainty_band": (
+            by_key["scenario_stress_uncertainty_band"].value
+            if by_key.get("scenario_stress_uncertainty_band")
+            else "missing"
+        ),
+        "public_outputs_expose_probability_language": any(
+            token in serialized
+            for token in (
+                "scenario probability",
+                "crash probability",
+                "market direction probability",
+            )
+        ),
+        "public_outputs_expose_trading_language": any(
+            token in serialized
+            for token in (
+                "trade signal",
+                "target allocation",
+                "expected return",
+            )
+        ),
+        "boundary_available": bool(boundary and boundary.value),
+        "missing_inputs_visible": bool(missing and missing.value is not None),
+        "uses_model_registry": bool(
+            isinstance(contributions, dict)
+            and contributions.get("uses_model_registry")
+        ),
+        "uses_evidence_index": bool(
+            isinstance(contributions, dict)
+            and contributions.get("uses_evidence_index")
         ),
     }
 
