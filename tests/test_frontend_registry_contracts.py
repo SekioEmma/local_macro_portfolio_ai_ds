@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from modeling.model_registry import ModelRegistry
+
 
 FRONTEND_SRC = Path("app_frontend/src")
 
@@ -17,6 +19,8 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
     assert 'liquidity_funding_stress: "Liquidity/funding stress"' in module_registry
     assert 'macro_regime_review: "Macro regime review"' in module_registry
     assert 'historical_validation: "Historical validation"' in module_registry
+    for module_key in ModelRegistry().model_output_module_keys():
+        assert f"{module_key}:" in module_registry
 
     assert 'financial_stress_score: "Financial stress score"' in metric_registry
     assert 'pullback_classification: "Pullback classification"' in metric_registry

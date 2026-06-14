@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app_backend.schemas.responses import DashboardEvidenceRow
+from modeling.model_registry import get_model_registry
 
 from .common import (
     BAD_FRESHNESS,
@@ -40,36 +41,13 @@ VALUATION_BLOCKED_METRIC_KEYS = (
     "eps_growth",
     "sp500_top10_weight",
 )
-MACRO_REGIME_REVIEW_METRIC_KEYS = {
-    "macro_regime_label",
-    "support_band",
-    "evidence_quality_band",
-    "conflict_band",
-    "primary_pressure_ranking",
-    "supporting_evidence",
-    "conflicting_evidence",
-    "missing_inputs",
-    "blocked_inputs",
-    "interpretation_boundary",
-    "model_version",
-    "formula_version",
-    "as_of_date",
-}
-HISTORICAL_VALIDATION_METRIC_KEYS = {
-    "historical_validation_status",
-    "historical_validation_event_count",
-    "historical_validation_available_event_count",
-    "historical_validation_insufficient_history_event_count",
-    "historical_validation_ordinary_pullback_over_escalation_count",
-    "historical_validation_stress_window_under_escalation_count",
-    "historical_validation_boundary_violation_count",
-    "historical_validation_event_window_summary",
-    "historical_validation_privacy_flags",
-    "historical_validation_validation_boundary",
-    "historical_validation_model_version",
-    "historical_validation_formula_version",
-    "historical_validation_as_of_date",
-}
+MODEL_REGISTRY = get_model_registry()
+MACRO_REGIME_REVIEW_METRIC_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("macro_regime_review")
+)
+HISTORICAL_VALIDATION_METRIC_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("historical_validation")
+)
 
 
 def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:

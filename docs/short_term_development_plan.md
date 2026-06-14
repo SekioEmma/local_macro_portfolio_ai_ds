@@ -7,7 +7,7 @@
 3. Stage 1 D15 Macro Regime Review v0: completed.
 4. Stage 2 Golden Output Contract: completed.
 5. Stage 2.5 D19 Historical Validation v0: completed.
-6. Stage 3 EvidenceIndex / MetricLookup / Model Registry.
+6. Stage 3 EvidenceIndex / MetricLookup / Model Registry: completed.
 7. Stage 4 D16 Scenario Stress Test v0.
 8. Stage 5 D17 Growth / Inflation Macro Pack.
 9. Stage 6 D18 Valuation / Equity Structure v0.
@@ -17,12 +17,12 @@
 
 ## Current Task Boundary
 
-Stage 2.5 adds D19 historical replay / historical validation over deterministic
-event windows. It is not probability modeling, future-market forecasting, or a
-trading performance review.
+Stage 3 adds shared EvidenceIndex, MetricLookup, ModelRegistry, and ModelOutput
+helpers. This is infrastructure and contract consolidation, not new financial
+model behavior.
 
-The next step is Stage 3 EvidenceIndex / MetricLookup / Model Registry. Do not
-do D16 now. D16 is a later scenario-matrix task.
+The next step is Stage 4 D16 Scenario Stress Test v0. D16 is not implemented in
+the Stage 3 infrastructure task.
 
 ## Not Now
 

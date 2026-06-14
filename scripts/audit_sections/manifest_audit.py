@@ -4,6 +4,15 @@ import json
 from typing import Any
 
 from app_backend.services import ai_context_service
+from modeling.model_registry import ModelRegistry
+
+
+MODEL_REGISTRY = ModelRegistry()
+D10_D11_MODULES = {
+    MODEL_REGISTRY.require("financial_stress_composite").module_key,
+    MODEL_REGISTRY.require("pullback_systemic_risk_checklist").module_key,
+}
+D15_MODULE = MODEL_REGISTRY.require("macro_regime_review").module_key
 
 def _ai_context_manifest_audit() -> dict[str, Any]:
     manifest = ai_context_service.build_ai_context_manifest()
@@ -39,15 +48,13 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
         "included_d10_d11_model_outputs_with_percentile_context": sum(
             1
             for row in manifest.included_model_outputs
-            if row.get("module")
-            in {"financial_stress_composite", "pullback_systemic_risk_checklist"}
+            if row.get("module") in D10_D11_MODULES
             and "percentile_context" in json.dumps(row.get("component_contributions", {}))
         ),
         "included_d10_d11_model_outputs_with_liquidity_context": sum(
             1
             for row in manifest.included_model_outputs
-            if row.get("module")
-            in {"financial_stress_composite", "pullback_systemic_risk_checklist"}
+            if row.get("module") in D10_D11_MODULES
             and (
                 "funding_liquidity" in json.dumps(row.get("component_contributions", {}))
                 or "pullback_liquidity_funding_context"
@@ -57,12 +64,12 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
         "included_d15_model_output_count": sum(
             1
             for row in manifest.included_model_outputs
-            if row.get("module") == "macro_regime_review"
+            if row.get("module") == D15_MODULE
         ),
         "excluded_d15_model_output_count": sum(
             1
             for row in manifest.excluded_model_outputs
-            if row.get("module") == "macro_regime_review"
+            if row.get("module") == D15_MODULE
         ),
         "excluded_d13_insufficient_history_count": sum(
             1

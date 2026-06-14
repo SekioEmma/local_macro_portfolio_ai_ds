@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 import audit_data_pipeline_coverage as audit
 from app_backend.main import app
 from app_backend.services import dashboard_service
+from modeling.model_registry import FORBIDDEN_PUBLIC_OUTPUT_KEYS, ModelRegistry
 
 
 REQUIRED_EVIDENCE_ROW_FIELDS = {
@@ -26,14 +27,8 @@ REQUIRED_EVIDENCE_ROW_FIELDS = {
     "ai_context_allowed",
     "module",
 }
-MODEL_MODULES = {
-    "financial_stress_composite",
-    "pullback_systemic_risk_checklist",
-    "historical_risk_percentile",
-    "liquidity_funding_stress",
-    "macro_regime_review",
-    "historical_validation",
-}
+MODEL_REGISTRY = ModelRegistry()
+MODEL_MODULES = set(MODEL_REGISTRY.module_keys())
 D10_KEYS = {
     "financial_stress_score",
     "financial_stress_status",
@@ -49,47 +44,9 @@ D11_KEYS = {
     "pullback_supporting_evidence",
     "pullback_interpretation_boundary",
 }
-D15_PUBLIC_KEYS = {
-    "macro_regime_label",
-    "support_band",
-    "evidence_quality_band",
-    "conflict_band",
-    "primary_pressure_ranking",
-    "supporting_evidence",
-    "conflicting_evidence",
-    "missing_inputs",
-    "blocked_inputs",
-    "interpretation_boundary",
-    "model_version",
-    "formula_version",
-    "as_of_date",
-}
-D15_FORBIDDEN_FIELDS = {
-    "macro_regime_score",
-    "support_score_internal",
-    "group_score_internal",
-    "crash_probability",
-    "recession_probability",
-    "market_direction_probability",
-    "expected_return",
-    "trade_signal",
-    "target_allocation",
-}
-D19_PUBLIC_KEYS = {
-    "historical_validation_status",
-    "historical_validation_event_count",
-    "historical_validation_available_event_count",
-    "historical_validation_insufficient_history_event_count",
-    "historical_validation_ordinary_pullback_over_escalation_count",
-    "historical_validation_stress_window_under_escalation_count",
-    "historical_validation_boundary_violation_count",
-    "historical_validation_event_window_summary",
-    "historical_validation_privacy_flags",
-    "historical_validation_validation_boundary",
-    "historical_validation_model_version",
-    "historical_validation_formula_version",
-    "historical_validation_as_of_date",
-}
+D15_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("macro_regime_review"))
+D15_FORBIDDEN_FIELDS = set(FORBIDDEN_PUBLIC_OUTPUT_KEYS)
+D19_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("historical_validation"))
 FORBIDDEN_PUBLIC_PHRASES = (
     "crash probability",
     "recession probability",
@@ -223,6 +180,7 @@ def test_golden_ai_context_manifest_contract(monkeypatch, tmp_path):
 
     included_model_modules = {row["module"] for row in data["included_model_outputs"]}
     included_model_keys = {row["metric_key"] for row in data["included_model_outputs"]}
+    assert included_model_modules <= MODEL_REGISTRY.model_output_module_keys()
     assert {"financial_stress_composite", "pullback_systemic_risk_checklist", "macro_regime_review"} <= included_model_modules
     assert "macro_regime_label" in included_model_keys
     assert "macro_regime_label" not in {row["metric_key"] for row in data["included_facts"]}
@@ -272,6 +230,16 @@ def test_golden_audit_contract(tmp_path):
     )
 
 
+def test_golden_model_registry_contract():
+    for registration in MODEL_REGISTRY.all():
+        assert registration.interpretation_boundary
+        assert registration.forbidden_language_policy
+        assert registration.audit_policy
+        assert registration.frontend_registry_policy
+        assert registration.public_output_keys
+        assert not (set(registration.public_output_keys) & D15_FORBIDDEN_FIELDS)
+
+
 def test_golden_frontend_registry_contract():
     module_registry = Path("app_frontend/src/utils/moduleRegistry.ts").read_text(
         encoding="utf-8"
@@ -281,6 +249,8 @@ def test_golden_frontend_registry_contract():
     )
     registry_text = f"{module_registry}\n{metric_registry}"
 
+    for module_key in MODEL_REGISTRY.model_output_module_keys():
+        assert f"{module_key}:" in module_registry
     assert 'macro_regime_review: "Macro regime review"' in module_registry
     assert 'historical_validation: "Historical validation"' in module_registry
     for metric_key in D15_PUBLIC_KEYS:

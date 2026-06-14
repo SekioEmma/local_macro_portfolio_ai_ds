@@ -63,6 +63,7 @@ Stage 2.5 D19 local audit baseline:
 - M6 frontend display registries organized.
 - Stage 2 Golden Output Contract and forbidden-language tests.
 - Stage 2.5 D19 Historical Validation v0.
+- Stage 3 EvidenceIndex / MetricLookup / Model Registry v0.
 
 ## Hard Boundaries
 
@@ -73,6 +74,7 @@ Stage 2.5 D19 local audit baseline:
 - D15 exposes bands and ranked evidence, not a public numeric regime score.
 - D19 is historical replay / event-window consistency validation, not probability
   modeling or trading performance review.
+- Stage 3 is infrastructure and contract consolidation, not new financial model behavior.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -80,6 +82,6 @@ Stage 2.5 D19 local audit baseline:
 
 ## Current Next Step
 
-The current next step is Stage 3 EvidenceIndex / MetricLookup / Model Registry.
+The current next step is Stage 4 D16 Scenario Stress Test v0.
 
-Do not do D16 now. D16 remains a later scenario matrix stage.
+D16 is not implemented yet.

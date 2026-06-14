@@ -6,6 +6,7 @@ import sys
 from app_backend.schemas.responses import DashboardEvidenceRow, DashboardMetric, DashboardModule
 import audit_data_pipeline_coverage as audit
 from data_quality import market_history_store
+from modeling.model_registry import ModelRegistry
 
 
 EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
@@ -175,6 +176,14 @@ EXPECTED_D15_KEYS = {
     "support_band",
 }
 
+MODEL_REGISTRY = ModelRegistry()
+EXPECTED_D15_PUBLIC_OUTPUT_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("macro_regime_review")
+)
+EXPECTED_D19_PUBLIC_OUTPUT_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("historical_validation")
+)
+
 EXPECTED_D19_KEYS = {
     "available_event_count",
     "boundary_violation_count",
@@ -260,6 +269,8 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert result["historical_validation"]["fetches_live_provider_data"] is False
     assert result["historical_validation"]["public_outputs_expose_probability_language"] is False
     assert result["historical_validation"]["public_outputs_expose_trading_language"] is False
+    assert set(result["macro_regime_review"]["public_output_keys"]) == EXPECTED_D15_PUBLIC_OUTPUT_KEYS
+    assert set(result["historical_validation"]["public_output_keys"]) == EXPECTED_D19_PUBLIC_OUTPUT_KEYS
     assert '"raw_provider"' not in body
     assert '"raw_holdings"' not in body
     assert "must_not_leak" not in body

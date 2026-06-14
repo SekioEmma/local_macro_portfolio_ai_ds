@@ -1,0 +1,62 @@
+from modeling.metric_lookup import (
+    D15_FORBIDDEN_PUBLIC_KEYS,
+    D15_PUBLIC_OUTPUT_KEYS,
+    D19_PUBLIC_OUTPUT_KEYS,
+    MetricLookup,
+)
+
+
+def test_metric_lookup_registers_d15_public_fields_without_internal_scores():
+    lookup = MetricLookup()
+    public_keys = set(lookup.public_output_keys("macro_regime_review"))
+
+    assert set(D15_PUBLIC_OUTPUT_KEYS) <= public_keys
+    assert not (public_keys & set(D15_FORBIDDEN_PUBLIC_KEYS))
+    assert lookup.require("macro_regime_label").role == "model_output"
+    assert lookup.require("interpretation_boundary").interpretation_boundary_required is True
+
+
+def test_metric_lookup_registers_d19_public_fields():
+    lookup = MetricLookup()
+    public_keys = set(lookup.public_output_keys("historical_validation"))
+
+    assert set(D19_PUBLIC_OUTPUT_KEYS) <= public_keys
+    assert lookup.require("historical_validation_status").evidence_group == "historical_validation"
+    assert (
+        lookup.require("historical_validation_validation_boundary")
+        .interpretation_boundary_required
+        is True
+    )
+
+
+def test_metric_lookup_proxy_metrics_cannot_be_strong_triggers():
+    lookup = MetricLookup()
+
+    assert lookup.require("hyg_vs_lqd_30d").trigger_policy == "proxy_never_strong_trigger"
+    assert lookup.require("spy_vs_rsp_30d").source_policy == "proxy_auxiliary_only"
+    assert lookup.can_strong_trigger("hyg_vs_lqd_30d") is False
+    assert lookup.can_strong_trigger("spy_vs_rsp_30d") is False
+
+
+def test_metric_lookup_research_needed_and_insufficient_history_do_not_support_label():
+    lookup = MetricLookup()
+
+    assert lookup.require("earnings_revision").status_policy == "research_needed"
+    assert lookup.require("eps_growth").trigger_policy == "cannot_trigger"
+    assert lookup.can_support_label("earnings_revision") is False
+    assert lookup.can_support_label("eps_growth") is False
+    assert lookup.get("unknown_insufficient_history_metric") is None
+    assert lookup.can_support_label("unknown_insufficient_history_metric") is False
+
+
+def test_metric_lookup_portfolio_overlay_cannot_determine_macro_regime():
+    lookup = MetricLookup()
+    portfolio_metrics = lookup.metrics_by_group("portfolio_overlay")
+
+    assert {metric.metric_key for metric in portfolio_metrics} >= {
+        "max_deviation_asset",
+        "max_deviation_pp",
+        "equity_total_deviation_pp",
+    }
+    assert all(metric.trigger_policy == "cannot_trigger" for metric in portfolio_metrics)
+    assert all(lookup.can_support_label(metric.metric_key) is False for metric in portfolio_metrics)

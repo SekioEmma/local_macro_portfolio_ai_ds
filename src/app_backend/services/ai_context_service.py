@@ -5,14 +5,10 @@ from typing import Any
 
 from app_backend.schemas.responses import AIContextManifestResponse, DashboardEvidenceRow
 from app_backend.services import dashboard_service
+from modeling.model_registry import get_model_registry
 
 
-MODEL_OUTPUT_MODULES = {
-    "financial_stress_composite",
-    "historical_validation",
-    "macro_regime_review",
-    "pullback_systemic_risk_checklist",
-}
+MODEL_OUTPUT_MODULES = get_model_registry().model_output_module_keys()
 D14_FACT_MODULES = {"liquidity_funding_stress"}
 EXCLUDED_STATUSES = {
     "missing",

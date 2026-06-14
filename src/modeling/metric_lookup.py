@@ -1,0 +1,209 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Iterable
+
+
+D15_PUBLIC_OUTPUT_KEYS = (
+    "macro_regime_label",
+    "support_band",
+    "evidence_quality_band",
+    "conflict_band",
+    "primary_pressure_ranking",
+    "supporting_evidence",
+    "conflicting_evidence",
+    "missing_inputs",
+    "blocked_inputs",
+    "interpretation_boundary",
+    "model_version",
+    "formula_version",
+    "as_of_date",
+)
+D19_PUBLIC_OUTPUT_KEYS = (
+    "historical_validation_status",
+    "historical_validation_event_count",
+    "historical_validation_available_event_count",
+    "historical_validation_insufficient_history_event_count",
+    "historical_validation_ordinary_pullback_over_escalation_count",
+    "historical_validation_stress_window_under_escalation_count",
+    "historical_validation_boundary_violation_count",
+    "historical_validation_event_window_summary",
+    "historical_validation_privacy_flags",
+    "historical_validation_validation_boundary",
+    "historical_validation_model_version",
+    "historical_validation_formula_version",
+    "historical_validation_as_of_date",
+)
+D15_FORBIDDEN_PUBLIC_KEYS = (
+    "macro_regime_score",
+    "support_score_internal",
+    "group_score_internal",
+)
+
+
+@dataclass(frozen=True)
+class MetricMetadata:
+    metric_key: str
+    module: str
+    label: str
+    evidence_group: str
+    role: str
+    source_policy: str
+    ai_context_policy: str
+    trigger_policy: str
+    public_output: bool
+    interpretation_boundary_required: bool
+    status_policy: str
+    notes: str = ""
+
+
+class MetricLookup:
+    def __init__(self, metrics: Iterable[MetricMetadata] | None = None) -> None:
+        self._metrics = {
+            metric.metric_key: metric
+            for metric in (tuple(metrics) if metrics is not None else DEFAULT_METRICS)
+        }
+
+    def get(self, metric_key: str) -> MetricMetadata | None:
+        return self._metrics.get(metric_key)
+
+    def require(self, metric_key: str) -> MetricMetadata:
+        metric = self.get(metric_key)
+        if metric is None:
+            raise KeyError(f"unknown metric metadata: {metric_key}")
+        return metric
+
+    def all(self) -> list[MetricMetadata]:
+        return list(self._metrics.values())
+
+    def public_output_keys(self, module_key: str | None = None) -> tuple[str, ...]:
+        return tuple(
+            metric.metric_key
+            for metric in self._metrics.values()
+            if metric.public_output and (module_key is None or metric.module == module_key)
+        )
+
+    def metrics_by_group(self, evidence_group: str) -> list[MetricMetadata]:
+        return [
+            metric
+            for metric in self._metrics.values()
+            if metric.evidence_group == evidence_group
+        ]
+
+    def metrics_by_module(self, module_key: str) -> list[MetricMetadata]:
+        return [
+            metric
+            for metric in self._metrics.values()
+            if metric.module == module_key
+        ]
+
+    def can_strong_trigger(self, metric_key: str) -> bool:
+        metric = self.get(metric_key)
+        return bool(metric and metric.trigger_policy == "can_trigger")
+
+    def can_support_label(self, metric_key: str) -> bool:
+        metric = self.get(metric_key)
+        if metric is None:
+            return False
+        return metric.status_policy == "usable_when_current" and metric.trigger_policy in {
+            "can_trigger",
+            "confirmation_only",
+            "current_level_only",
+        }
+
+
+def _metric(
+    metric_key: str,
+    module: str,
+    evidence_group: str,
+    role: str,
+    source_policy: str,
+    trigger_policy: str,
+    *,
+    label: str | None = None,
+    public_output: bool = False,
+    ai_context_policy: str = "eligible_when_current",
+    status_policy: str = "usable_when_current",
+    boundary_required: bool = False,
+    notes: str = "",
+) -> MetricMetadata:
+    return MetricMetadata(
+        metric_key=metric_key,
+        module=module,
+        label=label or metric_key.replace("_", " "),
+        evidence_group=evidence_group,
+        role=role,
+        source_policy=source_policy,
+        ai_context_policy=ai_context_policy,
+        trigger_policy=trigger_policy,
+        public_output=public_output,
+        interpretation_boundary_required=boundary_required,
+        status_policy=status_policy,
+        notes=notes,
+    )
+
+
+DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
+    _metric("high_yield_spread", "credit_stress", "credit", "core", "official_core", "can_trigger"),
+    _metric("investment_grade_spread", "credit_stress", "credit", "core", "official_core", "can_trigger"),
+    _metric("vix", "credit_stress", "credit", "auxiliary", "official_or_fallback_core", "confirmation_only"),
+    _metric("hyg_vs_lqd_30d", "breadth_concentration_proxy", "credit", "proxy", "proxy_auxiliary_only", "proxy_never_strong_trigger", status_policy="auxiliary_only"),
+    _metric("liquidity_funding_stress_status", "liquidity_funding_stress", "liquidity_funding", "derived", "derived_with_inputs", "confirmation_only", boundary_required=True),
+    _metric("policy_plumbing_status", "liquidity_funding_stress", "liquidity_funding", "confirm", "derived_with_inputs", "confirmation_only"),
+    _metric("short_term_funding_pressure_status", "liquidity_funding_stress", "liquidity_funding", "confirm", "derived_with_inputs", "confirmation_only"),
+    _metric("official_stress_reference_status", "liquidity_funding_stress", "liquidity_funding", "confirm", "derived_with_inputs", "confirmation_only"),
+    _metric("dgs10", "rate_pressure", "rates_real_yield", "core", "official_core", "can_trigger"),
+    _metric("dgs30", "rate_pressure", "rates_real_yield", "core", "official_core", "current_level_only"),
+    _metric("dfii10", "real_yield_pressure", "rates_real_yield", "core", "official_core", "can_trigger"),
+    _metric("t10yie", "real_yield_pressure", "rates_real_yield", "confirm", "official_core", "confirmation_only"),
+    _metric("real_yield_pressure_status", "real_yield_pressure", "rates_real_yield", "derived", "derived_with_inputs", "confirmation_only"),
+    _metric("core_cpi_yoy", "inflation_energy_pressure", "inflation_energy", "core", "official_core", "can_trigger"),
+    _metric("core_pce_yoy", "inflation_energy_pressure", "inflation_energy", "core", "official_core", "can_trigger"),
+    _metric("ppiaco_yoy", "inflation_energy_pressure", "inflation_energy", "core", "official_core", "confirmation_only"),
+    _metric("ppi_final_demand_yoy", "inflation_energy_pressure", "inflation_energy", "core", "official_core", "confirmation_only"),
+    _metric("wti_30d_change", "inflation_energy_pressure", "inflation_energy", "auxiliary", "derived_with_inputs", "confirmation_only"),
+    _metric("brent_30d_change", "inflation_energy_pressure", "inflation_energy", "auxiliary", "derived_with_inputs", "confirmation_only"),
+    _metric("initial_jobless_claims", "labor_macro", "labor_growth", "core", "official_core", "can_trigger"),
+    _metric("continuing_claims", "labor_macro", "labor_growth", "core", "official_core", "confirmation_only"),
+    _metric("unemployment_rate", "labor_macro", "labor_growth", "core", "official_core", "can_trigger"),
+    _metric("nonfarm_payrolls", "labor_macro", "labor_growth", "core", "official_core", "confirmation_only"),
+    _metric("labor_deterioration_status", "labor_macro", "labor_growth", "derived", "derived_with_inputs", "confirmation_only"),
+    _metric("sp500_drawdown_3m", "market_stress_derived", "equity_structure", "derived", "derived_with_inputs", "confirmation_only"),
+    _metric("nasdaq100_drawdown_3m", "market_stress_derived", "equity_structure", "derived", "derived_with_inputs", "confirmation_only"),
+    _metric("spy_vs_rsp_30d", "breadth_concentration_proxy", "equity_structure", "proxy", "proxy_auxiliary_only", "proxy_never_strong_trigger", status_policy="auxiliary_only"),
+    _metric("earnings_revision", "valuation_research", "valuation_earnings_breadth", "research", "research_needed_only", "cannot_trigger", status_policy="research_needed"),
+    _metric("eps_growth", "valuation_research", "valuation_earnings_breadth", "research", "research_needed_only", "cannot_trigger", status_policy="research_needed"),
+    _metric("max_deviation_asset", "portfolio_deviation", "portfolio_overlay", "local_context", "local_context", "cannot_trigger", status_policy="context_only"),
+    _metric("max_deviation_pp", "portfolio_deviation", "portfolio_overlay", "local_context", "local_context", "cannot_trigger", status_policy="context_only"),
+    _metric("equity_total_deviation_pp", "portfolio_deviation", "portfolio_overlay", "local_context", "local_context", "cannot_trigger", status_policy="context_only"),
+    *(
+        _metric(
+            metric_key,
+            "macro_regime_review",
+            "historical_validation" if metric_key == "as_of_date" else "macro_regime_review",
+            "boundary" if "boundary" in metric_key else "version" if "version" in metric_key else "model_output",
+            "model_output_only",
+            "metadata_only",
+            public_output=True,
+            ai_context_policy="model_output",
+            status_policy="model_output",
+            boundary_required=metric_key == "interpretation_boundary",
+        )
+        for metric_key in D15_PUBLIC_OUTPUT_KEYS
+    ),
+    *(
+        _metric(
+            metric_key,
+            "historical_validation",
+            "historical_validation",
+            "boundary" if "boundary" in metric_key else "version" if "version" in metric_key else "model_output",
+            "model_output_only",
+            "metadata_only",
+            public_output=True,
+            ai_context_policy="model_output",
+            status_policy="model_output",
+            boundary_required=metric_key == "historical_validation_validation_boundary",
+        )
+        for metric_key in D19_PUBLIC_OUTPUT_KEYS
+    ),
+)
