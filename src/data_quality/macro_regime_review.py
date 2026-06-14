@@ -228,13 +228,14 @@ def _inflation_group(by_key: dict[str, dict[str, Any]]) -> dict[str, Any]:
         by_key,
         ("core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy", "ppi_final_demand_yoy"),
     )
+    macro_context = _valid_row(by_key.get("inflation_macro_status"))
     oil = _valid_rows(by_key, ("wti_30d_change", "brent_30d_change", "t10yie"))
-    pressure = any(_status_value(row) in HIGH_PRESSURE_STATUSES for row in core)
-    watch = any(_status_value(row) in PRESSURE_STATUSES for row in core)
+    pressure = any(_status_value(row) in HIGH_PRESSURE_STATUSES for row in [*core, macro_context])
+    watch = any(_status_value(row) in PRESSURE_STATUSES for row in [*core, macro_context])
     level = "pressure" if pressure else "watch" if watch else "ok" if core else "missing"
     return _group(
         "inflation_energy",
-        [*core, *oil],
+        [*core, macro_context, *oil],
         level,
         missing=["core_inflation_input"] if not core else [],
         hard_gate="Inflation/energy pressure requires at least one core inflation input; oil or breakeven alone cannot trigger it.",
@@ -245,7 +246,8 @@ def _labor_group(by_key: dict[str, dict[str, Any]]) -> dict[str, Any]:
     claims = _valid_rows(by_key, ("initial_jobless_claims", "initial_claims_4w_avg", "continuing_claims", "continuing_claims_4w_avg"))
     labor = _valid_rows(by_key, ("unemployment_rate", "unemployment_rate_3m_avg", "nonfarm_payrolls", "labor_deterioration_status"))
     status_row = _valid_row(by_key.get("labor_deterioration_status"))
-    pressure = _status_value(status_row)
+    growth_context = _valid_row(by_key.get("growth_macro_status"))
+    pressure = _status_value(growth_context) or _status_value(status_row)
     if claims and labor and pressure in HIGH_PRESSURE_STATUSES:
         level = pressure
     elif claims and labor and pressure in PRESSURE_STATUSES:
@@ -254,7 +256,7 @@ def _labor_group(by_key: dict[str, dict[str, Any]]) -> dict[str, Any]:
         level = "ok" if claims and labor else "missing"
     return _group(
         "labor_growth",
-        [*claims, *labor, status_row],
+        [*claims, *labor, status_row, growth_context],
         level,
         missing=["claims_plus_unemployment_or_payrolls_style_evidence"] if not (claims and labor) else [],
         hard_gate="Labor watch alone cannot trigger recession-like interpretation or downturn odds.",

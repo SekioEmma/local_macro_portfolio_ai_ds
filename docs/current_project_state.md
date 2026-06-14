@@ -65,6 +65,7 @@ Stage 2.5 D19 local audit baseline:
 - Stage 2.5 D19 Historical Validation v0.
 - Stage 3 EvidenceIndex / MetricLookup / Model Registry v0.
 - Stage 4 D16 Scenario Stress Test v0.
+- Stage 5 D17 Growth / Inflation Macro Pack v0.
 
 ## Hard Boundaries
 
@@ -78,6 +79,8 @@ Stage 2.5 D19 local audit baseline:
 - Stage 3 is infrastructure and contract consolidation, not new financial model behavior.
 - D16 is a hypothetical scenario matrix / current evidence transmission review,
   not a forecast, probability model, allocation directive, or return estimate.
+- D17 is a conservative growth/inflation evidence context layer, not a forecast
+  or recession call.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -85,6 +88,6 @@ Stage 2.5 D19 local audit baseline:
 
 ## Current Next Step
 
-The current next step is Stage 5 D17 Growth / Inflation Macro Pack.
+The current next step is Stage 6 D18 Valuation / Equity Structure v0.
 
-D17 is not implemented yet.
+D18 is not implemented yet.

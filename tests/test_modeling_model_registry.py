@@ -1,5 +1,6 @@
 from modeling.model_registry import (
     D16_FORBIDDEN_TERMS,
+    D17_FORBIDDEN_TERMS,
     D19_FORBIDDEN_TERMS,
     FORBIDDEN_PUBLIC_OUTPUT_KEYS,
     ModelRegistry,
@@ -13,6 +14,7 @@ REQUIRED_MODEL_MODULES = {
     "pullback_systemic_risk_checklist",
     "historical_risk_percentile",
     "liquidity_funding_stress",
+    "growth_inflation_macro_pack",
     "macro_regime_review",
     "scenario_stress",
     "historical_validation",
@@ -76,7 +78,19 @@ def test_model_registry_d16_public_keys_exclude_forbidden_terms():
         assert term not in text
 
 
-def test_model_registry_and_audit_expected_keys_agree_for_d15_d16_d19():
+def test_model_registry_d17_public_keys_exclude_forbidden_terms():
+    registry = ModelRegistry()
+    keys = set(registry.public_output_keys("growth_inflation_macro_pack"))
+    text = " ".join(sorted(keys)).lower()
+
+    assert "growth_macro_status" in keys
+    assert "stagflation_watch_status" in keys
+    assert not (keys & set(FORBIDDEN_PUBLIC_OUTPUT_KEYS))
+    for term in D17_FORBIDDEN_TERMS:
+        assert term not in text
+
+
+def test_model_registry_and_audit_expected_keys_agree_for_d15_d16_d17_d19():
     registry = ModelRegistry()
 
     assert module_audits.MACRO_REGIME_REVIEW_METRIC_KEYS == set(
@@ -87,6 +101,9 @@ def test_model_registry_and_audit_expected_keys_agree_for_d15_d16_d19():
     )
     assert module_audits.SCENARIO_STRESS_METRIC_KEYS == set(
         registry.public_output_keys("scenario_stress")
+    )
+    assert module_audits.GROWTH_INFLATION_MACRO_PACK_METRIC_KEYS == set(
+        registry.public_output_keys("growth_inflation_macro_pack")
     )
 
 

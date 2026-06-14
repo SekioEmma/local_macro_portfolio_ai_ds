@@ -6,6 +6,7 @@ from typing import Iterable
 from modeling.metric_lookup import (
     D15_PUBLIC_OUTPUT_KEYS,
     D16_PUBLIC_OUTPUT_KEYS,
+    D17_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
 )
 
@@ -93,6 +94,18 @@ D16_FORBIDDEN_TERMS = (
     "expected_return",
     "trade_signal",
     "target_allocation",
+)
+D17_FORBIDDEN_TERMS = (
+    "crash_probability",
+    "recession_probability",
+    "market_direction_probability",
+    "expected_return",
+    "trade_signal",
+    "target_allocation",
+    "predictive_accuracy",
+    "forecast_accuracy",
+    "trading_performance",
+    "strategy_return",
 )
 
 
@@ -247,6 +260,34 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
             "cannot trigger liquidity or systemic regime."
         ),
         notes="D14 supports D10/D11/D15 as confirmation context.",
+    ),
+    ModelRegistration(
+        model_key="growth_inflation_macro_pack_v0",
+        module_key="growth_inflation_macro_pack",
+        version_prefix="growth_inflation_macro_pack",
+        category="derived_context",
+        public_output_keys=D17_PUBLIC_OUTPUT_KEYS,
+        required_input_groups=("growth_macro", "inflation_macro", "rates_real_yield"),
+        optional_input_groups=("policy_constraint", "stagflation_watch_context"),
+        ai_context_policy="fact_or_excluded_by_row",
+        audit_policy="audit_d17_growth_inflation_macro_pack",
+        frontend_registry_policy="derived_module_label_and_boundary",
+        forbidden_language_policy=(
+            "conservative current-evidence context",
+            "not a forecast",
+            "not event odds",
+            "not an allocation directive",
+            "no return estimate",
+            "missing and research-needed inputs remain explicit",
+        ),
+        interpretation_boundary=(
+            "Growth/inflation macro pack is a conservative current-evidence "
+            "context layer for growth, inflation, policy-constraint, and "
+            "stagflation-watch interpretation. It is not a forecast, "
+            "business-cycle call, event-odds model, allocation directive, or "
+            "return estimate."
+        ),
+        notes="D17 is a context layer for D15/D16, not a predictor.",
     ),
     ModelRegistration(
         model_key="macro_regime_review_v0",

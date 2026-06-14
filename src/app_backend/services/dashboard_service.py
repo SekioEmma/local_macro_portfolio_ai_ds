@@ -21,6 +21,7 @@ from app_backend.services.dashboard_filters import (
 )
 from app_backend.services import provider_service
 from data_quality import financial_stress_composite
+from data_quality import growth_inflation_macro_pack
 from data_quality import historical_derived_metrics
 from data_quality import historical_percentile_metrics
 from data_quality import historical_validation
@@ -165,6 +166,25 @@ DERIVED_METRIC_KEYS = {
     "official_stress_reference_status",
     "liquidity_funding_stress_status",
     "liquidity_funding_interpretation_boundary",
+    "growth_macro_status",
+    "growth_macro_supporting_evidence",
+    "growth_macro_missing_inputs",
+    "growth_macro_interpretation_boundary",
+    "inflation_macro_status",
+    "inflation_macro_supporting_evidence",
+    "inflation_macro_missing_inputs",
+    "inflation_macro_interpretation_boundary",
+    "policy_constraint_status",
+    "policy_constraint_supporting_evidence",
+    "policy_constraint_missing_inputs",
+    "policy_constraint_interpretation_boundary",
+    "stagflation_watch_status",
+    "stagflation_watch_supporting_evidence",
+    "stagflation_watch_missing_inputs",
+    "stagflation_watch_interpretation_boundary",
+    "growth_inflation_macro_pack_model_version",
+    "growth_inflation_macro_pack_formula_version",
+    "growth_inflation_macro_pack_as_of_date",
     "macro_regime_label",
     "support_band",
     "evidence_quality_band",
@@ -603,12 +623,20 @@ def build_dashboard_evidence_table(
     pullback_rows = _pullback_systemic_checklist_evidence_rows(
         base_rows + percentile_rows + liquidity_funding_rows + financial_stress_rows
     )
+    growth_inflation_rows = _growth_inflation_macro_pack_evidence_rows(
+        base_rows
+        + percentile_rows
+        + liquidity_funding_rows
+        + financial_stress_rows
+        + pullback_rows
+    )
     macro_regime_rows = _macro_regime_review_evidence_rows(
         base_rows
         + percentile_rows
         + liquidity_funding_rows
         + financial_stress_rows
         + pullback_rows
+        + growth_inflation_rows
     )
     historical_validation_rows = _historical_validation_evidence_rows(
         db_path=dashboard_market_history_db_path
@@ -619,6 +647,7 @@ def build_dashboard_evidence_table(
         + liquidity_funding_rows
         + financial_stress_rows
         + pullback_rows
+        + growth_inflation_rows
         + macro_regime_rows
         + historical_validation_rows
     )
@@ -626,6 +655,7 @@ def build_dashboard_evidence_table(
         base_rows
         + financial_stress_rows
         + pullback_rows
+        + growth_inflation_rows
         + macro_regime_rows
         + scenario_stress_rows
         + historical_validation_rows
@@ -814,6 +844,18 @@ def _macro_regime_review_evidence_rows(
     )
     return [
         _evidence_row("macro_regime_review", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
+def _growth_inflation_macro_pack_evidence_rows(
+    rows: list[DashboardEvidenceRow],
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = growth_inflation_macro_pack.build_growth_inflation_macro_pack_rows(
+        [_model_to_dict(row) for row in rows]
+    )
+    return [
+        _evidence_row("growth_inflation_macro_pack", DashboardMetric(**payload))
         for payload in metric_payloads
     ]
 

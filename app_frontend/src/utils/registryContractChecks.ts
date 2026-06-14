@@ -10,6 +10,8 @@ import { getModuleBoundary } from "./moduleRegistry";
 export const registryContractChecks = {
   moduleLabels: [
     getModuleLabel("financial_stress_composite") === "Financial stress composite",
+    getModuleLabel("growth_inflation_macro_pack") ===
+      "Growth/inflation macro pack",
     getModuleLabel("pullback_systemic_risk_checklist") ===
       "Pullback/systemic risk checklist",
     getModuleLabel("historical_risk_percentile") === "Historical risk percentile",
@@ -20,6 +22,7 @@ export const registryContractChecks = {
   ],
   metricLabels: [
     getMetricLabel("financial_stress_score") === "Financial stress score",
+    getMetricLabel("growth_macro_status") === "Growth macro status",
     getMetricLabel("pullback_classification") === "Pullback classification",
     getMetricLabel("high_yield_spread_percentile") ===
       "High-yield spread percentile",
@@ -38,6 +41,9 @@ export const registryContractChecks = {
   boundaries: [
     getModuleBoundary("financial_stress_composite").includes(
       "pressure temperature"
+    ),
+    getModuleBoundary("growth_inflation_macro_pack").includes(
+      "current-evidence context"
     ),
     getModuleBoundary("pullback_systemic_risk_checklist").includes(
       "reference review only"

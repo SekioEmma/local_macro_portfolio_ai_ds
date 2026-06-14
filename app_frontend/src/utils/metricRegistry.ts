@@ -81,6 +81,35 @@ Object.assign(metricLabels, {
   liquidity_funding_stress_status: "Liquidity/funding stress status",
   liquidity_funding_interpretation_boundary:
     "Liquidity/funding interpretation boundary",
+  growth_macro_status: "Growth macro status",
+  growth_macro_supporting_evidence: "Growth macro supporting evidence",
+  growth_macro_missing_inputs: "Growth macro missing inputs",
+  growth_macro_interpretation_boundary:
+    "Growth macro interpretation boundary",
+  inflation_macro_status: "Inflation macro status",
+  inflation_macro_supporting_evidence:
+    "Inflation macro supporting evidence",
+  inflation_macro_missing_inputs: "Inflation macro missing inputs",
+  inflation_macro_interpretation_boundary:
+    "Inflation macro interpretation boundary",
+  policy_constraint_status: "Policy constraint status",
+  policy_constraint_supporting_evidence:
+    "Policy constraint supporting evidence",
+  policy_constraint_missing_inputs: "Policy constraint missing inputs",
+  policy_constraint_interpretation_boundary:
+    "Policy constraint interpretation boundary",
+  stagflation_watch_status: "Stagflation watch status",
+  stagflation_watch_supporting_evidence:
+    "Stagflation watch supporting evidence",
+  stagflation_watch_missing_inputs: "Stagflation watch missing inputs",
+  stagflation_watch_interpretation_boundary:
+    "Stagflation watch interpretation boundary",
+  growth_inflation_macro_pack_model_version:
+    "Growth/inflation macro pack model version",
+  growth_inflation_macro_pack_formula_version:
+    "Growth/inflation macro pack formula version",
+  growth_inflation_macro_pack_as_of_date:
+    "Growth/inflation macro pack as-of date",
   macro_regime_label: "Macro regime label",
   support_band: "Macro regime support band",
   evidence_quality_band: "Macro regime evidence quality band",

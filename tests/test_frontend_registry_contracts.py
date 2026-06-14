@@ -12,6 +12,10 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
 
     assert 'financial_stress_composite: "Financial stress composite"' in module_registry
     assert (
+        'growth_inflation_macro_pack: "Growth/inflation macro pack"'
+        in module_registry
+    )
+    assert (
         'pullback_systemic_risk_checklist: "Pullback/systemic risk checklist"'
         in module_registry
     )
@@ -24,6 +28,7 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
         assert f"{module_key}:" in module_registry
 
     assert 'financial_stress_score: "Financial stress score"' in metric_registry
+    assert 'growth_macro_status: "Growth macro status"' in metric_registry
     assert 'pullback_classification: "Pullback classification"' in metric_registry
     assert 'high_yield_spread_percentile: "High-yield spread percentile"' in metric_registry
     assert (
@@ -39,6 +44,7 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
     assert 'scenario_stress_status: "Scenario stress status"' in metric_registry
 
     assert "event-odds model" in module_registry
+    assert "current-evidence context" in module_registry
     assert "allocation directive" in module_registry
     assert "not a forecast" in module_registry
     assert "scenario matrix" in module_registry

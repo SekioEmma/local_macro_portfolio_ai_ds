@@ -9,7 +9,7 @@
 5. Stage 2.5 D19 Historical Validation v0: completed.
 6. Stage 3 EvidenceIndex / MetricLookup / Model Registry: completed.
 7. Stage 4 D16 Scenario Stress Test v0: completed.
-8. Stage 5 D17 Growth / Inflation Macro Pack.
+8. Stage 5 D17 Growth / Inflation Macro Pack: completed.
 9. Stage 6 D18 Valuation / Equity Structure v0.
 10. Stage 7 D19 expanded historical validation.
 11. Stage 8 Portfolio Exposure Overlay.
@@ -17,13 +17,13 @@
 
 ## Current Task Boundary
 
-Stage 4 D16 Scenario Stress Test v0 is completed as a deterministic scenario
-matrix / current evidence transmission review.
+Stage 5 D17 Growth / Inflation Macro Pack v0 is completed as a conservative
+growth/inflation current-evidence context layer.
 
-D16 does not output scenario odds, asset-direction certainty, allocation
+D17 does not output forecasts, recession calls, event odds, allocation
 directives, action instructions, or return estimates.
 
-The next step is Stage 5 D17 Growth / Inflation Macro Pack. D17 is not
+The next step is Stage 6 D18 Valuation / Equity Structure v0. D18 is not
 implemented yet.
 
 ## Not Now

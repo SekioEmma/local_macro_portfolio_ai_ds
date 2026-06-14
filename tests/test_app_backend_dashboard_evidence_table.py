@@ -23,6 +23,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "pullback_systemic_risk_checklist",
     "historical_risk_percentile",
     "liquidity_funding_stress",
+    "growth_inflation_macro_pack",
     "macro_regime_review",
     "scenario_stress",
     "historical_validation",
@@ -92,6 +93,18 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     )
     assert liquidity["source_badge"] == "derived"
     assert "reference evidence" in liquidity["interpretation_boundary"]
+    growth = _row(data, "growth_inflation_macro_pack", "growth_macro_status")
+    assert growth["source_badge"] == "derived"
+    assert growth["value"] in {
+        "ok",
+        "watch",
+        "pressure",
+        "missing",
+        "research_needed",
+        "insufficient_history",
+        "unknown",
+    }
+    assert "current-evidence context" in growth["interpretation_boundary"]
     regime = _row(data, "macro_regime_review", "macro_regime_label")
     assert regime["source_badge"] == "derived"
     assert regime["value"] in {

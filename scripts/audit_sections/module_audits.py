@@ -51,6 +51,9 @@ HISTORICAL_VALIDATION_METRIC_KEYS = set(
 SCENARIO_STRESS_METRIC_KEYS = set(
     MODEL_REGISTRY.public_output_keys("scenario_stress")
 )
+GROWTH_INFLATION_MACRO_PACK_METRIC_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("growth_inflation_macro_pack")
+)
 
 
 def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -574,6 +577,82 @@ def _scenario_stress_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
             isinstance(contributions, dict)
             and contributions.get("uses_evidence_index")
         ),
+    }
+
+def _growth_inflation_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    pack_rows = [
+        row
+        for row in rows
+        if row.module == "growth_inflation_macro_pack"
+        or row.metric_key in GROWTH_INFLATION_MACRO_PACK_METRIC_KEYS
+    ]
+    by_key = {row.metric_key: row for row in pack_rows}
+    serialized = json.dumps([_row_payload(row) for row in pack_rows], ensure_ascii=False).lower()
+    public_keys = {row.metric_key for row in pack_rows}
+    boundary_rows = [
+        row
+        for row in pack_rows
+        if row.metric_key.endswith("_interpretation_boundary")
+    ]
+    missing_rows = [
+        row
+        for row in pack_rows
+        if row.metric_key.endswith("_missing_inputs")
+    ]
+    return {
+        "growth_inflation_macro_pack_available": bool(
+            by_key.get("growth_macro_status")
+            and by_key.get("inflation_macro_status")
+            and by_key.get("policy_constraint_status")
+            and by_key.get("stagflation_watch_status")
+        ),
+        "growth_inflation_macro_pack_metric_count": len(pack_rows),
+        "configured_public_output_count": len(GROWTH_INFLATION_MACRO_PACK_METRIC_KEYS),
+        "public_output_keys": sorted(public_keys),
+        "missing_public_output_keys": sorted(
+            GROWTH_INFLATION_MACRO_PACK_METRIC_KEYS - public_keys
+        ),
+        "growth_macro_status": (
+            by_key["growth_macro_status"].value
+            if by_key.get("growth_macro_status")
+            else "missing"
+        ),
+        "inflation_macro_status": (
+            by_key["inflation_macro_status"].value
+            if by_key.get("inflation_macro_status")
+            else "missing"
+        ),
+        "policy_constraint_status": (
+            by_key["policy_constraint_status"].value
+            if by_key.get("policy_constraint_status")
+            else "missing"
+        ),
+        "stagflation_watch_status": (
+            by_key["stagflation_watch_status"].value
+            if by_key.get("stagflation_watch_status")
+            else "missing"
+        ),
+        "research_needed_count": sum(1 for row in pack_rows if row.status == "research_needed"),
+        "missing_count": sum(1 for row in pack_rows if row.status == "missing"),
+        "ai_context_allowed_count": sum(1 for row in pack_rows if row.ai_context_allowed),
+        "public_outputs_expose_probability_language": any(
+            token in serialized
+            for token in (
+                "crash probability",
+                "recession probability",
+                "market direction probability",
+            )
+        ),
+        "public_outputs_expose_trading_language": any(
+            token in serialized
+            for token in (
+                "trade signal",
+                "target allocation",
+                "expected return",
+            )
+        ),
+        "boundary_available": any(row.value for row in boundary_rows),
+        "missing_inputs_visible": any(row.value is not None for row in missing_rows),
     }
 
 def _int_value(row: DashboardEvidenceRow | None) -> int:

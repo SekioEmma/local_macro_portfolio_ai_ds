@@ -50,6 +50,50 @@ D16_PUBLIC_OUTPUT_KEYS = (
     "scenario_stress_formula_version",
     "scenario_stress_as_of_date",
 )
+D17_PUBLIC_OUTPUT_KEYS = (
+    "growth_macro_status",
+    "growth_macro_supporting_evidence",
+    "growth_macro_missing_inputs",
+    "growth_macro_interpretation_boundary",
+    "inflation_macro_status",
+    "inflation_macro_supporting_evidence",
+    "inflation_macro_missing_inputs",
+    "inflation_macro_interpretation_boundary",
+    "policy_constraint_status",
+    "policy_constraint_supporting_evidence",
+    "policy_constraint_missing_inputs",
+    "policy_constraint_interpretation_boundary",
+    "stagflation_watch_status",
+    "stagflation_watch_supporting_evidence",
+    "stagflation_watch_missing_inputs",
+    "stagflation_watch_interpretation_boundary",
+    "growth_inflation_macro_pack_model_version",
+    "growth_inflation_macro_pack_formula_version",
+    "growth_inflation_macro_pack_as_of_date",
+)
+D17_RESEARCH_NEEDED_KEYS = (
+    "ism_manufacturing_pmi",
+    "ism_services_pmi",
+    "ism_new_orders",
+    "ism_employment",
+    "retail_sales_mom",
+    "retail_sales_yoy",
+    "retail_sales_control_group",
+    "industrial_production_yoy",
+    "capacity_utilization",
+    "housing_starts",
+    "building_permits",
+    "new_home_sales",
+    "mortgage_30y_rate",
+    "core_cpi_goods_yoy",
+    "core_cpi_services_yoy",
+    "core_pce_goods_yoy",
+    "core_pce_services_yoy",
+    "ppi_final_demand_goods_yoy",
+    "ppi_final_demand_services_yoy",
+    "ism_prices_paid",
+    "gasoline_price_context",
+)
 D15_FORBIDDEN_PUBLIC_KEYS = (
     "macro_regime_score",
     "support_score_internal",
@@ -184,6 +228,10 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
     _metric("unemployment_rate", "labor_macro", "labor_growth", "core", "official_core", "can_trigger"),
     _metric("nonfarm_payrolls", "labor_macro", "labor_growth", "core", "official_core", "confirmation_only"),
     _metric("labor_deterioration_status", "labor_macro", "labor_growth", "derived", "derived_with_inputs", "confirmation_only"),
+    _metric("growth_macro_status", "growth_inflation_macro_pack", "growth_macro", "derived", "derived_with_inputs", "confirmation_only", boundary_required=True),
+    _metric("inflation_macro_status", "growth_inflation_macro_pack", "inflation_macro", "derived", "derived_with_inputs", "confirmation_only", boundary_required=True),
+    _metric("policy_constraint_status", "growth_inflation_macro_pack", "policy_constraint", "derived", "derived_with_inputs", "confirmation_only", boundary_required=True),
+    _metric("stagflation_watch_status", "growth_inflation_macro_pack", "stagflation_watch_context", "derived", "derived_with_inputs", "confirmation_only", boundary_required=True),
     _metric("sp500_drawdown_3m", "market_stress_derived", "equity_structure", "derived", "derived_with_inputs", "confirmation_only"),
     _metric("nasdaq100_drawdown_3m", "market_stress_derived", "equity_structure", "derived", "derived_with_inputs", "confirmation_only"),
     _metric("spy_vs_rsp_30d", "breadth_concentration_proxy", "equity_structure", "proxy", "proxy_auxiliary_only", "proxy_never_strong_trigger", status_policy="auxiliary_only"),
@@ -192,6 +240,32 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
     _metric("max_deviation_asset", "portfolio_deviation", "portfolio_overlay", "local_context", "local_context", "cannot_trigger", status_policy="context_only"),
     _metric("max_deviation_pp", "portfolio_deviation", "portfolio_overlay", "local_context", "local_context", "cannot_trigger", status_policy="context_only"),
     _metric("equity_total_deviation_pp", "portfolio_deviation", "portfolio_overlay", "local_context", "local_context", "cannot_trigger", status_policy="context_only"),
+    *(
+        _metric(
+            metric_key,
+            "growth_inflation_macro_pack",
+            "growth_macro" if metric_key in {
+                "ism_manufacturing_pmi",
+                "ism_services_pmi",
+                "ism_new_orders",
+                "ism_employment",
+                "retail_sales_mom",
+                "retail_sales_yoy",
+                "retail_sales_control_group",
+                "industrial_production_yoy",
+                "capacity_utilization",
+                "housing_starts",
+                "building_permits",
+                "new_home_sales",
+                "mortgage_30y_rate",
+            } else "inflation_macro",
+            "research",
+            "research_needed_only",
+            "cannot_trigger",
+            status_policy="research_needed",
+        )
+        for metric_key in D17_RESEARCH_NEEDED_KEYS
+    ),
     *(
         _metric(
             metric_key,
@@ -236,5 +310,20 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
             boundary_required=metric_key == "scenario_stress_interpretation_boundary",
         )
         for metric_key in D16_PUBLIC_OUTPUT_KEYS
+    ),
+    *(
+        _metric(
+            metric_key,
+            "growth_inflation_macro_pack",
+            "growth_macro" if metric_key.startswith("growth_macro") else "inflation_macro" if metric_key.startswith("inflation_macro") else "policy_constraint" if metric_key.startswith("policy_constraint") else "stagflation_watch_context" if metric_key.startswith("stagflation_watch") else "growth_inflation_macro_pack",
+            "derived" if metric_key.endswith("_status") else "boundary" if "boundary" in metric_key else "version" if "version" in metric_key else "model_output",
+            "derived_with_inputs" if metric_key.endswith("_status") else "model_output_only",
+            "confirmation_only" if metric_key.endswith("_status") else "metadata_only",
+            public_output=True,
+            ai_context_policy="fact_or_excluded_by_row",
+            status_policy="usable_when_current" if metric_key.endswith("_status") else "model_output",
+            boundary_required=metric_key.endswith("_interpretation_boundary"),
+        )
+        for metric_key in D17_PUBLIC_OUTPUT_KEYS
     ),
 )

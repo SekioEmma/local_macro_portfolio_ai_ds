@@ -2,6 +2,7 @@ from modeling.metric_lookup import (
     D15_FORBIDDEN_PUBLIC_KEYS,
     D15_PUBLIC_OUTPUT_KEYS,
     D16_PUBLIC_OUTPUT_KEYS,
+    D17_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
     MetricLookup,
 )
@@ -43,6 +44,20 @@ def test_metric_lookup_registers_d16_public_fields():
     )
 
 
+def test_metric_lookup_registers_d17_public_fields():
+    lookup = MetricLookup()
+    public_keys = set(lookup.public_output_keys("growth_inflation_macro_pack"))
+
+    assert set(D17_PUBLIC_OUTPUT_KEYS) <= public_keys
+    assert lookup.require("growth_macro_status").evidence_group == "growth_macro"
+    assert lookup.require("growth_macro_status").trigger_policy == "confirmation_only"
+    assert (
+        lookup.require("stagflation_watch_interpretation_boundary")
+        .interpretation_boundary_required
+        is True
+    )
+
+
 def test_metric_lookup_proxy_metrics_cannot_be_strong_triggers():
     lookup = MetricLookup()
 
@@ -59,6 +74,8 @@ def test_metric_lookup_research_needed_and_insufficient_history_do_not_support_l
     assert lookup.require("eps_growth").trigger_policy == "cannot_trigger"
     assert lookup.can_support_label("earnings_revision") is False
     assert lookup.can_support_label("eps_growth") is False
+    assert lookup.require("ism_manufacturing_pmi").status_policy == "research_needed"
+    assert lookup.can_support_label("ism_manufacturing_pmi") is False
     assert lookup.get("unknown_insufficient_history_metric") is None
     assert lookup.can_support_label("unknown_insufficient_history_metric") is False
 

@@ -19,6 +19,7 @@ export const moduleLabels: Record<string, string> = {
 
 Object.assign(moduleLabels, {
   financial_stress_composite: "Financial stress composite",
+  growth_inflation_macro_pack: "Growth/inflation macro pack",
   historical_validation: "Historical validation",
   macro_regime_review: "Macro regime review",
   scenario_stress: "Scenario stress",
@@ -51,6 +52,8 @@ Object.assign(interpretationBoundaries, {
     "Sahm rule proxy is a recession-warning proxy, not official recession confirmation. One-month unemployment increases do not confirm recession. Claims increases are labor-pressure observations, not crisis confirmation. Payrolls are revised; do not overstate certainty.",
   financial_stress_composite:
     "Financial stress score is a transparent pressure temperature, not an event-odds model. It is reference review only. VIX alone and equity drawdown alone are not systemic stress. Liquidity/funding evidence is confirmation context only. Official stress indices do not replace the project financial stress composite.",
+  growth_inflation_macro_pack:
+    "Growth/inflation macro pack is a conservative current-evidence context layer for growth, inflation, policy-constraint, and stagflation-watch interpretation. It is not a forecast, business-cycle call, event-odds model, allocation directive, or return estimate.",
   historical_validation:
     "Historical validation is a read-only historical replay of deterministic evidence rows for event-window consistency and boundary validation. It is not a prediction model, event-odds model, business-cycle call, market direction forecast, allocation directive, or return estimate.",
   macro_regime_review:
@@ -67,6 +70,7 @@ Object.assign(interpretationBoundaries, {
 
 const moduleCategories: Record<string, ModuleRegistryEntry["category"]> = {
   financial_stress_composite: "model_output",
+  growth_inflation_macro_pack: "derived",
   historical_validation: "model_output",
   macro_regime_review: "model_output",
   scenario_stress: "model_output",

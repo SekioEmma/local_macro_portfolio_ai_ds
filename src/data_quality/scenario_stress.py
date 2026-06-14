@@ -63,7 +63,7 @@ SCENARIO_REGISTRY: tuple[ScenarioDefinition, ...] = (
             "rates pressure",
             "valuation pressure",
         ),
-        core_metrics=("core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy", "ppi_final_demand_yoy"),
+        core_metrics=("core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy", "ppi_final_demand_yoy", "inflation_macro_status"),
         auxiliary_metrics=("wti_30d_change", "brent_30d_change", "t10yie"),
     ),
     ScenarioDefinition(
@@ -113,6 +113,7 @@ SCENARIO_REGISTRY: tuple[ScenarioDefinition, ...] = (
             "continuing_claims",
             "nonfarm_payrolls",
             "labor_deterioration_status",
+            "growth_macro_status",
         ),
         missing_constraints=("broad_growth_pack",),
     ),
@@ -136,12 +137,16 @@ SCENARIO_REGISTRY: tuple[ScenarioDefinition, ...] = (
         core_metrics=(
             "core_cpi_yoy",
             "core_pce_yoy",
+            "inflation_macro_status",
             "labor_deterioration_status",
+            "growth_macro_status",
             "unemployment_rate",
             "initial_jobless_claims",
             "dgs10",
             "dfii10",
             "real_yield_pressure_status",
+            "policy_constraint_status",
+            "stagflation_watch_status",
         ),
     ),
     ScenarioDefinition(
@@ -398,9 +403,11 @@ def _support_band(
             return "moderate"
         return "weak"
     if definition.scenario_name == "stagflation_pressure":
-        has_inflation = any(metric in core_support for metric in ("core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy", "ppi_final_demand_yoy"))
-        has_labor = any(metric in core_support for metric in ("labor_deterioration_status", "unemployment_rate", "initial_jobless_claims"))
-        has_rates = any(metric in core_support for metric in ("dgs10", "dfii10", "real_yield_pressure_status"))
+        if "stagflation_watch_status" in core_support:
+            return "strong"
+        has_inflation = any(metric in core_support for metric in ("core_cpi_yoy", "core_pce_yoy", "ppiaco_yoy", "ppi_final_demand_yoy", "inflation_macro_status"))
+        has_labor = any(metric in core_support for metric in ("labor_deterioration_status", "unemployment_rate", "initial_jobless_claims", "growth_macro_status"))
+        has_rates = any(metric in core_support for metric in ("dgs10", "dfii10", "real_yield_pressure_status", "policy_constraint_status"))
         if has_inflation and has_labor and has_rates:
             return "strong"
         if sum((has_inflation, has_labor, has_rates)) >= 2:

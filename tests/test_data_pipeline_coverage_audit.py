@@ -22,6 +22,7 @@ EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
     "energy_history",
     "financial_stress_composite",
     "generated_at",
+    "growth_inflation_macro_pack",
     "historical_derived",
     "historical_risk_percentile",
     "historical_validation",
@@ -184,6 +185,9 @@ EXPECTED_D15_PUBLIC_OUTPUT_KEYS = set(
 EXPECTED_D16_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("scenario_stress")
 )
+EXPECTED_D17_PUBLIC_OUTPUT_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("growth_inflation_macro_pack")
+)
 EXPECTED_D19_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("historical_validation")
 )
@@ -204,6 +208,25 @@ EXPECTED_D16_KEYS = {
     "uncertainty_band",
     "uses_evidence_index",
     "uses_model_registry",
+}
+
+EXPECTED_D17_KEYS = {
+    "ai_context_allowed_count",
+    "boundary_available",
+    "configured_public_output_count",
+    "growth_inflation_macro_pack_available",
+    "growth_inflation_macro_pack_metric_count",
+    "growth_macro_status",
+    "inflation_macro_status",
+    "missing_count",
+    "missing_inputs_visible",
+    "missing_public_output_keys",
+    "policy_constraint_status",
+    "public_output_keys",
+    "public_outputs_expose_probability_language",
+    "public_outputs_expose_trading_language",
+    "research_needed_count",
+    "stagflation_watch_status",
 }
 
 EXPECTED_D19_KEYS = {
@@ -284,6 +307,7 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert set(result["liquidity_funding_stress"]) == EXPECTED_D14_KEYS
     assert set(result["macro_regime_review"]) == EXPECTED_D15_KEYS
     assert set(result["scenario_stress"]) == EXPECTED_D16_KEYS
+    assert set(result["growth_inflation_macro_pack"]) == EXPECTED_D17_KEYS
     assert set(result["historical_validation"]) == EXPECTED_D19_KEYS
     assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
     assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
@@ -298,6 +322,9 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert result["scenario_stress"]["public_outputs_expose_probability_language"] is False
     assert result["scenario_stress"]["public_outputs_expose_trading_language"] is False
     assert set(result["scenario_stress"]["public_output_keys"]) == EXPECTED_D16_PUBLIC_OUTPUT_KEYS
+    assert result["growth_inflation_macro_pack"]["public_outputs_expose_probability_language"] is False
+    assert result["growth_inflation_macro_pack"]["public_outputs_expose_trading_language"] is False
+    assert set(result["growth_inflation_macro_pack"]["public_output_keys"]) == EXPECTED_D17_PUBLIC_OUTPUT_KEYS
     assert set(result["historical_validation"]["public_output_keys"]) == EXPECTED_D19_PUBLIC_OUTPUT_KEYS
     assert '"raw_provider"' not in body
     assert '"raw_holdings"' not in body
@@ -398,6 +425,8 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert "liquidity_funding_available" in result["liquidity_funding_stress"]
     assert result["liquidity_funding_stress"]["raw_metric_count"] == 9
     assert result["liquidity_funding_stress"]["derived_metric_count"] == 9
+    assert "growth_inflation_macro_pack" in result
+    assert "growth_macro_status" in result["growth_inflation_macro_pack"]
     assert "scenario_stress" in result
     assert result["scenario_stress"]["scenario_count"] == 7
     assert result["scenario_stress"]["uses_model_registry"] is True

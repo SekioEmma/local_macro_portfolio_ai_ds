@@ -81,8 +81,20 @@ severity band, and uncertainty band.
 It does not output scenario odds, asset-direction certainty, return estimates,
 allocation directives, action instructions, or portfolio optimization results.
 
-The next engineering step is Stage 5 D17 Growth / Inflation Macro Pack. D17 is
-not implemented in Stage 4.
+Stage 5 D17 follows D16 and is now completed.
+
+## D17 Growth / Inflation Macro Pack v0
+
+D17 is implemented as a conservative growth/inflation current-evidence context
+layer for growth, inflation, policy-constraint, and stagflation-watch
+interpretation.
+
+It is not a forecast, recession call, event-odds model, allocation directive,
+or return estimate. Missing and research-needed inputs remain visible and do not
+support labels.
+
+The next engineering step is Stage 6 D18 Valuation / Equity Structure v0. D18 is
+not implemented in Stage 5.
 
 ## Later Modeling Areas
 
