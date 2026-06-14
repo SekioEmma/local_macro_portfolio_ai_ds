@@ -44,8 +44,19 @@ Hard gates:
 
 ## Stage 2.5 D19 Historical Validation v0
 
-D19 v0 should be historical replay of the deterministic evidence pipeline. It is
-not ROC/AUC optimization, a probability model, or a trading backtest.
+D19 v0 is implemented as historical replay of the deterministic evidence
+pipeline over predefined event windows.
+
+It is historical pressure recognition, event-window consistency, and boundary
+validation. It is not ROC/AUC optimization, probability modeling, future-market
+forecasting, or a trading performance review.
+
+Current D19 public outputs are compact model-output rows: status, event counts,
+available/insufficient-history counts, over/under-escalation flags, boundary
+violation count, privacy flags, model/formula versions, and validation boundary.
+
+The next engineering step is Stage 3 EvidenceIndex / MetricLookup / Model
+Registry, not D16.
 
 ## D16 Scenario Stress Test v0
 

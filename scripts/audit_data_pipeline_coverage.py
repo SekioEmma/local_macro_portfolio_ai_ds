@@ -50,6 +50,7 @@ from audit_sections.history_audits import (  # noqa: E402
 from audit_sections.manifest_audit import _ai_context_manifest_audit  # noqa: E402
 from audit_sections.module_audits import (  # noqa: E402
     _financial_stress_composite_audit,
+    _historical_validation_audit,
     _historical_risk_percentile_audit,
     _liquidity_funding_stress_audit,
     _macro_regime_review_audit,
@@ -107,6 +108,7 @@ def build_coverage_audit(
     financial_stress_composite = _financial_stress_composite_audit(rows)
     pullback_systemic_risk_checklist = _pullback_systemic_checklist_audit(rows)
     historical_risk_percentile = _historical_risk_percentile_audit(rows)
+    historical_validation = _historical_validation_audit(rows)
     liquidity_funding = _liquidity_funding_stress_audit(rows)
     macro_regime_review = _macro_regime_review_audit(rows)
     liquidity_funding_history = _liquidity_funding_history_audit(
@@ -150,6 +152,7 @@ def build_coverage_audit(
         "financial_stress_composite": financial_stress_composite,
         "pullback_systemic_risk_checklist": pullback_systemic_risk_checklist,
         "historical_risk_percentile": historical_risk_percentile,
+        "historical_validation": historical_validation,
         "liquidity_funding_stress": liquidity_funding,
         "macro_regime_review": macro_regime_review,
         "liquidity_funding_history": liquidity_funding_history,
@@ -1006,6 +1009,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Historical Risk Percentile", ""])
     for key, value in audit["historical_risk_percentile"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Historical Validation", ""])
+    for key, value in audit["historical_validation"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Liquidity/Funding Stress", ""])
     for key, value in audit["liquidity_funding_stress"].items():

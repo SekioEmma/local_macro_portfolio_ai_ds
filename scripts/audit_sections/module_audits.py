@@ -55,6 +55,21 @@ MACRO_REGIME_REVIEW_METRIC_KEYS = {
     "formula_version",
     "as_of_date",
 }
+HISTORICAL_VALIDATION_METRIC_KEYS = {
+    "historical_validation_status",
+    "historical_validation_event_count",
+    "historical_validation_available_event_count",
+    "historical_validation_insufficient_history_event_count",
+    "historical_validation_ordinary_pullback_over_escalation_count",
+    "historical_validation_stress_window_under_escalation_count",
+    "historical_validation_boundary_violation_count",
+    "historical_validation_event_window_summary",
+    "historical_validation_privacy_flags",
+    "historical_validation_validation_boundary",
+    "historical_validation_model_version",
+    "historical_validation_formula_version",
+    "historical_validation_as_of_date",
+}
 
 
 def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -436,6 +451,86 @@ def _macro_regime_review_audit(rows: list[DashboardEvidenceRow]) -> dict[str, An
             )
         ),
     }
+
+def _historical_validation_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    validation_rows = [
+        row
+        for row in rows
+        if row.module == "historical_validation"
+        or row.metric_key in HISTORICAL_VALIDATION_METRIC_KEYS
+    ]
+    by_key = {row.metric_key: row for row in validation_rows}
+    serialized = json.dumps([_row_payload(row) for row in validation_rows], ensure_ascii=False).lower()
+    contributions = (
+        getattr(by_key.get("historical_validation_status"), "component_contributions", None)
+        or {}
+    )
+    privacy_flags = (
+        contributions.get("privacy_flags", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    boundary_violation_count = _int_value(
+        by_key.get("historical_validation_boundary_violation_count")
+    )
+    return {
+        "historical_validation_available": bool(
+            by_key.get("historical_validation_status")
+            and by_key["historical_validation_status"].value == "available"
+        ),
+        "historical_validation_metric_count": len(validation_rows),
+        "configured_public_output_count": len(HISTORICAL_VALIDATION_METRIC_KEYS),
+        "public_output_keys": sorted({row.metric_key for row in validation_rows}),
+        "missing_public_output_keys": sorted(
+            HISTORICAL_VALIDATION_METRIC_KEYS
+            - {row.metric_key for row in validation_rows}
+        ),
+        "event_count": _int_value(by_key.get("historical_validation_event_count")),
+        "available_event_count": _int_value(
+            by_key.get("historical_validation_available_event_count")
+        ),
+        "insufficient_history_event_count": _int_value(
+            by_key.get("historical_validation_insufficient_history_event_count")
+        ),
+        "boundary_violation_count": boundary_violation_count,
+        "public_outputs_expose_probability_language": any(
+            token in serialized
+            for token in (
+                "crash probability",
+                "recession probability",
+                "market direction probability",
+                "probability calibration",
+            )
+        ),
+        "public_outputs_expose_trading_language": any(
+            token in serialized
+            for token in (
+                "trade signal",
+                "buy",
+                "sell",
+                "hedge",
+                "rebalance",
+                "target allocation",
+                "expected return",
+            )
+        ),
+        "privacy_flags": privacy_flags,
+        "reads_local_market_history_only": bool(
+            privacy_flags.get("reads_local_market_history_only")
+        ),
+        "writes_sqlite": bool(privacy_flags.get("writes_sqlite")),
+        "fetches_live_provider_data": bool(
+            privacy_flags.get("fetches_live_provider_data")
+        ),
+    }
+
+def _int_value(row: DashboardEvidenceRow | None) -> int:
+    if row is None:
+        return 0
+    try:
+        return int(row.value)
+    except (TypeError, ValueError):
+        return 0
 
 def _historical_risk_percentile_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
     percentile_rows = [

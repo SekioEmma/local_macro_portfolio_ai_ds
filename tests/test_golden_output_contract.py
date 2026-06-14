@@ -32,6 +32,7 @@ MODEL_MODULES = {
     "historical_risk_percentile",
     "liquidity_funding_stress",
     "macro_regime_review",
+    "historical_validation",
 }
 D10_KEYS = {
     "financial_stress_score",
@@ -73,6 +74,21 @@ D15_FORBIDDEN_FIELDS = {
     "expected_return",
     "trade_signal",
     "target_allocation",
+}
+D19_PUBLIC_KEYS = {
+    "historical_validation_status",
+    "historical_validation_event_count",
+    "historical_validation_available_event_count",
+    "historical_validation_insufficient_history_event_count",
+    "historical_validation_ordinary_pullback_over_escalation_count",
+    "historical_validation_stress_window_under_escalation_count",
+    "historical_validation_boundary_violation_count",
+    "historical_validation_event_window_summary",
+    "historical_validation_privacy_flags",
+    "historical_validation_validation_boundary",
+    "historical_validation_model_version",
+    "historical_validation_formula_version",
+    "historical_validation_as_of_date",
 }
 FORBIDDEN_PUBLIC_PHRASES = (
     "crash probability",
@@ -120,6 +136,7 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     assert D10_KEYS <= keys_by_module["financial_stress_composite"]
     assert D11_KEYS <= keys_by_module["pullback_systemic_risk_checklist"]
     assert D15_PUBLIC_KEYS <= keys_by_module["macro_regime_review"]
+    assert D19_PUBLIC_KEYS <= keys_by_module["historical_validation"]
 
     stress = _row(rows, "financial_stress_composite", "financial_stress_score")
     assert isinstance(stress["value"], (int, float))
@@ -163,6 +180,9 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     assert "probability" not in regime_boundary["value"].lower()
     assert "allocation directive" in regime_boundary["value"]
     assert "return estimate" in regime_boundary["value"]
+    d19_boundary = _row(rows, "historical_validation", "historical_validation_validation_boundary")
+    assert "historical replay" in d19_boundary["value"]
+    assert "event-window consistency" in d19_boundary["value"]
 
     _assert_no_forbidden_public_phrases(
         {
@@ -237,6 +257,11 @@ def test_golden_audit_contract(tmp_path):
     assert d15["contains_recession_probability_language"] is False
     assert d15["hard_gate_count"] >= 10
     assert result["ai_context_manifest"]["included_d15_model_output_count"] >= 1
+    d19 = result["historical_validation"]
+    assert d19["event_count"] >= 5
+    assert d19["boundary_violation_count"] == 0
+    assert d19["public_outputs_expose_probability_language"] is False
+    assert d19["public_outputs_expose_trading_language"] is False
 
     _assert_no_private_tokens(result)
     _assert_no_forbidden_public_phrases(
@@ -257,9 +282,13 @@ def test_golden_frontend_registry_contract():
     registry_text = f"{module_registry}\n{metric_registry}"
 
     assert 'macro_regime_review: "Macro regime review"' in module_registry
+    assert 'historical_validation: "Historical validation"' in module_registry
     for metric_key in D15_PUBLIC_KEYS:
         assert f"{metric_key}:" in metric_registry
+    for metric_key in D19_PUBLIC_KEYS:
+        assert f"{metric_key}:" in metric_registry
     assert "current evidence review" in module_registry
+    assert "historical replay" in module_registry
     assert "allocation directive" in module_registry
     assert "return estimate" in module_registry
     for token in D15_FORBIDDEN_FIELDS:

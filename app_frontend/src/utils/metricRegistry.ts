@@ -93,6 +93,25 @@ Object.assign(metricLabels, {
   interpretation_boundary: "Macro regime interpretation boundary",
   model_version: "Macro regime model version",
   formula_version: "Macro regime formula version",
-  as_of_date: "Macro regime as-of date"
+  as_of_date: "Macro regime as-of date",
+  historical_validation_status: "Historical validation status",
+  historical_validation_event_count: "Historical validation event count",
+  historical_validation_available_event_count:
+    "Historical validation available event count",
+  historical_validation_insufficient_history_event_count:
+    "Historical validation insufficient history event count",
+  historical_validation_ordinary_pullback_over_escalation_count:
+    "Historical validation ordinary pullback over-escalation count",
+  historical_validation_stress_window_under_escalation_count:
+    "Historical validation stress window under-escalation count",
+  historical_validation_boundary_violation_count:
+    "Historical validation boundary violation count",
+  historical_validation_event_window_summary:
+    "Historical validation event-window summary",
+  historical_validation_privacy_flags: "Historical validation privacy flags",
+  historical_validation_validation_boundary: "Historical validation boundary",
+  historical_validation_model_version: "Historical validation model version",
+  historical_validation_formula_version: "Historical validation formula version",
+  historical_validation_as_of_date: "Historical validation as-of date"
 });
 

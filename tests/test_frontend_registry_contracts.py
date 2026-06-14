@@ -16,6 +16,7 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
     assert 'historical_risk_percentile: "Historical risk percentile"' in module_registry
     assert 'liquidity_funding_stress: "Liquidity/funding stress"' in module_registry
     assert 'macro_regime_review: "Macro regime review"' in module_registry
+    assert 'historical_validation: "Historical validation"' in module_registry
 
     assert 'financial_stress_score: "Financial stress score"' in metric_registry
     assert 'pullback_classification: "Pullback classification"' in metric_registry
@@ -26,12 +27,17 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
     )
     assert 'macro_regime_label: "Macro regime label"' in metric_registry
     assert 'primary_pressure_ranking: "Primary pressure ranking"' in metric_registry
+    assert (
+        'historical_validation_status: "Historical validation status"'
+        in metric_registry
+    )
 
     assert "event-odds model" in module_registry
     assert "allocation directive" in module_registry
     assert "not a forecast" in module_registry
     assert "reference evidence" in module_registry
     assert "current evidence review" in module_registry
+    assert "historical replay" in module_registry
 
 
 def test_display_label_helpers_keep_unknown_fallbacks():

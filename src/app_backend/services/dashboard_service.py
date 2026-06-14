@@ -23,6 +23,7 @@ from app_backend.services import provider_service
 from data_quality import financial_stress_composite
 from data_quality import historical_derived_metrics
 from data_quality import historical_percentile_metrics
+from data_quality import historical_validation
 from data_quality import last_good_cache
 from data_quality import liquidity_funding_stress
 from data_quality import macro_regime_review
@@ -174,6 +175,19 @@ DERIVED_METRIC_KEYS = {
     "model_version",
     "formula_version",
     "as_of_date",
+    "historical_validation_status",
+    "historical_validation_event_count",
+    "historical_validation_available_event_count",
+    "historical_validation_insufficient_history_event_count",
+    "historical_validation_ordinary_pullback_over_escalation_count",
+    "historical_validation_stress_window_under_escalation_count",
+    "historical_validation_boundary_violation_count",
+    "historical_validation_event_window_summary",
+    "historical_validation_privacy_flags",
+    "historical_validation_validation_boundary",
+    "historical_validation_model_version",
+    "historical_validation_formula_version",
+    "historical_validation_as_of_date",
     "high_yield_spread_percentile",
     "high_yield_spread_zscore",
     "high_yield_spread_robust_zscore",
@@ -579,11 +593,15 @@ def build_dashboard_evidence_table(
         + financial_stress_rows
         + pullback_rows
     )
+    historical_validation_rows = _historical_validation_evidence_rows(
+        db_path=dashboard_market_history_db_path
+    )
     all_rows = (
         base_rows
         + financial_stress_rows
         + pullback_rows
         + macro_regime_rows
+        + historical_validation_rows
         + percentile_rows
         + liquidity_funding_rows
     )
@@ -769,6 +787,19 @@ def _macro_regime_review_evidence_rows(
     )
     return [
         _evidence_row("macro_regime_review", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
+def _historical_validation_evidence_rows(
+    *,
+    db_path: Path | str | None = None,
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = historical_validation.build_historical_validation_rows(
+        db_path=str(db_path) if db_path is not None else None
+    )
+    return [
+        _evidence_row("historical_validation", DashboardMetric(**payload))
         for payload in metric_payloads
     ]
 

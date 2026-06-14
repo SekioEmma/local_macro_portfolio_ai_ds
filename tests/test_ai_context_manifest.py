@@ -135,6 +135,8 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
         "ON RRP usage alone is not a risk trigger.",
         "Macro regime review is current evidence review, not future market direction.",
         "Macro regime review produces no probability or allocation directive.",
+        "Historical validation is event-window replay, not future market direction.",
+        "Historical validation produces no event odds or allocation directive.",
     ]
 
 

@@ -23,6 +23,7 @@ EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
     "generated_at",
     "historical_derived",
     "historical_risk_percentile",
+    "historical_validation",
     "historical_store",
     "last_good_cache",
     "liquidity_funding_history",
@@ -174,6 +175,24 @@ EXPECTED_D15_KEYS = {
     "support_band",
 }
 
+EXPECTED_D19_KEYS = {
+    "available_event_count",
+    "boundary_violation_count",
+    "configured_public_output_count",
+    "event_count",
+    "fetches_live_provider_data",
+    "historical_validation_available",
+    "historical_validation_metric_count",
+    "insufficient_history_event_count",
+    "missing_public_output_keys",
+    "privacy_flags",
+    "public_output_keys",
+    "public_outputs_expose_probability_language",
+    "public_outputs_expose_trading_language",
+    "reads_local_market_history_only",
+    "writes_sqlite",
+}
+
 EXPECTED_MANIFEST_KEYS = {
     "excluded_d13_insufficient_history_count",
     "excluded_d14_ineligible_count",
@@ -231,11 +250,16 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert set(result["historical_risk_percentile"]) == EXPECTED_D13_KEYS
     assert set(result["liquidity_funding_stress"]) == EXPECTED_D14_KEYS
     assert set(result["macro_regime_review"]) == EXPECTED_D15_KEYS
+    assert set(result["historical_validation"]) == EXPECTED_D19_KEYS
     assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
     assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
     assert result["ai_context_manifest"]["returns_credentials"] is False
     assert result["ai_context_manifest"]["returns_holdings_line_items"] is False
     assert result["ai_context_manifest"]["returns_provider_payloads"] is False
+    assert result["historical_validation"]["writes_sqlite"] is False
+    assert result["historical_validation"]["fetches_live_provider_data"] is False
+    assert result["historical_validation"]["public_outputs_expose_probability_language"] is False
+    assert result["historical_validation"]["public_outputs_expose_trading_language"] is False
     assert '"raw_provider"' not in body
     assert '"raw_holdings"' not in body
     assert "must_not_leak" not in body

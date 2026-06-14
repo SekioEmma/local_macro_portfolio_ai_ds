@@ -24,6 +24,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "historical_risk_percentile",
     "liquidity_funding_stress",
     "macro_regime_review",
+    "historical_validation",
 }
 
 
@@ -105,6 +106,14 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     }
     assert "macro_regime_score" not in json.dumps(regime)
     assert "current evidence review" in regime["interpretation_boundary"]
+    historical_validation = _row(
+        data,
+        "historical_validation",
+        "historical_validation_status",
+    )
+    assert historical_validation["source_badge"] == "derived"
+    assert historical_validation["status"] in {"ok", "insufficient_history"}
+    assert "historical replay" in historical_validation["interpretation_boundary"]
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):

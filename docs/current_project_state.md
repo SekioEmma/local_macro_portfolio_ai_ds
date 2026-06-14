@@ -38,6 +38,12 @@ Validation baseline after Stage 2 golden contracts:
 - Included model outputs: 28.
 - Market history: 33803 observations / 45 metrics.
 
+Stage 2.5 D19 local audit baseline:
+
+- D19 event windows configured: 5.
+- Current local historical validation coverage: 0 available / 5 insufficient history.
+- D19 boundary violations: 0.
+
 ## Completed Mainline
 
 - D7-D9 data foundation, PPIFIS, drawdown/curve/cross-asset, labor mini-pack, official labor history, labor compact fallback.
@@ -56,6 +62,7 @@ Validation baseline after Stage 2 golden contracts:
 - M5 audit pipeline modularized.
 - M6 frontend display registries organized.
 - Stage 2 Golden Output Contract and forbidden-language tests.
+- Stage 2.5 D19 Historical Validation v0.
 
 ## Hard Boundaries
 
@@ -64,6 +71,8 @@ Validation baseline after Stage 2 golden contracts:
 - `financial_stress_score` is pressure temperature, not probability.
 - D15 macro regime review is current evidence review, not a classifier or forecast model.
 - D15 exposes bands and ranked evidence, not a public numeric regime score.
+- D19 is historical replay / event-window consistency validation, not probability
+  modeling or trading performance review.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -71,7 +80,6 @@ Validation baseline after Stage 2 golden contracts:
 
 ## Current Next Step
 
-The current next step is Stage 2.5 D19 Historical Validation v0.
+The current next step is Stage 3 EvidenceIndex / MetricLookup / Model Registry.
 
-Do not do D16 now. D16 remains a later scenario matrix stage, not the immediate
-next task.
+Do not do D16 now. D16 remains a later scenario matrix stage.

@@ -9,6 +9,7 @@ from app_backend.services import dashboard_service
 
 MODEL_OUTPUT_MODULES = {
     "financial_stress_composite",
+    "historical_validation",
     "macro_regime_review",
     "pullback_systemic_risk_checklist",
 }
@@ -39,6 +40,8 @@ RISK_BOUNDARIES = [
     "ON RRP usage alone is not a risk trigger.",
     "Macro regime review is current evidence review, not future market direction.",
     "Macro regime review produces no probability or allocation directive.",
+    "Historical validation is event-window replay, not future market direction.",
+    "Historical validation produces no event odds or allocation directive.",
 ]
 
 
