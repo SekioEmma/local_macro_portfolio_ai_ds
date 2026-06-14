@@ -24,6 +24,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "historical_risk_percentile",
     "liquidity_funding_stress",
     "growth_inflation_macro_pack",
+    "valuation_equity_structure",
     "macro_regime_review",
     "scenario_stress",
     "historical_validation",
@@ -105,6 +106,16 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
         "unknown",
     }
     assert "current-evidence context" in growth["interpretation_boundary"]
+    valuation = _row(data, "valuation_equity_structure", "valuation_context_status")
+    assert valuation["source_badge"] == "derived"
+    assert valuation["value"] in {
+        "available",
+        "research_needed",
+        "limited_proxy_context",
+        "unavailable",
+        "insufficient_evidence",
+    }
+    assert "research/proxy context" in valuation["interpretation_boundary"]
     regime = _row(data, "macro_regime_review", "macro_regime_label")
     assert regime["source_badge"] == "derived"
     assert regime["value"] in {

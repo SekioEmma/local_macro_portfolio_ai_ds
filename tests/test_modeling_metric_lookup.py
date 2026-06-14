@@ -3,6 +3,7 @@ from modeling.metric_lookup import (
     D15_PUBLIC_OUTPUT_KEYS,
     D16_PUBLIC_OUTPUT_KEYS,
     D17_PUBLIC_OUTPUT_KEYS,
+    D18_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
     MetricLookup,
 )
@@ -53,6 +54,21 @@ def test_metric_lookup_registers_d17_public_fields():
     assert lookup.require("growth_macro_status").trigger_policy == "confirmation_only"
     assert (
         lookup.require("stagflation_watch_interpretation_boundary")
+        .interpretation_boundary_required
+        is True
+    )
+
+
+def test_metric_lookup_registers_d18_public_fields_as_auxiliary_context():
+    lookup = MetricLookup()
+    public_keys = set(lookup.public_output_keys("valuation_equity_structure"))
+
+    assert set(D18_PUBLIC_OUTPUT_KEYS) <= public_keys
+    assert lookup.require("valuation_context_status").evidence_group == "valuation_earnings_breadth"
+    assert lookup.require("valuation_context_status").trigger_policy == "cannot_trigger"
+    assert lookup.require("equity_structure_status").status_policy == "auxiliary_only"
+    assert (
+        lookup.require("breadth_concentration_interpretation_boundary")
         .interpretation_boundary_required
         is True
     )

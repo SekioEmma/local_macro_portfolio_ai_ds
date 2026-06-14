@@ -54,6 +54,9 @@ SCENARIO_STRESS_METRIC_KEYS = set(
 GROWTH_INFLATION_MACRO_PACK_METRIC_KEYS = set(
     MODEL_REGISTRY.public_output_keys("growth_inflation_macro_pack")
 )
+VALUATION_EQUITY_STRUCTURE_METRIC_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("valuation_equity_structure")
+)
 
 
 def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -653,6 +656,119 @@ def _growth_inflation_macro_pack_audit(rows: list[DashboardEvidenceRow]) -> dict
         ),
         "boundary_available": any(row.value for row in boundary_rows),
         "missing_inputs_visible": any(row.value is not None for row in missing_rows),
+    }
+
+def _valuation_equity_structure_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    context_rows = [
+        row
+        for row in rows
+        if row.module == "valuation_equity_structure"
+        or row.metric_key in VALUATION_EQUITY_STRUCTURE_METRIC_KEYS
+    ]
+    by_key = {row.metric_key: row for row in context_rows}
+    serialized = json.dumps([_row_payload(row) for row in context_rows], ensure_ascii=False).lower()
+    public_keys = {row.metric_key for row in context_rows}
+    boundary_rows = [
+        row
+        for row in context_rows
+        if row.metric_key.endswith("_interpretation_boundary")
+    ]
+    missing_rows = [
+        row for row in context_rows if row.metric_key.endswith("_missing_inputs")
+    ]
+    contributions = (
+        getattr(by_key.get("valuation_context_status"), "component_contributions", None)
+        or {}
+    )
+    hard_gates = (
+        contributions.get("hard_gates", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    return {
+        "valuation_equity_structure_available": bool(
+            by_key.get("valuation_context_status")
+            and by_key.get("earnings_context_status")
+            and by_key.get("equity_structure_status")
+            and by_key.get("breadth_concentration_context_status")
+        ),
+        "valuation_equity_structure_metric_count": len(context_rows),
+        "configured_public_output_count": len(VALUATION_EQUITY_STRUCTURE_METRIC_KEYS),
+        "public_output_keys": sorted(public_keys),
+        "missing_public_output_keys": sorted(
+            VALUATION_EQUITY_STRUCTURE_METRIC_KEYS - public_keys
+        ),
+        "valuation_context_status": (
+            by_key["valuation_context_status"].value
+            if by_key.get("valuation_context_status")
+            else "missing"
+        ),
+        "valuation_pressure_hint": (
+            by_key["valuation_pressure_hint"].value
+            if by_key.get("valuation_pressure_hint")
+            else "missing"
+        ),
+        "earnings_context_status": (
+            by_key["earnings_context_status"].value
+            if by_key.get("earnings_context_status")
+            else "missing"
+        ),
+        "equity_structure_status": (
+            by_key["equity_structure_status"].value
+            if by_key.get("equity_structure_status")
+            else "missing"
+        ),
+        "breadth_concentration_context_status": (
+            by_key["breadth_concentration_context_status"].value
+            if by_key.get("breadth_concentration_context_status")
+            else "missing"
+        ),
+        "research_needed_count": sum(
+            1 for row in context_rows if row.status == "research_needed"
+        ),
+        "missing_count": sum(1 for row in context_rows if row.status == "missing"),
+        "ai_context_allowed_count": sum(
+            1 for row in context_rows if row.ai_context_allowed
+        ),
+        "public_outputs_expose_probability_language": any(
+            token in serialized
+            for token in (
+                "crash probability",
+                "recession probability",
+                "market direction probability",
+                "event odds",
+            )
+        ),
+        "public_outputs_expose_trading_language": any(
+            token in serialized
+            for token in (
+                "trade signal",
+                "target allocation",
+                "buy",
+                "sell",
+                "hedge",
+                "rebalance",
+            )
+        ),
+        "public_outputs_expose_return_language": any(
+            token in serialized
+            for token in ("expected return", "strategy return")
+        ),
+        "boundary_available": any(row.value for row in boundary_rows),
+        "missing_inputs_visible": any(row.value is not None for row in missing_rows),
+        "proxy_constraints_visible": any(
+            "proxy" in str(getattr(row, "component_contributions", "")).lower()
+            for row in context_rows
+        ),
+        "valuation_cannot_trigger_macro_regime": bool(
+            hard_gates.get("valuation_cannot_trigger_macro_regime")
+        ),
+        "valuation_cannot_trigger_systemic_review": bool(
+            hard_gates.get("valuation_cannot_trigger_systemic_review")
+        ),
+        "proxy_breadth_not_true_breadth": bool(
+            hard_gates.get("proxy_breadth_not_true_breadth")
+        ),
     }
 
 def _int_value(row: DashboardEvidenceRow | None) -> int:

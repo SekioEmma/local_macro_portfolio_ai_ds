@@ -47,6 +47,7 @@ EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
     "top_insufficient_history_metrics",
     "top_missing_metrics",
     "top_research_needed_metrics",
+    "valuation_equity_structure",
     "valuation_research",
     "yfinance_history",
 }
@@ -188,6 +189,9 @@ EXPECTED_D16_PUBLIC_OUTPUT_KEYS = set(
 EXPECTED_D17_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("growth_inflation_macro_pack")
 )
+EXPECTED_D18_PUBLIC_OUTPUT_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("valuation_equity_structure")
+)
 EXPECTED_D19_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("historical_validation")
 )
@@ -227,6 +231,31 @@ EXPECTED_D17_KEYS = {
     "public_outputs_expose_trading_language",
     "research_needed_count",
     "stagflation_watch_status",
+}
+
+EXPECTED_D18_KEYS = {
+    "ai_context_allowed_count",
+    "boundary_available",
+    "breadth_concentration_context_status",
+    "configured_public_output_count",
+    "earnings_context_status",
+    "equity_structure_status",
+    "missing_count",
+    "missing_inputs_visible",
+    "missing_public_output_keys",
+    "proxy_breadth_not_true_breadth",
+    "proxy_constraints_visible",
+    "public_output_keys",
+    "public_outputs_expose_probability_language",
+    "public_outputs_expose_return_language",
+    "public_outputs_expose_trading_language",
+    "research_needed_count",
+    "valuation_cannot_trigger_macro_regime",
+    "valuation_cannot_trigger_systemic_review",
+    "valuation_context_status",
+    "valuation_equity_structure_available",
+    "valuation_equity_structure_metric_count",
+    "valuation_pressure_hint",
 }
 
 EXPECTED_D19_KEYS = {
@@ -308,6 +337,7 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert set(result["macro_regime_review"]) == EXPECTED_D15_KEYS
     assert set(result["scenario_stress"]) == EXPECTED_D16_KEYS
     assert set(result["growth_inflation_macro_pack"]) == EXPECTED_D17_KEYS
+    assert set(result["valuation_equity_structure"]) == EXPECTED_D18_KEYS
     assert set(result["historical_validation"]) == EXPECTED_D19_KEYS
     assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
     assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
@@ -325,6 +355,10 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert result["growth_inflation_macro_pack"]["public_outputs_expose_probability_language"] is False
     assert result["growth_inflation_macro_pack"]["public_outputs_expose_trading_language"] is False
     assert set(result["growth_inflation_macro_pack"]["public_output_keys"]) == EXPECTED_D17_PUBLIC_OUTPUT_KEYS
+    assert result["valuation_equity_structure"]["public_outputs_expose_probability_language"] is False
+    assert result["valuation_equity_structure"]["public_outputs_expose_trading_language"] is False
+    assert result["valuation_equity_structure"]["public_outputs_expose_return_language"] is False
+    assert set(result["valuation_equity_structure"]["public_output_keys"]) == EXPECTED_D18_PUBLIC_OUTPUT_KEYS
     assert set(result["historical_validation"]["public_output_keys"]) == EXPECTED_D19_PUBLIC_OUTPUT_KEYS
     assert '"raw_provider"' not in body
     assert '"raw_holdings"' not in body
@@ -427,6 +461,10 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
     assert result["liquidity_funding_stress"]["derived_metric_count"] == 9
     assert "growth_inflation_macro_pack" in result
     assert "growth_macro_status" in result["growth_inflation_macro_pack"]
+    assert "valuation_equity_structure" in result
+    assert "valuation_context_status" in result["valuation_equity_structure"]
+    assert result["valuation_equity_structure"]["valuation_cannot_trigger_macro_regime"] is True
+    assert result["valuation_equity_structure"]["public_outputs_expose_return_language"] is False
     assert "scenario_stress" in result
     assert result["scenario_stress"]["scenario_count"] == 7
     assert result["scenario_stress"]["uses_model_registry"] is True

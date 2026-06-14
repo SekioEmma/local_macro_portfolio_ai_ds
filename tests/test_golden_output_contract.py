@@ -48,6 +48,7 @@ D15_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("macro_regime_review"))
 D15_FORBIDDEN_FIELDS = set(FORBIDDEN_PUBLIC_OUTPUT_KEYS)
 D16_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("scenario_stress"))
 D17_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("growth_inflation_macro_pack"))
+D18_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("valuation_equity_structure"))
 D19_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("historical_validation"))
 FORBIDDEN_PUBLIC_PHRASES = (
     "crash probability",
@@ -95,6 +96,7 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     assert D10_KEYS <= keys_by_module["financial_stress_composite"]
     assert D11_KEYS <= keys_by_module["pullback_systemic_risk_checklist"]
     assert D17_PUBLIC_KEYS <= keys_by_module["growth_inflation_macro_pack"]
+    assert D18_PUBLIC_KEYS <= keys_by_module["valuation_equity_structure"]
     assert D15_PUBLIC_KEYS <= keys_by_module["macro_regime_review"]
     assert D16_PUBLIC_KEYS <= keys_by_module["scenario_stress"]
     assert D19_PUBLIC_KEYS <= keys_by_module["historical_validation"]
@@ -132,6 +134,15 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     growth_context = _row(rows, "growth_inflation_macro_pack", "growth_macro_status")
     assert "current-evidence context" in growth_context["interpretation_boundary"]
     assert "forecast" in growth_context["interpretation_boundary"]
+    valuation_context = _row(rows, "valuation_equity_structure", "valuation_context_status")
+    assert "research/proxy context" in valuation_context["interpretation_boundary"]
+    assert valuation_context["value"] in {
+        "available",
+        "research_needed",
+        "limited_proxy_context",
+        "unavailable",
+        "insufficient_evidence",
+    }
 
     regime_rows = rows_by_module["macro_regime_review"]
     regime_keys = {row["metric_key"] for row in regime_rows}
@@ -244,6 +255,11 @@ def test_golden_audit_contract(tmp_path):
     assert d17["growth_inflation_macro_pack_metric_count"] == len(D17_PUBLIC_KEYS)
     assert d17["public_outputs_expose_probability_language"] is False
     assert d17["public_outputs_expose_trading_language"] is False
+    d18 = result["valuation_equity_structure"]
+    assert d18["valuation_equity_structure_metric_count"] == len(D18_PUBLIC_KEYS)
+    assert d18["public_outputs_expose_probability_language"] is False
+    assert d18["public_outputs_expose_trading_language"] is False
+    assert d18["public_outputs_expose_return_language"] is False
 
     _assert_no_private_tokens(result)
     _assert_no_forbidden_public_phrases(
@@ -251,6 +267,7 @@ def test_golden_audit_contract(tmp_path):
             "macro_regime_review": result["macro_regime_review"],
             "scenario_stress": result["scenario_stress"],
             "growth_inflation_macro_pack": result["growth_inflation_macro_pack"],
+            "valuation_equity_structure": result["valuation_equity_structure"],
             "ai_context_manifest": result["ai_context_manifest"],
         }
     )
@@ -279,6 +296,7 @@ def test_golden_frontend_registry_contract():
         assert f"{module_key}:" in module_registry
     assert 'macro_regime_review: "Macro regime review"' in module_registry
     assert 'growth_inflation_macro_pack: "Growth/inflation macro pack"' in module_registry
+    assert 'valuation_equity_structure: "Valuation/equity structure"' in module_registry
     assert 'scenario_stress: "Scenario stress"' in module_registry
     assert 'historical_validation: "Historical validation"' in module_registry
     for metric_key in D15_PUBLIC_KEYS:
@@ -287,10 +305,13 @@ def test_golden_frontend_registry_contract():
         assert f"{metric_key}:" in metric_registry
     for metric_key in D17_PUBLIC_KEYS:
         assert f"{metric_key}:" in metric_registry
+    for metric_key in D18_PUBLIC_KEYS:
+        assert f"{metric_key}:" in metric_registry
     for metric_key in D19_PUBLIC_KEYS:
         assert f"{metric_key}:" in metric_registry
     assert "current evidence review" in module_registry
     assert "current-evidence context" in module_registry
+    assert "research/proxy context" in module_registry
     assert "scenario matrix" in module_registry
     assert "historical replay" in module_registry
     assert "allocation directive" in module_registry

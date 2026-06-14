@@ -160,7 +160,16 @@ SCENARIO_REGISTRY: tuple[ScenarioDefinition, ...] = (
             "equity structure fragility",
         ),
         core_metrics=("nasdaq100_drawdown_3m", "sp500_drawdown_3m"),
-        auxiliary_metrics=("qqq_vs_spy_30d", "qqq_vs_spy_60d", "spy_vs_rsp_30d", "spy_vs_rsp_60d"),
+        auxiliary_metrics=(
+            "qqq_vs_spy_30d",
+            "qqq_vs_spy_60d",
+            "spy_vs_rsp_30d",
+            "spy_vs_rsp_60d",
+            "valuation_context_status",
+            "earnings_context_status",
+            "equity_structure_status",
+            "breadth_concentration_context_status",
+        ),
         missing_constraints=("valuation", "earnings", "true_breadth"),
     ),
 )

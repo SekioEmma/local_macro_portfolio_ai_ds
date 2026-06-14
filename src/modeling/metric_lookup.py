@@ -71,6 +71,27 @@ D17_PUBLIC_OUTPUT_KEYS = (
     "growth_inflation_macro_pack_formula_version",
     "growth_inflation_macro_pack_as_of_date",
 )
+D18_PUBLIC_OUTPUT_KEYS = (
+    "valuation_context_status",
+    "valuation_pressure_hint",
+    "valuation_metric_source_quality",
+    "valuation_missing_inputs",
+    "valuation_interpretation_boundary",
+    "earnings_context_status",
+    "earnings_missing_inputs",
+    "earnings_interpretation_boundary",
+    "equity_structure_status",
+    "equity_structure_supporting_evidence",
+    "equity_structure_missing_inputs",
+    "equity_structure_interpretation_boundary",
+    "breadth_concentration_context_status",
+    "breadth_concentration_supporting_evidence",
+    "breadth_concentration_missing_inputs",
+    "breadth_concentration_interpretation_boundary",
+    "valuation_equity_structure_model_version",
+    "valuation_equity_structure_formula_version",
+    "valuation_equity_structure_as_of_date",
+)
 D17_RESEARCH_NEEDED_KEYS = (
     "ism_manufacturing_pmi",
     "ism_services_pmi",
@@ -93,6 +114,21 @@ D17_RESEARCH_NEEDED_KEYS = (
     "ppi_final_demand_services_yoy",
     "ism_prices_paid",
     "gasoline_price_context",
+)
+D18_RESEARCH_NEEDED_KEYS = (
+    "sp500_trailing_pe",
+    "sp500_forward_pe",
+    "cape_shiller_pe",
+    "earnings_yield",
+    "equity_risk_premium_proxy",
+    "earnings_revision",
+    "eps_growth",
+    "advance_decline_line",
+    "percent_above_200dma",
+    "new_highs_new_lows",
+    "true_breadth",
+    "sp500_top10_weight",
+    "mag7_concentration",
 )
 D15_FORBIDDEN_PUBLIC_KEYS = (
     "macro_regime_score",
@@ -269,6 +305,30 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
     *(
         _metric(
             metric_key,
+            "valuation_equity_structure",
+            "valuation_earnings_breadth"
+            if metric_key
+            in {
+                "sp500_trailing_pe",
+                "sp500_forward_pe",
+                "cape_shiller_pe",
+                "earnings_yield",
+                "equity_risk_premium_proxy",
+                "earnings_revision",
+                "eps_growth",
+            }
+            else "equity_structure",
+            "research",
+            "research_needed_only",
+            "cannot_trigger",
+            status_policy="research_needed",
+        )
+        for metric_key in D18_RESEARCH_NEEDED_KEYS
+        if metric_key not in {"earnings_revision", "eps_growth"}
+    ),
+    *(
+        _metric(
+            metric_key,
             "macro_regime_review",
             "historical_validation" if metric_key == "as_of_date" else "macro_regime_review",
             "boundary" if "boundary" in metric_key else "version" if "version" in metric_key else "model_output",
@@ -325,5 +385,33 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
             boundary_required=metric_key.endswith("_interpretation_boundary"),
         )
         for metric_key in D17_PUBLIC_OUTPUT_KEYS
+    ),
+    *(
+        _metric(
+            metric_key,
+            "valuation_equity_structure",
+            "valuation_earnings_breadth"
+            if metric_key.startswith(("valuation_", "earnings_"))
+            else "equity_structure",
+            "derived"
+            if metric_key.endswith("_status") or metric_key == "valuation_pressure_hint"
+            else "boundary"
+            if "boundary" in metric_key
+            else "version"
+            if "version" in metric_key or metric_key.endswith("_as_of_date")
+            else "model_output",
+            "derived_with_inputs"
+            if metric_key.endswith("_status") or metric_key == "valuation_pressure_hint"
+            else "model_output_only",
+            "cannot_trigger",
+            public_output=True,
+            ai_context_policy="fact_or_excluded_by_row",
+            status_policy="auxiliary_only"
+            if metric_key.endswith("_status") or metric_key == "valuation_pressure_hint"
+            else "model_output",
+            boundary_required=metric_key.endswith("_interpretation_boundary"),
+            notes="D18 context cannot determine macro regime or systemic review.",
+        )
+        for metric_key in D18_PUBLIC_OUTPUT_KEYS
     ),
 )

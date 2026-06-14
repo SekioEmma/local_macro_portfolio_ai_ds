@@ -37,6 +37,8 @@ def test_ai_context_manifest_includes_and_excludes_expected_rows(monkeypatch, tm
     assert "pullback_classification" in model_keys
     assert "macro_regime_label" in model_keys
     assert "scenario_stress_status" in model_keys | excluded_model_keys
+    assert "valuation_context_status" in included_keys | set(excluded)
+    assert "valuation_missing_inputs" in excluded
     assert "financial_stress_score" not in included_keys
     assert "pullback_classification" not in included_keys
     assert "macro_regime_label" not in included_keys
@@ -143,6 +145,7 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
         "Historical validation produces no event odds or allocation directive.",
         "Scenario stress is a hypothetical scenario matrix, not future market direction.",
         "Scenario stress produces no event odds or allocation directive.",
+        "Valuation/equity structure is research/proxy context; valuation alone cannot determine regime or systemic review.",
     ]
 
 

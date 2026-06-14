@@ -264,7 +264,17 @@ def _labor_group(by_key: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 
 def _equity_group(by_key: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    rows = _valid_rows(by_key, ("sp500_drawdown_3m", "nasdaq100_drawdown_3m", "sp500_30d_return", "nasdaq100_30d_return"))
+    rows = _valid_rows(
+        by_key,
+        (
+            "sp500_drawdown_3m",
+            "nasdaq100_drawdown_3m",
+            "sp500_30d_return",
+            "nasdaq100_30d_return",
+            "equity_structure_status",
+            "breadth_concentration_context_status",
+        ),
+    )
     return _group(
         "equity_structure",
         rows,
@@ -276,7 +286,18 @@ def _equity_group(by_key: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 
 def _valuation_group(by_key: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    rows = _valid_rows(by_key, ("sp500_trailing_pe", "sp500_forward_pe", "earnings_revision", "eps_growth"))
+    rows = _valid_rows(
+        by_key,
+        (
+            "sp500_trailing_pe",
+            "sp500_forward_pe",
+            "earnings_revision",
+            "eps_growth",
+            "valuation_context_status",
+            "valuation_pressure_hint",
+            "earnings_context_status",
+        ),
+    )
     return _group(
         "valuation_earnings_breadth",
         rows,

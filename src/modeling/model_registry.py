@@ -7,6 +7,7 @@ from modeling.metric_lookup import (
     D15_PUBLIC_OUTPUT_KEYS,
     D16_PUBLIC_OUTPUT_KEYS,
     D17_PUBLIC_OUTPUT_KEYS,
+    D18_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
 )
 
@@ -102,6 +103,19 @@ D17_FORBIDDEN_TERMS = (
     "expected_return",
     "trade_signal",
     "target_allocation",
+    "predictive_accuracy",
+    "forecast_accuracy",
+    "trading_performance",
+    "strategy_return",
+)
+D18_FORBIDDEN_TERMS = (
+    "crash_probability",
+    "recession_probability",
+    "market_direction_probability",
+    "expected_return",
+    "trade_signal",
+    "target_allocation",
+    "timing_signal",
     "predictive_accuracy",
     "forecast_accuracy",
     "trading_performance",
@@ -288,6 +302,36 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
             "return estimate."
         ),
         notes="D17 is a context layer for D15/D16, not a predictor.",
+    ),
+    ModelRegistration(
+        model_key="valuation_equity_structure_v0",
+        module_key="valuation_equity_structure",
+        version_prefix="valuation_equity_structure",
+        category="research_context",
+        public_output_keys=D18_PUBLIC_OUTPUT_KEYS,
+        required_input_groups=("valuation_earnings_breadth", "equity_structure"),
+        optional_input_groups=("breadth_concentration_proxy", "portfolio_overlay"),
+        ai_context_policy="fact_or_excluded_by_row",
+        audit_policy="audit_d18_valuation_equity_structure",
+        frontend_registry_policy="research_module_label_and_boundary",
+        forbidden_language_policy=(
+            "conservative research/proxy context",
+            "not a forecast",
+            "not event odds",
+            "not an allocation directive",
+            "no return estimate",
+            "valuation cannot trigger macro regime or systemic review",
+            "proxy breadth does not replace true breadth",
+        ),
+        interpretation_boundary=(
+            "Valuation/equity structure is a conservative research/proxy "
+            "context layer for valuation vulnerability, earnings gaps, "
+            "breadth gaps, and concentration context. It is not a forecast, "
+            "timing model, event-odds model, allocation directive, or return "
+            "estimate. Proxy breadth/concentration does not replace true "
+            "breadth."
+        ),
+        notes="D18 makes valuation, earnings, and true breadth gaps explicit without adding providers.",
     ),
     ModelRegistration(
         model_key="macro_regime_review_v0",

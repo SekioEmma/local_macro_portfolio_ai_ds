@@ -110,6 +110,34 @@ Object.assign(metricLabels, {
     "Growth/inflation macro pack formula version",
   growth_inflation_macro_pack_as_of_date:
     "Growth/inflation macro pack as-of date",
+  valuation_context_status: "Valuation context status",
+  valuation_pressure_hint: "Valuation pressure hint",
+  valuation_metric_source_quality: "Valuation metric source quality",
+  valuation_missing_inputs: "Valuation missing inputs",
+  valuation_interpretation_boundary: "Valuation interpretation boundary",
+  earnings_context_status: "Earnings context status",
+  earnings_missing_inputs: "Earnings missing inputs",
+  earnings_interpretation_boundary: "Earnings interpretation boundary",
+  equity_structure_status: "Equity structure status",
+  equity_structure_supporting_evidence:
+    "Equity structure supporting evidence",
+  equity_structure_missing_inputs: "Equity structure missing inputs",
+  equity_structure_interpretation_boundary:
+    "Equity structure interpretation boundary",
+  breadth_concentration_context_status:
+    "Breadth/concentration context status",
+  breadth_concentration_supporting_evidence:
+    "Breadth/concentration supporting evidence",
+  breadth_concentration_missing_inputs:
+    "Breadth/concentration missing inputs",
+  breadth_concentration_interpretation_boundary:
+    "Breadth/concentration interpretation boundary",
+  valuation_equity_structure_model_version:
+    "Valuation/equity structure model version",
+  valuation_equity_structure_formula_version:
+    "Valuation/equity structure formula version",
+  valuation_equity_structure_as_of_date:
+    "Valuation/equity structure as-of date",
   macro_regime_label: "Macro regime label",
   support_band: "Macro regime support band",
   evidence_quality_band: "Macro regime evidence quality band",

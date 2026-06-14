@@ -32,6 +32,7 @@ from data_quality import market_history_store
 from data_quality import official_macro_pack
 from data_quality import pullback_systemic_checklist
 from data_quality import scenario_stress
+from data_quality import valuation_equity_structure
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -185,6 +186,25 @@ DERIVED_METRIC_KEYS = {
     "growth_inflation_macro_pack_model_version",
     "growth_inflation_macro_pack_formula_version",
     "growth_inflation_macro_pack_as_of_date",
+    "valuation_context_status",
+    "valuation_pressure_hint",
+    "valuation_metric_source_quality",
+    "valuation_missing_inputs",
+    "valuation_interpretation_boundary",
+    "earnings_context_status",
+    "earnings_missing_inputs",
+    "earnings_interpretation_boundary",
+    "equity_structure_status",
+    "equity_structure_supporting_evidence",
+    "equity_structure_missing_inputs",
+    "equity_structure_interpretation_boundary",
+    "breadth_concentration_context_status",
+    "breadth_concentration_supporting_evidence",
+    "breadth_concentration_missing_inputs",
+    "breadth_concentration_interpretation_boundary",
+    "valuation_equity_structure_model_version",
+    "valuation_equity_structure_formula_version",
+    "valuation_equity_structure_as_of_date",
     "macro_regime_label",
     "support_band",
     "evidence_quality_band",
@@ -630,6 +650,14 @@ def build_dashboard_evidence_table(
         + financial_stress_rows
         + pullback_rows
     )
+    valuation_equity_rows = _valuation_equity_structure_evidence_rows(
+        base_rows
+        + percentile_rows
+        + liquidity_funding_rows
+        + financial_stress_rows
+        + pullback_rows
+        + growth_inflation_rows
+    )
     macro_regime_rows = _macro_regime_review_evidence_rows(
         base_rows
         + percentile_rows
@@ -637,6 +665,7 @@ def build_dashboard_evidence_table(
         + financial_stress_rows
         + pullback_rows
         + growth_inflation_rows
+        + valuation_equity_rows
     )
     historical_validation_rows = _historical_validation_evidence_rows(
         db_path=dashboard_market_history_db_path
@@ -648,6 +677,7 @@ def build_dashboard_evidence_table(
         + financial_stress_rows
         + pullback_rows
         + growth_inflation_rows
+        + valuation_equity_rows
         + macro_regime_rows
         + historical_validation_rows
     )
@@ -656,6 +686,7 @@ def build_dashboard_evidence_table(
         + financial_stress_rows
         + pullback_rows
         + growth_inflation_rows
+        + valuation_equity_rows
         + macro_regime_rows
         + scenario_stress_rows
         + historical_validation_rows
@@ -856,6 +887,18 @@ def _growth_inflation_macro_pack_evidence_rows(
     )
     return [
         _evidence_row("growth_inflation_macro_pack", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
+def _valuation_equity_structure_evidence_rows(
+    rows: list[DashboardEvidenceRow],
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = valuation_equity_structure.build_valuation_equity_structure_rows(
+        [_model_to_dict(row) for row in rows]
+    )
+    return [
+        _evidence_row("valuation_equity_structure", DashboardMetric(**payload))
         for payload in metric_payloads
     ]
 

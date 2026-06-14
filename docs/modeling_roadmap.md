@@ -81,7 +81,7 @@ severity band, and uncertainty band.
 It does not output scenario odds, asset-direction certainty, return estimates,
 allocation directives, action instructions, or portfolio optimization results.
 
-Stage 5 D17 follows D16 and is now completed.
+Stage 5 D17 follows D16 and is completed.
 
 ## D17 Growth / Inflation Macro Pack v0
 
@@ -93,12 +93,24 @@ It is not a forecast, recession call, event-odds model, allocation directive,
 or return estimate. Missing and research-needed inputs remain visible and do not
 support labels.
 
-The next engineering step is Stage 6 D18 Valuation / Equity Structure v0. D18 is
-not implemented in Stage 5.
+Stage 6 D18 follows D17 and is now completed.
+
+## D18 Valuation / Equity Structure v0
+
+D18 is implemented as a conservative valuation/equity-structure research and
+proxy context layer. It keeps valuation, earnings, and true breadth gaps
+explicit while allowing existing sanitized proxy rows to provide limited
+equity-structure and breadth/concentration context.
+
+D18 is not a forecast, timing model, event-odds model, allocation directive, or
+return estimate. Valuation context cannot determine macro regime or systemic
+review by itself, and proxy breadth/concentration does not replace true breadth.
+
+The next engineering step is Stage 7 D19 expanded historical validation. D19
+expanded historical validation is not implemented in D18.
 
 ## Later Modeling Areas
 
-Later work may cover growth/inflation macro packs, valuation/equity structure,
-expanded historical validation, portfolio exposure overlays, and AI memo/report
-surfaces. Those areas must preserve the same source, freshness, privacy, and
-evidence-boundary rules.
+Later work may cover expanded historical validation, portfolio exposure
+overlays, and AI memo/report surfaces. Those areas must preserve the same
+source, freshness, privacy, and evidence-boundary rules.

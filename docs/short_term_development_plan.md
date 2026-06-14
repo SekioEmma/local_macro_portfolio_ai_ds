@@ -10,21 +10,22 @@
 6. Stage 3 EvidenceIndex / MetricLookup / Model Registry: completed.
 7. Stage 4 D16 Scenario Stress Test v0: completed.
 8. Stage 5 D17 Growth / Inflation Macro Pack: completed.
-9. Stage 6 D18 Valuation / Equity Structure v0.
+9. Stage 6 D18 Valuation / Equity Structure v0: completed.
 10. Stage 7 D19 expanded historical validation.
 11. Stage 8 Portfolio Exposure Overlay.
 12. Stage 9 AI Chat / Memo / Report.
 
 ## Current Task Boundary
 
-Stage 5 D17 Growth / Inflation Macro Pack v0 is completed as a conservative
-growth/inflation current-evidence context layer.
+Stage 6 D18 Valuation / Equity Structure v0 is completed as a conservative
+valuation/equity-structure research and proxy context layer.
 
-D17 does not output forecasts, recession calls, event odds, allocation
-directives, action instructions, or return estimates.
+D18 does not output forecasts, timing calls, event odds, allocation directives,
+action instructions, or return estimates. Valuation, earnings, and true breadth
+gaps remain explicit, and proxy breadth/concentration remains auxiliary only.
 
-The next step is Stage 6 D18 Valuation / Equity Structure v0. D18 is not
-implemented yet.
+The next step is Stage 7 D19 expanded historical validation. D19 expanded
+historical validation is not implemented in this task.
 
 ## Not Now
 

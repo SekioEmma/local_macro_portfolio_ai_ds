@@ -20,6 +20,7 @@ export const moduleLabels: Record<string, string> = {
 Object.assign(moduleLabels, {
   financial_stress_composite: "Financial stress composite",
   growth_inflation_macro_pack: "Growth/inflation macro pack",
+  valuation_equity_structure: "Valuation/equity structure",
   historical_validation: "Historical validation",
   macro_regime_review: "Macro regime review",
   scenario_stress: "Scenario stress",
@@ -54,6 +55,8 @@ Object.assign(interpretationBoundaries, {
     "Financial stress score is a transparent pressure temperature, not an event-odds model. It is reference review only. VIX alone and equity drawdown alone are not systemic stress. Liquidity/funding evidence is confirmation context only. Official stress indices do not replace the project financial stress composite.",
   growth_inflation_macro_pack:
     "Growth/inflation macro pack is a conservative current-evidence context layer for growth, inflation, policy-constraint, and stagflation-watch interpretation. It is not a forecast, business-cycle call, event-odds model, allocation directive, or return estimate.",
+  valuation_equity_structure:
+    "Valuation/equity structure is a conservative research/proxy context layer for valuation vulnerability, earnings gaps, breadth gaps, and concentration context. It is not a forecast, timing model, event-odds model, allocation directive, or return estimate. Proxy breadth/concentration does not replace true breadth.",
   historical_validation:
     "Historical validation is a read-only historical replay of deterministic evidence rows for event-window consistency and boundary validation. It is not a prediction model, event-odds model, business-cycle call, market direction forecast, allocation directive, or return estimate.",
   macro_regime_review:
@@ -71,6 +74,7 @@ Object.assign(interpretationBoundaries, {
 const moduleCategories: Record<string, ModuleRegistryEntry["category"]> = {
   financial_stress_composite: "model_output",
   growth_inflation_macro_pack: "derived",
+  valuation_equity_structure: "research",
   historical_validation: "model_output",
   macro_regime_review: "model_output",
   scenario_stress: "model_output",

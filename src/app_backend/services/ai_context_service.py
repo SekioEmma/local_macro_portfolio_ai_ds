@@ -41,6 +41,7 @@ RISK_BOUNDARIES = [
     "Historical validation produces no event odds or allocation directive.",
     "Scenario stress is a hypothetical scenario matrix, not future market direction.",
     "Scenario stress produces no event odds or allocation directive.",
+    "Valuation/equity structure is research/proxy context; valuation alone cannot determine regime or systemic review.",
 ]
 
 

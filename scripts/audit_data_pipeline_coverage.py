@@ -61,6 +61,7 @@ from audit_sections.module_audits import (  # noqa: E402
     _proxy_breadth_audit,
     _pullback_systemic_checklist_audit,
     _scenario_stress_audit,
+    _valuation_equity_structure_audit,
     _valuation_research_audit,
 )
 
@@ -111,6 +112,7 @@ def build_coverage_audit(
     pullback_systemic_risk_checklist = _pullback_systemic_checklist_audit(rows)
     historical_risk_percentile = _historical_risk_percentile_audit(rows)
     growth_inflation_macro_pack = _growth_inflation_macro_pack_audit(rows)
+    valuation_equity_structure = _valuation_equity_structure_audit(rows)
     historical_validation = _historical_validation_audit(rows)
     liquidity_funding = _liquidity_funding_stress_audit(rows)
     macro_regime_review = _macro_regime_review_audit(rows)
@@ -157,6 +159,7 @@ def build_coverage_audit(
         "pullback_systemic_risk_checklist": pullback_systemic_risk_checklist,
         "historical_risk_percentile": historical_risk_percentile,
         "growth_inflation_macro_pack": growth_inflation_macro_pack,
+        "valuation_equity_structure": valuation_equity_structure,
         "historical_validation": historical_validation,
         "liquidity_funding_stress": liquidity_funding,
         "macro_regime_review": macro_regime_review,
@@ -1018,6 +1021,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Growth/Inflation Macro Pack", ""])
     for key, value in audit["growth_inflation_macro_pack"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Valuation/Equity Structure", ""])
+    for key, value in audit["valuation_equity_structure"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Historical Validation", ""])
     for key, value in audit["historical_validation"].items():
