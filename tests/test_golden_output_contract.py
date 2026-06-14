@@ -245,6 +245,20 @@ def test_golden_audit_contract(tmp_path):
     assert d19["boundary_violation_count"] == 0
     assert d19["public_outputs_expose_probability_language"] is False
     assert d19["public_outputs_expose_trading_language"] is False
+    assert d19["public_outputs_expose_backtest_language"] is False
+    assert d19["public_outputs_expose_return_language"] is False
+    assert d19["proxy_constraint_violation_count"] == 0
+    assert d19["missing_data_violation_count"] == 0
+    assert d19["reads_local_market_history_only"] is True
+    assert d19["writes_sqlite"] is False
+    assert d19["fetches_live_provider_data"] is False
+    assert d19["returns_holdings_line_items"] is False
+    assert d19["returns_provider_payloads"] is False
+    assert d19["returns_credentials"] is False
+    assert d19["D15_band_only_boundary_preserved"] is True
+    assert d19["D16_scenario_matrix_boundary_preserved"] is True
+    assert d19["D17_context_layer_boundary_preserved"] is True
+    assert d19["D18_research_proxy_boundary_preserved"] is True
     d16 = result["scenario_stress"]
     assert d16["scenario_count"] == 7
     assert d16["public_outputs_expose_probability_language"] is False

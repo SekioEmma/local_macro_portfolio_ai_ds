@@ -170,6 +170,16 @@ Object.assign(metricLabels, {
   historical_validation_model_version: "Historical validation model version",
   historical_validation_formula_version: "Historical validation formula version",
   historical_validation_as_of_date: "Historical validation as-of date",
+  historical_validation_coverage_summary:
+    "Historical validation coverage summary",
+  historical_validation_module_consistency_summary:
+    "Historical validation module consistency summary",
+  historical_validation_proxy_constraint_summary:
+    "Historical validation proxy constraint summary",
+  historical_validation_missing_data_summary:
+    "Historical validation missing-data summary",
+  historical_validation_replay_version:
+    "Historical validation replay version",
   scenario_stress_status: "Scenario stress status",
   scenario_stress_scenario_count: "Scenario stress scenario count",
   scenario_stress_scenarios: "Scenario stress scenarios",

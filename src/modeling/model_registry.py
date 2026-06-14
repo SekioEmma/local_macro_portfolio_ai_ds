@@ -86,6 +86,8 @@ D19_FORBIDDEN_TERMS = (
     "f1",
     "probability_calibration",
     "trading_backtest",
+    "strategy_return",
+    "timing_signal",
 )
 D16_FORBIDDEN_TERMS = (
     "scenario_probability",
@@ -395,7 +397,7 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
         notes="D16 summarizes predefined scenario transmission without odds or actions.",
     ),
     ModelRegistration(
-        model_key="historical_validation_v0",
+        model_key="historical_validation_v1",
         module_key="historical_validation",
         version_prefix="historical_validation",
         category="model_output",
@@ -409,7 +411,7 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
             "read-only historical replay",
             "not model skill scoring",
             "not event odds",
-            "not trading evaluation",
+            "not strategy evaluation",
             "fail closed when local history is insufficient",
         ),
         interpretation_boundary=(
@@ -417,6 +419,6 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
             "event-window consistency and boundary validation. It fails closed "
             "when local history is insufficient."
         ),
-        notes="D19 v0 is structural validation, not future-outcome evaluation.",
+        notes="D19 v1 is expanded event-window validation, not future-outcome evaluation.",
     ),
 )

@@ -460,10 +460,26 @@ def _historical_validation_audit(rows: list[DashboardEvidenceRow]) -> dict[str, 
     boundary_violation_count = _int_value(
         by_key.get("historical_validation_boundary_violation_count")
     )
+    coverage_summary = (
+        contributions.get("coverage_summary", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    module_consistency = (
+        contributions.get("module_consistency_summary", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    privacy_defaults = {
+        "returns_holdings_line_items": False,
+        "returns_provider_payloads": False,
+        "returns_credentials": False,
+    }
+    privacy_flags = {**privacy_defaults, **privacy_flags}
     return {
         "historical_validation_available": bool(
             by_key.get("historical_validation_status")
-            and by_key["historical_validation_status"].value == "available"
+            and by_key["historical_validation_status"].value in {"available", "limited_replay"}
         ),
         "historical_validation_metric_count": len(validation_rows),
         "configured_public_output_count": len(HISTORICAL_VALIDATION_METRIC_KEYS),
@@ -476,10 +492,22 @@ def _historical_validation_audit(rows: list[DashboardEvidenceRow]) -> dict[str, 
         "available_event_count": _int_value(
             by_key.get("historical_validation_available_event_count")
         ),
+        "limited_replay_event_count": int(coverage_summary.get("limited_replay", 0) or 0),
         "insufficient_history_event_count": _int_value(
             by_key.get("historical_validation_insufficient_history_event_count")
         ),
+        "unavailable_event_count": int(coverage_summary.get("unavailable", 0) or 0),
         "boundary_violation_count": boundary_violation_count,
+        "proxy_constraint_violation_count": int(
+            contributions.get("proxy_constraint_violation_count", 0)
+            if isinstance(contributions, dict)
+            else 0
+        ),
+        "missing_data_violation_count": int(
+            contributions.get("missing_data_violation_count", 0)
+            if isinstance(contributions, dict)
+            else 0
+        ),
         "public_outputs_expose_probability_language": any(
             token in serialized
             for token in (
@@ -501,6 +529,27 @@ def _historical_validation_audit(rows: list[DashboardEvidenceRow]) -> dict[str, 
                 "expected return",
             )
         ),
+        "public_outputs_expose_backtest_language": any(
+            token in serialized
+            for token in (
+                "trading backtest",
+                "strategy backtest",
+                "predictive accuracy",
+                "forecast accuracy",
+                "roc",
+                "auc",
+                "precision",
+                "recall",
+                "f1",
+            )
+        ),
+        "public_outputs_expose_return_language": any(
+            token in serialized
+            for token in (
+                "expected return",
+                "strategy return",
+            )
+        ),
         "privacy_flags": privacy_flags,
         "reads_local_market_history_only": bool(
             privacy_flags.get("reads_local_market_history_only")
@@ -508,6 +557,25 @@ def _historical_validation_audit(rows: list[DashboardEvidenceRow]) -> dict[str, 
         "writes_sqlite": bool(privacy_flags.get("writes_sqlite")),
         "fetches_live_provider_data": bool(
             privacy_flags.get("fetches_live_provider_data")
+        ),
+        "returns_holdings_line_items": bool(
+            privacy_flags.get("returns_holdings_line_items")
+        ),
+        "returns_provider_payloads": bool(
+            privacy_flags.get("returns_provider_payloads")
+        ),
+        "returns_credentials": bool(privacy_flags.get("returns_credentials")),
+        "D15_band_only_boundary_preserved": bool(
+            module_consistency.get("D15_band_only_boundary_preserved")
+        ),
+        "D16_scenario_matrix_boundary_preserved": bool(
+            module_consistency.get("D16_scenario_matrix_boundary_preserved")
+        ),
+        "D17_context_layer_boundary_preserved": bool(
+            module_consistency.get("D17_context_layer_boundary_preserved")
+        ),
+        "D18_research_proxy_boundary_preserved": bool(
+            module_consistency.get("D18_research_proxy_boundary_preserved")
         ),
     }
 

@@ -267,12 +267,25 @@ EXPECTED_D19_KEYS = {
     "historical_validation_available",
     "historical_validation_metric_count",
     "insufficient_history_event_count",
+    "limited_replay_event_count",
     "missing_public_output_keys",
+    "missing_data_violation_count",
     "privacy_flags",
+    "proxy_constraint_violation_count",
     "public_output_keys",
+    "public_outputs_expose_backtest_language",
     "public_outputs_expose_probability_language",
+    "public_outputs_expose_return_language",
     "public_outputs_expose_trading_language",
     "reads_local_market_history_only",
+    "returns_credentials",
+    "returns_holdings_line_items",
+    "returns_provider_payloads",
+    "D15_band_only_boundary_preserved",
+    "D16_scenario_matrix_boundary_preserved",
+    "D17_context_layer_boundary_preserved",
+    "D18_research_proxy_boundary_preserved",
+    "unavailable_event_count",
     "writes_sqlite",
 }
 
@@ -348,6 +361,15 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert result["historical_validation"]["fetches_live_provider_data"] is False
     assert result["historical_validation"]["public_outputs_expose_probability_language"] is False
     assert result["historical_validation"]["public_outputs_expose_trading_language"] is False
+    assert result["historical_validation"]["public_outputs_expose_backtest_language"] is False
+    assert result["historical_validation"]["public_outputs_expose_return_language"] is False
+    assert result["historical_validation"]["returns_holdings_line_items"] is False
+    assert result["historical_validation"]["returns_provider_payloads"] is False
+    assert result["historical_validation"]["returns_credentials"] is False
+    assert result["historical_validation"]["D15_band_only_boundary_preserved"] is True
+    assert result["historical_validation"]["D16_scenario_matrix_boundary_preserved"] is True
+    assert result["historical_validation"]["D17_context_layer_boundary_preserved"] is True
+    assert result["historical_validation"]["D18_research_proxy_boundary_preserved"] is True
     assert set(result["macro_regime_review"]["public_output_keys"]) == EXPECTED_D15_PUBLIC_OUTPUT_KEYS
     assert result["scenario_stress"]["public_outputs_expose_probability_language"] is False
     assert result["scenario_stress"]["public_outputs_expose_trading_language"] is False

@@ -58,7 +58,7 @@ Object.assign(interpretationBoundaries, {
   valuation_equity_structure:
     "Valuation/equity structure is a conservative research/proxy context layer for valuation vulnerability, earnings gaps, breadth gaps, and concentration context. It is not a forecast, timing model, event-odds model, allocation directive, or return estimate. Proxy breadth/concentration does not replace true breadth.",
   historical_validation:
-    "Historical validation is a read-only historical replay of deterministic evidence rows for event-window consistency and boundary validation. It is not a prediction model, event-odds model, business-cycle call, market direction forecast, allocation directive, or return estimate.",
+    "Historical validation is a read-only historical replay and event-window consistency layer for deterministic evidence boundaries. It is not a forecast, event-odds model, strategy-evaluation model, allocation directive, or return estimate.",
   macro_regime_review:
     "Macro regime review is a current evidence review, not a prediction model, downside-event model, business-cycle call, or market direction forecast. It is for reference review only and does not produce probability, allocation directive, or return estimate.",
   scenario_stress:

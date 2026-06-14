@@ -33,6 +33,11 @@ D19_PUBLIC_OUTPUT_KEYS = (
     "historical_validation_model_version",
     "historical_validation_formula_version",
     "historical_validation_as_of_date",
+    "historical_validation_coverage_summary",
+    "historical_validation_module_consistency_summary",
+    "historical_validation_proxy_constraint_summary",
+    "historical_validation_missing_data_summary",
+    "historical_validation_replay_version",
 )
 D16_PUBLIC_OUTPUT_KEYS = (
     "scenario_stress_status",

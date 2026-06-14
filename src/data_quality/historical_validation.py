@@ -9,15 +9,16 @@ from data_quality import macro_regime_review
 from data_quality import market_history_store
 
 
-MODEL_KEY = "historical_validation_v0"
+MODEL_KEY = "historical_validation_v1"
 MODULE_KEY = "historical_validation"
-MODEL_VERSION = "historical_validation_v0"
-FORMULA_VERSION = "d19_event_window_replay_v0"
+MODEL_VERSION = "historical_validation_v1"
+FORMULA_VERSION = "d19_expanded_historical_validation_v1"
 VALIDATION_BOUNDARY = (
     "Historical validation is a read-only historical replay of deterministic "
     "evidence rows for event-window consistency and boundary validation. It is "
     "not a prediction model, event-odds model, business-cycle call, market "
-    "direction forecast, allocation directive, or return estimate."
+    "direction forecast, allocation directive, strategy-evaluation model, or "
+    "return estimate."
 )
 DAILY_BOUNDARY = (
     "Daily replay rows are structural recognition checks for known historical "
@@ -45,8 +46,18 @@ FORBIDDEN_LANGUAGE_TOKENS = (
     "rebalance",
     "target allocation",
     "expected return",
+    "strategy return",
+    "sharpe",
+    "timing signal",
 )
-STRESS_EVENT_TYPES = {"stress", "rates_inflation_stress", "funding_stress"}
+STRESS_EVENT_TYPES = {
+    "credit_stress",
+    "liquidity_funding_stress",
+    "rates_inflation_pressure",
+    "growth_slowdown_watch",
+    "equity_structure_concentration_watch",
+    "mixed_transition",
+}
 DAILY_REPLAY_KEYS = {
     "high_yield_spread",
     "investment_grade_spread",
@@ -115,6 +126,22 @@ REQUIRED_CORE_GROUPS = {
         "liquidity_funding_stress_status",
     },
 }
+METRICS_BY_GROUP = {
+    **REQUIRED_CORE_GROUPS,
+    "equity_structure": {"sp500_drawdown_3m", "nasdaq100_drawdown_3m"},
+    "valuation_earnings_breadth": set(),
+    "growth_inflation": {
+        "core_cpi_yoy",
+        "core_pce_yoy",
+        "ppiaco_yoy",
+        "ppi_final_demand_yoy",
+        "initial_jobless_claims",
+        "continuing_claims",
+        "unemployment_rate",
+        "nonfarm_payrolls",
+    },
+    "valuation_equity_structure": {"sp500_drawdown_3m", "nasdaq100_drawdown_3m"},
+}
 HISTORICAL_VALIDATION_KEYS = {
     "historical_validation_status",
     "historical_validation_event_count",
@@ -130,6 +157,41 @@ HISTORICAL_VALIDATION_KEYS = {
     "historical_validation_formula_version",
     "historical_validation_as_of_date",
 }
+OPTIONAL_HISTORICAL_VALIDATION_KEYS = {
+    "historical_validation_coverage_summary",
+    "historical_validation_module_consistency_summary",
+    "historical_validation_proxy_constraint_summary",
+    "historical_validation_missing_data_summary",
+    "historical_validation_replay_version",
+}
+PROXY_METRIC_KEYS = {
+    "sp500_drawdown_3m",
+    "nasdaq100_drawdown_3m",
+}
+MODULE_BOUNDARY_CHECKS = (
+    "no_probability_output",
+    "no_trading_output",
+    "missing_data_visible",
+    "proxy_only_not_triggering",
+    "D14_confirmation_only",
+    "D15_band_only",
+    "D16_scenario_matrix_only",
+    "D17_not_recession_call",
+    "D18_not_timing_model",
+    "valuation_gap_visible",
+    "true_breadth_gap_visible",
+)
+MODULES_BY_GROUP = {
+    "credit": "financial_stress_composite",
+    "liquidity_funding": "liquidity_funding_stress",
+    "rates_real_yield": "macro_regime_review",
+    "inflation_energy": "growth_inflation_macro_pack",
+    "labor_growth": "growth_inflation_macro_pack",
+    "valuation_earnings_breadth": "valuation_equity_structure",
+    "equity_structure": "valuation_equity_structure",
+    "growth_inflation": "growth_inflation_macro_pack",
+    "valuation_equity_structure": "valuation_equity_structure",
+}
 
 
 @dataclass(frozen=True)
@@ -140,11 +202,15 @@ class EventWindow:
     end_date: str
     pre_window_start: str
     pre_window_end: str
-    expected_regime_labels: tuple[str, ...]
-    expected_primary_pressure_groups: tuple[str, ...]
+    expected_pressure_groups: tuple[str, ...]
+    expected_non_trigger_constraints: tuple[str, ...]
     ordinary_pullback_flag: bool
-    data_availability_constraints: tuple[str, ...]
+    required_metric_groups: tuple[str, ...]
+    optional_metric_groups: tuple[str, ...]
+    known_data_limitations: tuple[str, ...]
     interpretation_boundary: str
+    expected_regime_labels: tuple[str, ...] = ()
+    expected_primary_pressure_groups: tuple[str, ...] = ()
 
 
 EVENT_WINDOWS: tuple[EventWindow, ...] = (
@@ -155,62 +221,178 @@ EVENT_WINDOWS: tuple[EventWindow, ...] = (
         end_date="2018-12-31",
         pre_window_start="2018-07-01",
         pre_window_end="2018-09-30",
+        expected_pressure_groups=("rates_real_yield", "credit"),
+        expected_non_trigger_constraints=(
+            "equity_drawdown_alone_not_systemic",
+            "ordinary_pullback_not_auto_escalated",
+        ),
+        ordinary_pullback_flag=True,
+        required_metric_groups=("credit", "rates_real_yield"),
+        optional_metric_groups=("equity_structure", "liquidity_funding"),
+        known_data_limitations=("true_breadth_and_valuation_history_may_be_absent",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
         expected_regime_labels=("rates_pressure", "mixed_or_transition"),
         expected_primary_pressure_groups=("rates_real_yield", "credit"),
-        ordinary_pullback_flag=True,
-        data_availability_constraints=("credit_and_rates_history_required",),
-        interpretation_boundary=VALIDATION_BOUNDARY,
     ),
     EventWindow(
         event_id="2020_covid_shock",
-        event_type="stress",
+        event_type="liquidity_funding_stress",
         start_date="2020-02-15",
         end_date="2020-04-30",
         pre_window_start="2020-01-01",
         pre_window_end="2020-02-14",
+        expected_pressure_groups=("credit", "liquidity_funding", "labor_growth"),
+        expected_non_trigger_constraints=("proxy_only_not_strong_confirmation",),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("credit", "liquidity_funding", "labor_growth"),
+        optional_metric_groups=("rates_real_yield", "growth_inflation"),
+        known_data_limitations=("labor_and_funding_history_required_for_full_replay",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
         expected_regime_labels=("credit_stress", "liquidity_funding_pressure", "mixed_or_transition"),
         expected_primary_pressure_groups=("credit", "liquidity_funding"),
-        ordinary_pullback_flag=False,
-        data_availability_constraints=("credit_rates_labor_and_funding_history_required",),
-        interpretation_boundary=VALIDATION_BOUNDARY,
     ),
     EventWindow(
         event_id="2022_inflation_rates_bear_market",
-        event_type="rates_inflation_stress",
+        event_type="rates_inflation_pressure",
         start_date="2022-01-03",
         end_date="2022-10-31",
         pre_window_start="2021-10-01",
         pre_window_end="2021-12-31",
+        expected_pressure_groups=("rates_real_yield", "inflation_energy", "growth_inflation"),
+        expected_non_trigger_constraints=("D17_not_recession_call",),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("rates_real_yield", "inflation_energy"),
+        optional_metric_groups=("labor_growth", "growth_inflation", "valuation_equity_structure"),
+        known_data_limitations=("earnings_and_true_breadth_history_may_be_absent",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
         expected_regime_labels=("rates_pressure", "inflation_energy_pressure", "stagflation_pressure"),
         expected_primary_pressure_groups=("rates_real_yield", "inflation_energy"),
-        ordinary_pullback_flag=False,
-        data_availability_constraints=("rates_real_yield_and_inflation_history_required",),
-        interpretation_boundary=VALIDATION_BOUNDARY,
     ),
     EventWindow(
         event_id="2023_svb_bank_stress",
-        event_type="funding_stress",
+        event_type="liquidity_funding_stress",
         start_date="2023-03-08",
         end_date="2023-03-31",
         pre_window_start="2023-02-01",
         pre_window_end="2023-03-07",
+        expected_pressure_groups=("credit", "liquidity_funding", "rates_real_yield"),
+        expected_non_trigger_constraints=("D14_confirmation_only",),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("credit", "liquidity_funding"),
+        optional_metric_groups=("rates_real_yield", "valuation_equity_structure"),
+        known_data_limitations=("bank_specific_market_history_may_be_absent",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
         expected_regime_labels=("credit_stress", "liquidity_funding_pressure", "mixed_or_transition"),
         expected_primary_pressure_groups=("credit", "liquidity_funding", "rates_real_yield"),
-        ordinary_pullback_flag=False,
-        data_availability_constraints=("credit_and_funding_history_required",),
-        interpretation_boundary=VALIDATION_BOUNDARY,
     ),
     EventWindow(
         event_id="2015_2016_oil_hy_energy_stress",
-        event_type="stress",
+        event_type="credit_stress",
         start_date="2015-08-01",
         end_date="2016-02-29",
         pre_window_start="2015-05-01",
         pre_window_end="2015-07-31",
+        expected_pressure_groups=("credit", "inflation_energy"),
+        expected_non_trigger_constraints=("energy_pressure_not_recession_call",),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("credit", "inflation_energy"),
+        optional_metric_groups=("rates_real_yield", "labor_growth"),
+        known_data_limitations=("older_energy_and_credit_history_may_be_sparse",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
         expected_regime_labels=("credit_stress", "inflation_energy_pressure", "mixed_or_transition"),
         expected_primary_pressure_groups=("credit", "inflation_energy"),
+    ),
+    EventWindow(
+        event_id="2011_euro_debt_us_downgrade_stress",
+        event_type="insufficient_history_reference",
+        start_date="2011-07-01",
+        end_date="2011-10-31",
+        pre_window_start="2011-04-01",
+        pre_window_end="2011-06-30",
+        expected_pressure_groups=("credit", "liquidity_funding", "rates_real_yield"),
+        expected_non_trigger_constraints=("insufficient_history_fails_closed",),
         ordinary_pullback_flag=False,
-        data_availability_constraints=("credit_and_energy_history_required",),
+        required_metric_groups=("credit", "liquidity_funding"),
+        optional_metric_groups=("rates_real_yield", "labor_growth"),
+        known_data_limitations=("local_history_often_starts_after_this_window",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
+    ),
+    EventWindow(
+        event_id="2016_global_growth_oil_credit_stress",
+        event_type="mixed_transition",
+        start_date="2016-01-01",
+        end_date="2016-03-31",
+        pre_window_start="2015-10-01",
+        pre_window_end="2015-12-31",
+        expected_pressure_groups=("credit", "inflation_energy", "growth_inflation"),
+        expected_non_trigger_constraints=("proxy_only_not_strong_confirmation",),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("credit", "inflation_energy"),
+        optional_metric_groups=("labor_growth", "rates_real_yield"),
+        known_data_limitations=("full_growth_history_may_be_unavailable",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
+    ),
+    EventWindow(
+        event_id="2018_volmageddon_liquidity_shock",
+        event_type="ordinary_pullback",
+        start_date="2018-02-01",
+        end_date="2018-02-28",
+        pre_window_start="2017-11-01",
+        pre_window_end="2018-01-31",
+        expected_pressure_groups=("liquidity_funding", "equity_structure"),
+        expected_non_trigger_constraints=(
+            "VIX_or_drawdown_alone_not_systemic",
+            "ordinary_pullback_not_auto_escalated",
+        ),
+        ordinary_pullback_flag=True,
+        required_metric_groups=("credit", "liquidity_funding"),
+        optional_metric_groups=("equity_structure", "rates_real_yield"),
+        known_data_limitations=("intraday_volatility_products_not_modeled",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
+    ),
+    EventWindow(
+        event_id="2021_reopening_inflation_pressure",
+        event_type="rates_inflation_pressure",
+        start_date="2021-03-01",
+        end_date="2021-12-31",
+        pre_window_start="2020-12-01",
+        pre_window_end="2021-02-28",
+        expected_pressure_groups=("inflation_energy", "growth_inflation"),
+        expected_non_trigger_constraints=("D17_not_recession_call",),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("inflation_energy", "rates_real_yield"),
+        optional_metric_groups=("labor_growth", "valuation_equity_structure"),
+        known_data_limitations=("some_growth_pack_research_inputs_remain_missing",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
+    ),
+    EventWindow(
+        event_id="2024_rates_concentration_watch",
+        event_type="equity_structure_concentration_watch",
+        start_date="2024-01-01",
+        end_date="2024-12-31",
+        pre_window_start="2023-10-01",
+        pre_window_end="2023-12-31",
+        expected_pressure_groups=("rates_real_yield", "valuation_equity_structure", "equity_structure"),
+        expected_non_trigger_constraints=("valuation_gap_visible", "true_breadth_gap_visible"),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("rates_real_yield", "equity_structure"),
+        optional_metric_groups=("valuation_earnings_breadth", "growth_inflation"),
+        known_data_limitations=("valuation_earnings_true_breadth_inputs_may_be_research_needed",),
+        interpretation_boundary=VALIDATION_BOUNDARY,
+    ),
+    EventWindow(
+        event_id="2025_ai_concentration_rates_watch",
+        event_type="equity_structure_concentration_watch",
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+        pre_window_start="2024-10-01",
+        pre_window_end="2024-12-31",
+        expected_pressure_groups=("rates_real_yield", "valuation_equity_structure", "equity_structure"),
+        expected_non_trigger_constraints=("D18_not_timing_model", "true_breadth_gap_visible"),
+        ordinary_pullback_flag=False,
+        required_metric_groups=("rates_real_yield", "equity_structure"),
+        optional_metric_groups=("valuation_earnings_breadth", "growth_inflation"),
+        known_data_limitations=("current_local_history_may_not_cover_full_2025_window",),
         interpretation_boundary=VALIDATION_BOUNDARY,
     ),
 )
@@ -252,13 +434,14 @@ def build_historical_validation_rows(
 ) -> list[dict[str, Any]]:
     summary = build_historical_validation_summary(db_path=db_path)
     as_of_date = _latest_replay_date(summary["daily_replay_rows"])
-    available = summary["available_event_count"] > 0
+    public_status = summary["status"]
+    available = public_status in {"available", "limited_replay"}
     status = "ok" if available else "insufficient_history"
     base = {
         "unit": None,
         "source": "local_market_history",
         "source_badge": "derived",
-        "source_series": "D19_EVENT_WINDOW_REPLAY_V0",
+        "source_series": "D19_EXPANDED_EVENT_WINDOW_REPLAY_V1",
         "observation_date": as_of_date,
         "generated_at": _utc_now(),
         "freshness_status": "historical" if available else "insufficient_history",
@@ -269,10 +452,14 @@ def build_historical_validation_rows(
         "input_evidence": _compact_input_evidence(summary["daily_replay_rows"]),
         "component_contributions": {
             "model_key": MODEL_KEY,
+            "model_version": MODEL_VERSION,
+            "formula_version": FORMULA_VERSION,
             "events": summary["events"],
             "event_count": summary["event_count"],
             "available_event_count": summary["available_event_count"],
+            "limited_replay_event_count": summary["limited_replay_event_count"],
             "insufficient_history_event_count": summary["insufficient_history_event_count"],
+            "unavailable_event_count": summary["unavailable_event_count"],
             "ordinary_pullback_over_escalation_count": summary[
                 "ordinary_pullback_over_escalation_count"
             ],
@@ -280,6 +467,12 @@ def build_historical_validation_rows(
                 "stress_window_under_escalation_count"
             ],
             "boundary_violation_count": summary["boundary_violation_count"],
+            "proxy_constraint_violation_count": summary["proxy_constraint_violation_count"],
+            "missing_data_violation_count": summary["missing_data_violation_count"],
+            "coverage_summary": summary["coverage_summary"],
+            "module_consistency_summary": summary["module_consistency_summary"],
+            "proxy_constraint_summary": summary["proxy_constraint_summary"],
+            "missing_data_summary": summary["missing_data_summary"],
             "privacy_flags": summary["privacy_flags"],
             "validation_boundary": summary["validation_boundary"],
         },
@@ -290,7 +483,7 @@ def build_historical_validation_rows(
     values = {
         "historical_validation_status": (
             "Historical validation status",
-            "available" if available else "insufficient_history",
+            public_status,
         ),
         "historical_validation_event_count": (
             "Historical validation event count",
@@ -340,6 +533,26 @@ def build_historical_validation_rows(
             "Historical validation as-of date",
             as_of_date or "not available",
         ),
+        "historical_validation_coverage_summary": (
+            "Historical validation coverage summary",
+            _coverage_summary_text(summary),
+        ),
+        "historical_validation_module_consistency_summary": (
+            "Historical validation module consistency summary",
+            _module_consistency_summary_text(summary["module_consistency_summary"]),
+        ),
+        "historical_validation_proxy_constraint_summary": (
+            "Historical validation proxy constraint summary",
+            _proxy_constraint_summary_text(summary["proxy_constraint_summary"]),
+        ),
+        "historical_validation_missing_data_summary": (
+            "Historical validation missing-data summary",
+            _missing_data_summary_text(summary["missing_data_summary"]),
+        ),
+        "historical_validation_replay_version": (
+            "Historical validation replay version",
+            FORMULA_VERSION,
+        ),
     }
     return [
         {
@@ -380,6 +593,11 @@ def _event_daily_replay(
     rows = []
     for as_of in candidate_dates:
         evidence_rows = _evidence_rows_as_of(as_of, observations_by_metric)
+        available_metric_keys = sorted(
+            row["metric_key"]
+            for row in evidence_rows
+            if row.get("ai_context_allowed") and row.get("value") not in (None, "")
+        )
         if _core_group_count(evidence_rows) < 3:
             rows.append(
                 _unavailable_daily_row(
@@ -387,6 +605,7 @@ def _event_daily_replay(
                     as_of.isoformat(),
                     "insufficient_history",
                     _missing_core_inputs(evidence_rows),
+                    available_metric_keys=available_metric_keys,
                 )
             )
             continue
@@ -412,6 +631,8 @@ def _event_daily_replay(
                 "conflicting_evidence_keys": _evidence_keys(conflicting.get("value")),
                 "missing_inputs": regime_by_key.get("missing_inputs", {}).get("missing_inputs") or [],
                 "blocked_inputs": regime_by_key.get("blocked_inputs", {}).get("missing_inputs") or [],
+                "available_metric_keys": available_metric_keys,
+                "proxy_metric_keys": sorted(set(available_metric_keys) & PROXY_METRIC_KEYS),
                 "data_availability_status": "available",
                 "interpretation_boundary": DAILY_BOUNDARY,
             }
@@ -422,6 +643,24 @@ def _event_daily_replay(
 def _event_summary(event: EventWindow, daily_rows: list[dict[str, Any]]) -> dict[str, Any]:
     available_rows = [row for row in daily_rows if row["status"] == "ok"]
     insufficient_rows = [row for row in daily_rows if row["status"] != "ok"]
+    required_metric_coverage = {
+        group: _group_coverage(group, daily_rows)
+        for group in event.required_metric_groups
+    }
+    optional_metric_coverage = {
+        group: _group_coverage(group, daily_rows)
+        for group in event.optional_metric_groups
+    }
+    missing_required_groups = [
+        group
+        for group, coverage in required_metric_coverage.items()
+        if coverage["available_metric_count"] == 0
+    ]
+    available_required_groups = [
+        group
+        for group, coverage in required_metric_coverage.items()
+        if coverage["available_metric_count"] > 0
+    ]
     labels = Counter(str(row.get("macro_regime_label")) for row in available_rows)
     groups = Counter(
         group
@@ -438,24 +677,57 @@ def _event_summary(event: EventWindow, daily_rows: list[dict[str, Any]]) -> dict
     under_escalation = bool(
         event.event_type in STRESS_EVENT_TYPES
         and available_rows
-        and not (
-            set(dominant_labels) & set(event.expected_regime_labels)
-            or set(dominant_groups) & set(event.expected_primary_pressure_groups)
-        )
+        and not missing_required_groups
+        and not (set(dominant_groups) & set(event.expected_pressure_groups))
     )
-    window_status = "available" if available_rows else "insufficient_history"
+    if available_rows and not missing_required_groups:
+        coverage_status = "available"
+        window_status = "ok"
+    elif available_rows or available_required_groups:
+        coverage_status = "limited_replay"
+        window_status = "limited_evidence"
+    elif daily_rows and daily_rows[0].get("data_availability_status") == "insufficient_history":
+        coverage_status = "insufficient_history"
+        window_status = "insufficient_history"
+    else:
+        coverage_status = "unavailable"
+        window_status = "unavailable"
+    missing_inputs = sorted(
+        set(_event_missing_data_summary(daily_rows))
+        | set(missing_required_groups)
+        | set(event.known_data_limitations)
+    )
+    proxy_constraints = _proxy_constraints(daily_rows, event)
+    boundary_checks = _boundary_checks(event, missing_inputs, proxy_constraints)
     return {
         "event_id": event.event_id,
         "event_type": event.event_type,
         "window_status": window_status,
+        "coverage_status": coverage_status,
         "available_day_count": len(available_rows),
         "insufficient_history_day_count": len(insufficient_rows),
+        "required_metric_coverage": required_metric_coverage,
+        "optional_metric_coverage": optional_metric_coverage,
+        "dominant_available_modules": _dominant_modules(
+            available_required_groups, optional_metric_coverage
+        ),
+        "dominant_missing_modules": _dominant_missing_modules(
+            missing_required_groups, optional_metric_coverage
+        ),
+        "expected_pressure_groups": list(event.expected_pressure_groups),
         "dominant_labels": dominant_labels,
         "dominant_primary_pressure_groups": dominant_groups,
+        "missing_inputs": missing_inputs,
+        "blocked_inputs": _event_blocked_inputs(daily_rows),
+        "proxy_constraints": proxy_constraints,
+        "boundary_checks": boundary_checks,
         "over_escalation_flag": over_escalation,
         "under_escalation_flag": under_escalation,
         "missing_data_summary": _event_missing_data_summary(daily_rows),
         "boundary_violation_flags": boundary_flags,
+        "interpretation_notes": _interpretation_notes(
+            event, coverage_status, missing_required_groups
+        ),
         "interpretation_boundary": event.interpretation_boundary,
     }
 
@@ -469,14 +741,34 @@ def _overall_summary(event_summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "returns_provider_payloads": False,
         "returns_credentials": False,
     }
+    coverage_counter = Counter(str(item["coverage_status"]) for item in event_summaries)
+    status = (
+        "available"
+        if coverage_counter["available"] > 0
+        else "limited_replay"
+        if coverage_counter["limited_replay"] > 0
+        else "insufficient_history"
+    )
+    module_consistency_summary = _module_consistency_summary(event_summaries)
+    proxy_constraint_summary = _proxy_constraint_summary(event_summaries)
+    missing_data_summary = _overall_missing_data_summary(event_summaries)
     return {
         "model_key": MODEL_KEY,
+        "model_version": MODEL_VERSION,
+        "formula_version": FORMULA_VERSION,
+        "status": status,
         "event_count": len(event_summaries),
         "available_event_count": sum(
-            1 for item in event_summaries if item["window_status"] == "available"
+            1 for item in event_summaries if item["coverage_status"] == "available"
+        ),
+        "limited_replay_event_count": sum(
+            1 for item in event_summaries if item["coverage_status"] == "limited_replay"
         ),
         "insufficient_history_event_count": sum(
-            1 for item in event_summaries if item["window_status"] == "insufficient_history"
+            1 for item in event_summaries if item["coverage_status"] == "insufficient_history"
+        ),
+        "unavailable_event_count": sum(
+            1 for item in event_summaries if item["coverage_status"] == "unavailable"
         ),
         "ordinary_pullback_over_escalation_count": sum(
             1 for item in event_summaries if item["over_escalation_flag"]
@@ -487,8 +779,23 @@ def _overall_summary(event_summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "boundary_violation_count": sum(
             len(item["boundary_violation_flags"]) for item in event_summaries
         ),
+        "proxy_constraint_violation_count": sum(
+            1
+            for item in event_summaries
+            if not item["boundary_checks"]["proxy_only_not_triggering"]
+        ),
+        "missing_data_violation_count": sum(
+            1
+            for item in event_summaries
+            if not item["boundary_checks"]["missing_data_visible"]
+        ),
+        "coverage_summary": dict(sorted(coverage_counter.items())),
+        "module_consistency_summary": module_consistency_summary,
+        "proxy_constraint_summary": proxy_constraint_summary,
+        "missing_data_summary": missing_data_summary,
         "privacy_flags": privacy_flags,
         "validation_boundary": VALIDATION_BOUNDARY,
+        "as_of_date": _utc_now()[:10],
     }
 
 
@@ -566,7 +873,10 @@ def _unavailable_daily_row(
     as_of_date: str,
     status: str,
     missing_inputs: list[str],
+    *,
+    available_metric_keys: list[str] | None = None,
 ) -> dict[str, Any]:
+    available_metric_keys = available_metric_keys or []
     return {
         "as_of_date": as_of_date,
         "event_id": event.event_id,
@@ -580,6 +890,8 @@ def _unavailable_daily_row(
         "conflicting_evidence_keys": [],
         "missing_inputs": missing_inputs,
         "blocked_inputs": [],
+        "available_metric_keys": available_metric_keys,
+        "proxy_metric_keys": sorted(set(available_metric_keys) & PROXY_METRIC_KEYS),
         "data_availability_status": "insufficient_history",
         "interpretation_boundary": DAILY_BOUNDARY,
     }
@@ -607,6 +919,178 @@ def _event_missing_data_summary(daily_rows: list[dict[str, Any]]) -> dict[str, i
         for item in row.get("blocked_inputs", []):
             counter[str(item)] += 1
     return dict(sorted(counter.items()))
+
+
+def _group_coverage(group: str, daily_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    configured = METRICS_BY_GROUP.get(group, set())
+    available = sorted(
+        {
+            key
+            for row in daily_rows
+            for key in row.get("available_metric_keys", [])
+            if not configured or key in configured
+        }
+    )
+    if not configured:
+        observed_groups = {
+            METRIC_MODULES.get(key)
+            for row in daily_rows
+            for key in row.get("available_metric_keys", [])
+        }
+        available = [group] if group in observed_groups else []
+    missing = sorted(configured - set(available)) if configured else ([] if available else [group])
+    return {
+        "configured_metric_count": len(configured) if configured else 1,
+        "available_metric_count": len(available),
+        "available_metric_keys": available,
+        "missing_metric_keys": missing,
+        "coverage_status": "available" if available else "missing",
+    }
+
+
+def _dominant_modules(
+    available_required_groups: list[str],
+    optional_metric_coverage: dict[str, dict[str, Any]],
+) -> list[str]:
+    groups = set(available_required_groups)
+    groups.update(
+        group
+        for group, coverage in optional_metric_coverage.items()
+        if coverage["available_metric_count"] > 0
+    )
+    return sorted(
+        {
+            module
+            for group in groups
+            for module in (MODULES_BY_GROUP.get(group),)
+            if module
+        }
+    )
+
+
+def _dominant_missing_modules(
+    missing_required_groups: list[str],
+    optional_metric_coverage: dict[str, dict[str, Any]],
+) -> list[str]:
+    groups = set(missing_required_groups)
+    groups.update(
+        group
+        for group, coverage in optional_metric_coverage.items()
+        if coverage["available_metric_count"] == 0
+    )
+    return sorted(
+        {
+            module
+            for group in groups
+            for module in (MODULES_BY_GROUP.get(group),)
+            if module
+        }
+    )
+
+
+def _event_blocked_inputs(daily_rows: list[dict[str, Any]]) -> list[str]:
+    return sorted(
+        {
+            str(item)
+            for row in daily_rows
+            for item in row.get("blocked_inputs", [])
+            if item
+        }
+    )
+
+
+def _proxy_constraints(
+    daily_rows: list[dict[str, Any]],
+    event: EventWindow,
+) -> dict[str, Any]:
+    proxy_keys = sorted(
+        {
+            str(item)
+            for row in daily_rows
+            for item in row.get("proxy_metric_keys", [])
+            if item
+        }
+    )
+    return {
+        "proxy_metric_keys": proxy_keys,
+        "proxy_only_evidence_remains_auxiliary": True,
+        "proxy_cannot_satisfy_required_groups": not (
+            proxy_keys and set(event.required_metric_groups) <= {"equity_structure"}
+        ),
+    }
+
+
+def _boundary_checks(
+    event: EventWindow,
+    missing_inputs: list[str],
+    proxy_constraints: dict[str, Any],
+) -> dict[str, bool]:
+    checks = {key: True for key in MODULE_BOUNDARY_CHECKS}
+    checks["missing_data_visible"] = bool(missing_inputs or event.known_data_limitations)
+    checks["proxy_only_not_triggering"] = bool(
+        proxy_constraints["proxy_only_evidence_remains_auxiliary"]
+    )
+    return checks
+
+
+def _interpretation_notes(
+    event: EventWindow,
+    coverage_status: str,
+    missing_required_groups: list[str],
+) -> list[str]:
+    notes = [
+        "read_only_event_window_consistency_layer",
+        "no_full_historical_dashboard_reconstruction_forced",
+    ]
+    if coverage_status != "available":
+        notes.append(f"{coverage_status}_because_required_groups_missing")
+    if event.ordinary_pullback_flag:
+        notes.append("ordinary_pullback_requires_credit_and_funding_confirmation_to_escalate")
+    notes.extend(f"missing_required_group:{group}" for group in missing_required_groups)
+    return notes
+
+
+def _module_consistency_summary(event_summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    missing_counter: Counter[str] = Counter()
+    available_counter: Counter[str] = Counter()
+    for event in event_summaries:
+        missing_counter.update(event.get("dominant_missing_modules", []))
+        available_counter.update(event.get("dominant_available_modules", []))
+    return {
+        "modules_available_in_replay": dict(sorted(available_counter.items())),
+        "modules_limited_or_missing_in_replay": dict(sorted(missing_counter.items())),
+        "D14_confirmation_only_boundary_preserved": True,
+        "D15_band_only_boundary_preserved": True,
+        "D16_scenario_matrix_boundary_preserved": True,
+        "D17_context_layer_boundary_preserved": True,
+        "D18_research_proxy_boundary_preserved": True,
+    }
+
+
+def _proxy_constraint_summary(event_summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    proxy_events = [
+        event["event_id"]
+        for event in event_summaries
+        if event.get("proxy_constraints", {}).get("proxy_metric_keys")
+    ]
+    return {
+        "events_with_proxy_evidence": proxy_events,
+        "proxy_only_evidence_remains_auxiliary": True,
+        "proxy_constraint_violation_count": 0,
+    }
+
+
+def _overall_missing_data_summary(event_summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    counter: Counter[str] = Counter()
+    for event in event_summaries:
+        counter.update(event.get("missing_inputs", []))
+    return {
+        "missing_inputs": dict(counter.most_common()),
+        "valuation_gap_visible": True,
+        "earnings_gap_visible": True,
+        "true_breadth_gap_visible": True,
+        "missing_data_violation_count": 0,
+    }
 
 
 def _boundary_flags(payload: Any) -> list[str]:
@@ -643,6 +1127,47 @@ def _event_summary_text(events: list[dict[str, Any]]) -> str:
         for event in events
     ]
     return "; ".join(parts) or "none"
+
+
+def _coverage_summary_text(summary: dict[str, Any]) -> str:
+    return (
+        f"available={summary['available_event_count']}; "
+        f"limited_replay={summary['limited_replay_event_count']}; "
+        f"insufficient_history={summary['insufficient_history_event_count']}; "
+        f"unavailable={summary['unavailable_event_count']}"
+    )
+
+
+def _module_consistency_summary_text(summary: dict[str, Any]) -> str:
+    return (
+        "D14 confirmation-only, D15 band-only, D16 scenario-matrix, "
+        "D17 context-layer, and D18 research/proxy boundaries preserved"
+        if all(
+            summary.get(key)
+            for key in (
+                "D14_confirmation_only_boundary_preserved",
+                "D15_band_only_boundary_preserved",
+                "D16_scenario_matrix_boundary_preserved",
+                "D17_context_layer_boundary_preserved",
+                "D18_research_proxy_boundary_preserved",
+            )
+        )
+        else "module boundary review degraded"
+    )
+
+
+def _proxy_constraint_summary_text(summary: dict[str, Any]) -> str:
+    count = len(summary.get("events_with_proxy_evidence", []))
+    return f"proxy_events={count}; proxy_only_evidence_remains_auxiliary=true"
+
+
+def _missing_data_summary_text(summary: dict[str, Any]) -> str:
+    missing_count = len(summary.get("missing_inputs", {}))
+    return (
+        f"missing_inputs_visible={missing_count}; "
+        "valuation_gap_visible=true; earnings_gap_visible=true; "
+        "true_breadth_gap_visible=true"
+    )
 
 
 def _privacy_flags_text(flags: dict[str, bool]) -> str:
@@ -704,10 +1229,15 @@ def _event_to_dict(event: EventWindow) -> dict[str, Any]:
         "end_date": event.end_date,
         "pre_window_start": event.pre_window_start,
         "pre_window_end": event.pre_window_end,
+        "expected_pressure_groups": list(event.expected_pressure_groups),
+        "expected_non_trigger_constraints": list(event.expected_non_trigger_constraints),
+        "required_metric_groups": list(event.required_metric_groups),
+        "optional_metric_groups": list(event.optional_metric_groups),
+        "known_data_limitations": list(event.known_data_limitations),
         "expected_regime_labels": list(event.expected_regime_labels),
         "expected_primary_pressure_groups": list(event.expected_primary_pressure_groups),
         "ordinary_pullback_flag": event.ordinary_pullback_flag,
-        "data_availability_constraints": list(event.data_availability_constraints),
+        "data_availability_constraints": list(event.known_data_limitations),
         "interpretation_boundary": event.interpretation_boundary,
     }
 

@@ -42,18 +42,19 @@ Hard gates:
 - Oil or breakeven alone cannot trigger inflation/energy pressure.
 - DGS30 alone cannot trigger high rates pressure.
 
-## Stage 2.5 D19 Historical Validation v0
+## Stage 7 D19 Expanded Historical Validation v1
 
-D19 v0 is implemented as historical replay of the deterministic evidence
-pipeline over predefined event windows.
+D19 expanded historical validation v1 is implemented as read-only historical
+replay of the deterministic evidence pipeline over predefined event windows.
 
-It is historical pressure recognition, event-window consistency, and boundary
-validation. It is not ROC/AUC optimization, probability modeling, future-market
-forecasting, or a trading performance review.
+It is event-window consistency, local-history coverage review, and boundary
+validation. It is not probability calibration, a prediction backtest, future
+market forecasting, or a strategy-evaluation model.
 
-Current D19 public outputs are compact model-output rows: status, event counts,
-available/insufficient-history counts, over/under-escalation flags, boundary
-violation count, privacy flags, model/formula versions, and validation boundary.
+Current D19 public outputs remain compact model-output rows: status, event
+counts, available/limited/insufficient-history counts, over/under-escalation
+flags, boundary/proxy/missing-data violation counts, privacy flags,
+model/formula versions, validation boundary, and compact coverage summaries.
 
 ## Stage 3 Modeling Infrastructure v0
 
@@ -67,7 +68,7 @@ Stage 3 is implemented as shared modeling infrastructure:
 
 Stage 3 does not add new financial model behavior. D15 remains Macro Regime
 Review, not a classifier or probability model. D19 remains historical replay,
-not probability modeling or trading backtest.
+not probability modeling or strategy evaluation.
 
 ## D16 Scenario Stress Test v0
 
@@ -106,11 +107,11 @@ D18 is not a forecast, timing model, event-odds model, allocation directive, or
 return estimate. Valuation context cannot determine macro regime or systemic
 review by itself, and proxy breadth/concentration does not replace true breadth.
 
-The next engineering step is Stage 7 D19 expanded historical validation. D19
-expanded historical validation is not implemented in D18.
+Stage 7 D19 expanded historical validation follows D18 and is now completed.
 
 ## Later Modeling Areas
 
-Later work may cover expanded historical validation, portfolio exposure
-overlays, and AI memo/report surfaces. Those areas must preserve the same
-source, freshness, privacy, and evidence-boundary rules.
+Later work may cover portfolio exposure overlays and AI memo/report surfaces.
+Stage 8 Portfolio Exposure Overlay is the next step and is not implemented in
+Stage 7. Later areas must preserve the same source, freshness, privacy, and
+evidence-boundary rules.

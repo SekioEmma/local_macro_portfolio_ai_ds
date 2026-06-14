@@ -67,6 +67,7 @@ Stage 2.5 D19 local audit baseline:
 - Stage 4 D16 Scenario Stress Test v0.
 - Stage 5 D17 Growth / Inflation Macro Pack v0.
 - Stage 6 D18 Valuation / Equity Structure v0.
+- Stage 7 D19 Expanded Historical Validation v1.
 
 ## Hard Boundaries
 
@@ -91,8 +92,9 @@ Stage 2.5 D19 local audit baseline:
 
 ## Current Next Step
 
-The current next step is Stage 7 D19 expanded historical validation.
+The current next step is Stage 8 Portfolio Exposure Overlay.
 
-D18 is complete. Valuation, earnings, and true breadth gaps remain explicit,
-and proxy breadth/concentration remains auxiliary context only. D19 expanded
-historical validation is not implemented yet.
+Stage 7 D19 expanded historical validation is complete as a read-only
+historical replay, event-window consistency, and boundary-validation layer. It
+is not probability calibration, a prediction backtest, or a strategy-evaluation
+model. Stage 8 is not implemented yet.
