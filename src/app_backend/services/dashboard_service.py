@@ -25,6 +25,7 @@ from data_quality import historical_derived_metrics
 from data_quality import historical_percentile_metrics
 from data_quality import last_good_cache
 from data_quality import liquidity_funding_stress
+from data_quality import macro_regime_review
 from data_quality import market_history_store
 from data_quality import official_macro_pack
 from data_quality import pullback_systemic_checklist
@@ -160,6 +161,19 @@ DERIVED_METRIC_KEYS = {
     "official_stress_reference_status",
     "liquidity_funding_stress_status",
     "liquidity_funding_interpretation_boundary",
+    "macro_regime_label",
+    "support_band",
+    "evidence_quality_band",
+    "conflict_band",
+    "primary_pressure_ranking",
+    "supporting_evidence",
+    "conflicting_evidence",
+    "missing_inputs",
+    "blocked_inputs",
+    "interpretation_boundary",
+    "model_version",
+    "formula_version",
+    "as_of_date",
     "high_yield_spread_percentile",
     "high_yield_spread_zscore",
     "high_yield_spread_robust_zscore",
@@ -558,10 +572,18 @@ def build_dashboard_evidence_table(
     pullback_rows = _pullback_systemic_checklist_evidence_rows(
         base_rows + percentile_rows + liquidity_funding_rows + financial_stress_rows
     )
+    macro_regime_rows = _macro_regime_review_evidence_rows(
+        base_rows
+        + percentile_rows
+        + liquidity_funding_rows
+        + financial_stress_rows
+        + pullback_rows
+    )
     all_rows = (
         base_rows
         + financial_stress_rows
         + pullback_rows
+        + macro_regime_rows
         + percentile_rows
         + liquidity_funding_rows
     )
@@ -735,6 +757,18 @@ def _liquidity_funding_stress_evidence_rows(
     )
     return [
         _evidence_row("liquidity_funding_stress", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
+def _macro_regime_review_evidence_rows(
+    rows: list[DashboardEvidenceRow],
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = macro_regime_review.build_macro_regime_review_rows(
+        [_model_to_dict(row) for row in rows]
+    )
+    return [
+        _evidence_row("macro_regime_review", DashboardMetric(**payload))
         for payload in metric_payloads
     ]
 

@@ -52,6 +52,7 @@ from audit_sections.module_audits import (  # noqa: E402
     _financial_stress_composite_audit,
     _historical_risk_percentile_audit,
     _liquidity_funding_stress_audit,
+    _macro_regime_review_audit,
     _market_stress_derived_audit,
     _portfolio_compact_audit,
     _ppi_final_demand_row_available,
@@ -107,6 +108,7 @@ def build_coverage_audit(
     pullback_systemic_risk_checklist = _pullback_systemic_checklist_audit(rows)
     historical_risk_percentile = _historical_risk_percentile_audit(rows)
     liquidity_funding = _liquidity_funding_stress_audit(rows)
+    macro_regime_review = _macro_regime_review_audit(rows)
     liquidity_funding_history = _liquidity_funding_history_audit(
         db_path=_audit_market_history_db_path(reports_dir, market_history_db_path)
     )
@@ -149,6 +151,7 @@ def build_coverage_audit(
         "pullback_systemic_risk_checklist": pullback_systemic_risk_checklist,
         "historical_risk_percentile": historical_risk_percentile,
         "liquidity_funding_stress": liquidity_funding,
+        "macro_regime_review": macro_regime_review,
         "liquidity_funding_history": liquidity_funding_history,
         "core_risk_history": core_risk_history,
         "valuation_research": valuation_research,

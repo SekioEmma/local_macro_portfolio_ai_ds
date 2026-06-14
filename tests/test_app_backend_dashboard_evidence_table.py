@@ -23,6 +23,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "pullback_systemic_risk_checklist",
     "historical_risk_percentile",
     "liquidity_funding_stress",
+    "macro_regime_review",
 }
 
 
@@ -89,6 +90,21 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     )
     assert liquidity["source_badge"] == "derived"
     assert "not trading signals" in liquidity["interpretation_boundary"]
+    regime = _row(data, "macro_regime_review", "macro_regime_label")
+    assert regime["source_badge"] == "derived"
+    assert regime["value"] in {
+        "low_stress_liquidity_support",
+        "rates_pressure",
+        "inflation_energy_pressure",
+        "credit_stress",
+        "liquidity_funding_pressure",
+        "growth_slowdown_watch",
+        "stagflation_pressure",
+        "mixed_or_transition",
+        "insufficient_evidence",
+    }
+    assert "macro_regime_score" not in json.dumps(regime)
+    assert "current evidence review" in regime["interpretation_boundary"]
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):

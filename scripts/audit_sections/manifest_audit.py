@@ -54,6 +54,16 @@ def _ai_context_manifest_audit() -> dict[str, Any]:
                 in json.dumps(row.get("component_contributions", {}))
             )
         ),
+        "included_d15_model_output_count": sum(
+            1
+            for row in manifest.included_model_outputs
+            if row.get("module") == "macro_regime_review"
+        ),
+        "excluded_d15_model_output_count": sum(
+            1
+            for row in manifest.excluded_model_outputs
+            if row.get("module") == "macro_regime_review"
+        ),
         "excluded_d13_insufficient_history_count": sum(
             1
             for row in manifest.excluded_facts

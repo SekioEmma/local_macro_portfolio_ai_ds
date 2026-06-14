@@ -27,6 +27,7 @@ EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
     "last_good_cache",
     "liquidity_funding_history",
     "liquidity_funding_stress",
+    "macro_regime_review",
     "market_stress_derived",
     "metadata_anomalies",
     "module_coverage",
@@ -150,6 +151,29 @@ EXPECTED_D14_KEYS = {
     "watch_count",
 }
 
+EXPECTED_D15_KEYS = {
+    "ai_context_allowed_count",
+    "blocked_inputs_visible",
+    "blocked_or_insufficient_inputs_excluded_from_support",
+    "boundary_available",
+    "configured_public_output_count",
+    "conflict_band",
+    "contains_crash_probability_language",
+    "contains_recession_probability_language",
+    "evidence_quality_band",
+    "hard_gate_count",
+    "hard_gates",
+    "macro_regime_label",
+    "macro_regime_label_status",
+    "macro_regime_review_available",
+    "macro_regime_review_metric_count",
+    "missing_public_output_keys",
+    "public_output_keys",
+    "public_outputs_expose_macro_regime_score",
+    "public_outputs_expose_numeric_internal_scores",
+    "support_band",
+}
+
 EXPECTED_MANIFEST_KEYS = {
     "excluded_d13_insufficient_history_count",
     "excluded_d14_ineligible_count",
@@ -160,6 +184,7 @@ EXPECTED_MANIFEST_KEYS = {
     "included_d13_fact_count",
     "included_d14_boundary_count",
     "included_d14_fact_count",
+    "included_d15_model_output_count",
     "included_facts_count",
     "included_model_output_keys",
     "included_model_outputs_count",
@@ -170,6 +195,7 @@ EXPECTED_MANIFEST_KEYS = {
     "returns_provider_payloads",
     "risk_boundary_count",
     "search_derived_default",
+    "excluded_d15_model_output_count",
 }
 
 EXPECTED_HISTORICAL_STORE_KEYS = {
@@ -204,6 +230,7 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert set(result["pullback_systemic_risk_checklist"]) == EXPECTED_D11_KEYS
     assert set(result["historical_risk_percentile"]) == EXPECTED_D13_KEYS
     assert set(result["liquidity_funding_stress"]) == EXPECTED_D14_KEYS
+    assert set(result["macro_regime_review"]) == EXPECTED_D15_KEYS
     assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
     assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
     assert result["ai_context_manifest"]["returns_credentials"] is False

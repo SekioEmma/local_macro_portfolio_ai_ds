@@ -40,6 +40,21 @@ VALUATION_BLOCKED_METRIC_KEYS = (
     "eps_growth",
     "sp500_top10_weight",
 )
+MACRO_REGIME_REVIEW_METRIC_KEYS = {
+    "macro_regime_label",
+    "support_band",
+    "evidence_quality_band",
+    "conflict_band",
+    "primary_pressure_ranking",
+    "supporting_evidence",
+    "conflicting_evidence",
+    "missing_inputs",
+    "blocked_inputs",
+    "interpretation_boundary",
+    "model_version",
+    "formula_version",
+    "as_of_date",
+}
 
 
 def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -363,6 +378,63 @@ def _liquidity_funding_stress_audit(rows: list[DashboardEvidenceRow]) -> dict[st
         ),
         "d14_cp_spread_available": _row_has_ok_value(by_key.get("cp_effr_spread"))
         or _row_has_ok_value(by_key.get("cp_sofr_spread")),
+    }
+
+def _macro_regime_review_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    regime_rows = [
+        row
+        for row in rows
+        if row.module == "macro_regime_review"
+        or row.metric_key in MACRO_REGIME_REVIEW_METRIC_KEYS
+    ]
+    by_key = {row.metric_key: row for row in regime_rows}
+    serialized = json.dumps([_row_payload(row) for row in regime_rows], ensure_ascii=False).lower()
+    label = by_key.get("macro_regime_label")
+    boundary = by_key.get("interpretation_boundary")
+    contributions = (
+        getattr(label, "component_contributions", None)
+        if label is not None
+        else None
+    )
+    hard_gates = (
+        contributions.get("hard_gates", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    blocked_inputs = by_key.get("blocked_inputs")
+    public_keys = {row.metric_key for row in regime_rows}
+    return {
+        "macro_regime_review_available": bool(label and _has_value(label)),
+        "macro_regime_review_metric_count": len(regime_rows),
+        "configured_public_output_count": len(MACRO_REGIME_REVIEW_METRIC_KEYS),
+        "public_output_keys": sorted(public_keys),
+        "missing_public_output_keys": sorted(MACRO_REGIME_REVIEW_METRIC_KEYS - public_keys),
+        "macro_regime_label": label.value if label is not None else "missing",
+        "macro_regime_label_status": label.status if label is not None else "missing",
+        "support_band": by_key.get("support_band").value if by_key.get("support_band") else None,
+        "evidence_quality_band": (
+            by_key.get("evidence_quality_band").value
+            if by_key.get("evidence_quality_band")
+            else None
+        ),
+        "conflict_band": by_key.get("conflict_band").value if by_key.get("conflict_band") else None,
+        "ai_context_allowed_count": sum(1 for row in regime_rows if row.ai_context_allowed),
+        "public_outputs_expose_macro_regime_score": "macro_regime_score" in serialized,
+        "public_outputs_expose_numeric_internal_scores": any(
+            token in serialized
+            for token in ("support_score_internal", "group_score_internal")
+        ),
+        "contains_crash_probability_language": "crash probability" in serialized,
+        "contains_recession_probability_language": "recession probability" in serialized,
+        "boundary_available": bool(boundary and boundary.value),
+        "blocked_inputs_visible": bool(blocked_inputs and blocked_inputs.value is not None),
+        "hard_gate_count": sum(1 for value in hard_gates.values() if value is True),
+        "hard_gates": hard_gates,
+        "blocked_or_insufficient_inputs_excluded_from_support": bool(
+            hard_gates.get(
+                "missing_stale_blocked_research_needed_insufficient_history_cannot_support_label"
+            )
+        ),
     }
 
 def _historical_risk_percentile_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:

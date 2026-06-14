@@ -15,6 +15,7 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
     )
     assert 'historical_risk_percentile: "Historical risk percentile"' in module_registry
     assert 'liquidity_funding_stress: "Liquidity/funding stress"' in module_registry
+    assert 'macro_regime_review: "Macro regime review"' in module_registry
 
     assert 'financial_stress_score: "Financial stress score"' in metric_registry
     assert 'pullback_classification: "Pullback classification"' in metric_registry
@@ -23,11 +24,14 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
         'liquidity_funding_stress_status: "Liquidity/funding stress status"'
         in metric_registry
     )
+    assert 'macro_regime_label: "Macro regime label"' in metric_registry
+    assert 'primary_pressure_ranking: "Primary pressure ranking"' in metric_registry
 
     assert "not crash probability" in module_registry
     assert "does not produce buy/sell/hedge instructions" in module_registry
     assert "not a forecast" in module_registry
     assert "reference evidence, not trading signals" in module_registry
+    assert "current evidence review" in module_registry
 
 
 def test_display_label_helpers_keep_unknown_fallbacks():
@@ -63,4 +67,3 @@ def test_frontend_files_do_not_contain_raw_provider_or_holdings_payload_logic():
                 offenders.append(f"{path}:{token}")
 
     assert offenders == []
-

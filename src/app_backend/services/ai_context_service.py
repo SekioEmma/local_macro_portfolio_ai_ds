@@ -9,6 +9,7 @@ from app_backend.services import dashboard_service
 
 MODEL_OUTPUT_MODULES = {
     "financial_stress_composite",
+    "macro_regime_review",
     "pullback_systemic_risk_checklist",
 }
 D14_FACT_MODULES = {"liquidity_funding_stress"}
@@ -36,6 +37,8 @@ RISK_BOUNDARIES = [
     "Official stress indices do not replace the project financial stress composite.",
     "Commercial paper spread cannot alone prove systemic crisis.",
     "ON RRP usage alone is not a risk trigger.",
+    "Macro regime review is current evidence review, not future market direction.",
+    "Macro regime review produces no probability or allocation directive.",
 ]
 
 

@@ -80,6 +80,19 @@ Object.assign(metricLabels, {
   official_stress_reference_status: "Official stress reference status",
   liquidity_funding_stress_status: "Liquidity/funding stress status",
   liquidity_funding_interpretation_boundary:
-    "Liquidity/funding interpretation boundary"
+    "Liquidity/funding interpretation boundary",
+  macro_regime_label: "Macro regime label",
+  support_band: "Macro regime support band",
+  evidence_quality_band: "Macro regime evidence quality band",
+  conflict_band: "Macro regime conflict band",
+  primary_pressure_ranking: "Primary pressure ranking",
+  supporting_evidence: "Macro regime supporting evidence",
+  conflicting_evidence: "Macro regime conflicting evidence",
+  missing_inputs: "Macro regime missing inputs",
+  blocked_inputs: "Macro regime blocked inputs",
+  interpretation_boundary: "Macro regime interpretation boundary",
+  model_version: "Macro regime model version",
+  formula_version: "Macro regime formula version",
+  as_of_date: "Macro regime as-of date"
 });
 

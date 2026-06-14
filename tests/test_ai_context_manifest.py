@@ -32,8 +32,10 @@ def test_ai_context_manifest_includes_and_excludes_expected_rows(monkeypatch, tm
     }
     assert "financial_stress_score" in model_keys
     assert "pullback_classification" in model_keys
+    assert "macro_regime_label" in model_keys
     assert "financial_stress_score" not in included_keys
     assert "pullback_classification" not in included_keys
+    assert "macro_regime_label" not in included_keys
 
 
 def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_path):
@@ -44,6 +46,7 @@ def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_pa
     data = TestClient(app).get("/api/context/manifest").json()
     stress = _model_output(data, "financial_stress_score")
     pullback = _model_output(data, "pullback_classification")
+    regime = _model_output(data, "macro_regime_label")
 
     assert stress["source_badge"] == "derived"
     assert "pressure temperature" in stress["interpretation_boundary"]
@@ -51,6 +54,9 @@ def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_pa
     assert pullback["source_badge"] == "derived"
     assert "This checklist is not crash probability." in pullback["interpretation_boundary"]
     assert pullback["input_evidence"]
+    assert regime["source_badge"] == "derived"
+    assert "current evidence review" in regime["interpretation_boundary"]
+    assert "macro_regime_score" not in json.dumps(regime)
 
 
 def test_proxy_rows_keep_proxy_badge_and_search_is_excluded(monkeypatch, tmp_path):
@@ -127,6 +133,8 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
         "Official stress indices do not replace the project financial stress composite.",
         "Commercial paper spread cannot alone prove systemic crisis.",
         "ON RRP usage alone is not a risk trigger.",
+        "Macro regime review is current evidence review, not future market direction.",
+        "Macro regime review produces no probability or allocation directive.",
     ]
 
 

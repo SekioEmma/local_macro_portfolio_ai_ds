@@ -19,6 +19,7 @@ export const moduleLabels: Record<string, string> = {
 
 Object.assign(moduleLabels, {
   financial_stress_composite: "Financial stress composite",
+  macro_regime_review: "Macro regime review",
   pullback_systemic_risk_checklist: "Pullback/systemic risk checklist",
   historical_risk_percentile: "Historical risk percentile",
   liquidity_funding_stress: "Liquidity/funding stress"
@@ -48,6 +49,8 @@ Object.assign(interpretationBoundaries, {
     "Sahm rule proxy is a recession-warning proxy, not official recession confirmation. One-month unemployment increases do not confirm recession. Claims increases are labor-pressure observations, not crisis confirmation. Payrolls are revised; do not overstate certainty.",
   financial_stress_composite:
     "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Liquidity/funding evidence is confirmation context only. Official stress indices do not replace the project financial stress composite.",
+  macro_regime_review:
+    "Macro regime review is a current evidence review, not a prediction model, downside-event model, business-cycle call, or market direction forecast. It is for reference review only and does not produce probability, target allocation, or expected return.",
   pullback_systemic_risk_checklist:
     "This checklist is not crash probability. It does not predict market bottom or top. It does not produce buy/sell/hedge instructions. D14 cannot alone trigger systemic risk review. Liquidity/funding confirmation can upgrade review only when credit and transmission evidence also confirm. Missing valuation, earnings, and true breadth continue to limit crisis confirmation.",
   historical_risk_percentile:
@@ -58,6 +61,7 @@ Object.assign(interpretationBoundaries, {
 
 const moduleCategories: Record<string, ModuleRegistryEntry["category"]> = {
   financial_stress_composite: "model_output",
+  macro_regime_review: "model_output",
   pullback_systemic_risk_checklist: "model_output",
   historical_risk_percentile: "derived",
   liquidity_funding_stress: "derived",
