@@ -11,9 +11,9 @@ from data_quality import market_history_store
 
 INTERPRETATION_BOUNDARY = (
     "Historical percentile is relative to available local history, not a forecast. "
-    "Z-score and robust z-score are normalization statistics, not crash probability. "
+    "Z-score and robust z-score are normalization statistics, not event odds. "
     "Short or limited history can make percentile unstable. Different frequencies "
-    "must not be mixed. Percentile bands do not produce buy/sell instructions. "
+    "must not be mixed. Percentile bands are reference review only. "
     "Proxy inputs are auxiliary and cannot be hard triggers."
 )
 PREFERRED_WINDOW_DAYS = 365 * 5
@@ -607,7 +607,7 @@ def _interpretation_hint(
         f"for {spec.source_metric_key}; percentile_direction={spec.percentile_direction} "
         f"({direction_note}); history_quality_status={window['status']}; "
         f"trigger_eligibility={trigger_eligibility}. "
-        "Bands are descriptive normalization labels, not probabilities or trading instructions."
+        "Bands are descriptive normalization labels, not probabilities or allocation directives."
     )
 
 

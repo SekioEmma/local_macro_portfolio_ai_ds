@@ -11,8 +11,8 @@ BOUNDARY = (
     "Macro regime review is a current evidence review derived from current "
     "sanitized evidence rows, not a classifier, prediction model, downside-event "
     "model, business-cycle call, or market direction forecast. It is for "
-    "reference review only and does not produce target allocation or expected "
-    "return."
+    "reference review only and does not produce an allocation directive or return "
+    "estimate."
 )
 BAD_STATUSES = {
     "missing",

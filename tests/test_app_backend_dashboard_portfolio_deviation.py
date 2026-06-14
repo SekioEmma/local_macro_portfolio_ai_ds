@@ -32,7 +32,7 @@ def test_dashboard_exposes_portfolio_deviation_compact_fields(monkeypatch, tmp_p
     assert "buy" not in body.lower()
     assert "sell" not in body.lower()
     assert "market factors" in body
-    assert "cash reserve excluded from target allocation" in body.lower()
+    assert "cash reserve excluded from target mix" in body.lower()
 
 
 def test_evidence_table_allows_only_portfolio_compact_context(monkeypatch, tmp_path):

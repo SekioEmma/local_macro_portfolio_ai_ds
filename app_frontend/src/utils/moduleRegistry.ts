@@ -48,15 +48,15 @@ Object.assign(interpretationBoundaries, {
   labor_macro:
     "Sahm rule proxy is a recession-warning proxy, not official recession confirmation. One-month unemployment increases do not confirm recession. Claims increases are labor-pressure observations, not crisis confirmation. Payrolls are revised; do not overstate certainty.",
   financial_stress_composite:
-    "Financial stress score is a transparent pressure temperature, not crash probability. It does not produce buy/sell/hedge instructions. VIX alone and equity drawdown alone are not systemic stress. Liquidity/funding evidence is confirmation context only. Official stress indices do not replace the project financial stress composite.",
+    "Financial stress score is a transparent pressure temperature, not an event-odds model. It is reference review only. VIX alone and equity drawdown alone are not systemic stress. Liquidity/funding evidence is confirmation context only. Official stress indices do not replace the project financial stress composite.",
   macro_regime_review:
-    "Macro regime review is a current evidence review, not a prediction model, downside-event model, business-cycle call, or market direction forecast. It is for reference review only and does not produce probability, target allocation, or expected return.",
+    "Macro regime review is a current evidence review, not a prediction model, downside-event model, business-cycle call, or market direction forecast. It is for reference review only and does not produce probability, allocation directive, or return estimate.",
   pullback_systemic_risk_checklist:
-    "This checklist is not crash probability. It does not predict market bottom or top. It does not produce buy/sell/hedge instructions. D14 cannot alone trigger systemic risk review. Liquidity/funding confirmation can upgrade review only when credit and transmission evidence also confirm. Missing valuation, earnings, and true breadth continue to limit crisis confirmation.",
+    "This checklist is a current evidence review, not an event-odds model. It does not predict market bottom or top. It is reference review only. D14 cannot alone trigger systemic risk review. Liquidity/funding confirmation can upgrade review only when credit and transmission evidence also confirm. Missing valuation, earnings, and true breadth continue to limit crisis confirmation.",
   historical_risk_percentile:
-    "Historical percentile is relative to available local history, not a forecast. Z-score is a normalization statistic, not crash probability. Short history can make percentile unstable. Different frequencies must not be mixed.",
+    "Historical percentile is relative to available local history, not a forecast. Z-score is a normalization statistic, not event odds. Short history can make percentile unstable. Different frequencies must not be mixed.",
   liquidity_funding_stress:
-    "Liquidity/funding stress rows are reference evidence, not trading signals. Official stress indices are external reference layers and do not replace the project financial stress composite. Commercial paper spread can support funding-pressure confirmation but cannot alone prove systemic crisis. SOFR/EFFR/IORB/ON RRP describe policy plumbing and money-market backdrop, not market direction. ON RRP usage alone is not a risk trigger. Different frequencies must not be mixed without explicit as-of alignment. No crash probability or recession probability is produced. No buy/sell/hedge instruction is produced."
+    "Liquidity/funding stress rows are reference evidence, not allocation directives. Official stress indices are external reference layers and do not replace the project financial stress composite. Commercial paper spread can support funding-pressure confirmation but cannot alone prove systemic crisis. SOFR/EFFR/IORB/ON RRP describe policy plumbing and money-market backdrop, not market direction. ON RRP usage alone is not a risk trigger. Different frequencies must not be mixed without explicit as-of alignment. No event odds or business-cycle call is produced."
 });
 
 const moduleCategories: Record<string, ModuleRegistryEntry["category"]> = {

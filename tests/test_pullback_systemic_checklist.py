@@ -247,9 +247,9 @@ def test_boundary_does_not_contain_recession_probability_or_trading_advice_claim
     result = _by_key(checklist.build_pullback_checklist_rows(rows))
     boundary = result["pullback_interpretation_boundary"]["value"]
 
-    assert "This checklist is not crash probability." in boundary
-    assert "D14 does not produce recession probability." in boundary
-    assert "It does not produce buy/sell/hedge instructions." in boundary
+    assert "current evidence review" in boundary
+    assert "business-cycle calls" in boundary
+    assert "reference review only" in boundary
 
 
 def _row(
@@ -340,7 +340,7 @@ def _d14(metric_key, value, *, status="ok", badge="derived"):
         "ai_context_allowed": status == "ok",
         "input_evidence": [],
         "missing_inputs": [] if status == "ok" else [metric_key],
-        "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not trading signals.",
+        "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not allocation directives.",
     }
 
 

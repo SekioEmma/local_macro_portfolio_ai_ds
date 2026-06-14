@@ -35,17 +35,16 @@ DERIVED_METRIC_KEYS = (
 )
 ALL_METRIC_KEYS = RAW_METRIC_KEYS + DERIVED_METRIC_KEYS
 BOUNDARY = (
-    "Liquidity/funding stress rows are reference evidence, not trading signals. "
+    "Liquidity/funding stress rows are reference evidence, not allocation directives. "
     "Official stress indices are external reference layers and do not replace the "
     "project financial stress composite. Commercial paper spread can support "
     "funding-pressure confirmation but cannot alone prove systemic crisis. "
     "SOFR/EFFR/IORB/ON RRP describe policy plumbing and money-market backdrop, "
     "not market direction. ON RRP usage alone is not a risk trigger. Different "
-    "frequencies must not be mixed without explicit as-of alignment. No crash "
-    "probability or recession probability is produced. No buy/sell/hedge "
-    "instruction is produced."
+    "frequencies must not be mixed without explicit as-of alignment. No event "
+    "odds or business-cycle call is produced."
 )
-NO_TRADING_HINT = " Reference evidence only; no trading instruction, crash probability, or recession probability."
+NO_TRADING_HINT = " Reference evidence only; no allocation directive, event odds, or business-cycle call."
 CONTEXT_FIELDS = (
     "metric_key",
     "display_name",

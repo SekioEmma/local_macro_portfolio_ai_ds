@@ -8,16 +8,15 @@ from data_quality import liquidity_funding_stress
 
 
 PULLBACK_BOUNDARY = (
-    "This checklist is not crash probability. It does not predict market bottom "
-    "or top. It does not produce buy/sell/hedge instructions. Equity drawdown "
+    "This checklist is a current evidence review, not an event-odds model. "
+    "It does not predict market bottom or top. It is reference review only. Equity drawdown "
     "alone is not systemic risk. VIX alone is not systemic risk. Percentile "
     "evidence is auxiliary and cannot alone trigger systemic_risk_review. "
     "Equity drawdown percentile alone is not systemic risk. VIX percentile alone "
     "is not systemic risk. Proxy evidence is not true breadth or official funding "
     "stress. Liquidity/funding confirmation can upgrade risk review only when "
     "credit and transmission evidence also confirm. D14 does not predict market "
-    "crashes. D14 does not produce recession probability. D14 does not produce "
-    "buy/sell/hedge instructions. Missing valuation, earnings, and true breadth "
+    "crashes or make business-cycle calls. Missing valuation, earnings, and true breadth "
     "continue to limit crisis confirmation."
 )
 
@@ -25,7 +24,7 @@ INTERPRETATION_HINT = (
     "Derived from local dashboard evidence as a transparent risk review "
     "checklist for separating ordinary pullback, valuation drawdown, macro "
     "pressure, credit warning, and systemic risk review. It is not probability, "
-    "recession prediction, or trading advice."
+    "business-cycle prediction, or allocation advice."
 )
 
 INPUT_KEYS = (
@@ -721,8 +720,7 @@ def _liquidity_funding_context(
         "boundary": (
             "Liquidity/funding confirmation can upgrade risk review only when credit "
             "and transmission evidence also confirm. D14 does not predict market "
-            "crashes. D14 does not produce recession probability. D14 does not "
-            "produce buy/sell/hedge instructions. Missing valuation, earnings, and "
+            "crashes or make business-cycle calls. D14 is reference review only. Missing valuation, earnings, and "
             "true breadth continue to limit crisis confirmation."
         ),
     }
@@ -771,7 +769,7 @@ def _percentile_context(
         "systemic_not_triggered_by_percentile_only": True,
         "liquidity_still_missing_until_d14": False,
         "normalization_boundary": (
-            "This checklist is not crash probability. Percentile evidence is auxiliary "
+            "This checklist is not an event-odds model. Percentile evidence is auxiliary "
             "and cannot alone trigger systemic_risk_review. Equity drawdown percentile "
             "alone is not systemic risk. VIX percentile alone is not systemic risk. "
             "Proxy evidence is not true breadth or official funding stress. D14 "

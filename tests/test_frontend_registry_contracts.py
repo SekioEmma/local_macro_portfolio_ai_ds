@@ -27,10 +27,10 @@ def test_frontend_registry_preserves_required_labels_and_boundaries():
     assert 'macro_regime_label: "Macro regime label"' in metric_registry
     assert 'primary_pressure_ranking: "Primary pressure ranking"' in metric_registry
 
-    assert "not crash probability" in module_registry
-    assert "does not produce buy/sell/hedge instructions" in module_registry
+    assert "event-odds model" in module_registry
+    assert "allocation directive" in module_registry
     assert "not a forecast" in module_registry
-    assert "reference evidence, not trading signals" in module_registry
+    assert "reference evidence" in module_registry
     assert "current evidence review" in module_registry
 
 

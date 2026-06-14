@@ -52,7 +52,7 @@ def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_pa
     assert "pressure temperature" in stress["interpretation_boundary"]
     assert stress["input_evidence"]
     assert pullback["source_badge"] == "derived"
-    assert "This checklist is not crash probability." in pullback["interpretation_boundary"]
+    assert "current evidence review" in pullback["interpretation_boundary"]
     assert pullback["input_evidence"]
     assert regime["source_badge"] == "derived"
     assert "current evidence review" in regime["interpretation_boundary"]
@@ -120,16 +120,16 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
     data = TestClient(app).get("/api/ai/context-preview").json()
 
     assert data["risk_boundaries"] == [
-        "No trading instruction.",
-        "No crash probability.",
-        "No recession probability.",
+        "Reference evidence only.",
+        "No event-odds model.",
+        "No business-cycle call.",
         "VIX alone is not systemic crisis.",
         "Equity drawdown alone is not systemic crisis.",
         "Proxy breadth is not true breadth.",
         "Financial stress score is pressure temperature, not prediction.",
         "Pullback checklist is risk review, not forecast.",
         "Portfolio deviation cannot be attributed to macro factors.",
-        "Liquidity/funding stress rows are reference evidence, not trading signals.",
+        "Liquidity/funding stress rows are reference evidence, not allocation directives.",
         "Official stress indices do not replace the project financial stress composite.",
         "Commercial paper spread cannot alone prove systemic crisis.",
         "ON RRP usage alone is not a risk trigger.",
@@ -215,7 +215,7 @@ def test_manifest_carries_d10_d11_liquidity_context(monkeypatch):
                 "source_badge": "derived",
                 "source_series": "liquidity_funding_stress_status",
                 "observation_date": "2026-06-01",
-                "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not trading signals.",
+                "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not allocation directives.",
             }
         ],
         "available_count": 1,

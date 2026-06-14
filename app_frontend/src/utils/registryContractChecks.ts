@@ -23,6 +23,7 @@ export const registryContractChecks = {
       "High-yield spread percentile",
     getMetricLabel("liquidity_funding_stress_status") ===
       "Liquidity/funding stress status",
+    getMetricLabel("macro_regime_label") === "Macro regime label",
     getMetricLabel("unknown_metric_key") === "unknown_metric_key"
   ],
   statusAndSourceFallbacks: [
@@ -31,15 +32,16 @@ export const registryContractChecks = {
   ],
   boundaries: [
     getModuleBoundary("financial_stress_composite").includes(
-      "not crash probability"
+      "pressure temperature"
     ),
     getModuleBoundary("pullback_systemic_risk_checklist").includes(
-      "does not produce buy/sell/hedge instructions"
+      "reference review only"
     ),
     getModuleBoundary("historical_risk_percentile").includes("not a forecast"),
     getModuleBoundary("liquidity_funding_stress").includes(
-      "reference evidence, not trading signals"
-    )
+      "reference evidence"
+    ),
+    getModuleBoundary("macro_regime_review").includes("current evidence review")
   ],
   valueFallbacks: [
     formatEvidenceValueText("--", "research_needed") === "research needed",

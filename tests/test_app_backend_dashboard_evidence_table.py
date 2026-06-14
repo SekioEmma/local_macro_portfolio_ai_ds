@@ -73,7 +73,7 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
         "insufficient_evidence",
     }
     assert "valuation" in pullback["missing_inputs"]
-    assert "This checklist is not crash probability." in pullback["interpretation_boundary"]
+    assert "current evidence review" in pullback["interpretation_boundary"]
     percentile = _row(
         data,
         "historical_risk_percentile",
@@ -89,7 +89,7 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
         "liquidity_funding_interpretation_boundary",
     )
     assert liquidity["source_badge"] == "derived"
-    assert "not trading signals" in liquidity["interpretation_boundary"]
+    assert "reference evidence" in liquidity["interpretation_boundary"]
     regime = _row(data, "macro_regime_review", "macro_regime_label")
     assert regime["source_badge"] == "derived"
     assert regime["value"] in {

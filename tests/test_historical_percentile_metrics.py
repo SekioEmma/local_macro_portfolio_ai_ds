@@ -151,9 +151,9 @@ def test_interpretation_boundary_excludes_probability_and_trading_instruction(tm
     )
 
     text = f"{row['interpretation_boundary']} {row['interpretation_hint']}".lower()
-    assert "not crash probability" in text
+    assert "not event odds" in text
     assert "not probabilities" in text
-    assert "trading instructions" in text
+    assert "reference review only" in text
     assert "recession probability" not in text
 
 

@@ -455,8 +455,8 @@ PORTFOLIO_DEFAULT_TARGET_WEIGHTS = {
     "gold": 0.10,
 }
 PORTFOLIO_COMPACT_INTERPRETATION_HINT = (
-    "Cash reserve excluded from target allocation; portfolio deviation is not "
-    "attributed to market factors; no trading instruction."
+    "Cash reserve excluded from target mix; portfolio deviation is not "
+    "attributed to market factors; reference review only."
 )
 
 
@@ -1985,9 +1985,9 @@ def _portfolio_deviation_compact(report: ReportState) -> PortfolioDeviationCompa
         cash_reserve_status=cash_reserve_status,
         stale_status=stale_status,
         notes=[
-            "cash reserve excluded from target allocation",
+            "cash reserve excluded from target mix",
             "portfolio deviation is not attributed to market factors",
-            "no trading instruction",
+            "reference review only",
         ],
     )
 

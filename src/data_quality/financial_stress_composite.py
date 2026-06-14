@@ -8,14 +8,14 @@ from data_quality import liquidity_funding_stress
 
 
 FINANCIAL_STRESS_BOUNDARY = (
-    "Financial stress score is a transparent pressure temperature, not crash "
-    "probability. It does not produce buy/sell/hedge instructions. VIX alone "
+    "Financial stress score is a transparent pressure temperature, not an "
+    "event-odds model. It is reference review only. VIX alone "
     "is not systemic stress. Equity drawdown alone is not systemic stress. "
     "Percentile bands describe local historical rarity, not forecast probability. "
     "VIX percentile alone is not systemic stress. Equity drawdown percentile "
     "alone is not systemic stress. Credit percentile context is auxiliary unless "
     "core credit evidence is available. "
-    "Liquidity/funding evidence is a confirmation layer, not a trading signal. "
+    "Liquidity/funding evidence is a confirmation layer, not an allocation directive. "
     "Official stress indices are external reference layers and do not replace "
     "the project financial stress composite. CP spread can support funding-"
     "pressure confirmation but cannot alone prove systemic crisis. ON RRP usage "
@@ -28,7 +28,7 @@ FINANCIAL_STRESS_BOUNDARY = (
 
 INTERPRETATION_HINT = (
     "Derived from local dashboard evidence only; use as risk review context, "
-    "not as a trading signal, crash probability, or recession probability."
+    "not as an event-odds model, business-cycle call, or allocation directive."
 )
 
 GROUP_WEIGHTS = {
@@ -542,7 +542,7 @@ def _percentile_context(
             "VIX percentile alone is not systemic stress. Equity drawdown percentile alone "
             "is not systemic stress. Credit percentile context is auxiliary unless core "
             "credit evidence is available. Financial stress score remains a pressure "
-            "temperature, not crash probability."
+            "temperature, not an event-odds model."
         ),
     }
 
@@ -592,7 +592,7 @@ def _funding_liquidity_context(
         "d14_alone_cannot_produce_stress": True,
         "on_rrp_alone_not_trigger": True,
         "boundary": (
-            "Liquidity/funding evidence is a confirmation layer, not a trading signal. "
+            "Liquidity/funding evidence is a confirmation layer, not an allocation directive. "
             "Official stress indices are external reference layers and do not replace "
             "the project financial stress composite. CP spread can support funding-"
             "pressure confirmation but cannot alone prove systemic crisis. ON RRP "

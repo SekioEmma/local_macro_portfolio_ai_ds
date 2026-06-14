@@ -1,22 +1,30 @@
 # Short-Term Development Plan
 
-## Post-Stage-0 Route
+## Mainline Route
 
-Stage 0 is documentation governance only. After Stage 0, the planned route is:
+1. Stage 0 documentation governance: completed.
+2. Stage 0.5 optional credit history backfill: only with explicit user authorization.
+3. Stage 1 D15 Macro Regime Review v0: completed.
+4. Stage 2 Golden Output Contract: completed by the current Stage 2 change.
+5. Stage 2.5 D19 Historical Validation v0: next.
+6. Stage 3 EvidenceIndex / MetricLookup / Model Registry.
+7. Stage 4 D16 Scenario Stress Test v0.
+8. Stage 5 D17 Growth / Inflation Macro Pack.
+9. Stage 6 D18 Valuation / Equity Structure v0.
+10. Stage 7 D19 expanded historical validation.
+11. Stage 8 Portfolio Exposure Overlay.
+12. Stage 9 AI Chat / Memo / Report.
 
-1. D15 Macro Regime Review v0.
-2. Golden Output Contract.
-3. EvidenceIndex / MetricLookup / Model Registry.
-4. D16 Scenario Stress Test v0.
-5. D17 Growth / Inflation Macro Pack.
-6. D18 Valuation / Equity Structure.
-7. D19 Historical Validation Harness.
-8. Portfolio Exposure Overlay.
-9. AI Chat / Memo / Research Report.
+## Current Task Boundary
+
+Stage 2 locks output structure and forbidden-language coverage for evidence rows,
+D10-D15 model outputs, AI context manifest, audit output, privacy flags, and
+frontend registries.
+
+Do not do D16 now. D16 is a later scenario-matrix task, not the current next
+step.
 
 ## Not Now
-
-Do not do these during Stage 0:
 
 - DeepSeek.
 - Tavily.
@@ -27,17 +35,16 @@ Do not do these during Stage 0:
 - Hard PE, forward PE, or earnings provider integration.
 - News sentiment engine.
 - Black-box machine learning.
-
-Do not add D15 implementation code during Stage 0. The immediate next step is
-documentation alignment, not a macro regime classifier.
+- Live provider fetch/write.
 
 ## Persistent Boundaries
 
-- No buy, sell, add, reduce, clear, hedge, target allocation, or expected return language.
-- No crash probability or recession probability.
+- Public outputs may describe evidence, support bands, conflicts, missing inputs,
+  and current-review boundaries.
+- Public outputs must not provide allocation directives, action instructions,
+  event odds, market-direction probabilities, or return estimates.
 - Missing data must remain missing.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows
   must keep their limits visible.
 - Backend facts, source badges, freshness gates, and AI-context eligibility remain
   the source of truth.
-

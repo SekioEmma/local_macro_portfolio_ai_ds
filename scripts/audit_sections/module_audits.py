@@ -674,5 +674,7 @@ def _portfolio_cash_excluded_from_target(rows: list[DashboardEvidenceRow]) -> bo
                 row.interpretation_hint,
             )
         ).lower()
-        return "cash" in text and "excluded" in text and "target allocation" in text
+        return "cash" in text and "excluded" in text and (
+            "target mix" in text or "target allocation" in text
+        )
     return False

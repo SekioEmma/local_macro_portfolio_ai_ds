@@ -24,16 +24,16 @@ EXCLUDED_STATUSES = {
 EXCLUDED_FRESHNESS = {"unknown", "missing", "stale", "insufficient_history"}
 EXCLUDED_SOURCE_BADGES = {"search-derived", "missing", "research_needed"}
 RISK_BOUNDARIES = [
-    "No trading instruction.",
-    "No crash probability.",
-    "No recession probability.",
+    "Reference evidence only.",
+    "No event-odds model.",
+    "No business-cycle call.",
     "VIX alone is not systemic crisis.",
     "Equity drawdown alone is not systemic crisis.",
     "Proxy breadth is not true breadth.",
     "Financial stress score is pressure temperature, not prediction.",
     "Pullback checklist is risk review, not forecast.",
     "Portfolio deviation cannot be attributed to macro factors.",
-    "Liquidity/funding stress rows are reference evidence, not trading signals.",
+    "Liquidity/funding stress rows are reference evidence, not allocation directives.",
     "Official stress indices do not replace the project financial stress composite.",
     "Commercial paper spread cannot alone prove systemic crisis.",
     "ON RRP usage alone is not a risk trigger.",

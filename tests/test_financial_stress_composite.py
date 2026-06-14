@@ -354,7 +354,7 @@ def _d14(metric_key, value, *, status="ok", badge="derived"):
         "ai_context_allowed": status == "ok",
         "input_evidence": [],
         "missing_inputs": [] if status == "ok" else [metric_key],
-        "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not trading signals.",
+        "interpretation_boundary": "Liquidity/funding stress rows are reference evidence, not allocation directives.",
     }
 
 

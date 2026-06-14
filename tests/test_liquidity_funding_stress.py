@@ -211,9 +211,9 @@ def test_no_probability_trading_or_private_payload_leakage(tmp_path):
     db_path = _db_with_observations(tmp_path, sofr=4.35, effr=4.30, cp=4.8)
     body = str(d14.build_liquidity_funding_rows(db_path=db_path)).lower()
 
-    assert "crash probability" in body
-    assert "recession probability" in body
-    assert "buy/sell/hedge instruction" in body
+    assert "event odds" in body
+    assert "business-cycle call" in body
+    assert "allocation directive" in body
     assert "raw_provider" not in body
     assert "raw_holdings" not in body
     assert "sk-" not in body
