@@ -236,12 +236,44 @@ Status: completed 2026-06-15 (commit on `app-mvp`).
 - Stage 9.3-B-1 completion does NOT authorize Stage 9.3-B-2 real DeepSeek
   network implementation; explicit approval still required.
 
-### Stage 9.3-B-2 Real DeepSeek Adapter
+### Stage 9.3-B-2a Mocked DeepSeek Transport Adapter
+
+Status: completed 2026-06-15 (commit on `app-mvp`).
+
+- Added sanitized `DeepSeekTransportRequest` and
+  `DeepSeekTransportResponse` contracts. They carry only provider-payload
+  derived fields and do not carry API key, URL, endpoint, model name, raw
+  prompt, raw response, holdings, account values, position weights,
+  transaction history, search results, or local paths.
+- Added `src/app_backend/services/deepseek_transport_contract.py` with
+  `DeepSeekTransport`, `DeepSeekTransportError`, and deterministic
+  `MockDeepSeekTransport` / `FakeDeepSeekTransport`.
+- Added `DeepSeekNetworkAdapter` as a minimal injected-transport adapter.
+  The default remains disabled. The mocked transport path requires explicit
+  `fake_only_config()`, an injected transport, and a passing
+  `ExternalAIRuntimePolicy`.
+- Success path order is locked as `guard_request` -> runtime policy guard ->
+  provider payload builder -> transport request builder -> mocked
+  `transport.send(...)` -> `ExternalAIResponse` construction ->
+  `guard_response`.
+- `guard_response` still blocks `external_model_called=True`, so Stage
+  9.3-B-2a remains mocked-transport-only with `external_model_called=False`
+  and `fake_response=True`.
+- Transport timeout-like, HTTP-error-like, malformed, unexpected-exception,
+  malformed-response, forbidden-output, and privacy-token paths all fail
+  closed.
+- No real network, no API key, no env read, no `.env` /
+  `external_llm.yaml`, no HTTP client import, and no new endpoint.
+- Stage 9.2 files still do not import the adapter, transport, runtime policy,
+  or provider builder.
+
+### Stage 9.3-B-2b Real Key/Config/Network Transport Decision Review
 
 Status: not implemented; requires explicit approval before work begins.
 Stage 9.3-A skeleton, Stage 9.3-A closeout hardening, Stage 9.3-B
-readiness audit, Stage 9.3-B-0 runtime approval gate, and Stage 9.3-B-1
-provider payload contract (all 2026-06-15) do NOT authorize Stage 9.3-B-2.
+readiness audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
+provider payload contract, and Stage 9.3-B-2a mocked transport adapter
+(all 2026-06-15) do NOT authorize real DeepSeek network integration.
 
 - Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
   user approval.

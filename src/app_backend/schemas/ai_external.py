@@ -199,6 +199,46 @@ class DeepSeekProviderPayload(BaseModel):
     messages: list[DeepSeekProviderMessage]
 
 
+class DeepSeekTransportRequest(BaseModel):
+    """Stage 9.3-B-2a sanitized transport request.
+
+    Derived from a `DeepSeekProviderPayload`. Carries only the payload's
+    sanitized summary fields plus the message list; carries NO API key,
+    NO base URL, NO endpoint path, NO model name. The Stage 9.3-B-2a
+    `MockDeepSeekTransport` accepts this object verbatim. A future
+    Stage 9.3-B-2b real network adapter is allowed to apply key / URL /
+    model internally when forming the actual HTTP request but MUST NOT
+    add them as fields here.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    provider: AdapterProvider
+    mode: AdapterMode
+    messages: list[DeepSeekProviderMessage]
+    boundary_notices: list[str]
+    validator_required: bool = True
+
+
+class DeepSeekTransportResponse(BaseModel):
+    """Stage 9.3-B-2a sanitized transport response.
+
+    Mock transports return this object directly. A future real transport
+    must convert the provider's HTTP body into this shape; the adapter
+    only consumes these fields. No raw HTTP envelope, headers, cookies,
+    or provider-specific metadata may be exposed here.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    provider: AdapterProvider
+    mode: AdapterMode
+    content_text: str
+    finish_reason: Literal["stop", "length", "content_filter"] = "stop"
+
+
 def default_external_ai_runtime_policy() -> ExternalAIRuntimePolicy:
     """Return a fully fail-closed default runtime policy.
 
@@ -223,4 +263,6 @@ __all__ = [
     "default_external_ai_runtime_policy",
     "DeepSeekProviderMessage",
     "DeepSeekProviderPayload",
+    "DeepSeekTransportRequest",
+    "DeepSeekTransportResponse",
 ]

@@ -389,3 +389,63 @@ Stage 9.3-B-2 is:
 Stage 9.3-B-1 does not implement real DeepSeek network calls.
 Stage 9.3-B-2 remains a separate task and requires explicit user
 approval before work begins.
+
+## Stage 9.3-B-2a Mocked Transport Adapter
+
+Status: completed 2026-06-15.
+
+Stage 9.3-B-2a wires the minimal adapter call chain through an injected
+mocked transport only. It does not implement real HTTP, does not read an API
+key, does not read environment variables, does not read `.env` or
+`external_llm.yaml`, and does not add any endpoint.
+
+New surface:
+
+* `DeepSeekTransportRequest` and `DeepSeekTransportResponse` are sanitized
+  schemas derived from `DeepSeekProviderPayload`. They do not carry API key,
+  base URL, endpoint path, model name, raw prompt, raw response, holdings,
+  account values, position weights, transaction history, search results, or
+  local paths.
+* `src/app_backend/services/deepseek_transport_contract.py` defines the
+  `DeepSeekTransport` protocol, categorical `DeepSeekTransportError`, and
+  deterministic `MockDeepSeekTransport` / `FakeDeepSeekTransport`.
+* `DeepSeekNetworkAdapter` in
+  `src/app_backend/services/deepseek_adapter.py` requires an injected
+  transport and an explicit runtime policy. Its default config remains
+  disabled and fail-closed.
+
+Guard order for the mocked transport success path:
+
+1. `guard_request(request)`.
+2. `assert_external_ai_runtime_policy_allowed(policy)`.
+3. `build_deepseek_provider_payload(request)`.
+4. `build_transport_request_from_provider_payload(payload)`.
+5. `transport.send(transport_request)`.
+6. Construct `ExternalAIResponse`.
+7. `guard_response(response)`.
+8. Return response.
+
+Fail-closed behavior:
+
+* Default disabled adapter does not call transport.
+* Missing transport fails closed.
+* Runtime policy failure does not call transport.
+* `guard_request` failure does not call transport.
+* `mode="network"` request remains blocked by `guard_request`.
+* Transport timeout-like, HTTP-error-like, malformed, and unexpected
+  exceptions fail closed.
+* Malformed transport response objects fail closed.
+* Forbidden output terms and privacy tokens from mocked provider content are
+  blocked by `guard_response`.
+
+`guard_response` still blocks `external_model_called=True`, so Stage
+9.3-B-2a intentionally returns `external_model_called=False` and
+`fake_response=True`. The mocked transport represents a seam test, not a real
+external provider call. Real `external_model_called=true` behavior and any
+real API key/config/network transport remain a separate Stage 9.3-B-2b
+decision review.
+
+Stage 9.3-B-2a keeps a simulated `validator_result.passed=True` path for
+contract compatibility. Stage 9.3-B-2b or 2c must connect the real
+post-response validator such as `validate_ai_preview_payload` or an
+equivalent validator before any real external response can be surfaced.

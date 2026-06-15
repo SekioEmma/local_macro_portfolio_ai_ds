@@ -30,14 +30,14 @@ completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
 surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
 disabled-by-default, fake-client-only internal adapter contract.
 
-The current next step is Stage 9.3-B-2 minimal real adapter implementation
-review, not AI Chat productization. Stage 9.3-A skeleton, Stage 9.3-A closeout /
-adapter guard hardening, Stage 9.3-B readiness seam audit, Stage 9.3-B-0
-runtime approval gate, and Stage 9.3-B-1 minimal real adapter design + config
-contract are all complete. None of these call external models, read API keys
-or `.env`, or add HTTP routes. None of them authorize Stage 9.3-B-2. Real
-DeepSeek integration remains not implemented and requires a separate explicit
-approval task.
+The current next step is Stage 9.3-B-2b real key/config + real transport
+decision review, not AI Chat productization. Stage 9.3-A skeleton, Stage 9.3-A
+closeout / adapter guard hardening, Stage 9.3-B readiness seam audit, Stage
+9.3-B-0 runtime approval gate, Stage 9.3-B-1 minimal real adapter design +
+config contract, and Stage 9.3-B-2a mocked transport adapter are all complete.
+None of these call external models, read API keys or `.env`, or add HTTP
+routes. None of them authorize Stage 9.3-B-2b. Real DeepSeek integration
+remains not implemented and requires a separate explicit approval task.
 
 ## Current Baseline
 
@@ -168,6 +168,17 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   raw provider payloads, search results, and local paths; locked by
   `tests/test_deepseek_provider_contract.py`). Stage 9.3-B-2 real
   network adapter remains not implemented and not approved.
+- Stage 9.3-B-2a mocked DeepSeek transport adapter
+  (`DeepSeekTransportRequest` / `DeepSeekTransportResponse` schemas;
+  `DeepSeekTransport` protocol, categorical `DeepSeekTransportError`, and
+  deterministic `MockDeepSeekTransport`; `DeepSeekNetworkAdapter` with
+  injected transport only). The default remains disabled. The success path
+  requires explicit fake config, passing runtime policy, sanitized provider
+  payload, mocked transport, `ExternalAIResponse`, and `guard_response`.
+  Transport errors, malformed responses, forbidden output terms, and privacy
+  tokens all fail closed. No real HTTP, API key, env read, `.env`,
+  `external_llm.yaml`, or endpoint was added. Stage 9.3-B-2b real
+  key/config/network transport remains not implemented and not approved.
 
 ## Hard Boundaries
 
@@ -206,15 +217,17 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-The current next step is Stage 9.3-B readiness review / external AI integration
-seam audit, not Stage 9.3-B real DeepSeek integration. Stage 9.3-A skeleton and
-its closeout / adapter guard hardening are both complete.
+The current next step is Stage 9.3-B-2b real key/config + real transport
+decision review, not Stage 9.3-B real DeepSeek integration. Stage 9.3-A
+skeleton, its closeout / adapter guard hardening, Stage 9.3-B readiness seam
+audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1 provider payload
+contract, and Stage 9.3-B-2a mocked transport adapter are complete.
 
-Stage 9.3-A DeepSeek adapter skeleton is complete as a disabled-by-default,
-fake-client-only internal adapter contract. It does not call external models,
-does not read API keys or `.env`, does not add HTTP routes, and does not
-authorize Stage 9.3-B. Real DeepSeek integration remains not implemented and
-requires a separate explicit approval task.
+Stage 9.3-B-2a is mocked-transport-only. It does not call external models,
+does not read API keys or `.env`, does not read `external_llm.yaml`, does not
+add HTTP routes, and does not authorize Stage 9.3-B-2b. Real DeepSeek
+integration remains not implemented and requires a separate explicit approval
+task.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -226,5 +239,6 @@ Stage 9.1 Memo Template / Context Contract, Stage 9.2 Mock Chat / Mock Memo
 local preview endpoints, Stage 9.3-A adapter skeleton hardening, Stage
 9.3-B readiness review / external AI integration seam audit, Stage
 9.3-B-0 runtime approval gate / external AI policy contract, and Stage
-9.3-B-1 minimal real adapter design + config contract are complete.
+9.3-B-1 minimal real adapter design + config contract, and Stage 9.3-B-2a
+mocked transport adapter are complete.
 Real AI Chat / Memo / Report integrations remain not implemented.
