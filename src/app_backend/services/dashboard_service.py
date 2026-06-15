@@ -20,20 +20,11 @@ from app_backend.services.dashboard_filters import (
     evidence_row_matches,
 )
 from app_backend.services import provider_service
-from data_quality import financial_stress_composite
-from data_quality import growth_inflation_macro_pack
+from app_backend.services.dashboard_model_pipeline import build_dashboard_model_rows
 from data_quality import historical_derived_metrics
-from data_quality import historical_percentile_metrics
-from data_quality import historical_validation
 from data_quality import last_good_cache
-from data_quality import liquidity_funding_stress
-from data_quality import macro_regime_review
 from data_quality import market_history_store
 from data_quality import official_macro_pack
-from data_quality import portfolio_exposure_overlay
-from data_quality import pullback_systemic_checklist
-from data_quality import scenario_stress
-from data_quality import valuation_equity_structure
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -655,81 +646,12 @@ def build_dashboard_evidence_table(
         reports,
         db_path=dashboard_market_history_db_path,
     )
-    percentile_rows = _historical_risk_percentile_evidence_rows(
-        db_path=dashboard_market_history_db_path
+    _pipeline = build_dashboard_model_rows(
+        base_rows=base_rows,
+        db_path=dashboard_market_history_db_path,
+        build_evidence_row=_evidence_row,
     )
-    liquidity_funding_rows = _liquidity_funding_stress_evidence_rows(
-        db_path=dashboard_market_history_db_path
-    )
-    financial_stress_rows = _financial_stress_composite_evidence_rows(
-        base_rows + percentile_rows + liquidity_funding_rows
-    )
-    pullback_rows = _pullback_systemic_checklist_evidence_rows(
-        base_rows + percentile_rows + liquidity_funding_rows + financial_stress_rows
-    )
-    growth_inflation_rows = _growth_inflation_macro_pack_evidence_rows(
-        base_rows
-        + percentile_rows
-        + liquidity_funding_rows
-        + financial_stress_rows
-        + pullback_rows
-    )
-    valuation_equity_rows = _valuation_equity_structure_evidence_rows(
-        base_rows
-        + percentile_rows
-        + liquidity_funding_rows
-        + financial_stress_rows
-        + pullback_rows
-        + growth_inflation_rows
-    )
-    macro_regime_rows = _macro_regime_review_evidence_rows(
-        base_rows
-        + percentile_rows
-        + liquidity_funding_rows
-        + financial_stress_rows
-        + pullback_rows
-        + growth_inflation_rows
-        + valuation_equity_rows
-    )
-    historical_validation_rows = _historical_validation_evidence_rows(
-        db_path=dashboard_market_history_db_path
-    )
-    scenario_stress_rows = _scenario_stress_evidence_rows(
-        base_rows
-        + percentile_rows
-        + liquidity_funding_rows
-        + financial_stress_rows
-        + pullback_rows
-        + growth_inflation_rows
-        + valuation_equity_rows
-        + macro_regime_rows
-        + historical_validation_rows
-    )
-    portfolio_exposure_rows = _portfolio_exposure_overlay_evidence_rows(
-        base_rows
-        + percentile_rows
-        + liquidity_funding_rows
-        + financial_stress_rows
-        + pullback_rows
-        + growth_inflation_rows
-        + valuation_equity_rows
-        + macro_regime_rows
-        + scenario_stress_rows
-        + historical_validation_rows
-    )
-    all_rows = (
-        base_rows
-        + financial_stress_rows
-        + pullback_rows
-        + growth_inflation_rows
-        + valuation_equity_rows
-        + macro_regime_rows
-        + scenario_stress_rows
-        + historical_validation_rows
-        + portfolio_exposure_rows
-        + percentile_rows
-        + liquidity_funding_rows
-    )
+    all_rows = base_rows + _pipeline.rows
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
     filtered_rows = apply_evidence_filters(
@@ -852,129 +774,6 @@ def _labor_macro_evidence_rows(
         db_path=db_path,
     )
     return [_evidence_row("labor_macro", metric) for metric in metrics]
-
-
-def _financial_stress_composite_evidence_rows(
-    rows: list[DashboardEvidenceRow],
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = financial_stress_composite.build_financial_stress_rows(
-        [_model_to_dict(row) for row in rows]
-    )
-    return [
-        _evidence_row("financial_stress_composite", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _pullback_systemic_checklist_evidence_rows(
-    rows: list[DashboardEvidenceRow],
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = pullback_systemic_checklist.build_pullback_checklist_rows(
-        [_model_to_dict(row) for row in rows]
-    )
-    return [
-        _evidence_row("pullback_systemic_risk_checklist", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _historical_risk_percentile_evidence_rows(
-    *,
-    db_path: Path | str | None = None,
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = historical_percentile_metrics.build_historical_percentile_rows(
-        db_path=str(db_path) if db_path is not None else None
-    )
-    return [
-        _evidence_row("historical_risk_percentile", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _liquidity_funding_stress_evidence_rows(
-    *,
-    db_path: Path | str | None = None,
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = liquidity_funding_stress.build_liquidity_funding_rows(
-        db_path=db_path
-    )
-    return [
-        _evidence_row("liquidity_funding_stress", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _macro_regime_review_evidence_rows(
-    rows: list[DashboardEvidenceRow],
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = macro_regime_review.build_macro_regime_review_rows(
-        [_model_to_dict(row) for row in rows]
-    )
-    return [
-        _evidence_row("macro_regime_review", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _growth_inflation_macro_pack_evidence_rows(
-    rows: list[DashboardEvidenceRow],
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = growth_inflation_macro_pack.build_growth_inflation_macro_pack_rows(
-        [_model_to_dict(row) for row in rows]
-    )
-    return [
-        _evidence_row("growth_inflation_macro_pack", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _valuation_equity_structure_evidence_rows(
-    rows: list[DashboardEvidenceRow],
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = valuation_equity_structure.build_valuation_equity_structure_rows(
-        [_model_to_dict(row) for row in rows]
-    )
-    return [
-        _evidence_row("valuation_equity_structure", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _historical_validation_evidence_rows(
-    *,
-    db_path: Path | str | None = None,
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = historical_validation.build_historical_validation_rows(
-        db_path=str(db_path) if db_path is not None else None
-    )
-    return [
-        _evidence_row("historical_validation", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _scenario_stress_evidence_rows(
-    rows: list[DashboardEvidenceRow],
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = scenario_stress.build_scenario_stress_rows(
-        [_model_to_dict(row) for row in rows]
-    )
-    return [
-        _evidence_row("scenario_stress", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
-
-
-def _portfolio_exposure_overlay_evidence_rows(
-    rows: list[DashboardEvidenceRow],
-) -> list[DashboardEvidenceRow]:
-    metric_payloads = portfolio_exposure_overlay.build_portfolio_exposure_overlay_rows(
-        [_model_to_dict(row) for row in rows]
-    )
-    return [
-        _evidence_row("portfolio_exposure_overlay", DashboardMetric(**payload))
-        for payload in metric_payloads
-    ]
 
 
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:

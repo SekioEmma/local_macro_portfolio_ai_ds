@@ -11,38 +11,66 @@ orchestration or adding Stage 9 features now.
 
 ## M7 Dashboard Orchestration Cleanup
 
-- Current risk: `dashboard_service.py` still contains a long sequential chain
+### M7/M8-A — COMPLETED 2026-06-15 (behavior-preserving extraction, commit on app-mvp)
+
+Extraction summary:
+- Created `src/app_backend/services/dashboard_model_pipeline.py` with
+  `build_dashboard_model_rows(*, base_rows, db_path, build_evidence_row)` and
+  `DashboardModelPipelineResult(rows, row_groups)`.
+- The D13→D14→D10→D11→D17→D18→D15→D19→D16→Stage8 sequence is now in one named
+  function outside `dashboard_service.py`.
+- Removed 10 thin private wrapper functions and 10 data_quality imports from
+  `dashboard_service.py` (3521 → 3320 lines).
+- `dashboard_service.py` remains the public entry point; it calls
+  `build_dashboard_model_rows` and passes `_evidence_row` as a callable to
+  avoid circular imports.
+- Behavior-preservation confirmed: benchmark row count 219, included facts 119,
+  included model outputs 63 — identical to Stage 8.5 baseline. All 586 tests
+  pass. Validator boundaries unchanged (allowed=9 blocked=8 regression=17).
+- Audit documented in `docs/dashboard_orchestration_audit.md`.
+- Tests added in `tests/test_dashboard_model_pipeline.py` (14 tests).
+
+Not done in M7/M8-A (remains for M7/M8-B):
+- `_evidence_row` and AI eligibility helpers stay in `dashboard_service.py`
+  (moving them requires a shared utility module to avoid circular imports).
+- `AI_BLOCKED_*` constants remain in `dashboard_service.py` (used in
+  `_build_metric` and `_labor_history_fallback_needed`).
+- Pipeline is not yet registry-driven; build order is still explicit.
+- No cross-request caching guard added (M11 overlap).
+
+### M7/M8-B — remaining work
+
+- Move `_evidence_row` and its helpers (`_ai_context_allowed`,
+  `_ai_context_blocked_reason`, `AI_BLOCKED_*` constants) to a shared module
+  (e.g., `dashboard_ai_gates.py`) to eliminate the `build_evidence_row: Callable`
+  parameter from `build_dashboard_model_rows`.
+- Evaluate registry-driven row ordering once all models have stable public output
+  keys in `ModelRegistry`.
+- Consider adding a CI row-count threshold guard (M11 overlap).
+- Validation needed: same as M7/M8-A plus the callable parameter removal.
+
+---
+
+Original M7 risk note (still partially applies to M7/M8-B):
+
+- Original risk: `dashboard_service.py` still contains a long sequential chain
   that builds base rows, D13, D14, D10, D11, D17, D18, D15, D19, D16, and Stage
   8 rows in one function.
-- Affected files/functions: `src/app_backend/services/dashboard_service.py`,
-  especially `build_dashboard_evidence_table` and the private
-  `_..._evidence_rows` builders.
 - Why it matters: future Stage 9 surfaces could accidentally call summary,
   evidence, and manifest paths separately and rebuild the same chain.
-- Proposed future task: split orchestration into a small pipeline builder that
-  returns named row groups while preserving the public dashboard service entry
-  points.
-- Not-now boundary: do not rewrite production model logic or change D10-D19 /
-  Stage 8 financial meanings during Stage 8.5.
-- Validation needed: exact evidence-table JSON equality against baseline,
-  benchmark reuse flags, audit output equality where practical, and full
-  dashboard contract tests.
 
 ## M8 Registry-driven Model Row Builder
 
-- Current risk: several model row builders are still hard-wired in
-  `dashboard_service.py`: financial stress, pullback checklist,
-  growth/inflation macro pack, valuation/equity structure, macro regime review,
-  scenario stress, historical validation, and portfolio exposure overlay.
-- Affected files/functions: `dashboard_service.py`,
-  `src/modeling/model_registry.py`, and individual modules under
-  `src/data_quality/`.
-- Why it matters: ModelRegistry already defines public keys and policies, but
-  row construction is still hand ordered in the service layer.
-- Proposed future task: introduce `build_registered_model_rows` for modules
-  whose dependencies are explicit and stable, beginning with pure row-to-row
-  builders.
-- Not-now boundary: do not convert all orchestration during Stage 8.5.
+### M8-A — covered by M7/M8-A above
+
+The D13→Stage8 sequence is now in `build_dashboard_model_rows`. Row construction
+is still hand-ordered (not registry-driven), but is now in one testable location.
+
+### M8-B — remaining work
+
+- Introduce `build_registered_model_rows` for modules whose dependencies are
+  explicit and stable, beginning with pure row-to-row builders.
+- Not-now boundary: do not convert all orchestration before Stage 9.3 is scoped.
 - Validation needed: generated row count, public output keys, source badges,
   AI-context eligibility, and golden output contract equality.
 

@@ -122,6 +122,8 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 - Stage 9.0 AI Readiness Design.
 - Stage 9.1 Memo Template / Context Contract.
 - Stage 9.2 Mock Chat / Mock Memo local preview endpoints.
+- M7/M8-A dashboard model pipeline extraction (behavior-preserving; row count
+  unchanged at 219/119/63; 586 tests pass).
 
 ## Hard Boundaries
 
