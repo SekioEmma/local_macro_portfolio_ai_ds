@@ -28,6 +28,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
     "macro_regime_review",
     "scenario_stress",
     "historical_validation",
+    "portfolio_exposure_overlay",
 }
 
 
@@ -148,6 +149,21 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
     assert historical_validation["source_badge"] == "derived"
     assert historical_validation["status"] in {"ok", "insufficient_history"}
     assert "historical replay" in historical_validation["interpretation_boundary"]
+    portfolio_overlay = _row(
+        data,
+        "portfolio_exposure_overlay",
+        "portfolio_exposure_overlay_status",
+    )
+    assert portfolio_overlay["source_badge"] == "derived"
+    assert portfolio_overlay["value"] in {
+        "available",
+        "limited_context",
+        "insufficient_context",
+        "private_inputs_excluded",
+    }
+    assert "privacy-preserving explanatory layer" in portfolio_overlay[
+        "interpretation_boundary"
+    ]
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):

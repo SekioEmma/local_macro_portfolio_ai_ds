@@ -180,6 +180,34 @@ Object.assign(metricLabels, {
     "Historical validation missing-data summary",
   historical_validation_replay_version:
     "Historical validation replay version",
+  portfolio_exposure_overlay_status: "Portfolio exposure overlay status",
+  portfolio_exposure_channel_summary: "Portfolio exposure channel summary",
+  portfolio_exposure_primary_channels: "Portfolio exposure primary channels",
+  portfolio_exposure_supporting_evidence:
+    "Portfolio exposure supporting evidence",
+  portfolio_exposure_missing_inputs: "Portfolio exposure missing inputs",
+  portfolio_exposure_private_input_policy:
+    "Portfolio exposure private input policy",
+  portfolio_exposure_interpretation_boundary:
+    "Portfolio exposure interpretation boundary",
+  portfolio_exposure_model_version: "Portfolio exposure model version",
+  portfolio_exposure_formula_version: "Portfolio exposure formula version",
+  portfolio_exposure_as_of_date: "Portfolio exposure as-of date",
+  portfolio_exposure_equity_beta_context:
+    "Portfolio exposure equity beta context",
+  portfolio_exposure_rates_duration_context:
+    "Portfolio exposure rates duration context",
+  portfolio_exposure_credit_context: "Portfolio exposure credit context",
+  portfolio_exposure_liquidity_context:
+    "Portfolio exposure liquidity context",
+  portfolio_exposure_inflation_energy_context:
+    "Portfolio exposure inflation/energy context",
+  portfolio_exposure_concentration_context:
+    "Portfolio exposure concentration context",
+  portfolio_exposure_valuation_context:
+    "Portfolio exposure valuation context",
+  portfolio_exposure_cash_buffer_context:
+    "Portfolio exposure cash buffer context",
   scenario_stress_status: "Scenario stress status",
   scenario_stress_scenario_count: "Scenario stress scenario count",
   scenario_stress_scenarios: "Scenario stress scenarios",

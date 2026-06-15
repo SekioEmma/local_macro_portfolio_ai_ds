@@ -56,6 +56,23 @@ counts, available/limited/insufficient-history counts, over/under-escalation
 flags, boundary/proxy/missing-data violation counts, privacy flags,
 model/formula versions, validation boundary, and compact coverage summaries.
 
+## Stage 8 Portfolio Exposure Overlay v0
+
+Stage 8 Portfolio Exposure Overlay v0 is implemented as a downstream-only,
+privacy-preserving explanatory layer. It uses sanitized compact portfolio
+context and existing D10-D19 dashboard evidence/model outputs to map macro risk
+channels such as equity beta, rates duration, credit spread,
+liquidity/funding, inflation/energy, growth slowdown, valuation/earnings
+breadth, equity concentration, cash buffer, and historical-validation context.
+
+It does not read or expose holdings line items. It does not provide allocation
+advice, action directives, return estimates, probability outputs, position-level
+diagnosis, target mixes, or optimization results. Missing sanitized portfolio
+context remains visible and is not interpreted as low or high exposure.
+
+The next step after Stage 8 is Stage 9 AI Chat / Memo / Report. Stage 9 is not
+implemented in Stage 8.
+
 ## Stage 3 Modeling Infrastructure v0
 
 Stage 3 is implemented as shared modeling infrastructure:
@@ -108,10 +125,10 @@ return estimate. Valuation context cannot determine macro regime or systemic
 review by itself, and proxy breadth/concentration does not replace true breadth.
 
 Stage 7 D19 expanded historical validation follows D18 and is now completed.
+Stage 8 Portfolio Exposure Overlay follows D19 and is now completed.
 
 ## Later Modeling Areas
 
-Later work may cover portfolio exposure overlays and AI memo/report surfaces.
-Stage 8 Portfolio Exposure Overlay is the next step and is not implemented in
-Stage 7. Later areas must preserve the same source, freshness, privacy, and
-evidence-boundary rules.
+Later work may cover AI memo/report surfaces. Stage 9 AI Chat / Memo / Report
+is the next step and is not implemented in Stage 8. Later areas must preserve
+the same source, freshness, privacy, and evidence-boundary rules.

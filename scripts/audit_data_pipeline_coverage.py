@@ -57,6 +57,7 @@ from audit_sections.module_audits import (  # noqa: E402
     _macro_regime_review_audit,
     _market_stress_derived_audit,
     _portfolio_compact_audit,
+    _portfolio_exposure_overlay_audit,
     _ppi_final_demand_row_available,
     _proxy_breadth_audit,
     _pullback_systemic_checklist_audit,
@@ -114,6 +115,7 @@ def build_coverage_audit(
     growth_inflation_macro_pack = _growth_inflation_macro_pack_audit(rows)
     valuation_equity_structure = _valuation_equity_structure_audit(rows)
     historical_validation = _historical_validation_audit(rows)
+    portfolio_exposure_overlay = _portfolio_exposure_overlay_audit(rows)
     liquidity_funding = _liquidity_funding_stress_audit(rows)
     macro_regime_review = _macro_regime_review_audit(rows)
     scenario_stress = _scenario_stress_audit(rows)
@@ -161,6 +163,7 @@ def build_coverage_audit(
         "growth_inflation_macro_pack": growth_inflation_macro_pack,
         "valuation_equity_structure": valuation_equity_structure,
         "historical_validation": historical_validation,
+        "portfolio_exposure_overlay": portfolio_exposure_overlay,
         "liquidity_funding_stress": liquidity_funding,
         "macro_regime_review": macro_regime_review,
         "scenario_stress": scenario_stress,
@@ -1027,6 +1030,9 @@ def _write_markdown(audit: dict[str, Any], path: Path) -> None:
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Historical Validation", ""])
     for key, value in audit["historical_validation"].items():
+        lines.append(f"- {key}: {value}")
+    lines.extend(["", "## Portfolio Exposure Overlay", ""])
+    for key, value in audit["portfolio_exposure_overlay"].items():
         lines.append(f"- {key}: {value}")
     lines.extend(["", "## Scenario Stress", ""])
     for key, value in audit["scenario_stress"].items():

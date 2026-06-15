@@ -38,6 +38,7 @@ EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
     "official_macro_pack",
     "overall_status",
     "portfolio_compact",
+    "portfolio_exposure_overlay",
     "provider_health",
     "proxy_breadth",
     "pullback_systemic_risk_checklist",
@@ -195,6 +196,9 @@ EXPECTED_D18_PUBLIC_OUTPUT_KEYS = set(
 EXPECTED_D19_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("historical_validation")
 )
+EXPECTED_D20_PUBLIC_OUTPUT_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("portfolio_exposure_overlay")
+)
 
 EXPECTED_D16_KEYS = {
     "boundary_available",
@@ -289,6 +293,32 @@ EXPECTED_D19_KEYS = {
     "writes_sqlite",
 }
 
+EXPECTED_D20_KEYS = {
+    "channel_count",
+    "configured_public_output_count",
+    "missing_inputs_visible",
+    "missing_public_output_keys",
+    "overlay_status",
+    "portfolio_exposure_overlay_available",
+    "portfolio_exposure_overlay_metric_count",
+    "portfolio_overlay_cannot_change_scenario_severity",
+    "portfolio_overlay_cannot_trigger_macro_regime",
+    "portfolio_overlay_cannot_trigger_systemic_stress",
+    "portfolio_overlay_downstream_only",
+    "primary_channels",
+    "private_inputs_excluded",
+    "public_output_keys",
+    "public_outputs_expose_allocation_language",
+    "public_outputs_expose_probability_language",
+    "public_outputs_expose_return_language",
+    "public_outputs_expose_trading_language",
+    "reads_holdings_line_items",
+    "returns_account_values",
+    "returns_holdings_line_items",
+    "returns_position_weights",
+    "uses_sanitized_portfolio_context_only",
+}
+
 EXPECTED_MANIFEST_KEYS = {
     "excluded_d13_insufficient_history_count",
     "excluded_d14_ineligible_count",
@@ -352,6 +382,7 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert set(result["growth_inflation_macro_pack"]) == EXPECTED_D17_KEYS
     assert set(result["valuation_equity_structure"]) == EXPECTED_D18_KEYS
     assert set(result["historical_validation"]) == EXPECTED_D19_KEYS
+    assert set(result["portfolio_exposure_overlay"]) == EXPECTED_D20_KEYS
     assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
     assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
     assert result["ai_context_manifest"]["returns_credentials"] is False
@@ -370,6 +401,17 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert result["historical_validation"]["D16_scenario_matrix_boundary_preserved"] is True
     assert result["historical_validation"]["D17_context_layer_boundary_preserved"] is True
     assert result["historical_validation"]["D18_research_proxy_boundary_preserved"] is True
+    assert result["portfolio_exposure_overlay"]["reads_holdings_line_items"] is False
+    assert result["portfolio_exposure_overlay"]["returns_holdings_line_items"] is False
+    assert result["portfolio_exposure_overlay"]["returns_position_weights"] is False
+    assert result["portfolio_exposure_overlay"]["returns_account_values"] is False
+    assert result["portfolio_exposure_overlay"]["public_outputs_expose_trading_language"] is False
+    assert result["portfolio_exposure_overlay"]["public_outputs_expose_allocation_language"] is False
+    assert result["portfolio_exposure_overlay"]["public_outputs_expose_return_language"] is False
+    assert result["portfolio_exposure_overlay"]["public_outputs_expose_probability_language"] is False
+    assert result["portfolio_exposure_overlay"]["portfolio_overlay_cannot_trigger_macro_regime"] is True
+    assert result["portfolio_exposure_overlay"]["portfolio_overlay_downstream_only"] is True
+    assert set(result["portfolio_exposure_overlay"]["public_output_keys"]) == EXPECTED_D20_PUBLIC_OUTPUT_KEYS
     assert set(result["macro_regime_review"]["public_output_keys"]) == EXPECTED_D15_PUBLIC_OUTPUT_KEYS
     assert result["scenario_stress"]["public_outputs_expose_probability_language"] is False
     assert result["scenario_stress"]["public_outputs_expose_trading_language"] is False

@@ -9,6 +9,7 @@ from modeling.metric_lookup import (
     D17_PUBLIC_OUTPUT_KEYS,
     D18_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
+    D20_PUBLIC_OUTPUT_KEYS,
 )
 
 
@@ -123,6 +124,20 @@ D18_FORBIDDEN_TERMS = (
     "trading_performance",
     "strategy_return",
 )
+D20_FORBIDDEN_TERMS = (
+    "crash_probability",
+    "recession_probability",
+    "market_direction_probability",
+    "expected_return",
+    "trade_signal",
+    "target_allocation",
+    "target_weight",
+    "ideal_allocation",
+    "strategy_return",
+    "trading_performance",
+    "sharpe",
+    "predicted_return",
+)
 
 
 @dataclass(frozen=True)
@@ -172,7 +187,7 @@ class ModelRegistry:
         return {
             item.module_key
             for item in self._registrations.values()
-            if item.ai_context_policy == "model_output"
+            if item.ai_context_policy in {"model_output", "compact_safe_only"}
         }
 
     def public_output_keys(self, module_key: str) -> tuple[str, ...]:
@@ -420,5 +435,46 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
             "when local history is insufficient."
         ),
         notes="D19 v1 is expanded event-window validation, not future-outcome evaluation.",
+    ),
+    ModelRegistration(
+        model_key="portfolio_exposure_overlay_v0",
+        module_key="portfolio_exposure_overlay",
+        version_prefix="portfolio_exposure",
+        category="overlay_context",
+        public_output_keys=D20_PUBLIC_OUTPUT_KEYS,
+        required_input_groups=("portfolio_overlay",),
+        optional_input_groups=(
+            "credit",
+            "liquidity_funding",
+            "rates_real_yield",
+            "inflation_energy",
+            "growth_macro",
+            "valuation_earnings_breadth",
+            "equity_structure",
+            "historical_validation",
+        ),
+        ai_context_policy="compact_safe_only",
+        audit_policy="audit_d20_portfolio_exposure_overlay",
+        frontend_registry_policy="overlay_module_label_and_boundary",
+        forbidden_language_policy=(
+            "sanitized compact portfolio context only",
+            "private portfolio inputs excluded",
+            "downstream-only explanatory overlay",
+            "cannot trigger macro regime",
+            "cannot trigger systemic stress",
+            "cannot change scenario severity",
+            "no action directive",
+            "no event odds",
+            "no return estimation",
+            "no position-level output",
+        ),
+        interpretation_boundary=(
+            "Portfolio exposure overlay is a privacy-preserving explanatory "
+            "layer that maps sanitized compact portfolio context to macro risk "
+            "channels. It is not an optimization layer, action directive, "
+            "event-odds model, return-estimation model, or position-level "
+            "output. It does not expose private portfolio line items."
+        ),
+        notes="Stage 8 is downstream-only and reads sanitized dashboard rows only.",
     ),
 )

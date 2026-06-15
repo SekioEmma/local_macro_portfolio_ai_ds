@@ -39,6 +39,26 @@ D19_PUBLIC_OUTPUT_KEYS = (
     "historical_validation_missing_data_summary",
     "historical_validation_replay_version",
 )
+D20_PUBLIC_OUTPUT_KEYS = (
+    "portfolio_exposure_overlay_status",
+    "portfolio_exposure_channel_summary",
+    "portfolio_exposure_primary_channels",
+    "portfolio_exposure_supporting_evidence",
+    "portfolio_exposure_missing_inputs",
+    "portfolio_exposure_private_input_policy",
+    "portfolio_exposure_interpretation_boundary",
+    "portfolio_exposure_model_version",
+    "portfolio_exposure_formula_version",
+    "portfolio_exposure_as_of_date",
+    "portfolio_exposure_equity_beta_context",
+    "portfolio_exposure_rates_duration_context",
+    "portfolio_exposure_credit_context",
+    "portfolio_exposure_liquidity_context",
+    "portfolio_exposure_inflation_energy_context",
+    "portfolio_exposure_concentration_context",
+    "portfolio_exposure_valuation_context",
+    "portfolio_exposure_cash_buffer_context",
+)
 D16_PUBLIC_OUTPUT_KEYS = (
     "scenario_stress_status",
     "scenario_stress_scenario_count",
@@ -360,6 +380,26 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
             boundary_required=metric_key == "historical_validation_validation_boundary",
         )
         for metric_key in D19_PUBLIC_OUTPUT_KEYS
+    ),
+    *(
+        _metric(
+            metric_key,
+            "portfolio_exposure_overlay",
+            "portfolio_overlay",
+            "boundary"
+            if "boundary" in metric_key or "policy" in metric_key
+            else "version"
+            if "version" in metric_key or metric_key.endswith("_as_of_date")
+            else "overlay_context",
+            "sanitized_compact_context_only",
+            "cannot_trigger",
+            public_output=True,
+            ai_context_policy="compact_safe_only",
+            status_policy="context_only",
+            boundary_required=metric_key == "portfolio_exposure_interpretation_boundary",
+            notes="Stage 8 overlay is downstream-only and cannot determine macro labels.",
+        )
+        for metric_key in D20_PUBLIC_OUTPUT_KEYS
     ),
     *(
         _metric(

@@ -21,6 +21,7 @@ Object.assign(moduleLabels, {
   financial_stress_composite: "Financial stress composite",
   growth_inflation_macro_pack: "Growth/inflation macro pack",
   valuation_equity_structure: "Valuation/equity structure",
+  portfolio_exposure_overlay: "Portfolio exposure overlay",
   historical_validation: "Historical validation",
   macro_regime_review: "Macro regime review",
   scenario_stress: "Scenario stress",
@@ -57,6 +58,8 @@ Object.assign(interpretationBoundaries, {
     "Growth/inflation macro pack is a conservative current-evidence context layer for growth, inflation, policy-constraint, and stagflation-watch interpretation. It is not a forecast, business-cycle call, event-odds model, allocation directive, or return estimate.",
   valuation_equity_structure:
     "Valuation/equity structure is a conservative research/proxy context layer for valuation vulnerability, earnings gaps, breadth gaps, and concentration context. It is not a forecast, timing model, event-odds model, allocation directive, or return estimate. Proxy breadth/concentration does not replace true breadth.",
+  portfolio_exposure_overlay:
+    "Portfolio exposure overlay is a privacy-preserving explanatory layer that maps sanitized compact portfolio context to macro risk channels. It is not an optimization layer, action directive, event-odds model, return-estimation model, or position-level output. It does not expose private portfolio line items.",
   historical_validation:
     "Historical validation is a read-only historical replay and event-window consistency layer for deterministic evidence boundaries. It is not a forecast, event-odds model, strategy-evaluation model, allocation directive, or return estimate.",
   macro_regime_review:
@@ -75,6 +78,7 @@ const moduleCategories: Record<string, ModuleRegistryEntry["category"]> = {
   financial_stress_composite: "model_output",
   growth_inflation_macro_pack: "derived",
   valuation_equity_structure: "research",
+  portfolio_exposure_overlay: "derived",
   historical_validation: "model_output",
   macro_regime_review: "model_output",
   scenario_stress: "model_output",

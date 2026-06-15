@@ -3,6 +3,7 @@ from modeling.model_registry import (
     D17_FORBIDDEN_TERMS,
     D18_FORBIDDEN_TERMS,
     D19_FORBIDDEN_TERMS,
+    D20_FORBIDDEN_TERMS,
     FORBIDDEN_PUBLIC_OUTPUT_KEYS,
     ModelRegistry,
 )
@@ -20,6 +21,7 @@ REQUIRED_MODEL_MODULES = {
     "macro_regime_review",
     "scenario_stress",
     "historical_validation",
+    "portfolio_exposure_overlay",
 }
 
 
@@ -31,9 +33,10 @@ def test_model_registry_registers_all_stage_models():
         "financial_stress_composite",
         "pullback_systemic_risk_checklist",
         "macro_regime_review",
-        "scenario_stress",
-        "historical_validation",
-    } <= registry.model_output_module_keys()
+            "scenario_stress",
+            "historical_validation",
+            "portfolio_exposure_overlay",
+        } <= registry.model_output_module_keys()
 
 
 def test_model_registry_public_keys_boundaries_and_policies_are_present():
@@ -65,6 +68,21 @@ def test_model_registry_d19_public_keys_exclude_forbidden_backtest_terms():
 
     assert "historical_validation_status" in keys
     for term in D19_FORBIDDEN_TERMS:
+        assert term not in text
+
+
+def test_model_registry_stage8_portfolio_overlay_is_downstream_only():
+    registry = ModelRegistry()
+    registration = registry.require("portfolio_exposure_overlay")
+    keys = set(registration.public_output_keys)
+    text = " ".join(sorted(keys)).lower()
+
+    assert registration.model_key == "portfolio_exposure_overlay_v0"
+    assert registration.category == "overlay_context"
+    assert registration.ai_context_policy == "compact_safe_only"
+    assert "portfolio_exposure_overlay_status" in keys
+    assert not (keys & set(FORBIDDEN_PUBLIC_OUTPUT_KEYS))
+    for term in D20_FORBIDDEN_TERMS:
         assert term not in text
 
 
@@ -121,6 +139,9 @@ def test_model_registry_and_audit_expected_keys_agree_for_d15_d16_d17_d19():
     )
     assert module_audits.VALUATION_EQUITY_STRUCTURE_METRIC_KEYS == set(
         registry.public_output_keys("valuation_equity_structure")
+    )
+    assert module_audits.PORTFOLIO_EXPOSURE_OVERLAY_METRIC_KEYS == set(
+        registry.public_output_keys("portfolio_exposure_overlay")
     )
 
 

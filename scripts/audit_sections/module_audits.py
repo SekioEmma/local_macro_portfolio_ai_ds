@@ -57,6 +57,9 @@ GROWTH_INFLATION_MACRO_PACK_METRIC_KEYS = set(
 VALUATION_EQUITY_STRUCTURE_METRIC_KEYS = set(
     MODEL_REGISTRY.public_output_keys("valuation_equity_structure")
 )
+PORTFOLIO_EXPOSURE_OVERLAY_METRIC_KEYS = set(
+    MODEL_REGISTRY.public_output_keys("portfolio_exposure_overlay")
+)
 
 
 def _proxy_breadth_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
@@ -837,6 +840,116 @@ def _valuation_equity_structure_audit(rows: list[DashboardEvidenceRow]) -> dict[
         "proxy_breadth_not_true_breadth": bool(
             hard_gates.get("proxy_breadth_not_true_breadth")
         ),
+    }
+
+def _portfolio_exposure_overlay_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
+    overlay_rows = [
+        row
+        for row in rows
+        if row.module == "portfolio_exposure_overlay"
+        or row.metric_key in PORTFOLIO_EXPOSURE_OVERLAY_METRIC_KEYS
+    ]
+    by_key = {row.metric_key: row for row in overlay_rows}
+    serialized = json.dumps([_row_payload(row) for row in overlay_rows], ensure_ascii=False).lower()
+    public_keys = {row.metric_key for row in overlay_rows}
+    status_row = by_key.get("portfolio_exposure_overlay_status")
+    primary_row = by_key.get("portfolio_exposure_primary_channels")
+    missing_row = by_key.get("portfolio_exposure_missing_inputs")
+    contributions = getattr(status_row, "component_contributions", None) or {}
+    hard_gates = (
+        contributions.get("hard_gates", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    channels = (
+        contributions.get("channels", {})
+        if isinstance(contributions, dict)
+        else {}
+    )
+    return {
+        "portfolio_exposure_overlay_available": bool(
+            status_row
+            and status_row.value in {"available", "limited_context", "private_inputs_excluded"}
+        ),
+        "portfolio_exposure_overlay_metric_count": len(overlay_rows),
+        "configured_public_output_count": len(PORTFOLIO_EXPOSURE_OVERLAY_METRIC_KEYS),
+        "public_output_keys": sorted(public_keys),
+        "missing_public_output_keys": sorted(
+            PORTFOLIO_EXPOSURE_OVERLAY_METRIC_KEYS - public_keys
+        ),
+        "overlay_status": status_row.value if status_row is not None else "missing",
+        "primary_channels": primary_row.value if primary_row is not None else "none",
+        "private_inputs_excluded": bool(
+            contributions.get("private_inputs_excluded")
+            if isinstance(contributions, dict)
+            else True
+        ),
+        "missing_inputs_visible": bool(missing_row and missing_row.value is not None),
+        "uses_sanitized_portfolio_context_only": bool(
+            hard_gates.get("uses_sanitized_portfolio_context_only")
+        ),
+        "reads_holdings_line_items": bool(hard_gates.get("reads_holdings_line_items")),
+        "returns_holdings_line_items": bool(
+            hard_gates.get("returns_holdings_line_items")
+        ),
+        "returns_position_weights": bool(hard_gates.get("returns_position_weights")),
+        "returns_account_values": bool(hard_gates.get("returns_account_values")),
+        "public_outputs_expose_trading_language": any(
+            token in serialized
+            for token in (
+                "trade signal",
+                "buy",
+                "sell",
+                "hedge",
+                "rebalance",
+                "add position",
+                "reduce position",
+                "clear position",
+                "de-risk",
+                "rotate into",
+            )
+        ),
+        "public_outputs_expose_allocation_language": any(
+            token in serialized
+            for token in (
+                "target allocation",
+                "target weight",
+                "ideal allocation",
+                "overweight",
+                "underweight",
+            )
+        ),
+        "public_outputs_expose_return_language": any(
+            token in serialized
+            for token in (
+                "expected return",
+                "future return",
+                "predicted return",
+                "strategy return",
+                "sharpe",
+            )
+        ),
+        "public_outputs_expose_probability_language": any(
+            token in serialized
+            for token in (
+                "crash probability",
+                "recession probability",
+                "market direction probability",
+            )
+        ),
+        "portfolio_overlay_cannot_trigger_macro_regime": bool(
+            hard_gates.get("portfolio_overlay_cannot_trigger_macro_regime")
+        ),
+        "portfolio_overlay_cannot_trigger_systemic_stress": bool(
+            hard_gates.get("portfolio_overlay_cannot_trigger_systemic_stress")
+        ),
+        "portfolio_overlay_cannot_change_scenario_severity": bool(
+            hard_gates.get("portfolio_overlay_cannot_change_scenario_severity")
+        ),
+        "portfolio_overlay_downstream_only": bool(
+            hard_gates.get("portfolio_overlay_downstream_only")
+        ),
+        "channel_count": len(channels) if isinstance(channels, dict) else 0,
     }
 
 def _int_value(row: DashboardEvidenceRow | None) -> int:

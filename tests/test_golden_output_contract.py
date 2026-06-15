@@ -50,6 +50,7 @@ D16_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("scenario_stress"))
 D17_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("growth_inflation_macro_pack"))
 D18_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("valuation_equity_structure"))
 D19_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("historical_validation"))
+D20_PUBLIC_KEYS = set(MODEL_REGISTRY.public_output_keys("portfolio_exposure_overlay"))
 FORBIDDEN_PUBLIC_PHRASES = (
     "crash probability",
     "recession probability",
@@ -100,6 +101,7 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     assert D15_PUBLIC_KEYS <= keys_by_module["macro_regime_review"]
     assert D16_PUBLIC_KEYS <= keys_by_module["scenario_stress"]
     assert D19_PUBLIC_KEYS <= keys_by_module["historical_validation"]
+    assert D20_PUBLIC_KEYS <= keys_by_module["portfolio_exposure_overlay"]
 
     stress = _row(rows, "financial_stress_composite", "financial_stress_score")
     assert isinstance(stress["value"], (int, float))
@@ -165,6 +167,13 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     d19_boundary = _row(rows, "historical_validation", "historical_validation_validation_boundary")
     assert "historical replay" in d19_boundary["value"]
     assert "event-window consistency" in d19_boundary["value"]
+    overlay_boundary = _row(
+        rows,
+        "portfolio_exposure_overlay",
+        "portfolio_exposure_interpretation_boundary",
+    )
+    assert "privacy-preserving explanatory layer" in overlay_boundary["value"]
+    assert "position-level output" in overlay_boundary["value"]
 
     _assert_no_forbidden_public_phrases(
         {
@@ -274,6 +283,18 @@ def test_golden_audit_contract(tmp_path):
     assert d18["public_outputs_expose_probability_language"] is False
     assert d18["public_outputs_expose_trading_language"] is False
     assert d18["public_outputs_expose_return_language"] is False
+    d20 = result["portfolio_exposure_overlay"]
+    assert d20["portfolio_exposure_overlay_metric_count"] == len(D20_PUBLIC_KEYS)
+    assert d20["public_outputs_expose_probability_language"] is False
+    assert d20["public_outputs_expose_trading_language"] is False
+    assert d20["public_outputs_expose_allocation_language"] is False
+    assert d20["public_outputs_expose_return_language"] is False
+    assert d20["reads_holdings_line_items"] is False
+    assert d20["returns_holdings_line_items"] is False
+    assert d20["returns_position_weights"] is False
+    assert d20["returns_account_values"] is False
+    assert d20["portfolio_overlay_cannot_trigger_macro_regime"] is True
+    assert d20["portfolio_overlay_downstream_only"] is True
 
     _assert_no_private_tokens(result)
     _assert_no_forbidden_public_phrases(
@@ -282,6 +303,7 @@ def test_golden_audit_contract(tmp_path):
             "scenario_stress": result["scenario_stress"],
             "growth_inflation_macro_pack": result["growth_inflation_macro_pack"],
             "valuation_equity_structure": result["valuation_equity_structure"],
+            "portfolio_exposure_overlay": result["portfolio_exposure_overlay"],
             "ai_context_manifest": result["ai_context_manifest"],
         }
     )
@@ -311,6 +333,7 @@ def test_golden_frontend_registry_contract():
     assert 'macro_regime_review: "Macro regime review"' in module_registry
     assert 'growth_inflation_macro_pack: "Growth/inflation macro pack"' in module_registry
     assert 'valuation_equity_structure: "Valuation/equity structure"' in module_registry
+    assert 'portfolio_exposure_overlay: "Portfolio exposure overlay"' in module_registry
     assert 'scenario_stress: "Scenario stress"' in module_registry
     assert 'historical_validation: "Historical validation"' in module_registry
     for metric_key in D15_PUBLIC_KEYS:
@@ -322,6 +345,8 @@ def test_golden_frontend_registry_contract():
     for metric_key in D18_PUBLIC_KEYS:
         assert f"{metric_key}:" in metric_registry
     for metric_key in D19_PUBLIC_KEYS:
+        assert f"{metric_key}:" in metric_registry
+    for metric_key in D20_PUBLIC_KEYS:
         assert f"{metric_key}:" in metric_registry
     assert "current evidence review" in module_registry
     assert "current-evidence context" in module_registry

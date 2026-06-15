@@ -12,7 +12,7 @@
 8. Stage 5 D17 Growth / Inflation Macro Pack: completed.
 9. Stage 6 D18 Valuation / Equity Structure v0: completed.
 10. Stage 7 D19 expanded historical validation: completed.
-11. Stage 8 Portfolio Exposure Overlay.
+11. Stage 8 Portfolio Exposure Overlay: completed.
 12. Stage 9 AI Chat / Memo / Report.
 
 ## Current Task Boundary
@@ -25,8 +25,15 @@ action instructions, return estimates, probability calibration, prediction
 backtests, or strategy-evaluation results. Missing/stale/research-needed,
 proxy-only, valuation, earnings, and true-breadth gaps remain visible.
 
-The next step is Stage 8 Portfolio Exposure Overlay. Stage 8 is not implemented
-in the Stage 7 task.
+Stage 8 Portfolio Exposure Overlay v0 is completed as a downstream-only,
+privacy-preserving explanatory overlay using sanitized portfolio context only.
+It maps compact portfolio context to macro risk channels and existing D10-D19
+evidence/model outputs. It does not read or expose holdings line items and does
+not provide allocation advice, action directives, return estimates, or
+probability outputs.
+
+The next step is Stage 9 AI Chat / Memo / Report. Stage 9 is not implemented
+in the Stage 8 task.
 
 ## Not Now
 

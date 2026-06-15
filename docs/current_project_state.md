@@ -68,6 +68,7 @@ Stage 2.5 D19 local audit baseline:
 - Stage 5 D17 Growth / Inflation Macro Pack v0.
 - Stage 6 D18 Valuation / Equity Structure v0.
 - Stage 7 D19 Expanded Historical Validation v1.
+- Stage 8 Portfolio Exposure Overlay v0.
 
 ## Hard Boundaries
 
@@ -85,6 +86,10 @@ Stage 2.5 D19 local audit baseline:
   or recession call.
 - D18 is a conservative valuation/equity-structure research and proxy context
   layer, not a forecast or timing model.
+- Stage 8 is a privacy-preserving explanatory overlay using sanitized
+  portfolio context only. It does not read or expose holdings line items and
+  does not provide allocation advice, action directives, return estimates, or
+  probability outputs.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -92,9 +97,16 @@ Stage 2.5 D19 local audit baseline:
 
 ## Current Next Step
 
-The current next step is Stage 8 Portfolio Exposure Overlay.
+The current next step is Stage 9 AI Chat / Memo / Report.
 
 Stage 7 D19 expanded historical validation is complete as a read-only
 historical replay, event-window consistency, and boundary-validation layer. It
 is not probability calibration, a prediction backtest, or a strategy-evaluation
-model. Stage 8 is not implemented yet.
+model.
+
+Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
+privacy-preserving explanatory layer. It maps sanitized compact portfolio
+context to macro risk channels and existing D10-D19 evidence/model outputs. It
+does not read or expose holdings line items and does not provide allocation
+advice, action directives, return estimates, or probability outputs. Stage 9 is
+not implemented yet.

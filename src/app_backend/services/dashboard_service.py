@@ -30,6 +30,7 @@ from data_quality import liquidity_funding_stress
 from data_quality import macro_regime_review
 from data_quality import market_history_store
 from data_quality import official_macro_pack
+from data_quality import portfolio_exposure_overlay
 from data_quality import pullback_systemic_checklist
 from data_quality import scenario_stress
 from data_quality import valuation_equity_structure
@@ -231,6 +232,11 @@ DERIVED_METRIC_KEYS = {
     "historical_validation_model_version",
     "historical_validation_formula_version",
     "historical_validation_as_of_date",
+    "historical_validation_coverage_summary",
+    "historical_validation_module_consistency_summary",
+    "historical_validation_proxy_constraint_summary",
+    "historical_validation_missing_data_summary",
+    "historical_validation_replay_version",
     "scenario_stress_status",
     "scenario_stress_scenario_count",
     "scenario_stress_scenarios",
@@ -245,6 +251,24 @@ DERIVED_METRIC_KEYS = {
     "scenario_stress_model_version",
     "scenario_stress_formula_version",
     "scenario_stress_as_of_date",
+    "portfolio_exposure_overlay_status",
+    "portfolio_exposure_channel_summary",
+    "portfolio_exposure_primary_channels",
+    "portfolio_exposure_supporting_evidence",
+    "portfolio_exposure_missing_inputs",
+    "portfolio_exposure_private_input_policy",
+    "portfolio_exposure_interpretation_boundary",
+    "portfolio_exposure_model_version",
+    "portfolio_exposure_formula_version",
+    "portfolio_exposure_as_of_date",
+    "portfolio_exposure_equity_beta_context",
+    "portfolio_exposure_rates_duration_context",
+    "portfolio_exposure_credit_context",
+    "portfolio_exposure_liquidity_context",
+    "portfolio_exposure_inflation_energy_context",
+    "portfolio_exposure_concentration_context",
+    "portfolio_exposure_valuation_context",
+    "portfolio_exposure_cash_buffer_context",
     "high_yield_spread_percentile",
     "high_yield_spread_zscore",
     "high_yield_spread_robust_zscore",
@@ -681,6 +705,18 @@ def build_dashboard_evidence_table(
         + macro_regime_rows
         + historical_validation_rows
     )
+    portfolio_exposure_rows = _portfolio_exposure_overlay_evidence_rows(
+        base_rows
+        + percentile_rows
+        + liquidity_funding_rows
+        + financial_stress_rows
+        + pullback_rows
+        + growth_inflation_rows
+        + valuation_equity_rows
+        + macro_regime_rows
+        + scenario_stress_rows
+        + historical_validation_rows
+    )
     all_rows = (
         base_rows
         + financial_stress_rows
@@ -690,6 +726,7 @@ def build_dashboard_evidence_table(
         + macro_regime_rows
         + scenario_stress_rows
         + historical_validation_rows
+        + portfolio_exposure_rows
         + percentile_rows
         + liquidity_funding_rows
     )
@@ -928,6 +965,18 @@ def _scenario_stress_evidence_rows(
     ]
 
 
+def _portfolio_exposure_overlay_evidence_rows(
+    rows: list[DashboardEvidenceRow],
+) -> list[DashboardEvidenceRow]:
+    metric_payloads = portfolio_exposure_overlay.build_portfolio_exposure_overlay_rows(
+        [_model_to_dict(row) for row in rows]
+    )
+    return [
+        _evidence_row("portfolio_exposure_overlay", DashboardMetric(**payload))
+        for payload in metric_payloads
+    ]
+
+
 def _evidence_row(module_key: str, metric: DashboardMetric) -> DashboardEvidenceRow:
     ai_context_allowed = _evidence_ai_context_allowed(metric)
     blocked_reason = _ppi_observation_date_blocked_reason(metric)
@@ -993,7 +1042,7 @@ def _last_good_write_allowed(reports_dir: Path | str | None) -> bool:
 
 def _save_last_good_candidates(rows: list[DashboardEvidenceRow]) -> None:
     for row in rows:
-        if row.module == "portfolio_deviation":
+        if row.module in {"portfolio_deviation", "portfolio_exposure_overlay"}:
             continue
         if not row.ai_context_allowed:
             continue

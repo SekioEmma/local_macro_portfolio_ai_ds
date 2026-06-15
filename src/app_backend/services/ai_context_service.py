@@ -42,6 +42,7 @@ RISK_BOUNDARIES = [
     "Scenario stress is a hypothetical scenario matrix, not future market direction.",
     "Scenario stress produces no event odds or allocation directive.",
     "Valuation/equity structure is research/proxy context; valuation alone cannot determine regime or systemic review.",
+    "Portfolio exposure overlay uses sanitized compact context only and is not an action directive or position-level output.",
 ]
 
 

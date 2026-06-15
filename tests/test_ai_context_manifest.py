@@ -37,6 +37,7 @@ def test_ai_context_manifest_includes_and_excludes_expected_rows(monkeypatch, tm
     assert "pullback_classification" in model_keys
     assert "macro_regime_label" in model_keys
     assert "scenario_stress_status" in model_keys | excluded_model_keys
+    assert "portfolio_exposure_overlay_status" in model_keys | excluded_model_keys
     assert "valuation_context_status" in included_keys | set(excluded)
     assert "valuation_missing_inputs" in excluded
     assert "financial_stress_score" not in included_keys
@@ -53,6 +54,7 @@ def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_pa
     stress = _model_output(data, "financial_stress_score")
     pullback = _model_output(data, "pullback_classification")
     regime = _model_output(data, "macro_regime_label")
+    portfolio_overlay = _model_output_any(data, "portfolio_exposure_overlay_status")
 
     assert stress["source_badge"] == "derived"
     assert "pressure temperature" in stress["interpretation_boundary"]
@@ -63,6 +65,11 @@ def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_pa
     assert regime["source_badge"] == "derived"
     assert "current evidence review" in regime["interpretation_boundary"]
     assert "macro_regime_score" not in json.dumps(regime)
+    assert portfolio_overlay["source_badge"] == "derived"
+    assert "privacy-preserving explanatory layer" in portfolio_overlay[
+        "interpretation_boundary"
+    ]
+    assert "portfolio_context_status" in portfolio_overlay["component_contributions"]
 
 
 def test_proxy_rows_keep_proxy_badge_and_search_is_excluded(monkeypatch, tmp_path):
@@ -146,6 +153,7 @@ def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
         "Scenario stress is a hypothetical scenario matrix, not future market direction.",
         "Scenario stress produces no event odds or allocation directive.",
         "Valuation/equity structure is research/proxy context; valuation alone cannot determine regime or systemic review.",
+        "Portfolio exposure overlay uses sanitized compact context only and is not an action directive or position-level output.",
     ]
 
 
@@ -267,6 +275,13 @@ def test_manifest_carries_d10_d11_liquidity_context(monkeypatch):
 
 def _model_output(data, metric_key):
     for row in data["included_model_outputs"]:
+        if row["metric_key"] == metric_key:
+            return row
+    raise AssertionError(f"missing model output {metric_key}")
+
+
+def _model_output_any(data, metric_key):
+    for row in data["included_model_outputs"] + data["excluded_model_outputs"]:
         if row["metric_key"] == metric_key:
             return row
     raise AssertionError(f"missing model output {metric_key}")
