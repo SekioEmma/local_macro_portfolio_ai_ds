@@ -536,3 +536,36 @@ Isolation remains unchanged: Stage 9.2 endpoint files do not import the
 adapter, real transport, runtime policy, provider builder, or new external
 guard path. A later Stage 9.3-B-2d or security closeout must review any
 manual one-shot invocation workflow before real responses are surfaced.
+
+## Stage 9.3-B Security Closeout
+
+Status: completed 2026-06-15.
+
+The Stage 9.3-B closeout verifies the full external-AI seam from the disabled
+adapter skeleton through external-response guard semantics. It adds no new
+endpoint, frontend UI, persistence, Tavily/search, agent behavior, live test,
+or automatic external call.
+
+Verified boundaries:
+
+* Route surface remains unchanged; no `/api/chat`, `/api/search`,
+  `/api/ai/deepseek`, `/api/ai/external`, `/api/ai/tavily`, provider-payload,
+  runtime-policy, send, complete, or generate route exists.
+* Stage 9.2 preview files do not import DeepSeek adapter, real transport,
+  runtime policy, provider builder, transport request builder, external guard,
+  or key loader.
+* Secret handling remains isolated to
+  `load_deepseek_api_key_from_env()` in `deepseek_real_transport.py`; no `.env`
+  or YAML loading is introduced.
+* Manifest-only request, provider payload, and transport request contracts
+  still exclude raw question, raw prompt, API key, URL, endpoint, model, raw
+  response, holdings, account, position, transaction, search, and local paths.
+* `guard_response` still defaults to fail-closed for
+  `external_model_called=True`; only `guard_external_model_response` can allow a
+  compliant external response.
+* `generate_external_response(...)` requires request guard, runtime policy,
+  provider payload builder, transport success, post-response validator, and
+  explicit external-response guard before returning.
+
+The dedicated closeout document is
+`docs/stage9_3b_security_closeout.md`.

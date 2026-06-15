@@ -349,6 +349,37 @@ automatic provider call.
 - Do not include holdings line items.
 - Do not include account values, position weights, or transaction history.
 
+### Stage 9.3-B Security Closeout / External AI Boundary Audit
+
+Status: completed 2026-06-15 (commit on `app-mvp`).
+
+- Added `tests/test_stage9_3b_security_closeout.py` to lock the full Stage
+  9.3-A through Stage 9.3-B-2c external-AI boundary.
+- Added `docs/stage9_3b_security_closeout.md`.
+- Verified route surface: no chat/search/DeepSeek/external/Tavily/send/
+  complete/generate/provider-payload/runtime-policy endpoint.
+- Verified Stage 9.2 isolation: preview/context files do not import DeepSeek
+  adapter, real transport, runtime policy, provider builder, transport request
+  builder, external-response guard, external-response generator, or key loader.
+- Verified secret handling: `DEEPSEEK_API_KEY` and process-env reads remain
+  isolated to `load_deepseek_api_key_from_env()` in
+  `deepseek_real_transport.py`; no `.env`, dotenv, or external YAML loading.
+- Verified manifest-only chain: request, provider payload, and transport
+  request exclude raw question/prompt, key, URL, endpoint, model, raw response,
+  holdings, account, position, transaction, search, and local paths.
+- Verified runtime policy gate and dangerous-permission fail-closed behavior.
+- Verified external-response semantics: default `guard_response` still blocks
+  `external_model_called=True`; explicit `guard_external_model_response` is the
+  only allowed path and still requires validator pass, no search, no
+  persistence, no raw payload/prompt, no holdings exposure, human review, and
+  no forbidden output/privacy tokens.
+- Verified adapter external path with mocked transport only: validator failure,
+  transport error, malformed response, request guard failure, and runtime
+  policy failure prevent response return.
+- No production code changes were needed for the closeout.
+- No endpoint, frontend UI, persistence, Tavily/search, agent behavior, live
+  test, or automatic external call was added.
+
 ## Stage 9.4 Tavily Explicit-Search Beta
 
 - Keep disabled by default.
