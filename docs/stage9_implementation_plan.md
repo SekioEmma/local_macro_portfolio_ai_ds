@@ -114,6 +114,26 @@ Status: completed 2026-06-15 (commit on `app-mvp` after Stage 9.2 closeout).
 - Stage 9.3-A completion does NOT authorize Stage 9.3-B; explicit
   approval still required.
 
+### Stage 9.3-A Closeout / Adapter Guard Hardening
+
+Status: completed 2026-06-15.
+
+- ExternalAI Pydantic schemas reject extra fields to prevent silent acceptance
+  of raw prompt, holdings, API key, raw response, account value, or other
+  undeclared caller-provided fields.
+- `guard_response` now blocks `validator_result.passed=False`.
+- `guard_response` now scans response content for Stage 9.2-mirrored forbidden
+  generated-output terms, including action, allocation, return-estimation,
+  probability, and guarantee phrasing.
+- `guard_response` now scans response content for privacy forbidden tokens,
+  including API key markers, private path markers, holdings/account/position
+  language, raw provider payload language, and external LLM config markers.
+- `FakeDeepSeekAdapter` remains deterministic and passes the strengthened
+  response guard.
+- Default disabled adapter behavior remains fail-closed.
+- Stage 9.3-B real DeepSeek integration remains not implemented and not
+  approved.
+
 ### Stage 9.3-B Real DeepSeek Adapter
 
 Status: not implemented; requires explicit approval before work begins.

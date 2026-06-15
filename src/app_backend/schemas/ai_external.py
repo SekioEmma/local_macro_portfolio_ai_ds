@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app_backend.schemas.ai_memo import AIMemoValidatorResult
 
@@ -31,6 +31,8 @@ class ExternalAIAdapterConfig(BaseModel):
     external model, cannot reach the network, and cannot persist prompts
     or responses.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     provider: AdapterProvider = "deepseek"
     enabled: bool = False
@@ -52,6 +54,8 @@ class ExternalAIRequest(BaseModel):
     guard layer before the adapter is invoked.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     request_id: str
     provider: AdapterProvider
     mode: AdapterMode
@@ -67,6 +71,8 @@ class ExternalAIRequest(BaseModel):
 
 
 class ExternalAIPrivacySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     uses_ai_context_manifest_only: bool
     uses_holdings_line_items: bool
     uses_raw_provider_payloads: bool
@@ -77,6 +83,8 @@ class ExternalAIPrivacySummary(BaseModel):
 
 
 class ExternalAIResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     provider: AdapterProvider
     mode: AdapterMode
     external_model_called: bool
@@ -89,6 +97,8 @@ class ExternalAIResponse(BaseModel):
 
 
 class ExternalAIGuardResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     passed: bool
     findings: list[str]
 

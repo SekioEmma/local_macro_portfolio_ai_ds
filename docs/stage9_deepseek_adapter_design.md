@@ -174,3 +174,20 @@ Stage 9.3-A 完成**不**等于授权 Stage 9.3-B。Stage 9.3-B 启动必须满�
   显式开关。
 * `FakeDeepSeekAdapter` 返回的 boundary phrase 与 Stage 9.2 验证器一致，避免日后
   接入时验证器误判 boundary 缺失。
+
+## Stage 9.3-A Closeout / Guard Hardening
+
+Status: completed 2026-06-15.
+
+This closeout keeps Stage 9.3-A as a disabled-by-default, fake-client-only adapter contract. It does not implement Stage 9.3-B, does not call DeepSeek, does not read API keys or `.env`, and does not add HTTP routes.
+
+Hardening changes:
+
+* `ExternalAIAdapterConfig`, `ExternalAIRequest`, `ExternalAIPrivacySummary`, `ExternalAIResponse`, and `ExternalAIGuardResult` reject extra fields.
+* `guard_response` blocks any response whose `validator_result.passed` is not true.
+* `guard_response` blocks forbidden generated-output terms in `response.content`, mirroring the Stage 9.2 fail-closed policy for action, allocation, return-estimation, probability, guarantee, and directional phrasing.
+* `guard_response` blocks privacy forbidden tokens in `response.content`, including API key markers, private path markers, holdings/account/position language, transaction history language, raw provider payload language, and external LLM config markers.
+* `FakeDeepSeekAdapter` still passes the strengthened response guard.
+* The default disabled adapter still blocks `generate()`.
+
+Stage 9.3-B real DeepSeek adapter remains not implemented and not approved. A future Stage 9.3-B task must receive separate explicit approval before any real network adapter, API key handling, or external model call is introduced.

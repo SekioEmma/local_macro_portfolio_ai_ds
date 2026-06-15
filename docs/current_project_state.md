@@ -27,17 +27,14 @@ It is not:
 Stage 8.5 Foundation Stabilization Sprint is completed. Stage 8 Portfolio
 Exposure Overlay v0 is complete. Stage 9.1 Memo Template / Context Contract is
 completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
-surfaces only.
+surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
+disabled-by-default, fake-client-only internal adapter contract.
 
-The current next step is Stage 9.2 closeout / security review, not Stage 9.3
-DeepSeek. Stage 9.1 added deterministic local memo preview rendering over AI
-Context Manifest only. Stage 9.2 added local/mock preview endpoints for context,
-mock chat, mock memo, and mock report review over the AI Context Manifest and
-Stage 9.1 renderer. It does not call DeepSeek or Tavily, does not add persistent
-chat, does not add frontend chat UI, does not automatically save reports, and
-does not expose holdings line items. Real DeepSeek adapter, Tavily search,
-Tauri, persistent chat, agent flows, and automatic report saving remain not
-implemented.
+The current next step is Stage 9.3-A closeout / adapter guard hardening, not
+Stage 9.3-B real DeepSeek integration. Stage 9.3-A does not call external
+models, does not read API keys or `.env`, does not add HTTP routes, and does not
+authorize Stage 9.3-B. Real DeepSeek integration remains not implemented and
+requires a separate explicit approval task.
 
 ## Current Baseline
 
@@ -135,6 +132,10 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   `tests/test_deepseek_adapter_skeleton.py` and
   `tests/test_ai_external_adapter_guards.py`). Stage 9.3-B real DeepSeek
   adapter remains not implemented; Stage 9.3-A does NOT authorize Stage 9.3-B.
+- Stage 9.3-A closeout / adapter guard hardening (ExternalAI schemas reject
+  extra fields; response guard blocks failed validator results, forbidden
+  generated-output terms, and privacy tokens in response content). Stage 9.3-B
+  real DeepSeek adapter remains not implemented and not approved.
 
 ## Hard Boundaries
 
@@ -173,8 +174,14 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-The current next step is Stage 9.2 closeout / security review, not Stage 9.3
-DeepSeek.
+The current next step is Stage 9.3-A closeout / adapter guard hardening, not
+Stage 9.3-B real DeepSeek integration.
+
+Stage 9.3-A DeepSeek adapter skeleton is complete as a disabled-by-default,
+fake-client-only internal adapter contract. It does not call external models,
+does not read API keys or `.env`, does not add HTTP routes, and does not
+authorize Stage 9.3-B. Real DeepSeek integration remains not implemented and
+requires a separate explicit approval task.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -182,6 +189,6 @@ context to macro risk channels and existing D10-D19 evidence/model outputs. It
 does not read or expose holdings line items and does not provide allocation
 advice, action directives, return estimates, or probability outputs. Stage 8.5
 Foundation Stabilization Sprint is complete. Stage 9.0 AI Readiness Design,
-Stage 9.1 Memo Template / Context Contract, and Stage 9.2 Mock Chat / Mock Memo
-local preview endpoints are complete. Real AI Chat / Memo / Report integrations
-remain not implemented.
+Stage 9.1 Memo Template / Context Contract, Stage 9.2 Mock Chat / Mock Memo
+local preview endpoints, and Stage 9.3-A adapter skeleton hardening are
+complete. Real AI Chat / Memo / Report integrations remain not implemented.

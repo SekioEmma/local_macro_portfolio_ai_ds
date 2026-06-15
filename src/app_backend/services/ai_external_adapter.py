@@ -54,6 +54,51 @@ FORBIDDEN_REQUEST_TOKENS = (
     "external_llm.yaml",
 )
 
+FORBIDDEN_RESPONSE_OUTPUT_TERMS = (
+    "buy",
+    "sell",
+    "add position",
+    "reduce position",
+    "clear position",
+    "hedge",
+    "rebalance",
+    "target allocation",
+    "target weight",
+    "expected return",
+    "predicted return",
+    "future return",
+    "market direction probability",
+    "crash probability",
+    "recession probability",
+    "trade signal",
+    "guaranteed",
+    "will rise",
+    "will fall",
+)
+
+FORBIDDEN_RESPONSE_PRIVACY_TOKENS = (
+    "api_key",
+    "api-key",
+    "bearer ",
+    "sk_live_",
+    "sk_test_",
+    "deepseek_api_key",
+    "tavily_api_key",
+    "holdings line items",
+    "account values",
+    "position weights",
+    "transaction history",
+    "raw provider payload",
+    "raw_provider_payload",
+    "current_holdings.csv",
+    "data/private",
+    "g:\\local_macro_portfolio_ai",
+    "/mnt/data",
+    "c:\\users\\",
+    ".env",
+    "external_llm.yaml",
+)
+
 # Field names that, if present in the raw request dict, indicate the caller
 # tried to attach a forbidden field rather than just summarized text.
 FORBIDDEN_REQUEST_FIELD_NAMES = (
@@ -195,8 +240,30 @@ def guard_response(response: ExternalAIResponse) -> ExternalAIGuardResult:
         findings.append("fake_mode_requires_fake_response_true")
     if response.mode == "network":
         findings.append("response_mode_network_blocked_in_stage_9_3_a")
+    if response.validator_result.passed is not True:
+        findings.append("validator_result_must_pass")
+
+    content = response.content.lower()
+    for term in FORBIDDEN_RESPONSE_OUTPUT_TERMS:
+        if term in content:
+            findings.append(f"forbidden_response_term_{_finding_token(term)}")
+    for token in FORBIDDEN_RESPONSE_PRIVACY_TOKENS:
+        if token in content:
+            findings.append(f"forbidden_response_privacy_token_{_finding_token(token)}")
 
     return ExternalAIGuardResult(passed=not findings, findings=findings)
+
+
+def _finding_token(value: str) -> str:
+    return (
+        value.strip()
+        .replace("\\", "_")
+        .replace("/", "_")
+        .replace(" ", "_")
+        .replace("-", "_")
+        .replace(".", "")
+        .replace(":", "")
+    )
 
 
 __all__ = [
@@ -204,6 +271,8 @@ __all__ = [
     "ExternalAIAdapter",
     "FORBIDDEN_REQUEST_FIELD_NAMES",
     "FORBIDDEN_REQUEST_TOKENS",
+    "FORBIDDEN_RESPONSE_OUTPUT_TERMS",
+    "FORBIDDEN_RESPONSE_PRIVACY_TOKENS",
     "guard_config",
     "guard_request",
     "guard_response",
