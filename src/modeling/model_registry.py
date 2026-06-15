@@ -9,7 +9,7 @@ from modeling.metric_lookup import (
     D17_PUBLIC_OUTPUT_KEYS,
     D18_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
-    D20_PUBLIC_OUTPUT_KEYS,
+    PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS,
 )
 
 
@@ -124,7 +124,7 @@ D18_FORBIDDEN_TERMS = (
     "trading_performance",
     "strategy_return",
 )
-D20_FORBIDDEN_TERMS = (
+PORTFOLIO_EXPOSURE_OVERLAY_FORBIDDEN_TERMS = (
     "crash_probability",
     "recession_probability",
     "market_direction_probability",
@@ -441,7 +441,7 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
         module_key="portfolio_exposure_overlay",
         version_prefix="portfolio_exposure",
         category="overlay_context",
-        public_output_keys=D20_PUBLIC_OUTPUT_KEYS,
+        public_output_keys=PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS,
         required_input_groups=("portfolio_overlay",),
         optional_input_groups=(
             "credit",
@@ -454,7 +454,7 @@ DEFAULT_MODEL_REGISTRATIONS: tuple[ModelRegistration, ...] = (
             "historical_validation",
         ),
         ai_context_policy="compact_safe_only",
-        audit_policy="audit_d20_portfolio_exposure_overlay",
+        audit_policy="audit_portfolio_exposure_overlay",
         frontend_registry_policy="overlay_module_label_and_boundary",
         forbidden_language_policy=(
             "sanitized compact portfolio context only",

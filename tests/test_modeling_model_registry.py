@@ -3,9 +3,9 @@ from modeling.model_registry import (
     D17_FORBIDDEN_TERMS,
     D18_FORBIDDEN_TERMS,
     D19_FORBIDDEN_TERMS,
-    D20_FORBIDDEN_TERMS,
     FORBIDDEN_PUBLIC_OUTPUT_KEYS,
     ModelRegistry,
+    PORTFOLIO_EXPOSURE_OVERLAY_FORBIDDEN_TERMS,
 )
 from modeling.model_output import ModelOutput
 from audit_sections import module_audits
@@ -82,7 +82,7 @@ def test_model_registry_stage8_portfolio_overlay_is_downstream_only():
     assert registration.ai_context_policy == "compact_safe_only"
     assert "portfolio_exposure_overlay_status" in keys
     assert not (keys & set(FORBIDDEN_PUBLIC_OUTPUT_KEYS))
-    for term in D20_FORBIDDEN_TERMS:
+    for term in PORTFOLIO_EXPOSURE_OVERLAY_FORBIDDEN_TERMS:
         assert term not in text
 
 

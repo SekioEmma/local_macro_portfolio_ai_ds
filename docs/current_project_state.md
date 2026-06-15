@@ -22,27 +22,71 @@ It is not:
 - A brokerage sync tool.
 - A real-time market terminal.
 
+## Current Phase
+
+Stage 8.5 Foundation Stabilization Sprint is the current freeze and stability
+phase on branch `app-mvp`. Stage 8 Portfolio Exposure Overlay v0 is complete.
+Stage 9 AI Chat / Memo / Report is not implemented.
+
+The project is frozen against new features until Stage 8.5 passes. Stage 8.5
+does not add financial model behavior, does not call DeepSeek or Tavily, does
+not run live provider fetches, and does not read holdings line items. It records
+the latest validation baseline and produces a maintainability backlog instead
+of a major refactor.
+
 ## Current Baseline
 
-- Branch: `app-mvp`.
-- D15 baseline before Stage 2: `b1ccde6 Add macro regime review`.
-- `main` is the old stable baseline and must not be modified for current app-mvp work.
+- Branch before work: `app-mvp`.
+- Commit before work: `f47575a Add portfolio exposure overlay`.
+- Upstream before work: `origin/app-mvp`, aligned with local branch.
+- `main` is the old stable baseline and must not be modified for current
+  `app-mvp` work.
 
-Validation baseline after Stage 2 golden contracts:
+Validation baseline captured during Stage 8.5 preflight:
 
-- `python -m pytest -q`: 372 passed, 1 warning.
-- `npm run typecheck`: passed.
-- `npm run build`: passed.
-- Benchmark evidence rows: 131.
-- Included facts: 95.
-- Included model outputs: 28.
+- `python scripts/benchmark_dashboard_pipeline.py`: passed.
+- Benchmark evidence rows: 219.
+- Included facts: 119.
+- Included model outputs: 63.
 - Market history: 33803 observations / 45 metrics.
+- Legacy total latency: 7247.83 ms.
+- Shared pipeline context total latency: 3385.64 ms.
+- Dashboard summary latency: 744.55 ms legacy / 759.01 ms shared.
+- Evidence table latency: 3140.64 ms legacy / 2624.77 ms shared.
+- AI context manifest latency: 3362.64 ms legacy / 1.86 ms shared.
+- Audit latency inside benchmark: 7979.45 ms.
+- PipelineContext available: true.
+- Summary reused by evidence: true.
+- Evidence reused by manifest: true.
+- Estimated rebuilds avoided: 2.
+- D13 query strategy: batch.
+- D14 query strategy: batch.
+- `python scripts/audit_data_pipeline_coverage.py`: passed, `overall_status=degraded`.
+- Audit degraded reason: `portfolio_deviation: module_status=pressure`.
+- Stage 8 audit status: `portfolio_exposure_overlay_available=true`,
+  `overlay_status=available`, 18 configured public outputs, no missing public
+  output keys.
+- Stage 8 privacy flags: reads holdings line items false, returns holdings
+  line items false, returns position weights false, returns account values
+  false, sanitized compact context only true.
+- Stage 8 hard gates: downstream-only true, cannot trigger macro regime true,
+  cannot trigger systemic stress true, cannot change scenario severity true.
+- `python scripts/run_historical_validation.py --format text`: passed.
+- Historical validation summary: 11 events total, 2 available, 3 limited,
+  6 insufficient, 0 boundary violations.
+- `PYTHONIOENCODING=utf-8 python -m pytest -q`: 459 passed, 1 warning.
+- Targeted Stage 8.5 and related contract tests: passed after stabilization
+  edits; see final run log for exact command list.
+- `cd app_frontend && npm run typecheck`: passed.
+- `cd app_frontend && npm run build`: passed.
+- `python scripts/dev_check_validator_boundaries.py`: passed,
+  `allowed=9 blocked=8 regression=17`.
+- `git diff --check`: passed.
+- Preflight `git status --short --untracked-files=all`: clean.
 
-Stage 2.5 D19 local audit baseline:
-
-- D19 event windows configured: 5.
-- Current local historical validation coverage: 0 available / 5 insufficient history.
-- D19 boundary violations: 0.
+This Stage 8.5 baseline supersedes the older Stage 2 values previously listed
+in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
+28 included model outputs.
 
 ## Completed Mainline
 
@@ -90,6 +134,8 @@ Stage 2.5 D19 local audit baseline:
   portfolio context only. It does not read or expose holdings line items and
   does not provide allocation advice, action directives, return estimates, or
   probability outputs.
+- Stage 8.5 is a freeze/stabilization sprint. It does not implement Stage 9,
+  DeepSeek, Tavily, Tauri, AI Chat, or new financial models.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -97,16 +143,11 @@ Stage 2.5 D19 local audit baseline:
 
 ## Current Next Step
 
-The current next step is Stage 9 AI Chat / Memo / Report.
-
-Stage 7 D19 expanded historical validation is complete as a read-only
-historical replay, event-window consistency, and boundary-validation layer. It
-is not probability calibration, a prediction backtest, or a strategy-evaluation
-model.
+The current next step remains Stage 8.5 completion, not Stage 9 implementation.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
 context to macro risk channels and existing D10-D19 evidence/model outputs. It
 does not read or expose holdings line items and does not provide allocation
 advice, action directives, return estimates, or probability outputs. Stage 9 is
-not implemented yet.
+not implemented.

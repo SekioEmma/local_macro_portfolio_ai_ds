@@ -196,7 +196,7 @@ EXPECTED_D18_PUBLIC_OUTPUT_KEYS = set(
 EXPECTED_D19_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("historical_validation")
 )
-EXPECTED_D20_PUBLIC_OUTPUT_KEYS = set(
+EXPECTED_PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_OUTPUT_KEYS = set(
     MODEL_REGISTRY.public_output_keys("portfolio_exposure_overlay")
 )
 
@@ -293,7 +293,7 @@ EXPECTED_D19_KEYS = {
     "writes_sqlite",
 }
 
-EXPECTED_D20_KEYS = {
+EXPECTED_PORTFOLIO_EXPOSURE_OVERLAY_KEYS = {
     "channel_count",
     "configured_public_output_count",
     "missing_inputs_visible",
@@ -382,7 +382,7 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert set(result["growth_inflation_macro_pack"]) == EXPECTED_D17_KEYS
     assert set(result["valuation_equity_structure"]) == EXPECTED_D18_KEYS
     assert set(result["historical_validation"]) == EXPECTED_D19_KEYS
-    assert set(result["portfolio_exposure_overlay"]) == EXPECTED_D20_KEYS
+    assert set(result["portfolio_exposure_overlay"]) == EXPECTED_PORTFOLIO_EXPOSURE_OVERLAY_KEYS
     assert set(result["ai_context_manifest"]) == EXPECTED_MANIFEST_KEYS
     assert set(result["historical_store"]) == EXPECTED_HISTORICAL_STORE_KEYS
     assert result["ai_context_manifest"]["returns_credentials"] is False
@@ -411,7 +411,10 @@ def test_audit_cli_structural_contract_and_privacy_flags():
     assert result["portfolio_exposure_overlay"]["public_outputs_expose_probability_language"] is False
     assert result["portfolio_exposure_overlay"]["portfolio_overlay_cannot_trigger_macro_regime"] is True
     assert result["portfolio_exposure_overlay"]["portfolio_overlay_downstream_only"] is True
-    assert set(result["portfolio_exposure_overlay"]["public_output_keys"]) == EXPECTED_D20_PUBLIC_OUTPUT_KEYS
+    assert (
+        set(result["portfolio_exposure_overlay"]["public_output_keys"])
+        == EXPECTED_PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_OUTPUT_KEYS
+    )
     assert set(result["macro_regime_review"]["public_output_keys"]) == EXPECTED_D15_PUBLIC_OUTPUT_KEYS
     assert result["scenario_stress"]["public_outputs_expose_probability_language"] is False
     assert result["scenario_stress"]["public_outputs_expose_trading_language"] is False

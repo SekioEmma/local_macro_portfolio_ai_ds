@@ -39,7 +39,7 @@ D19_PUBLIC_OUTPUT_KEYS = (
     "historical_validation_missing_data_summary",
     "historical_validation_replay_version",
 )
-D20_PUBLIC_OUTPUT_KEYS = (
+PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS = (
     "portfolio_exposure_overlay_status",
     "portfolio_exposure_channel_summary",
     "portfolio_exposure_primary_channels",
@@ -399,7 +399,7 @@ DEFAULT_METRICS: tuple[MetricMetadata, ...] = (
             boundary_required=metric_key == "portfolio_exposure_interpretation_boundary",
             notes="Stage 8 overlay is downstream-only and cannot determine macro labels.",
         )
-        for metric_key in D20_PUBLIC_OUTPUT_KEYS
+        for metric_key in PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS
     ),
     *(
         _metric(

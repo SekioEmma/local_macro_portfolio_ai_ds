@@ -73,6 +73,19 @@ context remains visible and is not interpreted as low or high exposure.
 The next step after Stage 8 is Stage 9 AI Chat / Memo / Report. Stage 9 is not
 implemented in Stage 8.
 
+## Stage 8.5 Foundation Stabilization Sprint
+
+Stage 8.5 is the current freeze/stability phase after Stage 8 and before any
+Stage 9 AI surface work. It verifies the Stage 0-D19 foundation, refreshes
+validation baselines, profiles shared pipeline context reuse, audits Stage 8
+AI context eligibility, confirms privacy and forbidden-output boundaries, and
+records a maintainability backlog.
+
+Stage 8.5 does not add financial model behavior. It does not call DeepSeek or
+Tavily, does not read holdings line items, does not add a dashboard feature,
+and does not implement AI Chat / Memo / Report. Stage 9 remains blocked until
+Stage 8.5 validation and context-reuse evidence are cleanly recorded.
+
 ## Stage 3 Modeling Infrastructure v0
 
 Stage 3 is implemented as shared modeling infrastructure:
@@ -129,6 +142,8 @@ Stage 8 Portfolio Exposure Overlay follows D19 and is now completed.
 
 ## Later Modeling Areas
 
-Later work may cover AI memo/report surfaces. Stage 9 AI Chat / Memo / Report
-is the next step and is not implemented in Stage 8. Later areas must preserve
-the same source, freshness, privacy, and evidence-boundary rules.
+Later work may cover AI memo/report surfaces. Stage 8.5 Foundation
+Stabilization Sprint is the current next step. Stage 9 AI Chat / Memo / Report
+follows only after the freeze/stability phase passes and is not implemented in
+Stage 8.5. Later areas must preserve the same source, freshness, privacy, and
+evidence-boundary rules.

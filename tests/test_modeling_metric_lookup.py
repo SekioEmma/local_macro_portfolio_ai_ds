@@ -5,8 +5,8 @@ from modeling.metric_lookup import (
     D17_PUBLIC_OUTPUT_KEYS,
     D18_PUBLIC_OUTPUT_KEYS,
     D19_PUBLIC_OUTPUT_KEYS,
-    D20_PUBLIC_OUTPUT_KEYS,
     MetricLookup,
+    PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS,
 )
 
 
@@ -37,7 +37,7 @@ def test_metric_lookup_registers_stage8_portfolio_exposure_public_fields():
     lookup = MetricLookup()
     public_keys = set(lookup.public_output_keys("portfolio_exposure_overlay"))
 
-    assert set(D20_PUBLIC_OUTPUT_KEYS) <= public_keys
+    assert set(PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS) <= public_keys
     assert lookup.require("portfolio_exposure_overlay_status").evidence_group == "portfolio_overlay"
     assert lookup.require("portfolio_exposure_overlay_status").trigger_policy == "cannot_trigger"
     assert lookup.require("portfolio_exposure_overlay_status").ai_context_policy == "compact_safe_only"
