@@ -177,31 +177,50 @@ Stage 9.3-A 完成**不**等于授权 Stage 9.3-B。Stage 9.3-B 启动必须满�
 
 ## Stage 9.3-B Readiness Seam（必须遵循的处理顺序）
 
-完成于 2026-06-15。Stage 9.3-B 真实 DeepSeek 接入时**必须**按下列顺序串联，不得跳步：
+完成于 2026-06-15；2026-06-15 同日由 Stage 9.3-B-0 把第 5 步细化为 `guard_external_ai_runtime_policy`。Stage 9.3-B 真实 DeepSeek 接入时**必须**按下列顺序串联，不得跳步：
 
 1. **AI Context Manifest preview**：用户先看到将被发送的 manifest 摘要、
    included/excluded 计数与 boundary notices。Stage 9.2 `/api/ai/context-preview`
    是当前唯一合法 preview surface。
-2. **`build_external_ai_request_from_manifest(manifest, ...)`**
+2. **用户确认 preview**：用户在 UI / 流程上明确确认本次将要发送的内容，
+   并触发用户开关。
+3. **`build_external_ai_request_from_manifest(manifest, ...)`**
    （`src/app_backend/services/ai_external_request_builder.py`）：
    把 sanitize 之后的 manifest 折叠成 `ExternalAIRequest`。该 builder：
    * 不接受任何 `question` / `prompt` 参数（签名层面被测试锁定）；
    * 默认 `mode="fake"`；`mode="network"` 在入口直接拒绝；
    * 内部已经调用 `guard_request`，调用方拿不到未审查的请求对象。
-3. **`guard_request(request, raw_request=...)`**：再次 fail-closed 检查，
+4. **`guard_request(request, raw_request=...)`**：再次 fail-closed 检查，
    嵌套字段名 / 嵌套字符串值都会被递归扫描（2026-06-15 加固）。
-4. **外部模型调用**：Stage 9.3-A 不实现；Stage 9.3-B 启动前必须先获得显式批准，
-   且 adapter 必须 disabled-by-default，必须有用户开关。
-5. **`guard_response(response)`**：fail-closed 检查 `external_model_called` / 隐私
+5. **`guard_external_ai_runtime_policy(policy)`**
+   （`src/app_backend/services/ai_external_runtime_policy.py`）：
+   Stage 9.3-B-0 新增的运行时批准门。policy 必须由调用方在请求范围内显式构造，
+   且必须同时满足：
+   * 所有 approval gates 为 True：`external_ai_enabled` / `provider_network_enabled` /
+     `user_controlled_switch_enabled` / `single_request_user_approved` /
+     `context_preview_confirmed` / `request_built_from_manifest` /
+     `request_guard_passed` / `response_guard_required` /
+     `stage9_validator_required` / `human_review_required`；
+   * 所有 dangerous permissions 为 False：`save_raw_prompt` /
+     `save_raw_response` / `persist_chat_by_default` / `allow_search` /
+     `allow_tavily` / `allow_background_call` / `allow_app_start_call` /
+     `allow_page_load_call` / `allow_holdings_line_items` /
+     `allow_account_values` / `allow_position_weights` /
+     `allow_transaction_history`。
+   * 默认 `default_external_ai_runtime_policy()` 完全 fail-closed，
+     `passed=False`，第一条 finding 是 `external_ai_disabled`。
+6. **外部模型调用**：Stage 9.3-A 与 Stage 9.3-B-0 都不实现。Stage 9.3-B 启动前必须
+   先获得显式批准；adapter 必须 disabled-by-default，必须有用户开关。
+7. **`guard_response(response)`**：fail-closed 检查 `external_model_called` / 隐私
    flag / forbidden 输出语言 / 隐私 token / `validator_result.passed`。
-6. **Stage 9.2 generated-output validator**
+8. **Stage 9.2 generated-output validator**
    （`ai_preview_service.validate_ai_preview_payload` 或等价物）：若 Stage 9.3-B 响应
    通过 preview 端点 surface 给用户，必须再过一遍 Stage 9.2 validator，确保
    forbidden term / privacy finding / boundary notice / human_review_required 与
    Stage 9.2 闭环一致。
-7. **Human review**：`human_review_required=True` 必须始终保留。
-8. **不默认持久化**：raw prompt / raw response 必须默认不存盘；任何保存必须由用户
-   显式触发，且必须独立审计。
+9. **Human review**：`human_review_required=True` 必须始终保留。
+10. **不默认持久化**：raw prompt / raw response 必须默认不存盘；任何保存必须由用户
+    显式触发，且必须独立审计。
 
 只要任意一步被绕过，本闭环就视为 broken，Stage 9.3-B 必须 fail-closed 拒绝继续。
 
@@ -237,3 +256,51 @@ Hardening changes:
 * The default disabled adapter still blocks `generate()`.
 
 Stage 9.3-B real DeepSeek adapter remains not implemented and not approved. A future Stage 9.3-B task must receive separate explicit approval before any real network adapter, API key handling, or external model call is introduced.
+
+## Stage 9.3-B-0 Runtime Approval Gate / External AI Policy Contract
+
+Status: completed 2026-06-15.
+
+Stage 9.3-B-0 adds the runtime approval gate as code-level contract. It does
+NOT implement a real DeepSeek adapter, does NOT call DeepSeek, does NOT add
+HTTP routes, does NOT read API keys, and does NOT read `.env` /
+`external_llm.yaml`.
+
+New surface:
+
+* `ExternalAIRuntimePolicy` Pydantic schema in
+  `src/app_backend/schemas/ai_external.py` with `extra="forbid"`. Stores no
+  API key, no env var name, no URL, no model endpoint, no raw prompt, no
+  raw response.
+* `default_external_ai_runtime_policy()` returns a fully fail-closed default.
+* `src/app_backend/services/ai_external_runtime_policy.py` exposes
+  `guard_external_ai_runtime_policy(policy) -> ExternalAIGuardResult` and
+  `assert_external_ai_runtime_policy_allowed(policy) -> None` (raises
+  `BlockedAdapterError` on failure).
+* No network client, env read, or file open in the runtime policy module.
+
+Gate behavior:
+
+* Default policy fails closed with finding `external_ai_disabled`.
+* Happy-path policy passes only when every approval gate is True AND every
+  dangerous permission is False. Toggling any single gate breaks the pass.
+* Search and Tavily are blocked by `allow_search=False` /
+  `allow_tavily=False` regardless of other flags.
+* Background, app-start, and page-load calls are blocked by
+  `allow_background_call=False` / `allow_app_start_call=False` /
+  `allow_page_load_call=False`.
+* Holdings, account values, position weights, and transaction history
+  exposure are blocked by their respective `allow_*` flags.
+
+Isolation:
+
+* `src/app_backend/main.py`,
+  `src/app_backend/services/ai_preview_service.py`,
+  `src/app_backend/services/ai_memo_renderer.py`,
+  and `src/app_backend/services/ai_context_service.py` do not import the
+  runtime policy module, the request builder, the DeepSeek adapter, or the
+  fake adapter.
+* No new HTTP routes; the forbidden-routes list is still empty.
+
+Stage 9.3-B real DeepSeek adapter remains not implemented and requires
+separate explicit user approval.

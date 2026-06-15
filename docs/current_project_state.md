@@ -30,12 +30,13 @@ completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
 surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
 disabled-by-default, fake-client-only internal adapter contract.
 
-The current next step is Stage 9.3-B readiness review / external AI integration
-seam audit, not Stage 9.3-B real DeepSeek integration. Stage 9.3-A skeleton and
-its closeout / adapter guard hardening are both complete. Stage 9.3-A does not
-call external models, does not read API keys or `.env`, does not add HTTP
-routes, and does not authorize Stage 9.3-B. Real DeepSeek integration remains
-not implemented and requires a separate explicit approval task.
+The current next step is Stage 9.3-B implementation decision / explicit
+approval review, not automatic real DeepSeek integration. Stage 9.3-A skeleton,
+Stage 9.3-A closeout / adapter guard hardening, Stage 9.3-B readiness seam
+audit, and Stage 9.3-B-0 runtime approval gate are all complete. None of these
+call external models, read API keys or `.env`, or add HTTP routes. None of
+them authorize Stage 9.3-B. Real DeepSeek integration remains not implemented
+and requires a separate explicit approval task.
 
 ## Current Baseline
 
@@ -145,6 +146,16 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   locked by `tests/test_ai_external_request_builder.py` and additional
   nested-input tests in `tests/test_ai_external_adapter_guards.py`).
   Stage 9.3-B real DeepSeek adapter remains not implemented and not approved.
+- Stage 9.3-B-0 runtime approval gate / external AI policy contract
+  (new `ExternalAIRuntimePolicy` schema with `extra="forbid"`,
+  `default_external_ai_runtime_policy()` factory, and
+  `guard_external_ai_runtime_policy` / `assert_external_ai_runtime_policy_allowed`
+  in `src/app_backend/services/ai_external_runtime_policy.py`; default
+  fails closed; pass condition requires every approval gate True AND
+  every dangerous permission False; locked by
+  `tests/test_ai_external_runtime_policy.py`). No new HTTP routes; no
+  network client imported; no env / yaml / file read. Stage 9.3-B real
+  DeepSeek adapter remains not implemented and not approved.
 
 ## Hard Boundaries
 
@@ -200,6 +211,7 @@ does not read or expose holdings line items and does not provide allocation
 advice, action directives, return estimates, or probability outputs. Stage 8.5
 Foundation Stabilization Sprint is complete. Stage 9.0 AI Readiness Design,
 Stage 9.1 Memo Template / Context Contract, Stage 9.2 Mock Chat / Mock Memo
-local preview endpoints, Stage 9.3-A adapter skeleton hardening, and Stage
-9.3-B readiness review / external AI integration seam audit are complete.
+local preview endpoints, Stage 9.3-A adapter skeleton hardening, Stage
+9.3-B readiness review / external AI integration seam audit, and Stage
+9.3-B-0 runtime approval gate / external AI policy contract are complete.
 Real AI Chat / Memo / Report integrations remain not implemented.

@@ -103,6 +103,65 @@ class ExternalAIGuardResult(BaseModel):
     findings: list[str]
 
 
+class ExternalAIRuntimePolicy(BaseModel):
+    """Stage 9.3-B-0 runtime approval gate / external AI policy contract.
+
+    This policy is a code-level expression of "may a future real external AI
+    call proceed at runtime". Stage 9.3-B-0 does NOT implement the call. The
+    default constructed policy is fully fail-closed: every approval gate is
+    `False`, every dangerous permission is `False`. The guard function in
+    `ai_external_runtime_policy.py` only returns `passed=True` when every
+    approval gate is `True` AND every dangerous permission is `False`.
+
+    No API key, env var name, URL, model endpoint, raw prompt, or raw
+    response may be stored here. Extra fields are rejected by Pydantic.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: AdapterProvider = "deepseek"
+
+    # Approval gates — all must be True for runtime to proceed.
+    external_ai_enabled: bool = False
+    provider_network_enabled: bool = False
+    user_controlled_switch_enabled: bool = False
+    single_request_user_approved: bool = False
+    context_preview_confirmed: bool = False
+    request_built_from_manifest: bool = False
+    request_guard_passed: bool = False
+    response_guard_required: bool = True
+    stage9_validator_required: bool = True
+    human_review_required: bool = True
+
+    # Dangerous permissions — all must be False for runtime to proceed.
+    save_raw_prompt: bool = False
+    save_raw_response: bool = False
+    persist_chat_by_default: bool = False
+    allow_search: bool = False
+    allow_tavily: bool = False
+    allow_background_call: bool = False
+    allow_app_start_call: bool = False
+    allow_page_load_call: bool = False
+    allow_holdings_line_items: bool = False
+    allow_account_values: bool = False
+    allow_position_weights: bool = False
+    allow_transaction_history: bool = False
+
+    policy_version: str = "stage9_3b_0"
+
+
+def default_external_ai_runtime_policy() -> ExternalAIRuntimePolicy:
+    """Return a fully fail-closed default runtime policy.
+
+    Every approval gate is False; every dangerous permission is False.
+    The required-flag gates (`response_guard_required`,
+    `stage9_validator_required`, `human_review_required`) are True so that
+    when a future policy is constructed to "may proceed" status, those
+    requirements remain on.
+    """
+    return ExternalAIRuntimePolicy()
+
+
 __all__ = [
     "AdapterProvider",
     "AdapterMode",
@@ -111,4 +170,6 @@ __all__ = [
     "ExternalAIPrivacySummary",
     "ExternalAIResponse",
     "ExternalAIGuardResult",
+    "ExternalAIRuntimePolicy",
+    "default_external_ai_runtime_policy",
 ]

@@ -168,11 +168,49 @@ Status: completed 2026-06-15 (commit on `app-mvp`).
 - Stage 9.3-B readiness audit completion does NOT authorize Stage
   9.3-B real DeepSeek implementation.
 
+### Stage 9.3-B-0 Runtime Approval Gate / External AI Policy Contract
+
+Status: completed 2026-06-15 (commit on `app-mvp`).
+
+- New `ExternalAIRuntimePolicy` Pydantic schema in
+  `src/app_backend/schemas/ai_external.py` (`extra="forbid"`), with a
+  `default_external_ai_runtime_policy()` factory that returns a fully
+  fail-closed default.
+- New `src/app_backend/services/ai_external_runtime_policy.py` exposing
+  `guard_external_ai_runtime_policy` and
+  `assert_external_ai_runtime_policy_allowed`.
+- Pass condition: every approval gate True AND every dangerous permission
+  False; otherwise fail-closed with a deterministic findings list.
+- Approval gates: `external_ai_enabled`, `provider_network_enabled`,
+  `user_controlled_switch_enabled`, `single_request_user_approved`,
+  `context_preview_confirmed`, `request_built_from_manifest`,
+  `request_guard_passed`, `response_guard_required`,
+  `stage9_validator_required`, `human_review_required`.
+- Dangerous permissions: `save_raw_prompt`, `save_raw_response`,
+  `persist_chat_by_default`, `allow_search`, `allow_tavily`,
+  `allow_background_call`, `allow_app_start_call`, `allow_page_load_call`,
+  `allow_holdings_line_items`, `allow_account_values`,
+  `allow_position_weights`, `allow_transaction_history`.
+- Stage 9.2 preview endpoints, `ai_preview_service`, `ai_memo_renderer`,
+  and `ai_context_service` do NOT import the runtime policy module, the
+  request builder, or the DeepSeek adapter.
+- No new HTTP routes; no network client imported; no env / yaml / file read
+  in the runtime policy module.
+- 106 tests in `tests/test_ai_external_runtime_policy.py` lock the
+  contract: default fail-closed; happy-path pass; per-gate / per-permission
+  parametrized failures; extra-fields rejection; source-surface scan;
+  Stage 9.2 isolation; forbidden-routes absence.
+- Documented in `docs/stage9_deepseek_adapter_design.md` (Stage 9.3-B-0
+  section and the updated 10-step seam order).
+- Stage 9.3-B-0 completion does NOT authorize Stage 9.3-B real DeepSeek;
+  explicit approval still required.
+
 ### Stage 9.3-B Real DeepSeek Adapter
 
 Status: not implemented; requires explicit approval before work begins.
-Stage 9.3-A skeleton, Stage 9.3-A closeout hardening, and Stage 9.3-B
-readiness audit (all 2026-06-15) do NOT authorize Stage 9.3-B.
+Stage 9.3-A skeleton, Stage 9.3-A closeout hardening, Stage 9.3-B
+readiness audit, and Stage 9.3-B-0 runtime approval gate (all 2026-06-15)
+do NOT authorize Stage 9.3-B.
 
 - Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
   user approval.
