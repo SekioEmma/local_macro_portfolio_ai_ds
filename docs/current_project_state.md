@@ -129,6 +129,12 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   `docs/stage9_2_security_review.md`). Stage 9.3 DeepSeek remains
   not implemented and requires explicit approval before work begins; it must
   be disabled by default and behind a user-controlled switch.
+- Stage 9.3-A DeepSeek adapter skeleton (disabled-by-default, fake-client-only,
+  no network, no API key read, no `.env` read; documented in
+  `docs/stage9_deepseek_adapter_design.md`; locked by
+  `tests/test_deepseek_adapter_skeleton.py` and
+  `tests/test_ai_external_adapter_guards.py`). Stage 9.3-B real DeepSeek
+  adapter remains not implemented; Stage 9.3-A does NOT authorize Stage 9.3-B.
 
 ## Hard Boundaries
 

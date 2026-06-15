@@ -84,14 +84,52 @@ Status: completed 2026-06-15 (commit on app-mvp after M7/M8-A extraction).
 
 ## Stage 9.3 DeepSeek Adapter Behind Explicit User-Controlled Switch
 
-Status: not implemented; requires explicit approval before work begins.
-Stage 9.2 closeout (2026-06-15) does NOT authorize Stage 9.3.
+### Stage 9.3-A Adapter Skeleton
 
-- Start only after Stage 9.2 closeout / security review and explicit approval.
-- Stage 9.2 closeout completed but does not auto-approve Stage 9.3.
+Status: completed 2026-06-15 (commit on `app-mvp` after Stage 9.2 closeout).
+
+- Disabled-by-default adapter skeleton, no real network call, no API key
+  read, no `.env` read.
+- Files added: `src/app_backend/schemas/ai_external.py`,
+  `src/app_backend/services/ai_external_adapter.py`,
+  `src/app_backend/services/deepseek_adapter.py`.
+- Defaults: `enabled=False`, `mode="disabled"`, `allow_network=False`,
+  `requires_user_switch=True`, `requires_context_preview=True`,
+  `requires_validator=True`, `save_raw_prompt=False`, `save_raw_response=False`.
+- `FakeDeepSeekAdapter` returns deterministic local text only; flags
+  `external_model_called=False`, `fake_response=True`,
+  `not_saved_by_default=True`, `human_review_required=True`.
+- `guard_config` / `guard_request` / `guard_response` fail-closed on
+  network mode, allow_network, save_raw_prompt, save_raw_response,
+  forbidden field names (holdings / account / position / transaction /
+  api_key / raw_prompt / file_path / env_value / search_results),
+  forbidden tokens, and missing boundary/validator markers.
+- Stage 9.2 preview endpoints do not import the adapter; no new HTTP
+  routes added; no httpx/requests/aiohttp imports anywhere in the
+  adapter source.
+- 80 fail-closed unit tests in
+  `tests/test_deepseek_adapter_skeleton.py` and
+  `tests/test_ai_external_adapter_guards.py`.
+- Documented in `docs/stage9_deepseek_adapter_design.md`.
+- Stage 9.3-A completion does NOT authorize Stage 9.3-B; explicit
+  approval still required.
+
+### Stage 9.3-B Real DeepSeek Adapter
+
+Status: not implemented; requires explicit approval before work begins.
+Stage 9.3-A skeleton (2026-06-15) does NOT authorize Stage 9.3-B.
+
+- Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
+  user approval.
 - Keep adapter disabled by default.
 - Must not start automatically on app launch or page load.
 - Require an explicit UI or settings switch.
+- Must show AI Context Manifest preview before any external send.
+- Must run the Stage 9.2 validator after every response.
+- Must not save raw prompts or raw responses by default.
+- Must reuse `ExternalAIRequest` / `ExternalAIResponse` / `guard_*`
+  contracts from Stage 9.3-A unchanged; may only extend in backwards-
+  compatible ways.
 - Show context preview before send.
 - Show cost and model metadata.
 - Send only approved AI Context Manifest material.
