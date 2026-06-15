@@ -29,9 +29,10 @@ Exposure Overlay v0 is complete. Stage 9 AI Chat / Memo / Report is not
 implemented.
 
 The current next step is Stage 9 preparation, not Stage 9 implementation. Stage
-9 preparation must begin with AI Readiness / Memo Context Design. Real DeepSeek
-adapter, Tavily search, Tauri, persistent chat, agent flows, and automatic
-report saving remain not implemented.
+9.0 AI Readiness Design is the first preparation task and must begin with AI
+Readiness / Memo Context Design. Real DeepSeek adapter, Tavily search, Tauri,
+persistent chat, agent flows, and automatic report saving remain not
+implemented.
 
 ## Current Baseline
 
@@ -151,4 +152,5 @@ context to macro risk channels and existing D10-D19 evidence/model outputs. It
 does not read or expose holdings line items and does not provide allocation
 advice, action directives, return estimates, or probability outputs. Stage 8.5
 Foundation Stabilization Sprint is complete. Stage 9 is not implemented.
-Stage 9 preparation begins with AI Readiness / Memo Context Design.
+Stage 9 preparation begins with Stage 9.0 AI Readiness Design and Memo Context
+Design.

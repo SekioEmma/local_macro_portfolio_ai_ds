@@ -15,7 +15,8 @@
 11. Stage 8 Portfolio Exposure Overlay: completed.
 12. Stage 8.5 Foundation Stabilization Sprint: completed.
 13. Stage 9 preparation: current next phase.
-14. Stage 9 AI Chat / Memo / Report: not implemented.
+14. Stage 9.0 AI Readiness Design: immediate next task.
+15. Stage 9 AI Chat / Memo / Report: not implemented.
 
 ## Current Task Boundary
 
@@ -40,8 +41,9 @@ privacy and forbidden-output boundaries, and recorded maintainability backlog
 items. It did not add financial model behavior, did not read holdings line
 items, and did not call DeepSeek or Tavily.
 
-The current next phase is Stage 9 preparation. Stage 9 preparation is not real
-AI integration and must begin with AI Readiness / Memo Context Design.
+The current next phase is Stage 9 preparation. Stage 9.0 AI Readiness Design is
+the immediate next task. Stage 9 preparation is not real AI integration and
+must begin with AI Readiness / Memo Context Design.
 
 Stage 9 should be split into:
 

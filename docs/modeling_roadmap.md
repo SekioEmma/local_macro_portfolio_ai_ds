@@ -94,13 +94,15 @@ did not implement AI Chat / Memo / Report.
 Status: preparation phase only; not implemented.
 
 Stage 9 is an application surface over the evidence/model context, not a new
-financial model. Stage 9 must consume AI Context Manifest rather than raw
-dashboard payloads, holdings payloads, or provider payloads.
+financial model. It consumes D10-D19 and Stage 8 model outputs through AI
+Context Manifest rather than raw dashboard payloads, holdings payloads, or
+provider payloads.
 
 Stage 9 must not broaden model eligibility or bypass existing AI context gates.
-Preparation begins with AI Readiness / Memo Context Design before any real
-DeepSeek adapter, Tavily search, persistent chat, agent flow, Tauri shell, or
-automatic report saving work.
+It must not change D10-D19 or Stage 8 model semantics. Preparation begins with
+Stage 9.0 AI Readiness Design and Memo Context Design before any real DeepSeek
+adapter, Tavily search, persistent chat, agent flow, Tauri shell, or automatic
+report saving work.
 
 ## Stage 3 Modeling Infrastructure v0
 
