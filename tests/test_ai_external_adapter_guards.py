@@ -374,3 +374,85 @@ def test_base_adapter_generate_must_be_implemented():
     adapter = ExternalAIAdapter(_valid_config())
     with pytest.raises(NotImplementedError):
         adapter.generate(_valid_request())
+
+
+# ---------------------------------------------------------------------------
+# Nested raw_request guard (Stage 9.3-A audit hardening)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "forbidden_field",
+    [
+        "raw_prompt",
+        "api_key",
+        "holdings_line_items",
+        "account_values",
+        "position_weights",
+        "transaction_history",
+        "raw_provider_payload",
+        "search_results",
+    ],
+)
+def test_guard_blocks_nested_forbidden_field_name_in_raw_request(forbidden_field):
+    """A nested key like {'meta': {'<forbidden>': 'x'}} must also be caught."""
+    request = _valid_request()
+    raw = {
+        **request.model_dump(),
+        "meta": {"inner": {forbidden_field: "leaked"}},
+    }
+    result = guard_request(request, raw_request=raw)
+    assert result.passed is False
+    assert f"forbidden_field_{forbidden_field}" in result.findings
+
+
+@pytest.mark.parametrize(
+    "leaking_text",
+    [
+        "current_holdings.csv path attached",
+        "data/private/notes",
+        "API_KEY=sk_live_secret_value_test",
+        "Bearer ABCDEF1234567890",
+        "G:\\local_macro_portfolio_ai project root",
+        "holdings line items: 10 rows",
+        "account values: $1,234,567",
+        "transaction history: 100 trades",
+        ".env file contents",
+        "external_llm.yaml secrets",
+    ],
+)
+def test_guard_blocks_nested_forbidden_token_in_raw_request_string_value(leaking_text):
+    """Forbidden tokens in nested string values of raw_request must also be caught."""
+    request = _valid_request()
+    raw = {
+        **request.model_dump(),
+        "meta": {"deeply": {"nested": {"note": leaking_text}}},
+    }
+    result = guard_request(request, raw_request=raw)
+    assert result.passed is False
+    assert any("forbidden_raw_token_" in f for f in result.findings)
+
+
+def test_guard_safe_nested_raw_request_passes():
+    request = _valid_request()
+    raw = {
+        **request.model_dump(),
+        "meta": {"trace_id": "abc-123", "user_locale": "zh-CN"},
+    }
+    result = guard_request(request, raw_request=raw)
+    assert result.passed is True
+
+
+def test_guard_blocks_forbidden_field_inside_list_in_raw_request():
+    """List items containing a forbidden-field-bearing dict must also be caught."""
+    request = _valid_request()
+    raw = {
+        **request.model_dump(),
+        "trace_steps": [
+            {"step": 1, "note": "ok"},
+            {"step": 2, "api_key": "sk_live_secret"},
+        ],
+    }
+    result = guard_request(request, raw_request=raw)
+    assert result.passed is False
+    assert "forbidden_field_api_key" in result.findings

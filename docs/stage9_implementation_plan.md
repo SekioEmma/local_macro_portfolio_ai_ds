@@ -134,10 +134,45 @@ Status: completed 2026-06-15.
 - Stage 9.3-B real DeepSeek integration remains not implemented and not
   approved.
 
+### Stage 9.3-B Readiness Review / External AI Integration Seam Audit
+
+Status: completed 2026-06-15 (commit on `app-mvp`).
+
+- Documentation state drift fixed in `docs/current_project_state.md`
+  (next step now states Stage 9.3-B readiness review, not Stage 9.3-A
+  closeout).
+- Added `src/app_backend/services/ai_external_request_builder.py` with
+  `build_external_ai_request_from_manifest(...)` as the ONLY safe path
+  from AI Context Manifest to `ExternalAIRequest`. The builder rejects
+  any `question` / `prompt` parameter at the signature level, defaults to
+  `mode="fake"`, and rejects `mode="network"` at the entry point. It
+  runs `guard_request` internally so callers cannot get an unchecked
+  request.
+- Hardened `guard_request` to recursively scan `raw_request` nested
+  keys and nested string values so that attempts like
+  `{"meta": {"holdings_line_items": ...}}` or
+  `{"meta": {"note": "API_KEY=sk_live_..."}}` are caught.
+- Stage 9.2 preview endpoints still do NOT import the builder or the
+  adapter; no new HTTP routes; no httpx/requests/aiohttp imports
+  anywhere in the adapter / builder source.
+- Documented the required Stage 9.3-B integration seam order in
+  `docs/stage9_deepseek_adapter_design.md`:
+  manifest preview → builder → `guard_request` → (future external call)
+  → `guard_response` → Stage 9.2 generated-output validator → human
+  review → no raw persistence by default.
+- Locked by new `tests/test_ai_external_request_builder.py` and
+  additional nested-input tests in
+  `tests/test_ai_external_adapter_guards.py`.
+- Benchmark row count 219/119/63 unchanged. Validator boundaries
+  allowed=9 blocked=8 regression=17 unchanged.
+- Stage 9.3-B readiness audit completion does NOT authorize Stage
+  9.3-B real DeepSeek implementation.
+
 ### Stage 9.3-B Real DeepSeek Adapter
 
 Status: not implemented; requires explicit approval before work begins.
-Stage 9.3-A skeleton (2026-06-15) does NOT authorize Stage 9.3-B.
+Stage 9.3-A skeleton, Stage 9.3-A closeout hardening, and Stage 9.3-B
+readiness audit (all 2026-06-15) do NOT authorize Stage 9.3-B.
 
 - Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
   user approval.

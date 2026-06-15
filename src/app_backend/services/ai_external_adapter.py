@@ -192,12 +192,20 @@ def guard_request(
     if request.mode == "network":
         findings.append("mode_network_blocked_in_stage_9_3_a")
 
-    # Field-name guard against the raw request dict, if supplied.
+    # Field-name guard against the raw request dict, if supplied. Recursive
+    # so nested attempts like {"meta": {"holdings_line_items": ...}} are caught.
     if raw_request is not None:
-        lowered_keys = {str(k).lower() for k in raw_request.keys()}
+        nested_keys = _collect_keys_recursive(raw_request)
         for forbidden in FORBIDDEN_REQUEST_FIELD_NAMES:
-            if forbidden in lowered_keys:
+            if forbidden in nested_keys:
                 findings.append(f"forbidden_field_{forbidden}")
+        # Also scan all string values inside the raw dict for forbidden tokens,
+        # so that nested string fields don't slip past the validated-request
+        # token scan below.
+        raw_serialized = " ".join(_collect_string_values_recursive(raw_request)).lower()
+        for token in FORBIDDEN_REQUEST_TOKENS:
+            if token in raw_serialized:
+                findings.append(f"forbidden_raw_token_{_finding_token(token)}")
 
     # Token guard against any string value in the validated request.
     serialized = " ".join(
@@ -211,6 +219,31 @@ def guard_request(
             findings.append(f"forbidden_token_{token.strip()}")
 
     return ExternalAIGuardResult(passed=not findings, findings=findings)
+
+
+def _collect_keys_recursive(value: Any) -> set[str]:
+    keys: set[str] = set()
+    if isinstance(value, dict):
+        for k, v in value.items():
+            keys.add(str(k).lower())
+            keys.update(_collect_keys_recursive(v))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            keys.update(_collect_keys_recursive(item))
+    return keys
+
+
+def _collect_string_values_recursive(value: Any) -> list[str]:
+    out: list[str] = []
+    if isinstance(value, dict):
+        for v in value.values():
+            out.extend(_collect_string_values_recursive(v))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            out.extend(_collect_string_values_recursive(item))
+    elif isinstance(value, str):
+        out.append(value)
+    return out
 
 
 def guard_response(response: ExternalAIResponse) -> ExternalAIGuardResult:

@@ -175,6 +175,52 @@ Stage 9.3-A 完成**不**等于授权 Stage 9.3-B。Stage 9.3-B 启动必须满�
 * `FakeDeepSeekAdapter` 返回的 boundary phrase 与 Stage 9.2 验证器一致，避免日后
   接入时验证器误判 boundary 缺失。
 
+## Stage 9.3-B Readiness Seam（必须遵循的处理顺序）
+
+完成于 2026-06-15。Stage 9.3-B 真实 DeepSeek 接入时**必须**按下列顺序串联，不得跳步：
+
+1. **AI Context Manifest preview**：用户先看到将被发送的 manifest 摘要、
+   included/excluded 计数与 boundary notices。Stage 9.2 `/api/ai/context-preview`
+   是当前唯一合法 preview surface。
+2. **`build_external_ai_request_from_manifest(manifest, ...)`**
+   （`src/app_backend/services/ai_external_request_builder.py`）：
+   把 sanitize 之后的 manifest 折叠成 `ExternalAIRequest`。该 builder：
+   * 不接受任何 `question` / `prompt` 参数（签名层面被测试锁定）；
+   * 默认 `mode="fake"`；`mode="network"` 在入口直接拒绝；
+   * 内部已经调用 `guard_request`，调用方拿不到未审查的请求对象。
+3. **`guard_request(request, raw_request=...)`**：再次 fail-closed 检查，
+   嵌套字段名 / 嵌套字符串值都会被递归扫描（2026-06-15 加固）。
+4. **外部模型调用**：Stage 9.3-A 不实现；Stage 9.3-B 启动前必须先获得显式批准，
+   且 adapter 必须 disabled-by-default，必须有用户开关。
+5. **`guard_response(response)`**：fail-closed 检查 `external_model_called` / 隐私
+   flag / forbidden 输出语言 / 隐私 token / `validator_result.passed`。
+6. **Stage 9.2 generated-output validator**
+   （`ai_preview_service.validate_ai_preview_payload` 或等价物）：若 Stage 9.3-B 响应
+   通过 preview 端点 surface 给用户，必须再过一遍 Stage 9.2 validator，确保
+   forbidden term / privacy finding / boundary notice / human_review_required 与
+   Stage 9.2 闭环一致。
+7. **Human review**：`human_review_required=True` 必须始终保留。
+8. **不默认持久化**：raw prompt / raw response 必须默认不存盘；任何保存必须由用户
+   显式触发，且必须独立审计。
+
+只要任意一步被绕过，本闭环就视为 broken，Stage 9.3-B 必须 fail-closed 拒绝继续。
+
+## Stage 9.3-B Readiness Audit 结论
+
+Status: completed 2026-06-15（commit on `app-mvp`）。
+
+* Documentation drift fixed：`docs/current_project_state.md` 的 "current next step"
+  从 "Stage 9.3-A closeout" 改为 "Stage 9.3-B readiness review"。
+* Added `ai_external_request_builder.py`：manifest → `ExternalAIRequest` 唯一安全
+  入口，已被测试证明不接受 `question` / `prompt` 参数，并且默认 fake 模式。
+* Hardened `guard_request`：递归扫描 `raw_request` 嵌套 keys 与嵌套 string values，
+  覆盖 list / dict / 任意嵌套深度。
+* No new HTTP route added; no httpx/requests/aiohttp imported; no env / yaml
+  / private file read.
+* Stage 9.2 preview endpoints 仍然不 import builder 或 adapter，被新测试锁定。
+* 全部 row count / manifest count 不变；validator boundaries 不变。
+* Stage 9.3-B 仍然 blocked，等待显式批准。
+
 ## Stage 9.3-A Closeout / Guard Hardening
 
 Status: completed 2026-06-15.
