@@ -496,3 +496,43 @@ Isolation remains unchanged:
   9.3-B-2c must review the `external_model_called` guard policy and wire the
   post-response validator before any real provider response can be shown to a
   user.
+
+## Stage 9.3-B-2c External Response Guard + Validator
+
+Status: completed 2026-06-15.
+
+Stage 9.3-B-2c enables guarded external-response semantics only. It does not
+add any API endpoint, frontend chat, persistence, Tavily/search, or automatic
+external call.
+
+Guard policy:
+
+* `guard_response(response)` keeps its default Stage 9.3-A behavior and still
+  blocks `external_model_called=True`.
+* `guard_external_model_response(response)` is the explicit dedicated guard
+  for real external responses.
+* The explicit guard allows an external response only when all conditions hold:
+  `external_model_called=True`, `fake_response=False`, `mode="network"`,
+  `privacy_summary.external_model_called=True`,
+  `uses_ai_context_manifest_only=True`, no holdings/account/position/
+  transaction exposure, no raw provider payloads, no raw prompts,
+  `search_called=False`, `saved_by_default=False`,
+  `not_saved_by_default=True`, `human_review_required=True`, and
+  `validator_result.passed=True`.
+* Forbidden output terms and privacy tokens are still blocked.
+
+Post-response validator:
+
+* `validate_external_ai_response_content(content)` is the minimal Stage
+  9.3-B-2c validator wrapper for external provider text. It scans for the
+  same forbidden generated-output terms and privacy tokens that the response
+  guard enforces.
+* `DeepSeekNetworkAdapter.generate_external_response(...)` calls this
+  validator before constructing the return path and then calls
+  `guard_external_model_response(...)`.
+* Validator failure prevents response return.
+
+Isolation remains unchanged: Stage 9.2 endpoint files do not import the
+adapter, real transport, runtime policy, provider builder, or new external
+guard path. A later Stage 9.3-B-2d or security closeout must review any
+manual one-shot invocation workflow before real responses are surfaced.

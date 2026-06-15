@@ -22,6 +22,7 @@ from app_backend.schemas.ai_external import (
     ExternalAIRequest,
     ExternalAIResponse,
 )
+from app_backend.schemas.ai_memo import AIMemoValidatorResult
 
 
 # Tokens that must never appear in any request field. These are conservative
@@ -246,6 +247,30 @@ def _collect_string_values_recursive(value: Any) -> list[str]:
     return out
 
 
+def validate_external_ai_response_content(content: str) -> AIMemoValidatorResult:
+    """Validate generated external AI text before it can be surfaced.
+
+    This is the Stage 9.3-B-2c minimal post-response validator wrapper. It
+    intentionally mirrors the fail-closed generated-output and privacy-token
+    scans used by the response guard without changing Stage 9.2 endpoint
+    behavior.
+    """
+    lowered = content.lower()
+    blocked_terms = sorted(
+        term for term in FORBIDDEN_RESPONSE_OUTPUT_TERMS if term in lowered
+    )
+    privacy_findings = sorted(
+        _finding_token(token)
+        for token in FORBIDDEN_RESPONSE_PRIVACY_TOKENS
+        if token in lowered
+    )
+    return AIMemoValidatorResult(
+        passed=not blocked_terms and not privacy_findings,
+        blocked_terms=blocked_terms,
+        privacy_findings=privacy_findings,
+    )
+
+
 def guard_response(response: ExternalAIResponse) -> ExternalAIGuardResult:
     findings: list[str] = []
 
@@ -287,6 +312,59 @@ def guard_response(response: ExternalAIResponse) -> ExternalAIGuardResult:
     return ExternalAIGuardResult(passed=not findings, findings=findings)
 
 
+def guard_external_model_response(
+    response: ExternalAIResponse,
+) -> ExternalAIGuardResult:
+    """Explicit guard for the controlled real-external-response path.
+
+    `guard_response(response)` remains the default fail-closed guard and still
+    blocks `external_model_called=True`. This dedicated guard is the only Stage
+    9.3-B-2c path that allows a response to truthfully indicate an external
+    model call, and only when every privacy, persistence, human-review, and
+    validator condition is satisfied.
+    """
+    findings: list[str] = []
+
+    if response.external_model_called is not True:
+        findings.append("external_model_called_must_be_true")
+    if response.fake_response:
+        findings.append("external_response_must_not_be_fake")
+    if response.mode != "network":
+        findings.append("external_response_mode_must_be_network")
+    if response.privacy_summary.external_model_called is not True:
+        findings.append("privacy_external_model_called_must_be_true")
+    if response.privacy_summary.search_called:
+        findings.append("privacy_search_called_blocked")
+    if response.privacy_summary.saved_by_default:
+        findings.append("privacy_saved_by_default_blocked")
+    if not response.privacy_summary.uses_ai_context_manifest_only:
+        findings.append("must_use_ai_context_manifest_only")
+    if response.privacy_summary.uses_holdings_line_items:
+        findings.append("uses_holdings_line_items_blocked")
+    if response.privacy_summary.uses_raw_provider_payloads:
+        findings.append("uses_raw_provider_payloads_blocked")
+    if response.privacy_summary.uses_raw_prompts:
+        findings.append("uses_raw_prompts_blocked")
+    if not response.not_saved_by_default:
+        findings.append("not_saved_by_default_must_be_true")
+    if not response.human_review_required:
+        findings.append("human_review_required_must_be_true")
+    if response.validator_result.passed is not True:
+        findings.append("validator_result_must_pass")
+
+    content_validator = validate_external_ai_response_content(response.content)
+    findings.extend(
+        f"forbidden_response_term_{_finding_token(term)}"
+        for term in content_validator.blocked_terms
+    )
+    findings.extend(
+        f"forbidden_response_privacy_token_{token}"
+        for token in content_validator.privacy_findings
+    )
+
+    return ExternalAIGuardResult(passed=not findings, findings=sorted(set(findings)))
+
+
 def _finding_token(value: str) -> str:
     return (
         value.strip()
@@ -307,6 +385,8 @@ __all__ = [
     "FORBIDDEN_RESPONSE_OUTPUT_TERMS",
     "FORBIDDEN_RESPONSE_PRIVACY_TOKENS",
     "guard_config",
+    "guard_external_model_response",
     "guard_request",
     "guard_response",
+    "validate_external_ai_response_content",
 ]

@@ -29,8 +29,10 @@ from app_backend.schemas.ai_memo import AIMemoValidatorResult
 from app_backend.services.ai_external_adapter import (
     BlockedAdapterError,
     ExternalAIAdapter,
+    guard_external_model_response,
     guard_request,
     guard_response,
+    validate_external_ai_response_content,
 )
 from app_backend.services.ai_external_runtime_policy import (
     assert_external_ai_runtime_policy_allowed,
@@ -303,6 +305,78 @@ class DeepSeekNetworkAdapter(ExternalAIAdapter):
         # 7. guard_response blocks forbidden output terms, privacy tokens,
         #    validator_result failure, and Stage 9.3-A invariants.
         response_guard = guard_response(response)
+        if not response_guard.passed:
+            raise BlockedAdapterError(response_guard.findings)
+
+        return response
+
+    def generate_external_response(
+        self,
+        request: ExternalAIRequest,
+    ) -> ExternalAIResponse:
+        """Generate a guarded real-external response from an injected transport.
+
+        This Stage 9.3-B-2c path is explicit and internal. It is not wired to
+        any HTTP endpoint and does not persist raw prompt or raw response data.
+        """
+        request_guard = guard_request(request)
+        if not request_guard.passed:
+            raise BlockedAdapterError(request_guard.findings)
+
+        if self.config.mode == "disabled":
+            raise BlockedAdapterError(["adapter_disabled_in_stage_9_3_a"])
+        if self.config.mode == "network":
+            raise BlockedAdapterError(
+                ["network_mode_not_implemented_in_stage_9_3_b_2c"]
+            )
+        if self.config.mode != "fake":
+            raise BlockedAdapterError([f"unsupported_mode_{self.config.mode}"])
+
+        if self._runtime_policy is None:
+            raise BlockedAdapterError(["missing_runtime_policy"])
+        assert_external_ai_runtime_policy_allowed(self._runtime_policy)
+
+        payload = build_deepseek_provider_payload(request)
+        transport_request = build_transport_request_from_provider_payload(payload)
+
+        if self._transport is None:
+            raise BlockedAdapterError(["missing_transport"])
+        try:
+            transport_response = self._transport.send(transport_request)
+        except DeepSeekTransportError as exc:
+            raise BlockedAdapterError([f"transport_error_{exc.kind}"]) from exc
+        except BlockedAdapterError:
+            raise
+        except Exception:
+            raise BlockedAdapterError(["transport_unknown_error"])
+
+        if not isinstance(transport_response, DeepSeekTransportResponse):
+            raise BlockedAdapterError(["transport_malformed_response"])
+
+        validator_result = validate_external_ai_response_content(
+            transport_response.content_text
+        )
+        response = ExternalAIResponse(
+            provider=self.config.provider,
+            mode="network",
+            external_model_called=True,
+            fake_response=False,
+            content=transport_response.content_text,
+            validator_result=validator_result,
+            privacy_summary=ExternalAIPrivacySummary(
+                uses_ai_context_manifest_only=True,
+                uses_holdings_line_items=False,
+                uses_raw_provider_payloads=False,
+                uses_raw_prompts=False,
+                external_model_called=True,
+                search_called=False,
+                saved_by_default=False,
+            ),
+            not_saved_by_default=True,
+            human_review_required=True,
+        )
+
+        response_guard = guard_external_model_response(response)
         if not response_guard.passed:
             raise BlockedAdapterError(response_guard.findings)
 

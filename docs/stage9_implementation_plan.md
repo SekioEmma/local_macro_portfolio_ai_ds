@@ -297,12 +297,37 @@ Status: completed 2026-06-15 (commit on `app-mvp`).
 
 ### Stage 9.3-B-2c External Model Called Guard Policy + Validator Review
 
+Status: completed 2026-06-15 (commit on `app-mvp`).
+
+- Preserved `guard_response(response)` default behavior: it still blocks
+  `external_model_called=True`.
+- Added `guard_external_model_response(response)` as the only explicit guard
+  that allows a controlled external-response state.
+- External responses are allowed only when `external_model_called=True`,
+  `fake_response=False`, `mode="network"`,
+  `privacy_summary.external_model_called=True`,
+  `uses_ai_context_manifest_only=True`, holdings/account/position/
+  transaction/raw-provider-payload/raw-prompt/search/persistence flags are
+  all blocked, `not_saved_by_default=True`, `human_review_required=True`,
+  `validator_result.passed=True`, and response content has no forbidden
+  output terms or privacy tokens.
+- Added `validate_external_ai_response_content(content)` as the minimal
+  post-response validator wrapper for external provider text.
+- Added `DeepSeekNetworkAdapter.generate_external_response(...)` as an
+  explicit internal path that runs request guard, runtime policy, provider
+  payload builder, transport, post-response validator, and the external guard
+  before returning.
+- Stage 9.2 endpoint files still do not import the adapter, real transport,
+  runtime policy, request builder, provider builder, or external guard path.
+- No endpoint, frontend UI, Chat productization, Tavily/search, raw
+  prompt/response persistence, or automatic external call was added.
+
+### Stage 9.3-B-2d Internal One-shot Manual Invocation Review
+
 Status: not implemented; requires explicit approval before work begins.
-Stage 9.3-A skeleton, Stage 9.3-A closeout hardening, Stage 9.3-B
-readiness audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
-provider payload contract, Stage 9.3-B-2a mocked transport adapter, and
-Stage 9.3-B-2b real transport code (all 2026-06-15) do NOT authorize
-surfacing real external responses.
+Stage 9.3-B-2c enables guarded response semantics only. It does NOT add a
+manual invocation workflow, API endpoint, frontend chat, persistence, or
+automatic provider call.
 
 - Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
   user approval.

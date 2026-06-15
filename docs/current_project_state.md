@@ -30,15 +30,15 @@ completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
 surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
 disabled-by-default, fake-client-only internal adapter contract.
 
-The current next step is Stage 9.3-B-2c external_model_called guard policy +
-post-response validator integration review, not AI Chat productization. Stage
+The current next step is Stage 9.3-B-2d internal one-shot manual invocation
+review or Stage 9.3-B security closeout, not AI Chat productization. Stage
 9.3-A skeleton, Stage 9.3-A closeout / adapter guard hardening, Stage 9.3-B
 readiness seam audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
 minimal real adapter design + config contract, Stage 9.3-B-2a mocked
-transport adapter, and Stage 9.3-B-2b real transport code are all complete.
-None of these add HTTP routes, frontend chat, prompt/response persistence, or
-authorization to surface real external responses. Stage 9.3-B-2b adds real
-transport code only.
+transport adapter, Stage 9.3-B-2b real transport code, and Stage 9.3-B-2c
+external response guard + validator integration are all complete. None of
+these add HTTP routes, frontend chat, prompt/response persistence, Tavily/
+search, or automatic external calls.
 
 ## Current Baseline
 
@@ -178,8 +178,8 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   payload, mocked transport, `ExternalAIResponse`, and `guard_response`.
   Transport errors, malformed responses, forbidden output terms, and privacy
   tokens all fail closed. No real HTTP, API key, env read, `.env`,
-  `external_llm.yaml`, or endpoint was added. Stage 9.3-B-2b real
-  key/config/network transport remains not implemented and not approved.
+  `external_llm.yaml`, or endpoint was added in 2a; real key/config/network
+  transport was deferred to Stage 9.3-B-2b.
 - Stage 9.3-B-2b real DeepSeek transport code
   (`deepseek_real_transport.py` with `DeepSeekRealTransport` and
   `load_deepseek_api_key_from_env`). The key read is limited to
@@ -190,9 +190,21 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   refusal paths all raise categorical sanitized `DeepSeekTransportError`
   values. Tests use mocked opener callables only; no live provider call is
   made. No endpoint, frontend UI, Chat productization, Tavily/search, raw
-  prompt/response persistence, or automatic call was added. Real external
-  responses still cannot be surfaced until Stage 9.3-B-2c reviews
-  `external_model_called` guard semantics and post-response validation.
+  prompt/response persistence, or automatic call was added. 2b did not
+  authorize surfacing real external responses; that guard/validator semantic
+  work was deferred to Stage 9.3-B-2c.
+- Stage 9.3-B-2c external response guard + validator integration
+  (`guard_response` default behavior preserved; new
+  `guard_external_model_response`; new `validate_external_ai_response_content`;
+  explicit `DeepSeekNetworkAdapter.generate_external_response` path).
+  External responses are allowed only by the explicit guard when
+  `external_model_called=True`, `fake_response=False`, `mode="network"`,
+  privacy flags remain manifest-only/no-search/no-persistence/no-raw-payload/
+  no-raw-prompt/no-holdings, `not_saved_by_default=True`,
+  `human_review_required=True`, `validator_result.passed=True`, and content
+  contains no forbidden output terms or privacy tokens. No endpoint, frontend
+  UI, Chat productization, Tavily/search, persistence, or automatic external
+  call was added.
 
 ## Hard Boundaries
 
@@ -231,17 +243,17 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-The current next step is Stage 9.3-B-2c external_model_called guard policy +
-post-response validator integration review, not Stage 9.3-B real DeepSeek
-integration. Stage 9.3-A skeleton, its closeout / adapter guard hardening,
+The current next step is Stage 9.3-B-2d internal one-shot manual invocation
+review or Stage 9.3-B security closeout, not Stage 9.3-B real DeepSeek
+productization. Stage 9.3-A skeleton, its closeout / adapter guard hardening,
 Stage 9.3-B readiness seam audit, Stage 9.3-B-0 runtime approval gate, Stage
 9.3-B-1 provider payload contract, Stage 9.3-B-2a mocked transport adapter,
-and Stage 9.3-B-2b real transport code are complete.
+Stage 9.3-B-2b real transport code, and Stage 9.3-B-2c external response
+guard + validator integration are complete.
 
-Stage 9.3-B-2b adds real transport code only. It does not add an API endpoint,
-does not add frontend chat, does not persist prompts/responses, does not call
-Tavily/search, and does not authorize surfacing real external responses until
-Stage 9.3-B-2c guard/validator review is complete.
+Stage 9.3-B-2c only enables guarded external response semantics and validator
+integration. It does not add API endpoints, frontend chat, persistence,
+Tavily/search, or automatic external calls.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -255,5 +267,6 @@ local preview endpoints, Stage 9.3-A adapter skeleton hardening, Stage
 9.3-B-0 runtime approval gate / external AI policy contract, and Stage
 9.3-B-1 minimal real adapter design + config contract, and Stage 9.3-B-2a
 mocked transport adapter, and Stage 9.3-B-2b real transport code are
-complete.
+complete, and Stage 9.3-B-2c external response guard + validator integration
+is complete.
 Real AI Chat / Memo / Report integrations remain not implemented.
