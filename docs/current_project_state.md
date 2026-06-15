@@ -124,6 +124,11 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 - Stage 9.2 Mock Chat / Mock Memo local preview endpoints.
 - M7/M8-A dashboard model pipeline extraction (behavior-preserving; row count
   unchanged at 219/119/63; 586 tests pass).
+- Stage 9.2 closeout / security review (locked by
+  `tests/test_stage9_2_security_closeout.py`; documented in
+  `docs/stage9_2_security_review.md`). Stage 9.3 DeepSeek remains
+  not implemented and requires explicit approval before work begins; it must
+  be disabled by default and behind a user-controlled switch.
 
 ## Hard Boundaries
 

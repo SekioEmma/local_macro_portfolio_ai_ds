@@ -50,18 +50,47 @@ Status: completed.
 
 ## Stage 9.2 Closeout / Security Review
 
-Status: next candidate.
+Status: completed 2026-06-15 (commit on app-mvp after M7/M8-A extraction).
 
-- Review Stage 9.2 endpoint responses for privacy and boundary behavior.
-- Confirm no external adapter, search adapter, persistent chat, automatic
-  report saving, or holdings exposure was introduced.
-- Re-run the full validation ladder before any Stage 9.3 adapter work.
-- Stage 9.3 DeepSeek is not automatic and requires explicit approval.
+- Endpoint surface audit: required preview routes present; `/api/chat`,
+  `/api/search`, DeepSeek/Tavily, save/favorite/report-export endpoints absent.
+- Context source audit: preview services consume only AI Context Manifest +
+  Stage 9.1 deterministic renderer; do not import dashboard_model_pipeline
+  directly, do not open private files, do not read SQLite/holdings/.env.
+- M7/M8-A regression check: row counts, public output keys, Stage 8 overlay
+  gates, and AI Context Manifest counts all unchanged after the pipeline
+  extraction.
+- Request handling audit: chat preview does not echo `request.question`,
+  handles empty/whitespace/very-long question safely, rejects unsupported
+  style/context_mode (422), and is byte-deterministic across repeated calls.
+- Context-mode audit: facts_only / model_outputs_only / full_sanitized
+  boundaries hold; excluded rows remain constraints only; Stage 8 overlay
+  stays downstream-only with compact_summary_only policy.
+- Privacy scan: no holdings line items, account values, raw provider
+  payloads, raw prompts, API keys, .env, data/private, or local private
+  paths appear in any preview response body.
+- Forbidden output scan: no buy/sell/add/reduce/clear position, rebalance,
+  target allocation/weight, expected/predicted/future return, market
+  direction/crash/recession probability, guaranteed/will rise/will fall
+  terms in any preview body.
+- Validator gates: flag-level blocks for external_model_called=true,
+  search_called=true, saved_by_default=true, missing not_sent_to_external_model,
+  missing human_review_required, missing interpretation_boundary, and missing
+  boundary notice are all locked by regression tests.
+- Documented in `docs/stage9_2_security_review.md`; locked by
+  `tests/test_stage9_2_security_closeout.py` (34 new tests).
+- Stage 9.3 DeepSeek is NOT approved by this closeout and requires a
+  separate explicit user approval task before work may begin.
 
 ## Stage 9.3 DeepSeek Adapter Behind Explicit User-Controlled Switch
 
+Status: not implemented; requires explicit approval before work begins.
+Stage 9.2 closeout (2026-06-15) does NOT authorize Stage 9.3.
+
 - Start only after Stage 9.2 closeout / security review and explicit approval.
+- Stage 9.2 closeout completed but does not auto-approve Stage 9.3.
 - Keep adapter disabled by default.
+- Must not start automatically on app launch or page load.
 - Require an explicit UI or settings switch.
 - Show context preview before send.
 - Show cost and model metadata.
