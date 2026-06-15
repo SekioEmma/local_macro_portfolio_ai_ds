@@ -10,6 +10,9 @@ and not permission to call an external model.
 Stage 9.0 is the readiness design package. It defines the context contract,
 privacy rules, validator expectations, and staged implementation sequence
 needed before Stage 9.1, Stage 9.2, Stage 9.3, or Stage 9.4 can proceed.
+Stage 9.2 later adds local/mock preview API surfaces only; those surfaces do
+not change the external-model, search, persistence, or holdings boundaries
+defined here.
 
 ## Non-Goals
 
@@ -71,7 +74,9 @@ not be converted into low or high exposure.
 ## Model Destination Policy
 
 Stage 9.0, Stage 9.1, and Stage 9.2 are local/mock phases. They must not send
-content to an external model and must not create external-model output.
+content to an external model and must not create external-model output. Stage
+9.2 mock chat, memo, and report previews must be labeled local preview only and
+must set external-model/search/default-save flags to false.
 
 Any future Stage 9.3 DeepSeek adapter must be disabled by default, must require
 an explicit user-controlled switch, must show a context preview before send,
@@ -161,3 +166,12 @@ Safer wording includes:
    with cited results required.
 6. Stage 9.5 Tauri / Desktop Shell: only after backend, frontend, and AI
    surfaces stabilize.
+
+## Stage 9.2 Completion Boundary
+
+Stage 9.2 may expose local preview endpoints for context, mock chat, mock memo,
+and mock report review. It must not call DeepSeek, Tavily, live search, live
+providers, or web scraping. It must not add persistent chat, automatic report
+saving, raw prompt persistence, frontend chat UI, Tauri, or new financial model
+behavior. Before any real DeepSeek work, run a Stage 9.2 closeout / security
+review or get explicit approval.

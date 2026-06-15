@@ -32,22 +32,35 @@ Status: completed.
 
 ## Stage 9.2 Mock Chat / Mock Memo
 
-Status: next candidate.
+Status: completed.
 
 - Add mock/local preview endpoints only.
 - Use a deterministic renderer.
 - Show manifest-derived context preview.
 - Run validator before output is accepted.
+- Expose local preview API endpoints for context, mock chat, mock memo, and
+  mock report review.
 - No DeepSeek.
 - No Tavily.
 - No network.
 - No raw prompt persistence.
 - No holdings exposure.
 - No automatic report saving.
+- No frontend chat UI.
+
+## Stage 9.2 Closeout / Security Review
+
+Status: next candidate.
+
+- Review Stage 9.2 endpoint responses for privacy and boundary behavior.
+- Confirm no external adapter, search adapter, persistent chat, automatic
+  report saving, or holdings exposure was introduced.
+- Re-run the full validation ladder before any Stage 9.3 adapter work.
+- Stage 9.3 DeepSeek is not automatic and requires explicit approval.
 
 ## Stage 9.3 DeepSeek Adapter Behind Explicit User-Controlled Switch
 
-- Start only after Stage 9.1 and Stage 9.2 pass.
+- Start only after Stage 9.2 closeout / security review and explicit approval.
 - Keep adapter disabled by default.
 - Require an explicit UI or settings switch.
 - Show context preview before send.

@@ -129,6 +129,8 @@ PRIVACY_FORBIDDEN_TERMS = (
     ".env",
     "data/private",
     "current_holdings.csv",
+    "full local private path",
+    "g:\\local_macro_portfolio_ai",
     "transaction history",
     "credentials",
     "sk-",

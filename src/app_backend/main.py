@@ -3,6 +3,14 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from app_backend.schemas.ai_preview import (
+    AIContextPreviewResponse,
+    AIPreviewChatRequest,
+    AIPreviewChatResponse,
+    AIPreviewMemoRequest,
+    AIPreviewMemoResponse,
+    AIPreviewReportRequest,
+)
 from app_backend.schemas.responses import (
     AIContextManifestResponse,
     AppSettingsResponse,
@@ -19,6 +27,7 @@ from app_backend.schemas.responses import (
 )
 from app_backend.services import (
     ai_context_service,
+    ai_preview_service,
     dashboard_service,
     provider_service,
     storage_service,
@@ -71,9 +80,24 @@ def get_dashboard_evidence_table(
     )
 
 
-@app.get("/api/ai/context-preview", response_model=AIContextManifestResponse)
-def get_ai_context_preview() -> AIContextManifestResponse:
-    return ai_context_service.build_ai_context_manifest()
+@app.get("/api/ai/context-preview", response_model=AIContextPreviewResponse)
+def get_ai_context_preview() -> AIContextPreviewResponse:
+    return ai_preview_service.build_context_preview()
+
+
+@app.post("/api/ai/preview-chat", response_model=AIPreviewChatResponse)
+def post_ai_preview_chat(request: AIPreviewChatRequest) -> AIPreviewChatResponse:
+    return ai_preview_service.render_chat_preview(request)
+
+
+@app.post("/api/ai/preview-memo", response_model=AIPreviewMemoResponse)
+def post_ai_preview_memo(request: AIPreviewMemoRequest) -> AIPreviewMemoResponse:
+    return ai_preview_service.render_memo_preview(request)
+
+
+@app.post("/api/ai/preview-report", response_model=AIPreviewMemoResponse)
+def post_ai_preview_report(request: AIPreviewReportRequest) -> AIPreviewMemoResponse:
+    return ai_preview_service.render_report_preview(request)
 
 
 @app.get("/api/context/manifest", response_model=AIContextManifestResponse)

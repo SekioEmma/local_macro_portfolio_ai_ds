@@ -26,14 +26,18 @@ It is not:
 
 Stage 8.5 Foundation Stabilization Sprint is completed. Stage 8 Portfolio
 Exposure Overlay v0 is complete. Stage 9.1 Memo Template / Context Contract is
-completed. Stage 9 AI Chat / Memo / Report is not implemented.
+completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
+surfaces only.
 
-The current next step is Stage 9.2 Mock Chat / Mock Memo, not Stage 9.3
+The current next step is Stage 9.2 closeout / security review, not Stage 9.3
 DeepSeek. Stage 9.1 added deterministic local memo preview rendering over AI
-Context Manifest only. It does not call DeepSeek or Tavily, does not add
-persistent chat, does not add frontend chat UI, and does not expose holdings
-line items. Real DeepSeek adapter, Tavily search, Tauri, persistent chat, agent
-flows, and automatic report saving remain not implemented.
+Context Manifest only. Stage 9.2 added local/mock preview endpoints for context,
+mock chat, mock memo, and mock report review over the AI Context Manifest and
+Stage 9.1 renderer. It does not call DeepSeek or Tavily, does not add persistent
+chat, does not add frontend chat UI, does not automatically save reports, and
+does not expose holdings line items. Real DeepSeek adapter, Tavily search,
+Tauri, persistent chat, agent flows, and automatic report saving remain not
+implemented.
 
 ## Current Baseline
 
@@ -117,6 +121,7 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 - Stage 8 Portfolio Exposure Overlay v0.
 - Stage 9.0 AI Readiness Design.
 - Stage 9.1 Memo Template / Context Contract.
+- Stage 9.2 Mock Chat / Mock Memo local preview endpoints.
 
 ## Hard Boundaries
 
@@ -143,6 +148,11 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 - Stage 9.1 Memo Template / Context Contract is deterministic local rendering
   only. It does not call DeepSeek or Tavily, does not add persistent chat or
   frontend chat UI, and does not expose holdings line items.
+- Stage 9.2 Mock Chat / Mock Memo is deterministic local preview API work only.
+  It adds context, mock chat, mock memo, and mock report preview endpoints over
+  AI Context Manifest and the Stage 9.1 renderer. It does not call DeepSeek or
+  Tavily, does not add persistent chat, does not automatically save reports, does
+  not add frontend chat UI, and does not expose holdings line items.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -150,7 +160,7 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-The current next step is Stage 9.2 Mock Chat / Mock Memo, not Stage 9.3
+The current next step is Stage 9.2 closeout / security review, not Stage 9.3
 DeepSeek.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
@@ -158,6 +168,7 @@ privacy-preserving explanatory layer. It maps sanitized compact portfolio
 context to macro risk channels and existing D10-D19 evidence/model outputs. It
 does not read or expose holdings line items and does not provide allocation
 advice, action directives, return estimates, or probability outputs. Stage 8.5
-Foundation Stabilization Sprint is complete. Stage 9.0 AI Readiness Design and
-Stage 9.1 Memo Template / Context Contract are complete. Stage 9 AI Chat /
-Memo / Report is not implemented.
+Foundation Stabilization Sprint is complete. Stage 9.0 AI Readiness Design,
+Stage 9.1 Memo Template / Context Contract, and Stage 9.2 Mock Chat / Mock Memo
+local preview endpoints are complete. Real AI Chat / Memo / Report integrations
+remain not implemented.
