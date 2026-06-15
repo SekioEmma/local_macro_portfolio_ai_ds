@@ -13,6 +13,8 @@ Status: current task.
 
 ## Stage 9.1 Memo Template / Context Contract
 
+Status: completed.
+
 - Build deterministic memo templates only.
 - Render locally.
 - Consume AI Context Manifest only.
@@ -22,8 +24,15 @@ Status: current task.
 - No persistent chat.
 - No Tavily.
 - No holdings exposure.
+- No frontend chat UI.
+- No persistent chat.
+- No automatic report saving.
+- Next step after Stage 9.1 is Stage 9.2 Mock Chat / Mock Memo, not Stage 9.3
+  DeepSeek.
 
 ## Stage 9.2 Mock Chat / Mock Memo
+
+Status: next candidate.
 
 - Add mock/local preview endpoints only.
 - Use a deterministic renderer.

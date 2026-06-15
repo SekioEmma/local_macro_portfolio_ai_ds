@@ -11,6 +11,12 @@ All output types must preserve privacy policies, search policies, persistence
 policies, and interpretation boundaries. They must not convert excluded facts or
 model outputs into support.
 
+Stage 9.1 Memo Template / Context Contract is completed as deterministic local
+rendering only. It does not call DeepSeek, does not call Tavily, does not add
+persistent chat, does not add frontend chat UI, does not expose holdings line
+items, and does not save memo/report output automatically. The next step is
+Stage 9.2 Mock Chat / Mock Memo, not Stage 9.3 DeepSeek.
+
 ## Shared Forbidden Behavior
 
 Memo and report surfaces must not include:

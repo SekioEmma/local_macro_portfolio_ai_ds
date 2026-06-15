@@ -25,14 +25,15 @@ It is not:
 ## Current Phase
 
 Stage 8.5 Foundation Stabilization Sprint is completed. Stage 8 Portfolio
-Exposure Overlay v0 is complete. Stage 9 AI Chat / Memo / Report is not
-implemented.
+Exposure Overlay v0 is complete. Stage 9.1 Memo Template / Context Contract is
+completed. Stage 9 AI Chat / Memo / Report is not implemented.
 
-The current next step is Stage 9 preparation, not Stage 9 implementation. Stage
-9.0 AI Readiness Design is the first preparation task and must begin with AI
-Readiness / Memo Context Design. Real DeepSeek adapter, Tavily search, Tauri,
-persistent chat, agent flows, and automatic report saving remain not
-implemented.
+The current next step is Stage 9.2 Mock Chat / Mock Memo, not Stage 9.3
+DeepSeek. Stage 9.1 added deterministic local memo preview rendering over AI
+Context Manifest only. It does not call DeepSeek or Tavily, does not add
+persistent chat, does not add frontend chat UI, and does not expose holdings
+line items. Real DeepSeek adapter, Tavily search, Tauri, persistent chat, agent
+flows, and automatic report saving remain not implemented.
 
 ## Current Baseline
 
@@ -114,6 +115,8 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 - Stage 6 D18 Valuation / Equity Structure v0.
 - Stage 7 D19 Expanded Historical Validation v1.
 - Stage 8 Portfolio Exposure Overlay v0.
+- Stage 9.0 AI Readiness Design.
+- Stage 9.1 Memo Template / Context Contract.
 
 ## Hard Boundaries
 
@@ -137,6 +140,9 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   probability outputs.
 - Stage 8.5 Foundation Stabilization Sprint is complete. It did not implement
   Stage 9, DeepSeek, Tavily, Tauri, AI Chat, or new financial models.
+- Stage 9.1 Memo Template / Context Contract is deterministic local rendering
+  only. It does not call DeepSeek or Tavily, does not add persistent chat or
+  frontend chat UI, and does not expose holdings line items.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -144,13 +150,14 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-The current next step is Stage 9 preparation, not Stage 9 implementation.
+The current next step is Stage 9.2 Mock Chat / Mock Memo, not Stage 9.3
+DeepSeek.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
 context to macro risk channels and existing D10-D19 evidence/model outputs. It
 does not read or expose holdings line items and does not provide allocation
 advice, action directives, return estimates, or probability outputs. Stage 8.5
-Foundation Stabilization Sprint is complete. Stage 9 is not implemented.
-Stage 9 preparation begins with Stage 9.0 AI Readiness Design and Memo Context
-Design.
+Foundation Stabilization Sprint is complete. Stage 9.0 AI Readiness Design and
+Stage 9.1 Memo Template / Context Contract are complete. Stage 9 AI Chat /
+Memo / Report is not implemented.
