@@ -1,25 +1,25 @@
-"""Stage 9.3-B-2a DeepSeek transport contract.
+"""Stage 9.3-B-2 DeepSeek transport contract.
 
 This module defines the abstract transport interface and a deterministic
-mock implementation. Stage 9.3-B-2a does NOT implement a real network
-transport. A real transport is the Stage 9.3-B-2b task and must subclass
-the Protocol here without expanding its surface beyond
-``DeepSeekTransportRequest`` / ``DeepSeekTransportResponse``.
+mock implementation. Real transport code lives in
+``deepseek_real_transport.py`` and must implement the Protocol here without
+expanding its surface beyond ``DeepSeekTransportRequest`` /
+``DeepSeekTransportResponse``.
 
 Boundary policy:
 
-- The transport contract module does NOT import network client libraries.
-  There is no real HTTP client anywhere here.
-- It does NOT read environment variables, files, sockets, or the
-  network. The adapter is allowed to fail closed by deciding it has no
-  injected transport; without one, no `send` is ever attempted.
-- The transport request and response carry no API key, base URL,
-  endpoint path, or model name. Stage 9.3-B-2b is allowed to apply key /
-  URL / model internally but MUST NOT expose them through these schemas.
-- A `DeepSeekTransportError` is the ONLY exception subclass a transport
-  is allowed to raise. It carries a categorical ``kind`` (timeout /
-  http_error / malformed) plus an optional sanitized detail string —
-  never a raw provider payload, raw prompt, or sensitive header.
+- This contract module does NOT import network client libraries. There is no
+  real HTTP client anywhere here.
+- It does NOT read environment variables, files, sockets, or the network.
+  The adapter is allowed to fail closed by deciding it has no injected
+  transport; without one, no `send` is ever attempted.
+- The transport request and response carry no API key, base URL, endpoint
+  path, or model name. Stage 9.3-B-2b applies key / URL / model internally
+  but MUST NOT expose them through these schemas.
+- A `DeepSeekTransportError` is the ONLY exception subclass a transport is
+  allowed to raise. It carries a categorical ``kind`` plus an optional
+  sanitized detail string. Never include a raw provider payload, raw prompt,
+  or sensitive header.
 """
 from __future__ import annotations
 
@@ -32,7 +32,13 @@ from app_backend.schemas.ai_external import (
 )
 
 
-TransportErrorKind = Literal["timeout", "http_error", "malformed"]
+TransportErrorKind = Literal[
+    "timeout",
+    "http_error",
+    "malformed",
+    "missing_key",
+    "provider_refusal",
+]
 
 
 class DeepSeekTransportError(RuntimeError):
@@ -51,7 +57,7 @@ class DeepSeekTransportError(RuntimeError):
 
 @runtime_checkable
 class DeepSeekTransport(Protocol):
-    """Stage 9.3-B-2a transport Protocol.
+    """Stage 9.3-B transport Protocol.
 
     Implementations MUST take a `DeepSeekTransportRequest` and return a
     `DeepSeekTransportResponse`. Failure modes MUST be expressed via

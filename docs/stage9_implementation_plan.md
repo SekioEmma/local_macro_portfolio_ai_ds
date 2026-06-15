@@ -269,11 +269,40 @@ Status: completed 2026-06-15 (commit on `app-mvp`).
 
 ### Stage 9.3-B-2b Real Key/Config/Network Transport Decision Review
 
+Status: completed 2026-06-15 (commit on `app-mvp`).
+
+- Added `src/app_backend/services/deepseek_real_transport.py` with
+  `DeepSeekRealTransport`, a real HTTP transport implementation that conforms
+  to the existing `DeepSeekTransport` protocol.
+- Added `load_deepseek_api_key_from_env() -> str` as the only process-env
+  key-read function. It reads `DEEPSEEK_API_KEY` only, reads no local config
+  files, and fails closed with `DeepSeekTransportError(kind="missing_key")`
+  when missing or blank.
+- Real provider URL and model name are internal to the transport. They are
+  not added to `DeepSeekTransportRequest`, `DeepSeekTransportResponse`, or
+  any public schema.
+- Timeout-like failures, non-2xx / connection failures, malformed JSON,
+  missing content, and provider refusal all map to categorical
+  `DeepSeekTransportError` values with sanitized details.
+- Tests use mocked opener callables and monkeypatches only. No live DeepSeek
+  request is made by tests.
+- No Stage 9.2 endpoint imports the real transport, adapter, runtime policy,
+  request builder, or provider payload builder.
+- No new HTTP endpoint, no frontend UI, no Chat productization, no
+  Tavily/search, no raw prompt/response persistence, and no automatic
+  app-start/page-load/background call.
+- `guard_response` remains unchanged and still blocks
+  `external_model_called=True`; real external responses are not surfaced in
+  this stage.
+
+### Stage 9.3-B-2c External Model Called Guard Policy + Validator Review
+
 Status: not implemented; requires explicit approval before work begins.
 Stage 9.3-A skeleton, Stage 9.3-A closeout hardening, Stage 9.3-B
 readiness audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
-provider payload contract, and Stage 9.3-B-2a mocked transport adapter
-(all 2026-06-15) do NOT authorize real DeepSeek network integration.
+provider payload contract, Stage 9.3-B-2a mocked transport adapter, and
+Stage 9.3-B-2b real transport code (all 2026-06-15) do NOT authorize
+surfacing real external responses.
 
 - Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
   user approval.

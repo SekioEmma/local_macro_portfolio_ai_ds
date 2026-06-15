@@ -449,3 +449,50 @@ Stage 9.3-B-2a keeps a simulated `validator_result.passed=True` path for
 contract compatibility. Stage 9.3-B-2b or 2c must connect the real
 post-response validator such as `validate_ai_preview_payload` or an
 equivalent validator before any real external response can be surfaced.
+
+## Stage 9.3-B-2b Real Transport Contract
+
+Status: completed 2026-06-15.
+
+Stage 9.3-B-2b adds real DeepSeek transport code only. It does not add any
+HTTP endpoint, does not connect a frontend chat UI, does not persist prompts
+or responses, does not do Tavily/search, and does not trigger a live call on
+app start, page load, background jobs, or tests.
+
+New surface:
+
+* `src/app_backend/services/deepseek_real_transport.py` implements
+  `DeepSeekRealTransport`, which conforms to the existing
+  `DeepSeekTransport` protocol.
+* `load_deepseek_api_key_from_env() -> str` is the only function that reads
+  `DEEPSEEK_API_KEY` from the process environment. It does not read local
+  config files, and missing or blank keys raise
+  `DeepSeekTransportError(kind="missing_key")`.
+* `DeepSeekRealTransport.send(...)` accepts only
+  `DeepSeekTransportRequest`, builds provider HTTP details internally, and
+  returns only `DeepSeekTransportResponse`.
+* API key, provider URL, and model name remain internal transport details and
+  are not added to request or response schemas.
+
+Error handling:
+
+* Timeout-like failures become `DeepSeekTransportError(kind="timeout")`.
+* Non-2xx provider status and connection failures become
+  `DeepSeekTransportError(kind="http_error")`.
+* Malformed JSON, missing choices, missing message, or missing content become
+  `DeepSeekTransportError(kind="malformed")`.
+* Provider refusal becomes `DeepSeekTransportError(kind="provider_refusal")`.
+* Error details are categorical and sanitized. They do not include API keys,
+  headers, raw provider payloads, raw prompts, holdings/account/position/
+  transaction data, or local paths.
+
+Isolation remains unchanged:
+
+* Stage 9.2 files do not import the real transport, adapter, runtime policy,
+  request builder, or provider payload builder.
+* `guard_response` was not loosened. It still blocks
+  `external_model_called=True`.
+* The adapter still does not surface real external responses. Stage
+  9.3-B-2c must review the `external_model_called` guard policy and wire the
+  post-response validator before any real provider response can be shown to a
+  user.
