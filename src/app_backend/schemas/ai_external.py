@@ -150,6 +150,55 @@ class ExternalAIRuntimePolicy(BaseModel):
     policy_version: str = "stage9_3b_0"
 
 
+class DeepSeekProviderMessage(BaseModel):
+    """Stage 9.3-B-1 sanitized provider message.
+
+    Carries only role + content. ``role`` is locked to ``"system"``,
+    ``"context"``, or ``"summary"`` so that no raw user-question
+    transcript can be packaged as a ``"user"`` chat message. ``content``
+    must be a sanitized summary string already validated by the request
+    guard upstream; the contract here does not re-serialize manifest rows.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["system", "context", "summary"]
+    content: str
+
+
+class DeepSeekProviderPayload(BaseModel):
+    """Stage 9.3-B-1 sanitized provider payload.
+
+    The ONLY material a future Stage 9.3-B-2 real adapter is allowed to
+    package for DeepSeek. Built exclusively from a guarded
+    ``ExternalAIRequest`` by ``build_deepseek_provider_payload``.
+
+    Fields here intentionally exclude model name, base URL, endpoint
+    path, API key, env var name, message roles like ``"user"``, raw
+    question text, holdings line items, account values, position
+    weights, transaction history, raw provider payloads, search results,
+    and local file paths. Stage 9.3-B-2 may decide model name and
+    endpoint, but must not extend this schema with key/url/endpoint
+    fields.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str
+    provider: AdapterProvider
+    mode: AdapterMode
+    user_intent_summary: str
+    context_preview_summary: str
+    included_fact_count: int
+    included_model_output_count: int
+    excluded_context_summary: str
+    boundary_notices: list[str]
+    memo_type: str | None = None
+    preview_type: str | None = None
+    validator_required: bool = True
+    messages: list[DeepSeekProviderMessage]
+
+
 def default_external_ai_runtime_policy() -> ExternalAIRuntimePolicy:
     """Return a fully fail-closed default runtime policy.
 
@@ -172,4 +221,6 @@ __all__ = [
     "ExternalAIGuardResult",
     "ExternalAIRuntimePolicy",
     "default_external_ai_runtime_policy",
+    "DeepSeekProviderMessage",
+    "DeepSeekProviderPayload",
 ]

@@ -304,3 +304,88 @@ Isolation:
 
 Stage 9.3-B real DeepSeek adapter remains not implemented and requires
 separate explicit user approval.
+
+## Stage 9.3-B-1 Minimal Real DeepSeek Adapter Design + Config Contract
+
+Status: completed 2026-06-15.
+
+Stage 9.3-B-1 ships the **design contract** for a future real DeepSeek
+adapter. It does NOT implement the network call, does NOT read API keys,
+does NOT read `.env` / `external_llm.yaml`, does NOT add HTTP routes, and
+does NOT touch any provider client library.
+
+### New surface
+
+* `DeepSeekProviderMessage` and `DeepSeekProviderPayload` Pydantic models
+  in `src/app_backend/schemas/ai_external.py` with `extra="forbid"`.
+  Provider message `role` is restricted to `"system"` / `"context"` /
+  `"summary"` so the future adapter cannot package raw user-question
+  transcripts as a `"user"` chat message.
+* `src/app_backend/services/deepseek_provider_contract.py` exposes
+  `build_deepseek_provider_payload(request: ExternalAIRequest) ->
+  DeepSeekProviderPayload`. The builder runs `guard_request` first; any
+  finding raises `BlockedAdapterError` and no payload is returned.
+* The provider payload schema does NOT carry — and Pydantic
+  `extra="forbid"` rejects — `api_key`, `api_key_env`, `base_url`,
+  `endpoint`, `model`, `model_name`, `raw_question`, `raw_prompt`,
+  `holdings_line_items`, `account_values`, `position_weights`,
+  `transaction_history`, `raw_provider_payload`, `search_results`,
+  `local_path`, `env_file_path`, and any other unlisted field.
+
+### Minimal human workflow (Stage 9.3-B order)
+
+1. User opens AI Context Manifest preview (`/api/ai/context-preview`).
+2. User explicitly confirms this single send.
+3. `build_external_ai_request_from_manifest(...)` builds an
+   `ExternalAIRequest`.
+4. `guard_request` passes.
+5. `guard_external_ai_runtime_policy` passes (Stage 9.3-B-0).
+6. `build_deepseek_provider_payload(request)` returns a sanitized
+   `DeepSeekProviderPayload`.
+7. **Stage 9.3-B-2** is the only later step that may wrap this payload
+   in a real network call. Stage 9.3-B-2 must not modify or extend the
+   payload schema with key/url/endpoint fields.
+8. The response must pass `guard_response`.
+9. The response must pass the Stage 9.2 generated-output validator
+   (`ai_preview_service.validate_ai_preview_payload` or equivalent).
+10. Human review is required.
+11. Raw prompt / raw response are NOT saved by default; any save must be
+    user-initiated and audited.
+
+### Configuration plan (Stage 9.3-B-2; NOT implemented here)
+
+Stage 9.3-B-1 does NOT read any configuration. The plan documented for
+Stage 9.3-B-2 is:
+
+* The API key may only be read from a single environment variable
+  (suggested: `DEEPSEEK_API_KEY`), read by Stage 9.3-B-2 code only.
+* `.env` files MUST NOT be auto-loaded. `configs/external_llm.yaml` MUST
+  NOT be read.
+* The key MUST NOT be read at application start, at page load, or in
+  any background job. Read it only after `guard_external_ai_runtime_policy`
+  returns `passed=True` and only immediately before the provider call.
+* A missing or empty key MUST fail closed; the call must not proceed.
+* The key MUST NOT be printed, returned in any HTTP response, written
+  to any log, or persisted to disk.
+* The model name and provider endpoint will be decided in
+  Stage 9.3-B-2. They must not be added to the payload schema as
+  user-controlled fields; the adapter is allowed to apply them
+  internally when forming the actual HTTP request.
+
+### Isolation
+
+* `src/app_backend/main.py`, `ai_preview_service.py`,
+  `ai_memo_renderer.py`, and `ai_context_service.py` do NOT import the
+  provider contract module, the runtime policy module, the request
+  builder, or the DeepSeek adapter.
+* No new HTTP routes.
+* 102 tests in `tests/test_deepseek_provider_contract.py` lock builder
+  signature (no `question`/`prompt`/`api_key`/`endpoint`/`url`/`model`
+  parameters), restricted message roles, guard fail-closed behavior,
+  schema extra-field rejection, source-surface scan, Stage 9.2
+  isolation, forbidden-routes absence, and route-table immutability on
+  module import.
+
+Stage 9.3-B-1 does not implement real DeepSeek network calls.
+Stage 9.3-B-2 remains a separate task and requires explicit user
+approval before work begins.

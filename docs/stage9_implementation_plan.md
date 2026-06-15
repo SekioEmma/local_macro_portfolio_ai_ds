@@ -205,12 +205,43 @@ Status: completed 2026-06-15 (commit on `app-mvp`).
 - Stage 9.3-B-0 completion does NOT authorize Stage 9.3-B real DeepSeek;
   explicit approval still required.
 
-### Stage 9.3-B Real DeepSeek Adapter
+### Stage 9.3-B-1 Minimal Real DeepSeek Adapter Design + Config Contract
+
+Status: completed 2026-06-15 (commit on `app-mvp`).
+
+- Added `DeepSeekProviderMessage` and `DeepSeekProviderPayload` Pydantic
+  models in `src/app_backend/schemas/ai_external.py` with
+  `extra="forbid"`. Roles restricted to `system` / `context` / `summary`;
+  schema does not carry API key, env var name, base URL, endpoint, model
+  name, raw question, raw prompt, holdings, account values, position
+  weights, transaction history, raw provider payload, search results, or
+  local paths.
+- New `src/app_backend/services/deepseek_provider_contract.py` exposes
+  `build_deepseek_provider_payload(request: ExternalAIRequest)` which
+  runs `guard_request` first and raises `BlockedAdapterError` on any
+  finding (no payload returned).
+- Documented the Stage 9.3-B minimal human workflow (11 steps) and the
+  Stage 9.3-B-2 configuration plan in
+  `docs/stage9_deepseek_adapter_design.md`. Stage 9.3-B-1 does NOT read
+  any configuration, does NOT touch `.env` / `external_llm.yaml`, and
+  does NOT add HTTP routes.
+- Stage 9.2 surface (`main.py`, `ai_preview_service.py`,
+  `ai_memo_renderer.py`, `ai_context_service.py`) does NOT import the
+  provider contract module, the runtime policy module, the request
+  builder, or any adapter.
+- 102 tests in `tests/test_deepseek_provider_contract.py` lock the
+  builder signature, restricted message roles, guard fail-closed
+  behavior, extra-field rejection, source-surface scan, Stage 9.2
+  isolation, and forbidden-routes absence.
+- Stage 9.3-B-1 completion does NOT authorize Stage 9.3-B-2 real DeepSeek
+  network implementation; explicit approval still required.
+
+### Stage 9.3-B-2 Real DeepSeek Adapter
 
 Status: not implemented; requires explicit approval before work begins.
 Stage 9.3-A skeleton, Stage 9.3-A closeout hardening, Stage 9.3-B
-readiness audit, and Stage 9.3-B-0 runtime approval gate (all 2026-06-15)
-do NOT authorize Stage 9.3-B.
+readiness audit, Stage 9.3-B-0 runtime approval gate, and Stage 9.3-B-1
+provider payload contract (all 2026-06-15) do NOT authorize Stage 9.3-B-2.
 
 - Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
   user approval.
