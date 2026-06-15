@@ -1,8 +1,12 @@
 # Foundation Stabilization Backlog
 
-Stage 8.5 is a freeze/stability phase. This backlog documents maintainability
-risks and future work without converting orchestration or adding Stage 9
-features now.
+Stage 8.5 closeout accepted this backlog as non-blocking future work. M7/M8 are
+important before complex Stage 9 implementation, but they are not required
+before Stage 9 preparation. Do not resolve M7-M12 inside the Stage 8.5 closeout
+task.
+
+This backlog documents maintainability risks and future work without converting
+orchestration or adding Stage 9 features now.
 
 ## M7 Dashboard Orchestration Cleanup
 

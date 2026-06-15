@@ -58,6 +58,8 @@ model/formula versions, validation boundary, and compact coverage summaries.
 
 ## Stage 8 Portfolio Exposure Overlay v0
 
+Status: completed.
+
 Stage 8 Portfolio Exposure Overlay v0 is implemented as a downstream-only,
 privacy-preserving explanatory layer. It uses sanitized compact portfolio
 context and existing D10-D19 dashboard evidence/model outputs to map macro risk
@@ -70,21 +72,35 @@ advice, action directives, return estimates, probability outputs, position-level
 diagnosis, target mixes, or optimization results. Missing sanitized portfolio
 context remains visible and is not interpreted as low or high exposure.
 
-The next step after Stage 8 is Stage 9 AI Chat / Memo / Report. Stage 9 is not
-implemented in Stage 8.
+The next step after Stage 8.5 closeout is Stage 9 preparation. Stage 9 AI Chat
+/ Memo / Report is not implemented.
 
 ## Stage 8.5 Foundation Stabilization Sprint
 
-Stage 8.5 is the current freeze/stability phase after Stage 8 and before any
-Stage 9 AI surface work. It verifies the Stage 0-D19 foundation, refreshes
-validation baselines, profiles shared pipeline context reuse, audits Stage 8
-AI context eligibility, confirms privacy and forbidden-output boundaries, and
-records a maintainability backlog.
+Status: completed.
 
-Stage 8.5 does not add financial model behavior. It does not call DeepSeek or
-Tavily, does not read holdings line items, does not add a dashboard feature,
-and does not implement AI Chat / Memo / Report. Stage 9 remains blocked until
-Stage 8.5 validation and context-reuse evidence are cleanly recorded.
+Stage 8.5 was the freeze/stability phase after Stage 8 and before any Stage 9
+AI surface work. It verified the Stage 0-D19 foundation, refreshed validation
+baselines, profiled shared pipeline context reuse, audited Stage 8 AI context
+eligibility, confirmed privacy and forbidden-output boundaries, and recorded a
+maintainability backlog.
+
+Stage 8.5 did not add financial model behavior. It did not call DeepSeek or
+Tavily, did not read holdings line items, did not add a dashboard feature, and
+did not implement AI Chat / Memo / Report.
+
+## Stage 9 AI Chat / Memo / Report
+
+Status: preparation phase only; not implemented.
+
+Stage 9 is an application surface over the evidence/model context, not a new
+financial model. Stage 9 must consume AI Context Manifest rather than raw
+dashboard payloads, holdings payloads, or provider payloads.
+
+Stage 9 must not broaden model eligibility or bypass existing AI context gates.
+Preparation begins with AI Readiness / Memo Context Design before any real
+DeepSeek adapter, Tavily search, persistent chat, agent flow, Tauri shell, or
+automatic report saving work.
 
 ## Stage 3 Modeling Infrastructure v0
 
@@ -142,8 +158,7 @@ Stage 8 Portfolio Exposure Overlay follows D19 and is now completed.
 
 ## Later Modeling Areas
 
-Later work may cover AI memo/report surfaces. Stage 8.5 Foundation
-Stabilization Sprint is the current next step. Stage 9 AI Chat / Memo / Report
-follows only after the freeze/stability phase passes and is not implemented in
-Stage 8.5. Later areas must preserve the same source, freshness, privacy, and
-evidence-boundary rules.
+Later work may cover AI memo/report surfaces. Stage 8 Portfolio Exposure
+Overlay and Stage 8.5 Foundation Stabilization Sprint are completed. The
+current next step is Stage 9 preparation, not implementation. Later areas must
+preserve the same source, freshness, privacy, and evidence-boundary rules.

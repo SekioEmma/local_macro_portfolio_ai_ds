@@ -13,8 +13,9 @@
 9. Stage 6 D18 Valuation / Equity Structure v0: completed.
 10. Stage 7 D19 expanded historical validation: completed.
 11. Stage 8 Portfolio Exposure Overlay: completed.
-12. Stage 8.5 Foundation Stabilization Sprint: current freeze/stability phase.
-13. Stage 9 AI Chat / Memo / Report: not implemented.
+12. Stage 8.5 Foundation Stabilization Sprint: completed.
+13. Stage 9 preparation: current next phase.
+14. Stage 9 AI Chat / Memo / Report: not implemented.
 
 ## Current Task Boundary
 
@@ -33,14 +34,24 @@ evidence/model outputs. It does not read or expose holdings line items and does
 not provide allocation advice, action directives, return estimates, or
 probability outputs.
 
-The current task is Stage 8.5 Foundation Stabilization Sprint. It refreshes
-validation baselines, checks pipeline reuse, audits Stage 8 AI context behavior,
-locks privacy and forbidden-output boundaries, and records maintainability
-backlog items. It does not add financial model behavior, does not read holdings
-line items, and does not call DeepSeek or Tavily.
+Stage 8.5 Foundation Stabilization Sprint is completed. It refreshed validation
+baselines, checked pipeline reuse, audited Stage 8 AI context behavior, locked
+privacy and forbidden-output boundaries, and recorded maintainability backlog
+items. It did not add financial model behavior, did not read holdings line
+items, and did not call DeepSeek or Tavily.
 
-Stage 9 AI Chat / Memo / Report is not implemented. The project remains frozen
-against new features until Stage 8.5 passes.
+The current next phase is Stage 9 preparation. Stage 9 preparation is not real
+AI integration and must begin with AI Readiness / Memo Context Design.
+
+Stage 9 should be split into:
+
+1. Stage 9.0 AI Readiness Design.
+2. Stage 9.1 Memo Template / Context Contract.
+3. Stage 9.2 Mock Chat / Mock Memo.
+4. Stage 9.3 DeepSeek adapter behind explicit user-controlled switch.
+5. Stage 9.4 Tavily explicit-search beta.
+
+Stage 9 AI Chat / Memo / Report is not implemented.
 
 ## Not Now
 
@@ -54,7 +65,11 @@ against new features until Stage 8.5 passes.
 - News sentiment engine.
 - Black-box machine learning.
 - Live provider fetch/write.
-- Stage 9 implementation during Stage 8.5.
+- Jumping directly to real DeepSeek Chat.
+- Jumping directly to Tavily.
+- Agent frameworks, MCP, persistent multi-turn chat, or automatic report saving
+  in the first Stage 9 task.
+- Treating Stage 9 preparation as real AI integration.
 
 ## Persistent Boundaries
 
@@ -67,5 +82,5 @@ against new features until Stage 8.5 passes.
   must keep their limits visible.
 - Backend facts, source badges, freshness gates, and AI-context eligibility remain
   the source of truth.
-- Stage 8.5 should produce stabilization evidence and backlog documentation
-  rather than a broad dashboard or model orchestration refactor.
+- M7-M12 remain future maintainability backlog, not blockers for Stage 9
+  preparation.

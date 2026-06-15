@@ -24,20 +24,20 @@ It is not:
 
 ## Current Phase
 
-Stage 8.5 Foundation Stabilization Sprint is the current freeze and stability
-phase on branch `app-mvp`. Stage 8 Portfolio Exposure Overlay v0 is complete.
-Stage 9 AI Chat / Memo / Report is not implemented.
+Stage 8.5 Foundation Stabilization Sprint is completed. Stage 8 Portfolio
+Exposure Overlay v0 is complete. Stage 9 AI Chat / Memo / Report is not
+implemented.
 
-The project is frozen against new features until Stage 8.5 passes. Stage 8.5
-does not add financial model behavior, does not call DeepSeek or Tavily, does
-not run live provider fetches, and does not read holdings line items. It records
-the latest validation baseline and produces a maintainability backlog instead
-of a major refactor.
+The current next step is Stage 9 preparation, not Stage 9 implementation. Stage
+9 preparation must begin with AI Readiness / Memo Context Design. Real DeepSeek
+adapter, Tavily search, Tauri, persistent chat, agent flows, and automatic
+report saving remain not implemented.
 
 ## Current Baseline
 
 - Branch before work: `app-mvp`.
-- Commit before work: `f47575a Add portfolio exposure overlay`.
+- Current frozen foundation baseline: `cc5c1aa Stabilize Stage 8 foundation`.
+- Commit before Stage 8.5 stabilization work: `f47575a Add portfolio exposure overlay`.
 - Upstream before work: `origin/app-mvp`, aligned with local branch.
 - `main` is the old stable baseline and must not be modified for current
   `app-mvp` work.
@@ -134,8 +134,8 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   portfolio context only. It does not read or expose holdings line items and
   does not provide allocation advice, action directives, return estimates, or
   probability outputs.
-- Stage 8.5 is a freeze/stabilization sprint. It does not implement Stage 9,
-  DeepSeek, Tavily, Tauri, AI Chat, or new financial models.
+- Stage 8.5 Foundation Stabilization Sprint is complete. It did not implement
+  Stage 9, DeepSeek, Tavily, Tauri, AI Chat, or new financial models.
 - Proxy, search-derived, research-needed, stale, and insufficient-history rows are not official facts.
 - Missing data must not be filled by AI.
 - The backend must not bind `0.0.0.0`.
@@ -143,11 +143,12 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-The current next step remains Stage 8.5 completion, not Stage 9 implementation.
+The current next step is Stage 9 preparation, not Stage 9 implementation.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
 context to macro risk channels and existing D10-D19 evidence/model outputs. It
 does not read or expose holdings line items and does not provide allocation
-advice, action directives, return estimates, or probability outputs. Stage 9 is
-not implemented.
+advice, action directives, return estimates, or probability outputs. Stage 8.5
+Foundation Stabilization Sprint is complete. Stage 9 is not implemented.
+Stage 9 preparation begins with AI Readiness / Memo Context Design.
