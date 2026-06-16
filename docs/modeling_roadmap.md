@@ -90,8 +90,8 @@ Stage order:
 
 1. DF-0 Roadmap arbitration and legacy cleanup: completed.
 2. DF-1 D19 v1 historical evidence-row integration: completed.
-3. DF-2 D15/D16 compliance audit: next.
-4. DF-3 D17/D18 data gap and source-gate review.
+3. DF-2 D15/D16 compliance audit: completed.
+4. DF-3 D17/D18 data gap and source-gate review: next.
 5. DF-4 D13 reliability/divergence metadata, optional/backlog.
 
 DF-1 integrates existing historical validation summary information into D19
@@ -99,8 +99,9 @@ replay rows through compact component metadata. D19 remains historical pressure
 recognition and boundary validation, not prediction, backtest, probability
 calibration, return estimation, or trading strategy review.
 
-DF-2 should review the existing D15 and D16 implementations for compliance with
-current boundaries rather than inventing a parallel model.
+DF-2 reviewed the existing D15 and D16 implementations for compliance with
+current boundaries rather than inventing a parallel model. The audit passed
+without production code changes.
 
 DF-3 should prefer structured missing, stale, proxy, and source-gate states over
 weak data filling. D17 and D18 review should keep missing inputs visible.
