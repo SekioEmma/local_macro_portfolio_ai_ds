@@ -324,30 +324,30 @@ Status: completed 2026-06-15 (commit on `app-mvp`).
 
 ### Stage 9.3-B-2d Internal One-shot Manual Invocation Review
 
-Status: not implemented; requires explicit approval before work begins.
-Stage 9.3-B-2c enables guarded response semantics only. It does NOT add a
-manual invocation workflow, API endpoint, frontend chat, persistence, or
-automatic provider call.
+Status: completed 2026-06-16 (commit on `app-mvp`).
 
-- Start only after Stage 9.2 closeout, Stage 9.3-A skeleton, and explicit
-  user approval.
-- Keep adapter disabled by default.
-- Must not start automatically on app launch or page load.
-- Require an explicit UI or settings switch.
-- Must show AI Context Manifest preview before any external send.
-- Must run the Stage 9.2 validator after every response.
-- Must not save raw prompts or raw responses by default.
-- Must reuse `ExternalAIRequest` / `ExternalAIResponse` / `guard_*`
-  contracts from Stage 9.3-A unchanged; may only extend in backwards-
-  compatible ways.
-- Show context preview before send.
-- Show cost and model metadata.
-- Send only approved AI Context Manifest material.
-- Run validator after response.
-- Do not save ordinary chat by default.
-- Do not persist raw prompts.
-- Do not include holdings line items.
-- Do not include account values, position weights, or transaction history.
+- Added `scripts/dev_deepseek_one_shot_review.py` as a local-only,
+  command-line-only, manual-only one-shot review script.
+- Default invocation is dry-run/fail-closed and does not construct transport,
+  read `DEEPSEEK_API_KEY`, call DeepSeek, or persist anything.
+- A live call requires `--live-call`,
+  `--i-understand-this-calls-deepseek`, `--confirm-context-preview`, and
+  process-env `DEEPSEEK_API_KEY`.
+- The script prints sanitized context preview before any possible call and
+  sanitized result summary after a guarded response only.
+- The flow reuses AI Context Manifest, `build_external_ai_request_from_manifest`,
+  `guard_request`, `ExternalAIRuntimePolicy`,
+  `guard_external_ai_runtime_policy`, `build_deepseek_provider_payload`,
+  `build_transport_request_from_provider_payload`, `DeepSeekRealTransport`,
+  `DeepSeekNetworkAdapter.generate_external_response`,
+  `validate_external_ai_response_content`, and
+  `guard_external_model_response`.
+- Tests use mock transport / monkeypatch only; no live provider call is made.
+- No endpoint, frontend UI, Chat productization, persistence, Tavily/search,
+  agent behavior, or automatic external call was added.
+- Stage 9.3-B-2d completes the internal one-shot manual invocation review.
+  External AI line is frozen. Next work returns to the core modeling/data
+  roadmap.
 
 ### Stage 9.3-B Security Closeout / External AI Boundary Audit
 

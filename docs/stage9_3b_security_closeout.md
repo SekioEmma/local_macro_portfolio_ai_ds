@@ -84,18 +84,20 @@ Missing context remains missing. AI must not fill missing data.
 
 - The external response validator wrapper is minimal; it is not a full AI
   product validator.
-- A real internal one-shot invocation workflow is not implemented.
+- The internal one-shot invocation workflow is command-line-only and
+  manual-only; it is not a product surface.
 - No UI or user-confirmation flow is implemented.
 - No live DeepSeek call was performed in tests.
-- Real provider behavior still requires a separate manual dry-run and close
-  review before any surfacing workflow.
+- Real provider behavior remains unsurfaced by application endpoints and must
+  not be treated as a fact layer.
 
 ## Next Step Recommendation
 
-Either run Stage 9.3-B-2d internal one-shot manual invocation review under
-explicit approval, or pause external AI work and return to the core
-modeling/data roadmap.
+Stage 9.3-B-2d internal one-shot manual invocation review completed.
+External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
+Tavily/search was added. The next step is to return to the core modeling/data
+roadmap.
 
 Stage 9.3-B security closeout does not add Chat productization. It does not add
-endpoint/UI/persistence/live test. Any internal one-shot manual invocation or
-user-facing AI feature remains a separate explicit approval task.
+endpoint/UI/persistence/live test. The completed one-shot workflow remains
+internal, local-only, command-line-only, and manual-only.

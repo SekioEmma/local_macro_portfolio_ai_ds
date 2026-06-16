@@ -30,9 +30,9 @@ completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
 surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
 disabled-by-default, fake-client-only internal adapter contract.
 
-The current next step requires an explicit decision: Stage 9.3-B-2d internal
-one-shot manual invocation review, or pause external AI work and return to the
-core modeling/data roadmap. Stage
+Stage 9.3-B-2d internal one-shot manual invocation review is complete.
+External AI line is frozen. The next step is to return to the core
+modeling/data roadmap. Stage
 9.3-A skeleton, Stage 9.3-A closeout / adapter guard hardening, Stage 9.3-B
 readiness seam audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
 minimal real adapter design + config contract, Stage 9.3-B-2a mocked
@@ -215,6 +215,17 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   modes, no persistence, and no financial-advice expansion. No production code
   change, endpoint, frontend UI, persistence, Tavily/search, live call, or
   automatic external call was added.
+- Stage 9.3-B-2d internal one-shot manual invocation review
+  (`scripts/dev_deepseek_one_shot_review.py`,
+  `tests/test_stage9_3b_manual_one_shot_review.py`, and
+  `docs/stage9_3b_one_shot_review.md`). The script is local-only,
+  command-line-only, manual-only, and dry-run/fail-closed by default. A live
+  call requires `--live-call`, `--i-understand-this-calls-deepseek`,
+  `--confirm-context-preview`, process-env `DEEPSEEK_API_KEY`, a passing
+  request guard, a passing runtime policy, provider payload/transport
+  contract construction, the external response validator, and
+  `guard_external_model_response`. No endpoint, frontend UI, persistence,
+  Tavily/search, live test, or automatic external call was added.
 
 ## Hard Boundaries
 
@@ -253,18 +264,10 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-The current next step requires an explicit decision: Stage 9.3-B-2d internal
-one-shot manual invocation review, or pause external AI work and return to the
-core modeling/data roadmap. Stage 9.3-A skeleton, its closeout / adapter guard
-hardening, Stage 9.3-B readiness seam audit, Stage 9.3-B-0 runtime approval
-gate, Stage 9.3-B-1 provider payload contract, Stage 9.3-B-2a mocked
-transport adapter, Stage 9.3-B-2b real transport code, Stage 9.3-B-2c
-external response guard + validator integration, and Stage 9.3-B security
-closeout are complete.
-
-Stage 9.3-B security closeout is complete. Real AI Chat, public endpoint,
-frontend UI, persistence, Tavily/search, live tests, and automatic external
-calls remain not implemented.
+Stage 9.3-B-2d internal one-shot manual invocation review completed.
+External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
+Tavily/search was added. The next step is to return to the core modeling/data
+roadmap.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -279,5 +282,6 @@ local preview endpoints, Stage 9.3-A adapter skeleton hardening, Stage
 9.3-B-1 minimal real adapter design + config contract, Stage 9.3-B-2a
 mocked transport adapter, Stage 9.3-B-2b real transport code, Stage 9.3-B-2c
 external response guard + validator integration, and Stage 9.3-B security
-closeout are complete.
+closeout, and Stage 9.3-B-2d internal one-shot manual invocation review are
+complete.
 Real AI Chat / Memo / Report integrations remain not implemented.

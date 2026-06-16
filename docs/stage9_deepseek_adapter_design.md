@@ -534,8 +534,60 @@ Post-response validator:
 
 Isolation remains unchanged: Stage 9.2 endpoint files do not import the
 adapter, real transport, runtime policy, provider builder, or new external
-guard path. A later Stage 9.3-B-2d or security closeout must review any
-manual one-shot invocation workflow before real responses are surfaced.
+guard path. Stage 9.3-B-2d adds only an internal command-line manual one-shot
+review workflow; it does not surface real responses through app endpoints.
+
+## Stage 9.3-B-2d Internal One-shot Manual Invocation Review
+
+Status: completed 2026-06-16.
+
+Stage 9.3-B-2d adds `scripts/dev_deepseek_one_shot_review.py` as a local-only,
+command-line-only, manual-only one-shot review script. It is not AI Chat, not
+an HTTP endpoint, not frontend UI, and not persistence.
+
+Default invocation is dry-run/fail-closed:
+
+```bash
+python scripts/dev_deepseek_one_shot_review.py
+```
+
+A live DeepSeek call requires all explicit flags and a process-env key:
+
+```bash
+python scripts/dev_deepseek_one_shot_review.py \
+  --live-call \
+  --i-understand-this-calls-deepseek \
+  --confirm-context-preview
+```
+
+The script prints only sanitized context preview and sanitized result summary.
+It does not print API keys, raw request payloads, raw provider payloads, raw
+provider responses, raw prompts, raw questions, holdings/account/position/
+transaction data, or local private paths.
+
+The one-shot flow keeps the existing chain intact:
+
+1. Build AI Context Manifest.
+2. Build `ExternalAIRequest` from manifest only.
+3. Run `guard_request`.
+4. Construct and guard `ExternalAIRuntimePolicy`.
+5. Build DeepSeek provider payload.
+6. Build transport request.
+7. Use injected or real transport only after all manual gates pass.
+8. Route the response through `generate_external_response`.
+9. Run `validate_external_ai_response_content`.
+10. Run `guard_external_model_response`.
+11. Print sanitized result summary only, with no persistence by default.
+
+Tests use mock transport / monkeypatch only. No live DeepSeek call is made by
+tests or Codex. Stage 9.2 endpoint files still do not import the one-shot
+script, adapter, real transport, runtime policy, provider builder, transport
+builder, external guard, or key loader.
+
+Stage 9.3-B-2d completes the internal one-shot manual invocation review.
+External AI line is now frozen. No Chat productization, endpoint, frontend UI,
+persistence, Tavily/search, or automatic external call was added. Next work
+should return to the core modeling/data roadmap.
 
 ## Stage 9.3-B Security Closeout
 
