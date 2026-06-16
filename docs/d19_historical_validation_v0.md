@@ -142,6 +142,9 @@ with the existing D19 historical validation script behavior.
 
 ## Next Step
 
+DF-0 roadmap arbitration begins Stage DF and keeps external AI frozen. The next
+engineering task after DF-0 is D19 v1 historical evidence-row integration.
+
 D19 v1 may connect the static registry to actual historical evidence rows when
 safe. D15 may use the D19 event registry as historical interpretation
 reference, not as training labels.

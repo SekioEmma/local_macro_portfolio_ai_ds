@@ -77,8 +77,37 @@ estimates, trading advice, production clustering, cluster probability,
 cluster-to-action mapping, endpoints, frontend UI, external AI, or live
 fetch/ingest behavior.
 
-Next step: D15 Macro Regime Review v0 follow-up or D19 v1 historical
-evidence-row integration.
+Next step: DF-1 D19 v1 historical evidence-row integration.
+
+## Stage DF - Data Foundation & Historical Evidence Integration
+
+Status: active.
+
+Stage DF is the current modeling/data route after D19 v0 and DF-0 roadmap
+arbitration.
+
+Stage order:
+
+1. DF-0 Roadmap arbitration and legacy cleanup.
+2. DF-1 D19 v1 historical evidence-row integration.
+3. DF-2 D15/D16 compliance audit.
+4. DF-3 D17/D18 data gap and source-gate review.
+5. DF-4 D13 reliability/divergence metadata, optional/backlog.
+
+DF-1 should integrate existing historical validation summary information into
+D19 replay rows. D19 remains historical pressure recognition and boundary
+validation, not prediction, backtest, probability calibration, return
+estimation, or trading strategy review.
+
+DF-2 should review the existing D15 and D16 implementations for compliance with
+current boundaries rather than inventing a parallel model.
+
+DF-3 should prefer structured missing, stale, proxy, and source-gate states over
+weak data filling. D17 and D18 review should keep missing inputs visible.
+
+External AI remains frozen. Stage DF does not reopen DeepSeek Chat,
+Tavily/search, frontend AI UI, persistence, full-account external context, or
+automatic external calls.
 
 ## Stage 8 Portfolio Exposure Overlay v0
 

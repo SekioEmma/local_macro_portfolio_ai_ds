@@ -30,12 +30,19 @@ completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
 surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
 disabled-by-default, fake-client-only internal adapter contract.
 
+Current branch: `app-mvp`. `main` remains the stable baseline and should not be
+touched for current `app-mvp` work.
+
+Current phase: Stage DF - Data Foundation & Historical Evidence Integration.
+Immediate task: DF-0 Roadmap Arbitration and Legacy Document Cleanup. The next
+engineering task after DF-0 is D19 v1 historical evidence-row integration. A
+D15/D16 compliance audit follows after D19 v1 or as DF-2.
+
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage R1 Course Paper Research Recovery Note is
 complete as docs-only research recovery. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is complete as a static, local-only event registry
-and replay-row scaffold. The next step is D15 Macro Regime Review v0 follow-up
-or D19 v1 historical evidence-row integration. Stage
+and replay-row scaffold. Stage
 9.3-A skeleton, Stage 9.3-A closeout / adapter guard hardening, Stage 9.3-B
 readiness seam audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
 minimal real adapter design + config contract, Stage 9.3-B-2a mocked
@@ -256,6 +263,16 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 - No allocation directive, action instruction, or return estimate language in public outputs.
 - No event-odds, crash-odds, recession-odds, or market-direction probability output.
+- No AI Chat.
+- No DeepSeek endpoint.
+- No Tavily/search productization.
+- No frontend AI UI.
+- No prompt/response/chat/report persistence productization.
+- No automatic external calls.
+- No full-account external context.
+- No holdings line items, account values, position weights, or transaction
+  history may be exposed to external AI context.
+- No prediction, probability, or trading model.
 - `financial_stress_score` is pressure temperature, not probability.
 - D15 macro regime review is current evidence review, not a classifier or forecast model.
 - D15 exposes bands and ranked evidence, not a public numeric regime score.
@@ -293,8 +310,11 @@ Stage 9.3-B-2d internal one-shot manual invocation review completed.
 External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
 Tavily/search was added. Stage R1 Course Paper Research Recovery Note
 completed as docs-only research recovery. D19 v0 Historical Validation Event
-Registry + Replay Skeleton is completed. The next step is D15 Macro Regime
-Review v0 follow-up or D19 v1 historical evidence-row integration.
+Registry + Replay Skeleton is completed. Current phase is Stage DF - Data
+Foundation & Historical Evidence Integration. DF-0 is roadmap arbitration and
+legacy document cleanup; the next engineering task after DF-0 is D19 v1
+historical evidence-row integration. D15/D16 compliance audit follows after
+D19 v1 or as DF-2.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio

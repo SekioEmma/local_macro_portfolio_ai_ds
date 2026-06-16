@@ -111,3 +111,7 @@ Stage 9.3-B-2d completes the internal one-shot manual invocation review.
 External AI line is now frozen. No AI Chat/product endpoint/frontend UI/
 persistence/Tavily/search was added. Next work should return to the core
 modeling/data roadmap.
+
+DF-0 roadmap arbitration confirms that any user-facing AI feature requires a
+separate explicit approval. The next modeling/data task after DF-0 is D19 v1
+historical evidence-row integration.

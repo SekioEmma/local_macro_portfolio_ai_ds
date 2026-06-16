@@ -1,5 +1,35 @@
 # Short-Term Development Plan
 
+## Current Phase
+
+Stage DF - Data Foundation & Historical Evidence Integration.
+
+## Priority Route
+
+### P0
+
+1. DF-0 Roadmap Arbitration and Legacy Document Cleanup: completed.
+2. DF-1 D19 v1 Historical Evidence-row Integration: next engineering task.
+
+### P1
+
+1. DF-2 D15/D16 Compliance Audit.
+2. DF-3 D17/D18 Data Gap and Source-gate Review.
+
+### P2
+
+1. DF-4 D13 Reliability / Divergence Metadata.
+2. D16 scenario stress refinement, only after audit.
+
+### Frozen
+
+- External AI productization.
+- Chat UI.
+- Tavily/search.
+- Tauri.
+- Account editing.
+- Full-account DeepSeek context.
+
 ## Mainline Route
 
 1. Stage 0 documentation governance: completed.
@@ -17,8 +47,12 @@
 13. Stage 9 preparation through Stage 9.3-B-2d: completed; external AI line frozen.
 14. Stage R1 Course Paper Research Recovery Note: completed as docs-only research recovery.
 15. D19 v0 Historical Validation Event Registry + Replay Skeleton: completed.
-16. D15 Macro Regime Review v0 follow-up or D19 v1 historical evidence-row integration: current next phase.
-17. Stage 9 AI Chat / Memo / Report: not implemented.
+16. DF-0 Roadmap Arbitration and Legacy Document Cleanup: completed.
+17. DF-1 D19 v1 Historical Evidence-row Integration: next engineering task.
+18. DF-2 D15/D16 Compliance Audit: follows D19 v1 or runs as DF-2.
+19. DF-3 D17/D18 Data Gap and Source-gate Review.
+20. DF-4 D13 Reliability / Divergence Metadata: optional/backlog.
+21. Stage 9 AI Chat / Memo / Report: not implemented.
 
 ## Current Task Boundary
 
@@ -48,10 +82,16 @@ froze the external AI line. Stage R1 completed course-paper research recovery
 as docs-only method and boundary material. The current next phase is a return
 to the D15/D19 core modeling roadmap. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is now completed as a static local-only registry and
-replay-row scaffold. The next step is D15 Macro Regime Review v0 follow-up or
-D19 v1 historical evidence-row integration.
+replay-row scaffold. DF-0 roadmap arbitration and legacy cleanup is completed.
+The next engineering task is DF-1 D19 v1 historical evidence-row integration.
+D15/D16 compliance audit follows after D19 v1 or as DF-2.
 
-Stage 9 should be split into:
+Legacy Stage 9 productization remains frozen and is not the current short-term
+route. Historical Stage 9 notes should not be used to authorize Chat UI,
+Tavily/search, full-account DeepSeek context, persistence, Tauri, or new API
+endpoints.
+
+Historical Stage 9 work was split into:
 
 1. Stage 9.0 AI Readiness Design.
 2. Stage 9.1 Memo Template / Context Contract.
@@ -78,6 +118,9 @@ classifier, probability output, return estimate, or trading advice.
 - Reopening Tavily/search productization.
 - Tauri.
 - Account editing.
+- Full-account DeepSeek context.
+- Holdings line items, account values, position weights, or transaction history
+  in external AI context.
 - Auto trading.
 - Portfolio optimization.
 - Hard PE, forward PE, or earnings provider integration.

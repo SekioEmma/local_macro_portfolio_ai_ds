@@ -1,3 +1,17 @@
+> Legacy note:
+> This document is a historical APP roadmap and is no longer the current
+> execution source. It is superseded by `docs/current_project_state.md`,
+> `docs/modeling_roadmap.md`, `docs/short_term_development_plan.md`,
+> `docs/stage9_3b_one_shot_review.md`,
+> `docs/stage9_3b_security_closeout.md`, and
+> `docs/d19_historical_validation_v0.md`.
+>
+> Do not use this file to authorize DeepSeek Chat productization, Tavily,
+> frontend AI UI, full-account external context, persistence, or API endpoints.
+> External AI line remains frozen after Stage 9.3-B-2d. The current phase is
+> Stage DF, and the next engineering task after DF-0 is D19 v1 historical
+> evidence-row integration.
+
 # Local Macro Portfolio AI DS APP 最终项目架构与开发计划定稿
 
 ## 0. 当前阶段判断
@@ -142,11 +156,20 @@ SQLite -> data/holdings/current_holdings.csv
 
 ### 4.2 DeepSeek 边界
 
-用户接受默认 full context，即 DeepSeek 可以接收完整账户金额、资产配置、市场摘要和配置规则。
+Legacy / superseded note: the old full context plan below is not current and is
+for historical APP-roadmap context only. Current Stage 9.3 and Stage DF
+boundaries do not allow external AI context to include holdings line items,
+account values, position weights, transaction history, full-account external
+context, or complete holdings. The external AI line remains frozen.
+
+旧计划曾假设用户接受默认 full context，由 DeepSeek 接收完整账户金额、资产配置、
+市场摘要和配置规则。This is not current execution guidance and must not be used
+to authorize provider payloads.
 
 但 UI 必须明确显示：
 
 ```text
+LEGACY / NOT CURRENT:
 当前模式：完整账户上下文
 该请求会发送账户金额、配置偏离和市场上下文给 DeepSeek
 ```
@@ -545,6 +568,11 @@ POST /api/provider-health/refresh
 
 ### Phase 3：Chat MVP with DeepSeek
 
+Legacy / superseded phase note: this phase is not a current short-term target
+and does not authorize `/api/chat`, DeepSeek Chat productization, persistence,
+frontend AI UI, or full-account external context. Current execution returns to
+Stage DF data/modeling work.
+
 目标：
 
 实现 GPT 式自由聊天，不联网搜索。
@@ -581,6 +609,11 @@ POST /api/provider-health/refresh
 * 不保存所有聊天。
 
 ### Phase 4：Tavily Beta Search
+
+Legacy / superseded phase note: this phase is not current and does not
+authorize Tavily/search, `/api/search`, Chat UI, or search-derived product
+integration. External AI and search productization remain frozen unless a
+future task explicitly reopens them.
 
 目标：
 
@@ -651,6 +684,10 @@ SQLite 成为账户真源，账户页支持类别级编辑。
 * 不编辑基金明细 UI。
 
 ### Phase 6：Formal Memo and Tauri
+
+Legacy / superseded phase note: this phase is not current and does not
+authorize Tauri, memo productization, frontend AI UI, persistence, or new API
+endpoints. Current work remains Stage DF data/modeling integration.
 
 目标：
 

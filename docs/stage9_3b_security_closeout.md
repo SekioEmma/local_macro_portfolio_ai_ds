@@ -101,3 +101,7 @@ roadmap.
 Stage 9.3-B security closeout does not add Chat productization. It does not add
 endpoint/UI/persistence/live test. The completed one-shot workflow remains
 internal, local-only, command-line-only, and manual-only.
+
+DF-0 roadmap arbitration confirms that the external AI line remains frozen. Any
+user-facing AI feature requires separate explicit approval. The next
+modeling/data task after DF-0 is D19 v1 historical evidence-row integration.
