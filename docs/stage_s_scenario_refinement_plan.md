@@ -33,6 +33,8 @@ without changing trigger semantics.
 
 ## S1 D16 Scenario Stress Refinement v1
 
+Status: completed.
+
 Goal:
 
 Use existing D13 reliability/divergence/OAS coverage metadata, D17/D18
@@ -82,3 +84,31 @@ Not allowed:
 - AI memo contract tests.
 - Full pytest if production code changes.
 - Benchmark/audit/historical validation if D16 production code changes.
+
+## S1 Completion Notes
+
+S1 is completed in `src/data_quality/scenario_stress.py` with focused contract
+coverage in `tests/test_s1_d16_scenario_refinement.py` and the implementation
+note in `docs/s1_d16_scenario_refinement.md`.
+
+The D16 public output keys remain unchanged. New explanation details are kept
+inside existing scenario component metadata:
+
+- `scenario_uncertainty_drivers`
+- `scenario_missing_constraints`
+- `scenario_proxy_constraints`
+- `scenario_source_gate_constraints`
+- `scenario_d13_reliability_context`
+- `scenario_d13_divergence_context`
+- `scenario_d13_oas_coverage_context`
+- `scenario_d17_d18_gap_context`
+- `scenario_d19_reference_context`
+- `scenario_refinement_boundary`
+
+S1 does not add providers, endpoints, frontend UI, external AI, search,
+persistence, live fetches, live writes, scenario probabilities, forecast paths,
+return estimates, price targets, portfolio actions, D13 gate relaxation,
+BAA10Y substitution, or new hard triggers.
+
+Next recommended task: S2 D16 scenario explanation tests / golden contract
+integration if needed, or S3 AI memo boundary template update only after S1/S2.

@@ -33,17 +33,18 @@ disabled-by-default, fake-client-only internal adapter contract.
 Current branch: `app-mvp`. `main` remains the stable baseline and should not be
 touched for current `app-mvp` work.
 
-Current phase: Stage S - Scenario Stress / Explanation Refinement planning.
+Current phase: Stage S - Scenario Stress / Explanation Refinement. S1 D16
+Scenario Stress Refinement v1 is complete.
 DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
 Historical Evidence-row Integration is complete. DF-2 D15/D16 Compliance Audit
 is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. DF-4
 D13 Reliability / Divergence Metadata is complete with scoped D13 production
 code edits that add explanatory metadata fields only. DF-4a Credit OAS history
 availability audit is complete. DF-4c Credit OAS coverage / provider-rebuild
-metadata integration is complete. Stage DF is concluded. Current transition
-task: Stage S0 Post-DF Roadmap Reconciliation. Next engineering task after S0:
-S1 D16 Scenario Stress Refinement v1. Optional DF-4d BAA10Y reference
-documentation is deferred unless explicitly requested later.
+metadata integration is complete. Stage DF is concluded. Stage S0 Post-DF
+Roadmap Reconciliation is complete. S1 D16 Scenario Stress Refinement v1 is
+complete. Optional DF-4d BAA10Y reference documentation is deferred unless
+explicitly requested later.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage 9 Chat / Memo / Report productization remains
@@ -328,6 +329,17 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   `ai_context_allowed=False` and `trigger_eligibility=not_eligible`.
   `BAA10Y` is documented as a long-history proxy/reference only, not a
   substitute for HY/IG OAS.
+- S1 D16 Scenario Stress Refinement v1
+  (`src/data_quality/scenario_stress.py`,
+  `tests/test_s1_d16_scenario_refinement.py`, and
+  `docs/s1_d16_scenario_refinement.md`). S1 adds explanation-only scenario
+  component metadata for uncertainty drivers, missing constraints, proxy
+  constraints, source-gate constraints, D13 reliability/divergence/OAS coverage
+  context, D17/D18 gap context, and D19 reference context. D16 public output
+  keys remain unchanged. S1 does not add providers, endpoints, frontend UI,
+  external AI, Tavily/search, persistence, live fetches, live writes, scenario
+  probabilities, forecasts, return estimates, target prices, portfolio
+  actions, D13 gate relaxation, BAA10Y substitution, or new hard triggers.
 
 ## Hard Boundaries
 
@@ -381,17 +393,20 @@ External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
 Tavily/search was added. Stage R1 Course Paper Research Recovery Note
 completed as docs-only research recovery. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is completed. Current phase is Stage S - Scenario
-Stress / Explanation Refinement planning. DF-0 roadmap arbitration and
+Stress / Explanation Refinement. S1 D16 Scenario Stress Refinement v1 is
+completed. DF-0 roadmap arbitration and
 legacy document cleanup is completed. DF-1 D19 v1 historical evidence-row
 integration is completed. DF-2 D15/D16 compliance audit is completed. DF-3
 D17/D18 data gap and source-gate review is completed without production code
 changes. DF-4 D13 reliability / divergence metadata is completed with scoped
 D13 production code edits that add explanatory metadata fields only. DF-4a
 Credit OAS history audit and DF-4c Credit OAS coverage/provider-rebuild
-metadata are complete. Stage DF is concluded. Current transition task is Stage
-S0 Post-DF Roadmap Reconciliation. The next engineering task is S1 D16 Scenario
-Stress Refinement v1. Optional DF-4d BAA10Y D19 proxy/reference documentation
-is deferred unless explicitly requested later.
+metadata are complete. Stage DF is concluded. Stage S0 Post-DF Roadmap
+Reconciliation is complete. S1 D16 Scenario Stress Refinement v1 is complete.
+Optional DF-4d BAA10Y D19 proxy/reference documentation is deferred unless
+explicitly requested later. Next recommended task: S2 D16 scenario explanation
+tests / golden contract integration if needed, or S3 AI memo boundary template
+update only after S1/S2.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -416,8 +431,9 @@ source-gate review is complete without production code changes. DF-4 D13
 reliability / divergence metadata is complete with scoped D13 production code
 edits that add explanatory metadata fields only. DF-4a Credit OAS history audit
 is complete. DF-4c Credit OAS coverage / provider-rebuild metadata integration
-is complete. Stage DF is concluded. Stage S0 is the current roadmap
-reconciliation task, and S1 D16 Scenario Stress Refinement v1 is the next
-engineering task. Optional DF-4d BAA10Y D19 proxy/reference documentation is
-deferred unless explicitly requested later.
+is complete. Stage DF is concluded. Stage S0 is complete, and S1 D16 Scenario
+Stress Refinement v1 is complete. Optional DF-4d BAA10Y D19 proxy/reference
+documentation is deferred unless explicitly requested later. Next recommended
+task: S2 D16 scenario explanation tests / golden contract integration if
+needed, or S3 AI memo boundary template update only after S1/S2.
 Real AI Chat / Memo / Report integrations remain not implemented.

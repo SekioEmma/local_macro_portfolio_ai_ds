@@ -2,19 +2,19 @@
 
 ## Current Phase
 
-Stage S - Scenario Stress / Explanation Refinement planning.
+Stage S - Scenario Stress / Explanation Refinement. S1 D16 Scenario Stress
+Refinement v1 is completed.
 
 ## Priority Route
 
 ### P0
 
-1. S0 Post-DF Roadmap Reconciliation and S1 Entry Plan: current.
-2. S1 D16 Scenario Stress Refinement v1: next.
+1. S1 D16 Scenario Stress Refinement v1: completed.
+2. S2 D16 scenario explanation tests / golden contract integration if needed: next.
 
 ### P1
 
-1. S2 D16 scenario explanation tests / golden contract integration if needed.
-2. S3 AI memo boundary template update only after S1/S2.
+1. S3 AI memo boundary template update only after S1/S2.
 
 ### Completed
 
@@ -25,6 +25,8 @@ Stage S - Scenario Stress / Explanation Refinement planning.
 - DF-4 D13 Reliability / Divergence Metadata.
 - DF-4a Credit OAS history availability audit.
 - DF-4c Credit OAS coverage/provider-rebuild metadata.
+- S0 Post-DF Roadmap Reconciliation and S1 Entry Plan.
+- S1 D16 Scenario Stress Refinement v1.
 
 ### Deferred
 
@@ -93,8 +95,8 @@ items, and did not call DeepSeek or Tavily.
 
 Stage 9.3-B-2d completed the internal one-shot manual invocation review and
 froze the external AI line. Stage R1 completed course-paper research recovery
-as docs-only method and boundary material. The current next phase is Stage S -
-Scenario Stress / Explanation Refinement planning. D19 v0 Historical Validation Event
+as docs-only method and boundary material. The current phase is Stage S -
+Scenario Stress / Explanation Refinement. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is now completed as a static local-only registry and
 replay-row scaffold. DF-0 roadmap arbitration and legacy cleanup is completed.
 DF-1 D19 v1 historical evidence-row integration is completed. DF-2 D15/D16
@@ -109,10 +111,14 @@ D19 trigger logic, add prediction/probability/trading outputs, endpoints,
 frontend UI, external AI, Tavily/search, persistence, live fetches, or live
 writes.
 
-Stage S0 reconciles the post-DF roadmap. The next engineering task after S0 is
-S1 D16 Scenario Stress Refinement v1. S1 is explanation refinement, not a
-prediction model, scenario-probability model, return-estimate model, price-path
-model, or portfolio-action model.
+Stage S0 reconciled the post-DF roadmap. S1 D16 Scenario Stress Refinement v1
+is completed as explanation refinement, not a prediction model,
+scenario-probability model, return-estimate model, price-path model, or
+portfolio-action model.
+
+The next recommended task is S2 D16 scenario explanation tests / golden
+contract integration if needed, or S3 AI memo boundary template update only
+after S1/S2.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,
