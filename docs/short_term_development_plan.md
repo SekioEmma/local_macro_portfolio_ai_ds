@@ -9,11 +9,11 @@ Stage DF - Data Foundation & Historical Evidence Integration.
 ### P0
 
 1. DF-0 Roadmap Arbitration and Legacy Document Cleanup: completed.
-2. DF-1 D19 v1 Historical Evidence-row Integration: next engineering task.
+2. DF-1 D19 v1 Historical Evidence-row Integration: completed.
 
 ### P1
 
-1. DF-2 D15/D16 Compliance Audit.
+1. DF-2 D15/D16 Compliance Audit: next engineering task.
 2. DF-3 D17/D18 Data Gap and Source-gate Review.
 
 ### P2
@@ -48,8 +48,8 @@ Stage DF - Data Foundation & Historical Evidence Integration.
 14. Stage R1 Course Paper Research Recovery Note: completed as docs-only research recovery.
 15. D19 v0 Historical Validation Event Registry + Replay Skeleton: completed.
 16. DF-0 Roadmap Arbitration and Legacy Document Cleanup: completed.
-17. DF-1 D19 v1 Historical Evidence-row Integration: next engineering task.
-18. DF-2 D15/D16 Compliance Audit: follows D19 v1 or runs as DF-2.
+17. DF-1 D19 v1 Historical Evidence-row Integration: completed.
+18. DF-2 D15/D16 Compliance Audit: next engineering task.
 19. DF-3 D17/D18 Data Gap and Source-gate Review.
 20. DF-4 D13 Reliability / Divergence Metadata: optional/backlog.
 21. Stage 9 AI Chat / Memo / Report: not implemented.
@@ -83,8 +83,8 @@ as docs-only method and boundary material. The current next phase is a return
 to the D15/D19 core modeling roadmap. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is now completed as a static local-only registry and
 replay-row scaffold. DF-0 roadmap arbitration and legacy cleanup is completed.
-The next engineering task is DF-1 D19 v1 historical evidence-row integration.
-D15/D16 compliance audit follows after D19 v1 or as DF-2.
+DF-1 D19 v1 historical evidence-row integration is completed. The next
+engineering task is DF-2 D15/D16 compliance audit.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

@@ -169,6 +169,12 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
     d19_boundary = _row(rows, "historical_validation", "historical_validation_validation_boundary")
     assert "historical replay" in d19_boundary["value"]
     assert "event-window consistency" in d19_boundary["value"]
+    d19_status = _row(rows, "historical_validation", "historical_validation_status")
+    assert "d19_v1_replay_summary" in d19_status["component_contributions"]
+    assert "d19_v1_replay_rows" in d19_status["component_contributions"]
+    assert d19_status["component_contributions"]["d19_v1_replay_summary"][
+        "replay_row_count"
+    ] >= 9
     overlay_boundary = _row(
         rows,
         "portfolio_exposure_overlay",

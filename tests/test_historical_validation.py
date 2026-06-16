@@ -178,6 +178,42 @@ def test_d19_public_rows_keep_legacy_keys_and_add_compact_v1_keys(tmp_path):
     )
 
 
+def test_d19_public_rows_include_compact_registry_replay_metadata(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    market_history_store.initialize_market_history_db(db_path)
+    for metric_key, value, status in (
+        ("high_yield_spread", 4.2, "ok"),
+        ("investment_grade_spread", 1.4, "ok"),
+        ("dgs10", 4.1, "ok"),
+        ("dfii10", 1.6, "ok"),
+        ("real_yield_pressure_status", 1.0, "pressure"),
+        ("core_cpi_yoy", 6.3, "pressure"),
+        ("core_pce_yoy", 5.1, "pressure"),
+        ("initial_jobless_claims", 220000.0, "ok"),
+        ("unemployment_rate", 3.7, "ok"),
+    ):
+        _write_observation(db_path, metric_key, value, status, "2022-06-15")
+
+    rows = d19.build_historical_validation_rows(db_path=str(db_path))
+    contributions = _row(rows, "historical_validation_status")[
+        "component_contributions"
+    ]
+    replay_rows = contributions["d19_v1_replay_rows"]
+    replay_summary = contributions["d19_v1_replay_summary"]
+    inflation = _replay_event(replay_rows, "inflation_rates_pressure_2022")
+
+    assert replay_summary["replay_row_count"] >= 9
+    assert replay_summary["rows_with_summary_count"] >= 5
+    assert replay_summary["boundary_violation_count"] == 0
+    assert inflation["validation_status"] in {"available", "limited"}
+    assert "2022_inflation_rates_bear_market" in inflation["source_summary_event_ids"]
+    assert inflation["available_day_count"] >= 1
+    assert {"rates_real_yield", "inflation_energy"} & set(
+        inflation["available_model_outputs"]
+    )
+    assert "earnings_gap_visible" in contributions["missing_data_summary"]
+
+
 def test_run_historical_validation_defaults_to_stdout_only_and_output_is_explicit(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     out_path = tmp_path / "d19.json"
@@ -260,6 +296,13 @@ def _row(rows, metric_key):
         if row["metric_key"] == metric_key:
             return row
     raise AssertionError(f"missing row {metric_key}")
+
+
+def _replay_event(rows, event_id):
+    for row in rows:
+        if row["event_id"] == event_id:
+            return row
+    raise AssertionError(f"missing replay event {event_id}")
 
 
 def _write_observation(db_path, metric_key, value, status, observation_date):

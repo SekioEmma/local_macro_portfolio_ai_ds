@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from app_backend.services.historical_validation_replay import (
+    get_historical_validation_replay_rows,
+)
 from data_quality import macro_regime_review
 from data_quality import market_history_store
 
@@ -433,6 +436,7 @@ def build_historical_validation_rows(
     db_path: str | None = None,
 ) -> list[dict[str, Any]]:
     summary = build_historical_validation_summary(db_path=db_path)
+    replay_rows = get_historical_validation_replay_rows(existing_summary=summary)
     as_of_date = _latest_replay_date(summary["daily_replay_rows"])
     public_status = summary["status"]
     available = public_status in {"available", "limited_replay"}
@@ -473,6 +477,8 @@ def build_historical_validation_rows(
             "module_consistency_summary": summary["module_consistency_summary"],
             "proxy_constraint_summary": summary["proxy_constraint_summary"],
             "missing_data_summary": summary["missing_data_summary"],
+            "d19_v1_replay_rows": replay_rows,
+            "d19_v1_replay_summary": _replay_summary(replay_rows),
             "privacy_flags": summary["privacy_flags"],
             "validation_boundary": summary["validation_boundary"],
         },
@@ -1116,6 +1122,29 @@ def _summary_missing_inputs(events: list[dict[str, Any]]) -> list[str]:
     for event in events:
         counter.update(event.get("missing_data_summary", {}))
     return [key for key, _ in counter.most_common()]
+
+
+def _replay_summary(replay_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counter = Counter(str(row.get("validation_status")) for row in replay_rows)
+    return {
+        "replay_row_count": len(replay_rows),
+        "validation_status_counts": dict(sorted(status_counter.items())),
+        "rows_with_summary_count": sum(
+            1
+            for row in replay_rows
+            if row.get("compact_validation_metadata", {}).get("has_summary")
+        ),
+        "boundary_violation_count": sum(
+            int(row.get("boundary_violation_count") or 0)
+            for row in replay_rows
+        ),
+        "missing_or_limited_input_count": sum(
+            len(row.get("missing_or_limited_inputs") or ())
+            for row in replay_rows
+        ),
+        "proxy_only_evidence_remains_auxiliary": True,
+        "missing_data_visible": True,
+    }
 
 
 def _event_summary_text(events: list[dict[str, Any]]) -> str:

@@ -34,9 +34,9 @@ Current branch: `app-mvp`. `main` remains the stable baseline and should not be
 touched for current `app-mvp` work.
 
 Current phase: Stage DF - Data Foundation & Historical Evidence Integration.
-Immediate task: DF-0 Roadmap Arbitration and Legacy Document Cleanup. The next
-engineering task after DF-0 is D19 v1 historical evidence-row integration. A
-D15/D16 compliance audit follows after D19 v1 or as DF-2.
+DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
+Historical Evidence-row Integration is complete. The next engineering task is
+DF-2 D15/D16 compliance audit.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage R1 Course Paper Research Recovery Note is
@@ -258,6 +258,17 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   display flags. No frontend, endpoint, external AI call, live ingest,
   production clustering, probability output, return estimate, or trading advice
   was added.
+- DF-1 D19 v1 Historical Evidence-row Integration
+  (`src/app_backend/services/historical_validation_replay.py` and
+  `src/data_quality/historical_validation.py`). The static D19 registry/replay
+  skeleton now consumes existing D19 historical validation summary data when
+  available. D19 public rows carry compact `d19_v1_replay_rows` and
+  `d19_v1_replay_summary` metadata in component contributions while preserving
+  `reference_only` fallback behavior when no summary is supplied. Missing,
+  stale, research-needed, proxy-only, valuation, earnings, and true-breadth
+  gaps remain visible. No endpoint, frontend UI, external AI, Tavily/search,
+  persistence, live fetch/ingest, probability output, prediction output,
+  trading advice, or allocation directive was added.
 
 ## Hard Boundaries
 
@@ -311,10 +322,10 @@ External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
 Tavily/search was added. Stage R1 Course Paper Research Recovery Note
 completed as docs-only research recovery. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is completed. Current phase is Stage DF - Data
-Foundation & Historical Evidence Integration. DF-0 is roadmap arbitration and
-legacy document cleanup; the next engineering task after DF-0 is D19 v1
-historical evidence-row integration. D15/D16 compliance audit follows after
-D19 v1 or as DF-2.
+Foundation & Historical Evidence Integration. DF-0 roadmap arbitration and
+legacy document cleanup is completed. DF-1 D19 v1 historical evidence-row
+integration is completed. The next engineering task is DF-2 D15/D16 compliance
+audit.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -332,5 +343,6 @@ external response guard + validator integration, and Stage 9.3-B security
 closeout, and Stage 9.3-B-2d internal one-shot manual invocation review are
 complete. Stage R1 Course Paper Research Recovery Note is complete as docs-only
 research recovery. D19 v0 Historical Validation Event Registry + Replay
-Skeleton is complete as static local-only registry/replay scaffolding.
+Skeleton is complete as static local-only registry/replay scaffolding. DF-1 D19
+v1 historical evidence-row integration is complete.
 Real AI Chat / Memo / Report integrations remain not implemented.

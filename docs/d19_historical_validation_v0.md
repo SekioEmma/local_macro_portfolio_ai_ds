@@ -100,6 +100,24 @@ Allowed statuses:
 When no existing summary is passed, v0 returns `reference_only`. That status is
 a coverage state, not a low-risk label.
 
+## DF-1 Historical Evidence-row Integration
+
+DF-1 is completed. The replay skeleton now maps existing D19 historical
+validation summary events into registry replay rows when a summary is supplied.
+Known D19 v1 event ids are matched to the Stage R1 registry ids through a
+static alias map.
+
+D19 public rows include compact `d19_v1_replay_rows` and
+`d19_v1_replay_summary` metadata in component contributions. This metadata can
+show event-level `available`, `limited`, `insufficient`, or `reference_only`
+status, source summary event ids, coverage statuses, available-day counts,
+missing or limited inputs, blocked inputs, proxy constraints, missing-data
+summaries, and boundary-violation flags.
+
+The integration does not create new public metric keys, endpoints, frontend UI,
+external AI calls, persistence, live fetches, live ingests, probabilities,
+prediction outputs, return estimates, allocation directives, or trading advice.
+
 ## What D19 Can Validate
 
 - Historical pressure-recognition timing.
@@ -142,9 +160,9 @@ with the existing D19 historical validation script behavior.
 
 ## Next Step
 
-DF-0 roadmap arbitration begins Stage DF and keeps external AI frozen. The next
-engineering task after DF-0 is D19 v1 historical evidence-row integration.
+DF-0 roadmap arbitration and DF-1 historical evidence-row integration are
+completed. External AI remains frozen.
 
-D19 v1 may connect the static registry to actual historical evidence rows when
-safe. D15 may use the D19 event registry as historical interpretation
-reference, not as training labels.
+The next engineering task is DF-2 D15/D16 compliance audit. D15 may use the
+D19 event registry as historical interpretation reference, not as training
+labels.

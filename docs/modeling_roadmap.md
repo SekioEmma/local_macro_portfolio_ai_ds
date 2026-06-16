@@ -77,7 +77,7 @@ estimates, trading advice, production clustering, cluster probability,
 cluster-to-action mapping, endpoints, frontend UI, external AI, or live
 fetch/ingest behavior.
 
-Next step: DF-1 D19 v1 historical evidence-row integration.
+DF-1 D19 v1 historical evidence-row integration is completed.
 
 ## Stage DF - Data Foundation & Historical Evidence Integration
 
@@ -88,16 +88,16 @@ arbitration.
 
 Stage order:
 
-1. DF-0 Roadmap arbitration and legacy cleanup.
-2. DF-1 D19 v1 historical evidence-row integration.
-3. DF-2 D15/D16 compliance audit.
+1. DF-0 Roadmap arbitration and legacy cleanup: completed.
+2. DF-1 D19 v1 historical evidence-row integration: completed.
+3. DF-2 D15/D16 compliance audit: next.
 4. DF-3 D17/D18 data gap and source-gate review.
 5. DF-4 D13 reliability/divergence metadata, optional/backlog.
 
-DF-1 should integrate existing historical validation summary information into
-D19 replay rows. D19 remains historical pressure recognition and boundary
-validation, not prediction, backtest, probability calibration, return
-estimation, or trading strategy review.
+DF-1 integrates existing historical validation summary information into D19
+replay rows through compact component metadata. D19 remains historical pressure
+recognition and boundary validation, not prediction, backtest, probability
+calibration, return estimation, or trading strategy review.
 
 DF-2 should review the existing D15 and D16 implementations for compliance with
 current boundaries rather than inventing a parallel model.

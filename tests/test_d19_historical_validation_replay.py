@@ -82,6 +82,86 @@ def test_d19_v0_replay_can_consume_existing_summary_without_reading_data():
     assert rows[0].validation_status == "limited"
     assert rows[0].available_model_outputs == ("credit",)
     assert rows[0].missing_or_limited_inputs == ("liquidity_funding",)
+    assert rows[0].source_summary_event_ids == (target.event_id,)
+    assert rows[0].coverage_statuses == ("limited_replay",)
+
+
+def test_d19_v1_replay_maps_existing_summary_aliases_to_registry_windows():
+    events = [
+        event
+        for event in build_historical_validation_event_registry()
+        if event.event_id == "inflation_rates_pressure_2022"
+    ]
+    rows = build_historical_validation_replay_rows(
+        events=events,
+        existing_summary={
+            "events": [
+                {
+                    "event_id": "2022_inflation_rates_bear_market",
+                    "coverage_status": "available",
+                    "window_status": "ok",
+                    "available_day_count": 3,
+                    "insufficient_history_day_count": 0,
+                    "dominant_primary_pressure_groups": [
+                        "rates_real_yield",
+                        "inflation_energy",
+                    ],
+                    "dominant_labels": ["rates_pressure"],
+                    "missing_inputs": [],
+                    "blocked_inputs": ["true_breadth"],
+                    "boundary_violation_flags": [],
+                    "proxy_constraints": {"proxy_metric_keys": ["sp500_drawdown_3m"]},
+                    "missing_data_summary": {"earnings_revision": 3},
+                }
+            ]
+        },
+    )
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.validation_status == "available"
+    assert row.source_summary_event_ids == ("2022_inflation_rates_bear_market",)
+    assert row.coverage_statuses == ("available",)
+    assert row.window_statuses == ("ok",)
+    assert row.available_day_count == 3
+    assert row.available_model_outputs == ("rates_real_yield", "inflation_energy")
+    assert row.blocked_inputs == ("true_breadth",)
+    assert row.proxy_constraints["proxy_metric_keys"] == ("sp500_drawdown_3m",)
+    assert row.missing_data_summary == {"earnings_revision": 3}
+    assert row.compact_validation_metadata["has_summary"] is True
+
+
+def test_d19_v1_replay_keeps_boundary_violations_visible_without_unsafe_language():
+    events = [
+        event
+        for event in build_historical_validation_event_registry()
+        if event.event_id == "q4_rates_liquidity_equity_stress_2018"
+    ]
+    rows = build_historical_validation_replay_rows(
+        events=events,
+        existing_summary={
+            "events": [
+                {
+                    "event_id": "2018_q4_tightening_scare",
+                    "coverage_status": "limited_replay",
+                    "window_status": "limited_evidence",
+                    "available_day_count": 1,
+                    "insufficient_history_day_count": 2,
+                    "dominant_primary_pressure_groups": ["rates_real_yield"],
+                    "missing_inputs": ["liquidity_funding"],
+                    "boundary_violation_flags": ["test_boundary_flag"],
+                    "missing_data_summary": {"liquidity_funding": 2},
+                }
+            ]
+        },
+    )
+
+    row = rows[0]
+    assert row.validation_status == "limited"
+    assert row.boundary_violation_flags == ("test_boundary_flag",)
+    assert row.boundary_violation_count == 1
+    assert "liquidity_funding" in row.missing_or_limited_inputs
+    assert "boundary items" in " ".join(row.validation_notes)
 
 
 def test_d19_v0_ordinary_pullback_is_not_systemic_stress_event():
@@ -100,6 +180,31 @@ def test_d19_v0_ordinary_pullback_is_not_systemic_stress_event():
 def test_d19_v0_replay_boundary_language_is_output_safe():
     text = json.dumps(
         get_historical_validation_replay_rows(),
+        sort_keys=True,
+        ensure_ascii=False,
+    ).lower()
+
+    for token in FORBIDDEN_OUTPUT_TERMS:
+        assert token not in text
+
+
+def test_d19_v1_replay_with_summary_boundary_language_is_output_safe():
+    text = json.dumps(
+        get_historical_validation_replay_rows(
+            existing_summary={
+                "events": [
+                    {
+                        "event_id": "2023_svb_bank_stress",
+                        "coverage_status": "insufficient_history",
+                        "window_status": "insufficient_history",
+                        "available_day_count": 0,
+                        "insufficient_history_day_count": 1,
+                        "missing_inputs": ["liquidity_funding"],
+                        "boundary_violation_flags": [],
+                    }
+                ]
+            }
+        ),
         sort_keys=True,
         ensure_ascii=False,
     ).lower()

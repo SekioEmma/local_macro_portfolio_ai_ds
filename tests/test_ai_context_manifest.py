@@ -273,6 +273,65 @@ def test_manifest_carries_d10_d11_liquidity_context(monkeypatch):
     assert "raw_provider" not in body
 
 
+def test_manifest_carries_safe_d19_replay_metadata_without_private_context(monkeypatch):
+    rows = [
+        _evidence_row(
+            "historical_validation",
+            "historical_validation_status",
+            "available",
+            source_badge="derived",
+            component_contributions={
+                "d19_v1_replay_summary": {
+                    "replay_row_count": 9,
+                    "validation_status_counts": {"available": 1, "limited": 1},
+                    "boundary_violation_count": 0,
+                    "proxy_only_evidence_remains_auxiliary": True,
+                    "missing_data_visible": True,
+                },
+                "d19_v1_replay_rows": [
+                    {
+                        "event_id": "inflation_rates_pressure_2022",
+                        "validation_status": "available",
+                        "source_summary_event_ids": [
+                            "2022_inflation_rates_bear_market"
+                        ],
+                        "coverage_statuses": ["available"],
+                        "available_day_count": 3,
+                        "missing_or_limited_inputs": ["earnings_revision"],
+                        "boundary_violation_count": 0,
+                    }
+                ],
+            },
+        )
+    ]
+    monkeypatch.setattr(
+        dashboard_service,
+        "build_dashboard_evidence_table",
+        lambda **kwargs: SimpleNamespace(
+            generated_at="2026-06-01T00:00:00+00:00",
+            rows=rows,
+        ),
+    )
+
+    manifest = ai_context_service.build_ai_context_manifest()
+    historical = _model_output(
+        {"included_model_outputs": manifest.included_model_outputs},
+        "historical_validation_status",
+    )
+    body = json.dumps(historical, sort_keys=True).lower()
+
+    assert "d19_v1_replay_summary" in historical["component_contributions"]
+    assert "d19_v1_replay_rows" in historical["component_contributions"]
+    assert "2022_inflation_rates_bear_market" in body
+    assert "holdings" not in body
+    assert "account values" not in body
+    assert "position weights" not in body
+    assert "transaction history" not in body
+    assert "probability" not in body
+    assert "expected return" not in body
+    assert "trade signal" not in body
+
+
 def _model_output(data, metric_key):
     for row in data["included_model_outputs"]:
         if row["metric_key"] == metric_key:

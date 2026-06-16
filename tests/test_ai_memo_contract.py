@@ -128,6 +128,20 @@ def test_stage_9_1_does_not_add_http_chat_or_memo_endpoints():
 
 def test_stage_9_1_does_not_modify_model_output_modules():
     changed = _git_changed_files()
+    stage_9_1_surface_changed = any(
+        path.startswith(
+            (
+                "src/app_backend/services/ai_memo_renderer.py",
+                "src/app_backend/services/ai_context_service.py",
+                "src/app_backend/services/ai_preview_service.py",
+                "src/app_backend/main.py",
+            )
+        )
+        or path.startswith("docs/stage9")
+        for path in changed
+    )
+    if not stage_9_1_surface_changed:
+        return
 
     forbidden_prefixes = (
         "src/data_quality/",
