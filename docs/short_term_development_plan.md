@@ -19,7 +19,11 @@ Stage DF - Data Foundation & Historical Evidence Integration.
 ### P2
 
 1. DF-4 D13 Reliability / Divergence Metadata: completed.
-2. D16 scenario stress refinement, only after audit.
+2. DF-4a Credit OAS history availability audit: completed.
+3. DF-4c Credit OAS coverage/provider-rebuild metadata: completed.
+4. Decide between Stage S0/S1 planning or optional DF-4d BAA10Y D19
+   proxy/reference documentation.
+5. D16 scenario stress refinement, only after audit.
 
 ### Frozen
 
@@ -52,7 +56,9 @@ Stage DF - Data Foundation & Historical Evidence Integration.
 18. DF-2 D15/D16 Compliance Audit: completed.
 19. DF-3 D17/D18 Data Gap and Source-gate Review: completed.
 20. DF-4 D13 Reliability / Divergence Metadata: completed.
-21. Stage 9 AI Chat / Memo / Report: not implemented.
+21. DF-4a Credit OAS history availability audit: completed.
+22. DF-4c Credit OAS coverage/provider-rebuild metadata: completed.
+23. Stage 9 AI Chat / Memo / Report: not implemented.
 
 ## Current Task Boundary
 
@@ -88,6 +94,12 @@ compliance audit is completed without production code changes. DF-3 D17/D18
 data gap and source-gate review is completed without production code changes.
 DF-4 D13 reliability / divergence metadata is completed with scoped D13
 production-code changes that add explanatory metadata fields only.
+DF-4a Credit OAS history availability audit and DF-4c Credit OAS
+coverage/provider-rebuild metadata are completed. DF-4c does not add providers,
+relax the exact 3Y gate, substitute `BAA10Y` for HY/IG OAS, change D10/D11/D15/
+D19 trigger logic, add prediction/probability/trading outputs, endpoints,
+frontend UI, external AI, Tavily/search, persistence, live fetches, or live
+writes.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

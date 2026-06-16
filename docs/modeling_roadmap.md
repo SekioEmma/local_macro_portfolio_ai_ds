@@ -93,6 +93,8 @@ Stage order:
 3. DF-2 D15/D16 compliance audit: completed.
 4. DF-3 D17/D18 data gap and source-gate review: completed.
 5. DF-4 D13 reliability/divergence metadata: completed.
+6. DF-4a Credit OAS history availability audit: completed.
+7. DF-4c Credit OAS coverage/provider-rebuild metadata: completed.
 
 DF-1 integrates existing historical validation summary information into D19
 replay rows through compact component metadata. D19 remains historical pressure
@@ -121,6 +123,22 @@ metadata is descriptive model-quality context. It does not change percentile
 / z-score / robust z-score values, 5Y/3Y lookback rules, band thresholds,
 trigger eligibility, or AI context allowance. See
 `docs/d13_reliability_divergence_metadata.md` for the full DF-4 design.
+
+DF-4a audited current credit OAS history availability. HY/IG OAS local and
+current provider history are approximately three years and were still below the
+exact 3Y fallback gate at 1094 coverage days. `BAA10Y` remains a separate
+long-history credit proxy/reference, not a substitute for HY/IG OAS.
+
+DF-4c integrated that conclusion into D13 metadata. New fields include
+`history_coverage_status`, `provider_rebuild_status`,
+`normalization_availability`, `coverage_diagnostics`, `credit_reference_role`,
+`substitution_policy`, and `long_history_reference_status`. DF-4c does not
+change D13 formulas, 5Y/3Y gates, band thresholds, trigger eligibility, AI
+context allowance, providers, D10/D11/D15/D19 trigger logic, endpoints,
+frontend UI, external AI, search, persistence, live fetches, or live writes.
+
+The next recommended task is to choose between Stage S0/S1 planning or optional
+DF-4d BAA10Y D19 proxy/reference documentation.
 
 External AI remains frozen. Stage DF does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

@@ -38,7 +38,10 @@ DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
 Historical Evidence-row Integration is complete. DF-2 D15/D16 Compliance Audit
 is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. DF-4
 D13 Reliability / Divergence Metadata is complete with scoped D13 production
-code edits that add explanatory metadata fields only. Stage DF is concluded.
+code edits that add explanatory metadata fields only. DF-4a Credit OAS history
+availability audit is complete. DF-4c Credit OAS coverage / provider-rebuild
+metadata integration is complete. Stage DF is concluded pending any optional
+DF-4d BAA10Y reference documentation.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage R1 Course Paper Research Recovery Note is
@@ -308,6 +311,20 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   context eligibility. No new provider, endpoint, frontend UI, external AI,
   Tavily/search, persistence, live fetch/write, prediction output,
   probability output, allocation directive, or trading advice was added.
+- DF-4a / DF-4c Credit OAS coverage work
+  (`docs/d13_credit_oas_history_audit.md`,
+  `docs/d13_credit_oas_coverage_metadata.md`,
+  `tests/test_d13_credit_oas_coverage_metadata.py`, and
+  `src/data_quality/historical_percentile_metrics.py`). DF-4a confirmed the
+  current HY/IG OAS local and provider history is about three years and still
+  below the exact 3Y fallback gate at 1094 coverage days. DF-4c adds row-level
+  and component-level metadata for `history_coverage_status`,
+  `provider_rebuild_status`, `normalization_availability`,
+  `coverage_diagnostics`, `credit_reference_role`, `substitution_policy`, and
+  `long_history_reference_status`. HY/IG below-gate rows remain
+  `ai_context_allowed=False` and `trigger_eligibility=not_eligible`.
+  `BAA10Y` is documented as a long-history proxy/reference only, not a
+  substitute for HY/IG OAS.
 
 ## Hard Boundaries
 
@@ -366,8 +383,10 @@ legacy document cleanup is completed. DF-1 D19 v1 historical evidence-row
 integration is completed. DF-2 D15/D16 compliance audit is completed. DF-3
 D17/D18 data gap and source-gate review is completed without production code
 changes. DF-4 D13 reliability / divergence metadata is completed with scoped
-D13 production code edits that add explanatory metadata fields only. Stage DF
-is concluded.
+D13 production code edits that add explanatory metadata fields only. DF-4a
+Credit OAS history audit and DF-4c Credit OAS coverage/provider-rebuild
+metadata are complete. Stage DF is concluded unless the next task is optional
+DF-4d BAA10Y D19 proxy/reference documentation.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -390,5 +409,8 @@ v1 historical evidence-row integration is complete. DF-2 D15/D16 compliance
 audit is complete without production code changes. DF-3 D17/D18 data gap and
 source-gate review is complete without production code changes. DF-4 D13
 reliability / divergence metadata is complete with scoped D13 production code
-edits that add explanatory metadata fields only.
+edits that add explanatory metadata fields only. DF-4a Credit OAS history audit
+is complete. DF-4c Credit OAS coverage / provider-rebuild metadata integration
+is complete. The next recommended task is to choose between Stage S0/S1
+planning or optional DF-4d BAA10Y D19 proxy/reference documentation.
 Real AI Chat / Memo / Report integrations remain not implemented.

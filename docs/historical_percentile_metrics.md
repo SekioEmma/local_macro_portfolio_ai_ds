@@ -101,6 +101,32 @@ new hard trigger, change `trigger_eligibility`, or relax `ai_context_allowed`.
 
 See `docs/d13_reliability_divergence_metadata.md` for the full DF-4 design.
 
+## Credit OAS Coverage Metadata
+
+DF-4c adds credit OAS coverage and provider-rebuild metadata to D13 rows:
+
+- `history_coverage_status`
+- `provider_rebuild_status`
+- `normalization_availability`
+- `coverage_diagnostics`
+- `credit_reference_role`
+- `substitution_policy`
+- `long_history_reference_status`
+
+For `high_yield_spread` and `investment_grade_spread`, the current audited
+provider rebuild status is `provider_rebuild_limited`. When the local sample is
+1094 days, D13 remains fail-closed with
+`history_coverage_status=below_exact_gate`; the exact 3Y fallback gate remains
+1095 days.
+
+`normalization_availability.current_level_available=True` means the latest
+level can be present in local history. It does not mean percentile, z-score, or
+robust-z normalization is available. Below-gate rows remain excluded from AI
+factual context.
+
+`BAA10Y` is a long-history credit proxy/reference only. It is not substituted
+for HY/IG OAS and does not satisfy their percentile requirements.
+
 ## Boundary
 
 Historical percentile is relative to available local history, not a forecast.

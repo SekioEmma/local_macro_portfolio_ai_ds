@@ -33,6 +33,14 @@ BAD_STATUSES = {
     "stale",
 }
 OFFICIAL_BADGES = {"official", "official_fallback"}
+PRIMARY_CREDIT_OAS_METRICS = {"high_yield_spread", "investment_grade_spread"}
+LONG_HISTORY_CREDIT_PROXY_REFERENCES = {"BAA10Y", "baa10y"}
+CREDIT_OAS_PROVIDER_REBUILD_STATUS = {
+    "high_yield_spread": "provider_rebuild_limited",
+    "investment_grade_spread": "provider_rebuild_limited",
+    "BAA10Y": "reproducible_long_history",
+    "baa10y": "reproducible_long_history",
+}
 AUXILIARY_CONTEXT_FIELDS = (
     "metric_key",
     "display_name",
@@ -69,6 +77,13 @@ AUXILIARY_CONTEXT_FIELDS = (
     "zscore_robust_zscore_alignment",
     "source_quality_note",
     "history_window_note",
+    "history_coverage_status",
+    "provider_rebuild_status",
+    "normalization_availability",
+    "coverage_diagnostics",
+    "credit_reference_role",
+    "substitution_policy",
+    "long_history_reference_status",
 )
 
 BROAD_BAND_LEVELS: dict[str | None, int] = {
@@ -296,6 +311,17 @@ def build_metric_payload(
         minimum_observation_count=spec.minimum_observation_count,
         blocked=False,
     )
+    coverage = _credit_oas_coverage_metadata(
+        spec,
+        status=_status_for_band(band),
+        history_quality_status=window["status"],
+        observation_count=len(values),
+        latest=latest,
+        lookback=window,
+        percentile_band=percentile_band,
+        zscore_band=zscore_band,
+        robust_zscore_band=robust_zscore_band,
+    )
     payload = {
         "metric_key": spec.metric_key,
         "display_name": spec.display_name,
@@ -331,6 +357,7 @@ def build_metric_payload(
         "ai_context_tier": ai_context_tier,
         "trigger_eligibility": trigger_eligibility,
         **reliability,
+        **coverage,
         "component_contributions": {
             "lookback_window": window["lookback_window"],
             "lookback_start": window["lookback_start"],
@@ -354,6 +381,7 @@ def build_metric_payload(
             "trigger_eligibility": trigger_eligibility,
             "ai_context_tier": ai_context_tier,
             **reliability,
+            **coverage,
         },
         "missing_inputs": [],
         "interpretation_boundary": INTERPRETATION_BOUNDARY,
@@ -395,6 +423,17 @@ def _blocked_payload(
         blocked=True,
         missing_reason=missing_reason,
     )
+    coverage = _credit_oas_coverage_metadata(
+        spec,
+        status=status,
+        history_quality_status=history_quality_status,
+        observation_count=observation_count,
+        latest=latest,
+        lookback=lookback,
+        percentile_band=None,
+        zscore_band=None,
+        robust_zscore_band=None,
+    )
     return {
         "metric_key": spec.metric_key,
         "display_name": spec.display_name,
@@ -434,6 +473,7 @@ def _blocked_payload(
         "ai_context_tier": "excluded",
         "trigger_eligibility": trigger_eligibility,
         **reliability,
+        **coverage,
         "component_contributions": {
             "lookback_window": lookback_window,
             "lookback_start": (lookback or {}).get("lookback_start"),
@@ -447,6 +487,7 @@ def _blocked_payload(
             "trigger_eligibility": trigger_eligibility,
             "ai_context_tier": "excluded",
             **reliability,
+            **coverage,
         },
         "missing_inputs": [spec.source_metric_key],
         "interpretation_boundary": INTERPRETATION_BOUNDARY,
@@ -977,6 +1018,169 @@ def _history_window_note(
         f"history_quality_status={history_quality_status}; "
         f"observation_count={observation_count}/{minimum_observation_count}"
     )
+
+
+def _credit_oas_coverage_metadata(
+    spec: PercentileMetricSpec,
+    *,
+    status: str,
+    history_quality_status: str | None,
+    observation_count: int,
+    latest: dict[str, Any] | None,
+    lookback: dict[str, Any] | None,
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+) -> dict[str, Any]:
+    diagnostics = _coverage_diagnostics(
+        lookback=lookback,
+        observation_count=observation_count,
+    )
+    current_level_available = _current_level_available(latest)
+    return {
+        "history_coverage_status": _history_coverage_status(
+            source_metric_key=spec.source_metric_key,
+            status=status,
+            history_quality_status=history_quality_status,
+            coverage_days=diagnostics["coverage_days"],
+            days_short=diagnostics["days_short"],
+        ),
+        "provider_rebuild_status": _provider_rebuild_status(spec.source_metric_key),
+        "normalization_availability": _normalization_availability(
+            percentile_band=percentile_band,
+            zscore_band=zscore_band,
+            robust_zscore_band=robust_zscore_band,
+            current_level_available=current_level_available,
+            source_metric_key=spec.source_metric_key,
+        ),
+        "coverage_diagnostics": diagnostics,
+        "credit_reference_role": _credit_reference_role(spec.source_metric_key),
+        "substitution_policy": _substitution_policy(spec.source_metric_key),
+        "long_history_reference_status": _long_history_reference_status(
+            spec.source_metric_key
+        ),
+    }
+
+
+def _history_coverage_status(
+    *,
+    source_metric_key: str,
+    status: str,
+    history_quality_status: str | None,
+    coverage_days: int | None,
+    days_short: int | None,
+) -> str:
+    if history_quality_status == SUFFICIENT_HISTORY_STATUS:
+        return "sufficient_history"
+    if history_quality_status == LIMITED_HISTORY_STATUS:
+        return "limited_history"
+    if (
+        source_metric_key in PRIMARY_CREDIT_OAS_METRICS
+        and coverage_days is not None
+        and coverage_days < FALLBACK_WINDOW_DAYS
+        and days_short is not None
+        and 0 < days_short <= 7
+    ):
+        return "below_exact_gate"
+    if status in BAD_STATUSES or history_quality_status == INSUFFICIENT_HISTORY_STATUS:
+        return "insufficient_history"
+    return "not_applicable"
+
+
+def _provider_rebuild_status(source_metric_key: str) -> str:
+    return CREDIT_OAS_PROVIDER_REBUILD_STATUS.get(source_metric_key, "not_applicable")
+
+
+def _normalization_availability(
+    *,
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+    current_level_available: bool,
+    source_metric_key: str,
+) -> dict[str, bool]:
+    return {
+        "percentile_available": percentile_band is not None,
+        "zscore_available": zscore_band is not None,
+        "robust_zscore_available": robust_zscore_band is not None,
+        "current_level_available": current_level_available,
+        "long_history_reference_available": (
+            source_metric_key in LONG_HISTORY_CREDIT_PROXY_REFERENCES
+        ),
+    }
+
+
+def _coverage_diagnostics(
+    *,
+    lookback: dict[str, Any] | None,
+    observation_count: int,
+) -> dict[str, Any]:
+    observations = (lookback or {}).get("observations") or []
+    dates = sorted(
+        {
+            parsed
+            for observation in observations
+            for parsed in [_parse_date(observation.get("observation_date"))]
+            if parsed is not None
+        }
+    )
+    local_start = dates[0] if dates else _parse_date((lookback or {}).get("lookback_start"))
+    local_end = dates[-1] if dates else _parse_date((lookback or {}).get("lookback_end"))
+    coverage_days = (local_end - local_start).days if local_start and local_end else None
+    days_short = (
+        max(FALLBACK_WINDOW_DAYS - coverage_days, 0)
+        if coverage_days is not None
+        else None
+    )
+    return {
+        "local_start": local_start.isoformat() if local_start else None,
+        "local_end": local_end.isoformat() if local_end else None,
+        "observation_count": observation_count,
+        "distinct_dates": len(dates) if dates else None,
+        "coverage_days": coverage_days,
+        "required_days": FALLBACK_WINDOW_DAYS,
+        "days_short": days_short,
+        "provider_start_now": None,
+        "provider_end_now": None,
+    }
+
+
+def _credit_reference_role(source_metric_key: str) -> str:
+    if source_metric_key in PRIMARY_CREDIT_OAS_METRICS:
+        return "primary_oas_series"
+    if source_metric_key in LONG_HISTORY_CREDIT_PROXY_REFERENCES:
+        return "long_history_credit_proxy_reference"
+    return "non_credit_percentile_metric"
+
+
+def _substitution_policy(source_metric_key: str) -> str:
+    if source_metric_key in PRIMARY_CREDIT_OAS_METRICS:
+        return "no_substitution"
+    if source_metric_key in LONG_HISTORY_CREDIT_PROXY_REFERENCES:
+        return "proxy_reference_not_oas_substitute"
+    return "not_applicable"
+
+
+def _long_history_reference_status(source_metric_key: str) -> str:
+    if source_metric_key in PRIMARY_CREDIT_OAS_METRICS:
+        return "unavailable_for_primary_series"
+    if source_metric_key in LONG_HISTORY_CREDIT_PROXY_REFERENCES:
+        return "available_proxy_reference"
+    return "not_applicable"
+
+
+def _current_level_available(latest: dict[str, Any] | None) -> bool:
+    if latest is None:
+        return False
+    if latest.get("status") in market_history_store.BLOCKED_STATUSES:
+        return False
+    if latest.get("source_badge") in market_history_store.BLOCKED_SOURCE_BADGES:
+        return False
+    if latest.get("freshness_status") in BAD_FRESHNESS:
+        return False
+    if latest.get("value") is None and _to_float(latest.get("value_numeric")) is None:
+        return False
+    return True
 
 
 def _reliability_metadata(

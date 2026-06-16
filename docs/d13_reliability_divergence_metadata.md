@@ -53,6 +53,33 @@ DF-4 does not modify any of these. It only adds new metadata fields.
 These fields are also propagated through `sanitized_d13_context`, so D10 / D11 /
 D15 / D16 that read sanitized auxiliary context see the metadata.
 
+## DF-4c Credit OAS Coverage Metadata
+
+DF-4c extends the same metadata pattern for credit OAS coverage and provider
+rebuild diagnostics. It adds these fields to every D13 row and to
+`component_contributions`:
+
+- `history_coverage_status`
+- `provider_rebuild_status`
+- `normalization_availability`
+- `coverage_diagnostics`
+- `credit_reference_role`
+- `substitution_policy`
+- `long_history_reference_status`
+
+For `high_yield_spread` and `investment_grade_spread`, a 1094-day local sample
+remains blocked as `insufficient_history` with
+`history_coverage_status=below_exact_gate`, `provider_rebuild_status=
+provider_rebuild_limited`, `substitution_policy=no_substitution`, and
+`long_history_reference_status=unavailable_for_primary_series`.
+
+`normalization_availability.current_level_available=True` can coexist with
+percentile/z-score/robust-z availability all being false. This explains why the
+current OAS level exists while historical normalization remains blocked.
+
+`BAA10Y` is documented as `long_history_credit_proxy_reference` with
+`proxy_reference_not_oas_substitute`; it does not replace HY/IG OAS.
+
 ## Broad Band Mapping
 
 To compare percentile_band / zscore_band / robust_zscore_band without crossing

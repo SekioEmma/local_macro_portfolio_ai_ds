@@ -96,9 +96,23 @@ each D13 row.
 The metadata cannot relax existing AI context eligibility or promote proxy /
 insufficient rows into hard triggers.
 
+## Credit OAS Coverage Diagnostics
+
+DF-4c adds coverage diagnostics for credit OAS rows. These diagnostics separate
+current-level availability from historical-normalization availability.
+
+For the current audited HY/IG OAS series, the latest level can be present while
+the historical sample remains below the exact 3Y fallback gate. In that case,
+`normalization_availability.current_level_available=True`, but percentile,
+z-score, and robust-z availability remain false and the row stays excluded from
+AI factual context.
+
+`BAA10Y` can be documented as a long-history credit proxy/reference, but it
+cannot replace HY/IG OAS history or satisfy HY/IG OAS percentile requirements.
+
 ## Forbidden Interpretations
 
-Do not interpret percentile, reliability, or divergence as:
+Do not interpret percentile, reliability, divergence, or coverage diagnostics as:
 
 - crash probability
 - recession probability

@@ -74,6 +74,18 @@ Recommended metadata flags for DF-4 design:
 - `below_exact_3y_gate`
 - `long_history_reference_unavailable`
 
+DF-4c implements these as D13 row metadata:
+
+- `history_coverage_status=below_exact_gate` while HY/IG OAS coverage remains
+  one day below the exact 3Y fallback gate.
+- `provider_rebuild_status=provider_rebuild_limited` for both primary OAS
+  series.
+- `normalization_availability.current_level_available=True` while percentile,
+  z-score, robust-z, and long-history reference availability remain false.
+- `substitution_policy=no_substitution` and
+  `long_history_reference_status=unavailable_for_primary_series` for both
+  primary OAS series.
+
 Recommended D13 decision:
 
 - Keep production D13 on the existing fail-closed 5Y preferred / 3Y fallback
