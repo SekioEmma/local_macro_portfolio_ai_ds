@@ -2,28 +2,34 @@
 
 ## Current Phase
 
-Stage DF - Data Foundation & Historical Evidence Integration.
+Stage S - Scenario Stress / Explanation Refinement planning.
 
 ## Priority Route
 
 ### P0
 
-1. DF-0 Roadmap Arbitration and Legacy Document Cleanup: completed.
-2. DF-1 D19 v1 Historical Evidence-row Integration: completed.
+1. S0 Post-DF Roadmap Reconciliation and S1 Entry Plan: current.
+2. S1 D16 Scenario Stress Refinement v1: next.
 
 ### P1
 
-1. DF-2 D15/D16 Compliance Audit: completed.
-2. DF-3 D17/D18 Data Gap and Source-gate Review: completed.
+1. S2 D16 scenario explanation tests / golden contract integration if needed.
+2. S3 AI memo boundary template update only after S1/S2.
 
-### P2
+### Completed
 
-1. DF-4 D13 Reliability / Divergence Metadata: completed.
-2. DF-4a Credit OAS history availability audit: completed.
-3. DF-4c Credit OAS coverage/provider-rebuild metadata: completed.
-4. Decide between Stage S0/S1 planning or optional DF-4d BAA10Y D19
-   proxy/reference documentation.
-5. D16 scenario stress refinement, only after audit.
+- DF-0 Roadmap Arbitration and Legacy Document Cleanup.
+- DF-1 D19 v1 Historical Evidence-row Integration.
+- DF-2 D15/D16 Compliance Audit.
+- DF-3 D17/D18 Data Gap and Source-gate Review.
+- DF-4 D13 Reliability / Divergence Metadata.
+- DF-4a Credit OAS history availability audit.
+- DF-4c Credit OAS coverage/provider-rebuild metadata.
+
+### Deferred
+
+- DF-4d BAA10Y D19 proxy/reference documentation, only if explicitly
+  requested later.
 
 ### Frozen
 
@@ -33,6 +39,8 @@ Stage DF - Data Foundation & Historical Evidence Integration.
 - Tauri.
 - Account editing.
 - Full-account DeepSeek context.
+- Live provider fetch/write.
+- Prediction/probability/trading outputs.
 
 ## Mainline Route
 
@@ -85,8 +93,8 @@ items, and did not call DeepSeek or Tavily.
 
 Stage 9.3-B-2d completed the internal one-shot manual invocation review and
 froze the external AI line. Stage R1 completed course-paper research recovery
-as docs-only method and boundary material. The current next phase is a return
-to the D15/D19 core modeling roadmap. D19 v0 Historical Validation Event
+as docs-only method and boundary material. The current next phase is Stage S -
+Scenario Stress / Explanation Refinement planning. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is now completed as a static local-only registry and
 replay-row scaffold. DF-0 roadmap arbitration and legacy cleanup is completed.
 DF-1 D19 v1 historical evidence-row integration is completed. DF-2 D15/D16
@@ -100,6 +108,11 @@ relax the exact 3Y gate, substitute `BAA10Y` for HY/IG OAS, change D10/D11/D15/
 D19 trigger logic, add prediction/probability/trading outputs, endpoints,
 frontend UI, external AI, Tavily/search, persistence, live fetches, or live
 writes.
+
+Stage S0 reconciles the post-DF roadmap. The next engineering task after S0 is
+S1 D16 Scenario Stress Refinement v1. S1 is explanation refinement, not a
+prediction model, scenario-probability model, return-estimate model, price-path
+model, or portfolio-action model.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

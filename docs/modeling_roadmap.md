@@ -81,10 +81,10 @@ DF-1 D19 v1 historical evidence-row integration is completed.
 
 ## Stage DF - Data Foundation & Historical Evidence Integration
 
-Status: active.
+Status: concluded.
 
-Stage DF is the current modeling/data route after D19 v0 and DF-0 roadmap
-arbitration.
+Stage DF was the modeling/data route after D19 v0 and DF-0 roadmap
+arbitration. It is concluded after DF-4c.
 
 Stage order:
 
@@ -137,10 +137,30 @@ change D13 formulas, 5Y/3Y gates, band thresholds, trigger eligibility, AI
 context allowance, providers, D10/D11/D15/D19 trigger logic, endpoints,
 frontend UI, external AI, search, persistence, live fetches, or live writes.
 
-The next recommended task is to choose between Stage S0/S1 planning or optional
-DF-4d BAA10Y D19 proxy/reference documentation.
+Optional DF-4d BAA10Y D19 proxy/reference documentation is deferred unless
+explicitly requested later. It is not the default next task.
 
-External AI remains frozen. Stage DF does not reopen DeepSeek Chat,
+## Stage S - Scenario Stress / Explanation Refinement
+
+Status: current planning transition.
+
+Stage S is the next modeling phase after Stage DF. Its purpose is to refine
+D16 scenario-stress explanation quality using existing evidence and metadata,
+without changing trigger semantics or introducing prediction behavior.
+
+Current transition task: Stage S0 Post-DF Roadmap Reconciliation and S1 Entry
+Plan.
+
+First Stage S engineering task: S1 D16 Scenario Stress Refinement v1.
+
+S1 may improve scenario explanation text, uncertainty drivers, missing/proxy/
+research_needed constraints, and component contribution metadata. S1 must not
+add scenario probabilities, forecasts, expected returns, price paths, portfolio
+actions, buy/sell/hedge/rebalance language, providers, endpoints, frontend UI,
+external AI, Tavily/search, live fetches, live writes, BAA10Y substitution for
+HY/IG OAS, or D13 gate relaxation.
+
+External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
 automatic external calls.
 
@@ -160,8 +180,8 @@ advice, action directives, return estimates, probability outputs, position-level
 diagnosis, target mixes, or optimization results. Missing sanitized portfolio
 context remains visible and is not interpreted as low or high exposure.
 
-The next step after Stage 8.5 closeout is Stage 9 preparation. Stage 9 AI Chat
-/ Memo / Report is not implemented.
+Stage 9 AI Chat / Memo / Report is not implemented and is not the current next
+engineering task.
 
 ## Stage 8.5 Foundation Stabilization Sprint
 
@@ -179,7 +199,7 @@ did not implement AI Chat / Memo / Report.
 
 ## Stage 9 AI Chat / Memo / Report
 
-Status: preparation phase only; not implemented.
+Status: frozen / later work only; not implemented.
 
 Stage 9 is an application surface over the evidence/model context, not a new
 financial model. It consumes D10-D19 and Stage 8 model outputs through AI
@@ -187,10 +207,10 @@ Context Manifest rather than raw dashboard payloads, holdings payloads, or
 provider payloads.
 
 Stage 9 must not broaden model eligibility or bypass existing AI context gates.
-It must not change D10-D19 or Stage 8 model semantics. Preparation begins with
-Stage 9.0 AI Readiness Design and Memo Context Design before any real DeepSeek
-adapter, Tavily search, persistent chat, agent flow, Tauri shell, or automatic
-report saving work.
+It must not change D10-D19 or Stage 8 model semantics. Stage 9 productization is
+not current. Any user-facing AI feature requires separate explicit approval
+before any real DeepSeek adapter, Tavily search, persistent chat, agent flow,
+Tauri shell, or automatic report saving work.
 
 ## Stage 3 Modeling Infrastructure v0
 
@@ -248,10 +268,10 @@ Stage 8 Portfolio Exposure Overlay follows D19 and is now completed.
 
 ## Later Modeling Areas
 
-Later work may cover AI memo/report surfaces. Stage 8 Portfolio Exposure
-Overlay and Stage 8.5 Foundation Stabilization Sprint are completed. The
-current next step is Stage 9 preparation, not implementation. Later areas must
-preserve the same source, freshness, privacy, and evidence-boundary rules.
+Later work may cover AI memo/report surfaces, but Stage 9 productization is not
+current. Stage 8 Portfolio Exposure Overlay and Stage 8.5 Foundation
+Stabilization Sprint are completed. Later areas must preserve the same source,
+freshness, privacy, and evidence-boundary rules.
 
 ## Stage R Research Recovery Notes
 
