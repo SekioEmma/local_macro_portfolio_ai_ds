@@ -164,3 +164,35 @@ Later work may cover AI memo/report surfaces. Stage 8 Portfolio Exposure
 Overlay and Stage 8.5 Foundation Stabilization Sprint are completed. The
 current next step is Stage 9 preparation, not implementation. Later areas must
 preserve the same source, freshness, privacy, and evidence-boundary rules.
+
+## Stage R Research Recovery Notes
+
+Status: Stage R1 completed.
+
+Stage R is a documentation-only research recovery track. It can translate
+course-paper research into method notes, interpretation boundaries, historical
+archetypes, and D19 event-note material. It does not authorize production
+models, Dashboard modules, endpoints, frontend UI, AI productization, external
+calls, live fetches, or data ingests.
+
+Stage R1 recovers the course-paper research on historical percentiles and
+clustering for U.S. macro-financial pressure recognition:
+
+- D13 can reuse percentile methodology, pressure-up normalization language,
+  lookback-window discipline, proxy caveats, and `insufficient_history`
+  boundary language.
+- D15 can reuse historical archetype vocabulary as design context, not as a
+  K-means or GMM production classifier.
+- D19 can reuse candidate event windows, cluster-period descriptions, and
+  external stress index comparison notes as historical validation context.
+- Stage 9 memo/report language can reuse boundary sentences that distinguish
+  historical pressure interpretation from forecasts, probabilities, and
+  actions.
+
+K-means, GMM, cluster probability, cluster-to-action mapping,
+cluster-to-portfolio mapping, and full-sample percentile as live D13 are
+explicitly outside production logic. External stress indices remain independent
+reference layers and do not replace D10, D11, D15, or D19.
+
+The next core modeling step should return to D15/D19, using Stage R1 only as
+methodology and boundary-language support.

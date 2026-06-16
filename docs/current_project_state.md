@@ -31,8 +31,9 @@ surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
 disabled-by-default, fake-client-only internal adapter contract.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
-External AI line is frozen. The next step is to return to the core
-modeling/data roadmap. Stage
+External AI line is frozen. Stage R1 Course Paper Research Recovery Note is
+complete as docs-only research recovery. The next step is to return to the
+D15/D19 core modeling roadmap. Stage
 9.3-A skeleton, Stage 9.3-A closeout / adapter guard hardening, Stage 9.3-B
 readiness seam audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
 minimal real adapter design + config contract, Stage 9.3-B-2a mocked
@@ -226,6 +227,15 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   contract construction, the external response validator, and
   `guard_external_model_response`. No endpoint, frontend UI, persistence,
   Tavily/search, live test, or automatic external call was added.
+- Stage R1 Course Paper Research Recovery Note
+  (`docs/research/financial_market_pressure_clustering_note.md`,
+  `docs/historical_percentile_method_note.md`,
+  `docs/metric_interpretation_boundaries.md`, and
+  `docs/historical_validation_event_notes.md`). The course-paper research is
+  recovered as methodology, boundary language, historical archetypes, and D19
+  event-note material only. It does not add production clustering, K-means/GMM
+  classifier logic, cluster probability, cluster dashboard modules, trading
+  signals, AI productization, endpoints, or external calls.
 
 ## Hard Boundaries
 
@@ -266,8 +276,9 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 Stage 9.3-B-2d internal one-shot manual invocation review completed.
 External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
-Tavily/search was added. The next step is to return to the core modeling/data
-roadmap.
+Tavily/search was added. Stage R1 Course Paper Research Recovery Note
+completed as docs-only research recovery. The next step is to return to the
+D15/D19 core modeling roadmap.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -283,5 +294,6 @@ local preview endpoints, Stage 9.3-A adapter skeleton hardening, Stage
 mocked transport adapter, Stage 9.3-B-2b real transport code, Stage 9.3-B-2c
 external response guard + validator integration, and Stage 9.3-B security
 closeout, and Stage 9.3-B-2d internal one-shot manual invocation review are
-complete.
+complete. Stage R1 Course Paper Research Recovery Note is complete as docs-only
+research recovery.
 Real AI Chat / Memo / Report integrations remain not implemented.

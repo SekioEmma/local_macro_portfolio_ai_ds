@@ -14,9 +14,10 @@
 10. Stage 7 D19 expanded historical validation: completed.
 11. Stage 8 Portfolio Exposure Overlay: completed.
 12. Stage 8.5 Foundation Stabilization Sprint: completed.
-13. Stage 9 preparation: current next phase.
-14. Stage 9.0 AI Readiness Design: immediate next task.
-15. Stage 9 AI Chat / Memo / Report: not implemented.
+13. Stage 9 preparation through Stage 9.3-B-2d: completed; external AI line frozen.
+14. Stage R1 Course Paper Research Recovery Note: completed as docs-only research recovery.
+15. Return to D15/D19 core modeling roadmap: current next phase.
+16. Stage 9 AI Chat / Memo / Report: not implemented.
 
 ## Current Task Boundary
 
@@ -41,9 +42,10 @@ privacy and forbidden-output boundaries, and recorded maintainability backlog
 items. It did not add financial model behavior, did not read holdings line
 items, and did not call DeepSeek or Tavily.
 
-The current next phase is Stage 9 preparation. Stage 9.0 AI Readiness Design is
-the immediate next task. Stage 9 preparation is not real AI integration and
-must begin with AI Readiness / Memo Context Design.
+Stage 9.3-B-2d completed the internal one-shot manual invocation review and
+froze the external AI line. Stage R1 completed course-paper research recovery
+as docs-only method and boundary material. The current next phase is a return
+to the D15/D19 core modeling roadmap.
 
 Stage 9 should be split into:
 
@@ -53,12 +55,18 @@ Stage 9 should be split into:
 4. Stage 9.3 DeepSeek adapter behind explicit user-controlled switch.
 5. Stage 9.4 Tavily explicit-search beta.
 
-Stage 9 AI Chat / Memo / Report is not implemented.
+Stage 9 AI Chat / Memo / Report productization is not implemented.
+
+Stage R research recovery is docs-only. Stage R1 may inform D13 percentile
+methodology, D15 historical archetype language, D19 event-note integration, and
+AI memo boundary wording. It does not add production clustering, K-means/GMM
+classifier logic, cluster probability, cluster-to-action mapping, cluster
+dashboard modules, live fetches, external calls, or trading signals.
 
 ## Not Now
 
-- DeepSeek.
-- Tavily.
+- Reopening DeepSeek productization.
+- Reopening Tavily/search productization.
 - Tauri.
 - Account editing.
 - Auto trading.
@@ -66,12 +74,16 @@ Stage 9 AI Chat / Memo / Report is not implemented.
 - Hard PE, forward PE, or earnings provider integration.
 - News sentiment engine.
 - Black-box machine learning.
+- K-means or GMM production classifier.
+- Cluster probability or cluster-to-action mapping.
+- Cluster dashboard module.
 - Live provider fetch/write.
 - Jumping directly to real DeepSeek Chat.
 - Jumping directly to Tavily.
 - Agent frameworks, MCP, persistent multi-turn chat, or automatic report saving
   in the first Stage 9 task.
 - Treating Stage 9 preparation as real AI integration.
+- Treating Stage R research notes as implemented production models.
 
 ## Persistent Boundaries
 
