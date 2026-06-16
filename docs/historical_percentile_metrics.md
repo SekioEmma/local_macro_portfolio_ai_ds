@@ -79,10 +79,34 @@ decimal interpretation.
 D13 does not change D10 financial stress score or D11 pullback classification.
 A later D13c step may use these bands as auxiliary evidence.
 
+## Reliability And Divergence Metadata
+
+D13 rows also carry DF-4 reliability / divergence metadata:
+
+- `reliability_band`: `high` / `medium` / `low` / `insufficient`, derived from
+  history quality, latest input source badge, method availability, and
+  divergence. It is data and method quality, not probability.
+- `divergence_band`: `none` / `mild` / `material` / `not_available`. It flags
+  disagreement among percentile, z-score, and robust z-score, not market
+  direction. Material divergence should be explained, not traded.
+- `method_agreement`: categorical summary across available methods.
+- `normalization_methods_available`: which methods produced a band.
+- `percentile_zscore_alignment`, `percentile_robust_zscore_alignment`,
+  `zscore_robust_zscore_alignment`: pairwise alignment labels.
+- `reliability_drivers`: sorted list of reason tags.
+- `source_quality_note` and `history_window_note`: human-readable summaries.
+
+`reliability_band=high` is descriptive only. It does not promote a row to a
+new hard trigger, change `trigger_eligibility`, or relax `ai_context_allowed`.
+
+See `docs/d13_reliability_divergence_metadata.md` for the full DF-4 design.
+
 ## Boundary
 
 Historical percentile is relative to available local history, not a forecast.
 Z-score and robust z-score are normalization statistics, not crash probability.
 Short or limited history can make percentile unstable. Different frequencies
 must not be mixed. Percentile bands do not produce buy/sell instructions. Proxy
-inputs are auxiliary and cannot be hard triggers.
+inputs are auxiliary and cannot be hard triggers. Reliability and divergence
+metadata are explanatory model-quality context; they do not authorize
+probability, forecast, allocation, or trading interpretation.

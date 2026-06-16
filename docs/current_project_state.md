@@ -36,8 +36,9 @@ touched for current `app-mvp` work.
 Current phase: Stage DF - Data Foundation & Historical Evidence Integration.
 DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
 Historical Evidence-row Integration is complete. DF-2 D15/D16 Compliance Audit
-is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. The
-next engineering task is DF-4 D13 reliability / divergence metadata.
+is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. DF-4
+D13 Reliability / Divergence Metadata is complete with scoped D13 production
+code edits that add explanatory metadata fields only. Stage DF is concluded.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage R1 Course Paper Research Recovery Note is
@@ -291,6 +292,22 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   gaps, single-proxy-cannot-create-pressure, and proxy-breadth-not-true-breadth
   hard gates enforced. D17/D18 enter AI Context Manifest only when per-row
   `ai_context_allowed` is True. DF-3 passed without production code changes.
+- DF-4 D13 Reliability / Divergence Metadata
+  (`docs/d13_reliability_divergence_metadata.md`,
+  `tests/test_d13_reliability_divergence_metadata.py`, and
+  `src/data_quality/historical_percentile_metrics.py`). DF-4 adds new
+  explanatory metadata fields to every D13 row and to component_contributions:
+  `reliability_band`, `reliability_drivers`, `divergence_band`,
+  `divergence_notes`, `method_agreement`, `normalization_methods_available`,
+  three pairwise alignment labels, `source_quality_note`, and
+  `history_window_note`. New fields propagate through `sanitized_d13_context`
+  for downstream D10/D11/D15/D16/AI Context consumers. DF-4 did not change
+  percentile / z-score / robust z-score values, 5Y/3Y lookback rules, band
+  thresholds, `trigger_eligibility`, or `ai_context_allowed` semantics. The
+  new metadata cannot promote a row to a hard trigger and cannot relax AI
+  context eligibility. No new provider, endpoint, frontend UI, external AI,
+  Tavily/search, persistence, live fetch/write, prediction output,
+  probability output, allocation directive, or trading advice was added.
 
 ## Hard Boundaries
 
@@ -348,8 +365,9 @@ Foundation & Historical Evidence Integration. DF-0 roadmap arbitration and
 legacy document cleanup is completed. DF-1 D19 v1 historical evidence-row
 integration is completed. DF-2 D15/D16 compliance audit is completed. DF-3
 D17/D18 data gap and source-gate review is completed without production code
-changes. The next engineering task is DF-4 D13 reliability / divergence
-metadata.
+changes. DF-4 D13 reliability / divergence metadata is completed with scoped
+D13 production code edits that add explanatory metadata fields only. Stage DF
+is concluded.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -370,5 +388,7 @@ research recovery. D19 v0 Historical Validation Event Registry + Replay
 Skeleton is complete as static local-only registry/replay scaffolding. DF-1 D19
 v1 historical evidence-row integration is complete. DF-2 D15/D16 compliance
 audit is complete without production code changes. DF-3 D17/D18 data gap and
-source-gate review is complete without production code changes.
+source-gate review is complete without production code changes. DF-4 D13
+reliability / divergence metadata is complete with scoped D13 production code
+edits that add explanatory metadata fields only.
 Real AI Chat / Memo / Report integrations remain not implemented.

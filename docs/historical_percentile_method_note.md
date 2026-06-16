@@ -81,9 +81,24 @@ and interpretation boundaries.
 Stale, missing, research-needed, or insufficient-history facts cannot be filled
 by AI. AI output is not a fact layer.
 
+## Reliability And Divergence Metadata
+
+DF-4 adds explanatory `reliability_band` and `divergence_band` metadata to
+each D13 row.
+
+- `reliability_band` reflects data/method quality (history length, source
+  badge, method availability, divergence). It is not probability.
+- `divergence_band` flags disagreement among percentile, z-score, and robust
+  z-score. It is not market direction.
+- Material divergence should be explained as method disagreement, not
+  converted into a probability, allocation directive, or trade.
+
+The metadata cannot relax existing AI context eligibility or promote proxy /
+insufficient rows into hard triggers.
+
 ## Forbidden Interpretations
 
-Do not interpret percentile as:
+Do not interpret percentile, reliability, or divergence as:
 
 - crash probability
 - recession probability

@@ -92,7 +92,7 @@ Stage order:
 2. DF-1 D19 v1 historical evidence-row integration: completed.
 3. DF-2 D15/D16 compliance audit: completed.
 4. DF-3 D17/D18 data gap and source-gate review: completed.
-5. DF-4 D13 reliability/divergence metadata: next.
+5. DF-4 D13 reliability/divergence metadata: completed.
 
 DF-1 integrates existing historical validation summary information into D19
 replay rows through compact component metadata. D19 remains historical pressure
@@ -111,6 +111,16 @@ missing valuation/earnings/true-breadth gaps remain visible, proxy-only
 inputs cannot strong-trigger labels, and research_needed/missing rows stay
 excluded from AI factual context. DF-3 passed without production code
 changes.
+
+DF-4 added explanatory reliability and method-divergence metadata to D13
+`historical_risk_percentile` rows. New fields include `reliability_band`,
+`reliability_drivers`, `divergence_band`, `divergence_notes`,
+`method_agreement`, `normalization_methods_available`, three pairwise
+alignment labels, `source_quality_note`, and `history_window_note`. The
+metadata is descriptive model-quality context. It does not change percentile
+/ z-score / robust z-score values, 5Y/3Y lookback rules, band thresholds,
+trigger eligibility, or AI context allowance. See
+`docs/d13_reliability_divergence_metadata.md` for the full DF-4 design.
 
 External AI remains frozen. Stage DF does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

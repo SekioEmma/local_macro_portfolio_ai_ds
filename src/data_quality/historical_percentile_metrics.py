@@ -58,7 +58,26 @@ AUXILIARY_CONTEXT_FIELDS = (
     "interpretation_boundary",
     "missing_reason",
     "blocked_reason",
+    "reliability_band",
+    "reliability_drivers",
+    "divergence_band",
+    "divergence_notes",
+    "method_agreement",
+    "normalization_methods_available",
+    "percentile_zscore_alignment",
+    "percentile_robust_zscore_alignment",
+    "zscore_robust_zscore_alignment",
+    "source_quality_note",
+    "history_window_note",
 )
+
+BROAD_BAND_LEVELS: dict[str | None, int] = {
+    "low_extreme": -1,
+    "normal": 0,
+    "elevated": 1,
+    "high": 2,
+    "extreme": 3,
+}
 
 
 @dataclass(frozen=True)
@@ -264,6 +283,19 @@ def build_metric_payload(
         band = robust_zscore_band
     trigger_eligibility = _trigger_eligibility(latest.get("source_badge"), window["status"])
     ai_context_tier = _ai_context_tier(trigger_eligibility)
+    reliability = _reliability_metadata(
+        status=_status_for_band(band),
+        history_quality_status=window["status"],
+        latest_source_badge=latest.get("source_badge"),
+        trigger_eligibility=trigger_eligibility,
+        percentile_band=percentile_band,
+        zscore_band=zscore_band,
+        robust_zscore_band=robust_zscore_band,
+        lookback_window=window["lookback_window"],
+        observation_count=len(values),
+        minimum_observation_count=spec.minimum_observation_count,
+        blocked=False,
+    )
     payload = {
         "metric_key": spec.metric_key,
         "display_name": spec.display_name,
@@ -298,6 +330,7 @@ def build_metric_payload(
         "transform_class": spec.transform_class,
         "ai_context_tier": ai_context_tier,
         "trigger_eligibility": trigger_eligibility,
+        **reliability,
         "component_contributions": {
             "lookback_window": window["lookback_window"],
             "lookback_start": window["lookback_start"],
@@ -320,6 +353,7 @@ def build_metric_payload(
             "transform_class": spec.transform_class,
             "trigger_eligibility": trigger_eligibility,
             "ai_context_tier": ai_context_tier,
+            **reliability,
         },
         "missing_inputs": [],
         "interpretation_boundary": INTERPRETATION_BOUNDARY,
@@ -346,6 +380,21 @@ def _blocked_payload(
     lookback_window = (lookback or {}).get("lookback_window") or "5Y rolling"
     history_quality_status = (lookback or {}).get("status") or status
     trigger_eligibility = "not_eligible"
+    latest_source_badge = latest.get("source_badge") if latest else None
+    reliability = _reliability_metadata(
+        status=status,
+        history_quality_status=history_quality_status,
+        latest_source_badge=latest_source_badge,
+        trigger_eligibility=trigger_eligibility,
+        percentile_band=None,
+        zscore_band=None,
+        robust_zscore_band=None,
+        lookback_window=lookback_window,
+        observation_count=observation_count,
+        minimum_observation_count=spec.minimum_observation_count,
+        blocked=True,
+        missing_reason=missing_reason,
+    )
     return {
         "metric_key": spec.metric_key,
         "display_name": spec.display_name,
@@ -384,6 +433,7 @@ def _blocked_payload(
         "transform_class": spec.transform_class,
         "ai_context_tier": "excluded",
         "trigger_eligibility": trigger_eligibility,
+        **reliability,
         "component_contributions": {
             "lookback_window": lookback_window,
             "lookback_start": (lookback or {}).get("lookback_start"),
@@ -396,6 +446,7 @@ def _blocked_payload(
             "transform_class": spec.transform_class,
             "trigger_eligibility": trigger_eligibility,
             "ai_context_tier": "excluded",
+            **reliability,
         },
         "missing_inputs": [spec.source_metric_key],
         "interpretation_boundary": INTERPRETATION_BOUNDARY,
@@ -656,3 +707,350 @@ def _to_float(value: Any) -> float | None:
         return float(str(value).strip())
     except (TypeError, ValueError):
         return None
+
+
+def _band_level(band: str | None) -> int | None:
+    if band is None:
+        return None
+    return BROAD_BAND_LEVELS.get(band)
+
+
+def _alignment_label(level_a: int | None, level_b: int | None) -> str:
+    if level_a is None or level_b is None:
+        return "not_available"
+    diff = abs(level_a - level_b)
+    if diff == 0:
+        return "aligned"
+    if diff == 1:
+        return "mildly_divergent"
+    return "materially_divergent"
+
+
+def _normalization_methods_available(
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+) -> dict[str, bool]:
+    return {
+        "percentile": percentile_band is not None,
+        "zscore": zscore_band is not None,
+        "robust_zscore": robust_zscore_band is not None,
+    }
+
+
+def _divergence_band(
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+) -> str:
+    levels = [
+        level
+        for level in (
+            _band_level(percentile_band),
+            _band_level(zscore_band),
+            _band_level(robust_zscore_band),
+        )
+        if level is not None
+    ]
+    if len(levels) < 2:
+        return "not_available"
+    diff = max(levels) - min(levels)
+    if diff == 0:
+        return "none"
+    if diff == 1:
+        return "mild"
+    return "material"
+
+
+def _method_agreement(
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+) -> str:
+    levels = [
+        level
+        for level in (
+            _band_level(percentile_band),
+            _band_level(zscore_band),
+            _band_level(robust_zscore_band),
+        )
+        if level is not None
+    ]
+    if len(levels) < 2:
+        return "insufficient_methods"
+    diff = max(levels) - min(levels)
+    if diff == 0:
+        return "all_available_aligned"
+    if diff == 1:
+        return "mostly_aligned"
+    if diff == 2:
+        return "mixed"
+    return "divergent"
+
+
+def _source_driver(source_badge: str | None) -> str | None:
+    if source_badge == "official":
+        return "official_source"
+    if source_badge == "official_fallback":
+        return "official_fallback_source"
+    if source_badge == "unofficial_fallback":
+        return "unofficial_fallback_source"
+    if source_badge == "derived":
+        return "derived_source"
+    if source_badge == "proxy":
+        return "proxy_source_auxiliary_only"
+    if source_badge in {"missing", "research_needed", "search-derived"}:
+        return "missing_input_blocked"
+    return None
+
+
+def _history_driver(history_quality_status: str | None) -> str | None:
+    if history_quality_status == SUFFICIENT_HISTORY_STATUS:
+        return "sufficient_5y_history"
+    if history_quality_status == LIMITED_HISTORY_STATUS:
+        return "limited_3y_history"
+    if history_quality_status == INSUFFICIENT_HISTORY_STATUS:
+        return "insufficient_history"
+    return None
+
+
+def _method_availability_drivers(
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+    *,
+    blocked: bool,
+) -> list[str]:
+    drivers: list[str] = []
+    if percentile_band is not None:
+        drivers.append("percentile_available")
+    elif blocked:
+        drivers.append("percentile_band_unavailable")
+    else:
+        drivers.append("percentile_unavailable")
+    if zscore_band is not None:
+        drivers.append("zscore_available")
+    elif blocked:
+        drivers.append("zscore_band_unavailable")
+    else:
+        drivers.append("zscore_unavailable_zero_std")
+    if robust_zscore_band is not None:
+        drivers.append("robust_zscore_available")
+    elif blocked:
+        drivers.append("robust_zscore_band_unavailable")
+    else:
+        drivers.append("robust_zscore_unavailable_zero_mad")
+    return drivers
+
+
+def _reliability_drivers(
+    *,
+    status: str,
+    history_quality_status: str | None,
+    latest_source_badge: str | None,
+    trigger_eligibility: str,
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+    divergence_band: str,
+    blocked: bool,
+    missing_reason: str | None,
+) -> list[str]:
+    drivers: set[str] = set()
+    history_driver = _history_driver(history_quality_status)
+    if history_driver is not None:
+        drivers.add(history_driver)
+    source_driver = _source_driver(latest_source_badge)
+    if source_driver is not None:
+        drivers.add(source_driver)
+    drivers.update(
+        _method_availability_drivers(
+            percentile_band,
+            zscore_band,
+            robust_zscore_band,
+            blocked=blocked,
+        )
+    )
+    if divergence_band == "none":
+        drivers.add("method_agreement")
+    elif divergence_band in {"mild", "material"}:
+        drivers.add("method_divergence")
+    if status == "stale":
+        drivers.add("stale_input_blocked")
+    elif status == "missing":
+        drivers.add("missing_input_blocked")
+    elif status == "insufficient_history":
+        drivers.add("insufficient_history_blocked")
+    elif status == "not_available":
+        drivers.add("normalization_method_unavailable_blocked")
+    if missing_reason == "zscore_not_available_zero_std":
+        drivers.add("zscore_unavailable_zero_std")
+    elif missing_reason == "robust_zscore_not_available_zero_mad":
+        drivers.add("robust_zscore_unavailable_zero_mad")
+    if trigger_eligibility == "not_eligible" and not blocked:
+        drivers.add("trigger_not_eligible")
+    return sorted(drivers)
+
+
+def _reliability_band(
+    *,
+    status: str,
+    history_quality_status: str | None,
+    latest_source_badge: str | None,
+    methods: dict[str, bool],
+    divergence_band: str,
+) -> str:
+    if status in BAD_STATUSES:
+        return "insufficient"
+    if history_quality_status not in {SUFFICIENT_HISTORY_STATUS, LIMITED_HISTORY_STATUS}:
+        return "insufficient"
+    if not any(methods.values()):
+        return "insufficient"
+    if latest_source_badge == "proxy":
+        return "low"
+    if divergence_band == "material":
+        return "low"
+    methods_unavailable = sum(1 for available in methods.values() if not available)
+    if methods_unavailable >= 2:
+        return "low"
+    if history_quality_status == LIMITED_HISTORY_STATUS and divergence_band == "mild":
+        return "low"
+    if history_quality_status == LIMITED_HISTORY_STATUS:
+        return "medium"
+    if latest_source_badge == "unofficial_fallback":
+        return "medium"
+    if methods_unavailable >= 1:
+        return "medium"
+    if divergence_band == "mild":
+        return "medium"
+    return "high"
+
+
+def _divergence_notes(
+    *,
+    divergence_band: str,
+    method_agreement: str,
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+) -> str:
+    if divergence_band == "not_available":
+        return (
+            "fewer than two normalization methods available; divergence cannot be assessed"
+        )
+    if divergence_band == "none":
+        return "percentile, z-score, and robust z-score bands align on the same broad level"
+    parts = [
+        f"percentile_band={percentile_band or 'unavailable'}",
+        f"zscore_band={zscore_band or 'unavailable'}",
+        f"robust_zscore_band={robust_zscore_band or 'unavailable'}",
+    ]
+    if divergence_band == "mild":
+        return (
+            "normalization methods differ by one broad level; explanation only, "
+            "not a trading signal (" + ", ".join(parts) + ", agreement=" + method_agreement + ")"
+        )
+    return (
+        "normalization methods disagree across major levels; downgrade explanation "
+        "rather than escalate (" + ", ".join(parts) + ", agreement=" + method_agreement + ")"
+    )
+
+
+def _source_quality_note(
+    source_badge: str | None,
+    trigger_eligibility: str,
+) -> str:
+    return (
+        f"latest input source_badge={source_badge or 'missing'}; "
+        f"trigger_eligibility={trigger_eligibility}"
+    )
+
+
+def _history_window_note(
+    lookback_window: str,
+    history_quality_status: str | None,
+    observation_count: int,
+    minimum_observation_count: int,
+) -> str:
+    return (
+        f"lookback_window={lookback_window}; "
+        f"history_quality_status={history_quality_status}; "
+        f"observation_count={observation_count}/{minimum_observation_count}"
+    )
+
+
+def _reliability_metadata(
+    *,
+    status: str,
+    history_quality_status: str | None,
+    latest_source_badge: str | None,
+    trigger_eligibility: str,
+    percentile_band: str | None,
+    zscore_band: str | None,
+    robust_zscore_band: str | None,
+    lookback_window: str,
+    observation_count: int,
+    minimum_observation_count: int,
+    blocked: bool,
+    missing_reason: str | None = None,
+) -> dict[str, Any]:
+    methods = _normalization_methods_available(
+        percentile_band, zscore_band, robust_zscore_band
+    )
+    divergence_band = _divergence_band(
+        percentile_band, zscore_band, robust_zscore_band
+    )
+    method_agreement = _method_agreement(
+        percentile_band, zscore_band, robust_zscore_band
+    )
+    reliability_band = _reliability_band(
+        status=status,
+        history_quality_status=history_quality_status,
+        latest_source_badge=latest_source_badge,
+        methods=methods,
+        divergence_band=divergence_band,
+    )
+    drivers = _reliability_drivers(
+        status=status,
+        history_quality_status=history_quality_status,
+        latest_source_badge=latest_source_badge,
+        trigger_eligibility=trigger_eligibility,
+        percentile_band=percentile_band,
+        zscore_band=zscore_band,
+        robust_zscore_band=robust_zscore_band,
+        divergence_band=divergence_band,
+        blocked=blocked,
+        missing_reason=missing_reason,
+    )
+    return {
+        "reliability_band": reliability_band,
+        "reliability_drivers": drivers,
+        "divergence_band": divergence_band,
+        "divergence_notes": _divergence_notes(
+            divergence_band=divergence_band,
+            method_agreement=method_agreement,
+            percentile_band=percentile_band,
+            zscore_band=zscore_band,
+            robust_zscore_band=robust_zscore_band,
+        ),
+        "method_agreement": method_agreement,
+        "normalization_methods_available": methods,
+        "percentile_zscore_alignment": _alignment_label(
+            _band_level(percentile_band), _band_level(zscore_band)
+        ),
+        "percentile_robust_zscore_alignment": _alignment_label(
+            _band_level(percentile_band), _band_level(robust_zscore_band)
+        ),
+        "zscore_robust_zscore_alignment": _alignment_label(
+            _band_level(zscore_band), _band_level(robust_zscore_band)
+        ),
+        "source_quality_note": _source_quality_note(
+            latest_source_badge, trigger_eligibility
+        ),
+        "history_window_note": _history_window_note(
+            lookback_window,
+            history_quality_status,
+            observation_count,
+            minimum_observation_count,
+        ),
+    }
