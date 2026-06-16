@@ -3,18 +3,20 @@
 ## Current Phase
 
 Stage S - Scenario Stress / Explanation Refinement. S1 D16 Scenario Stress
-Refinement v1 is completed.
+Refinement v1 is completed. HF-1 Test Runtime Hotfix is completed after S1.
 
 ## Priority Route
 
 ### P0
 
 1. S1 D16 Scenario Stress Refinement v1: completed.
-2. S2 D16 scenario explanation tests / golden contract integration if needed: next.
+2. HF-1 Test Runtime Hotfix / DB-backed Fixture Batching: completed.
+3. P-M1 dashboard_model_pipeline `_to_dicts` accumulator optimization: next.
 
 ### P1
 
 1. S3 AI memo boundary template update only after S1/S2.
+2. S2 D16 scenario explanation tests / golden contract integration if needed.
 
 ### Completed
 
@@ -27,6 +29,7 @@ Refinement v1 is completed.
 - DF-4c Credit OAS coverage/provider-rebuild metadata.
 - S0 Post-DF Roadmap Reconciliation and S1 Entry Plan.
 - S1 D16 Scenario Stress Refinement v1.
+- HF-1 Test Runtime Hotfix / DB-backed Fixture Batching.
 
 ### Deferred
 
@@ -119,6 +122,12 @@ portfolio-action model.
 The next recommended task is S2 D16 scenario explanation tests / golden
 contract integration if needed, or S3 AI memo boundary template update only
 after S1/S2.
+
+HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
+test fixtures and benchmark result reuse only; it did not change model
+semantics, providers, endpoints, frontend UI, external AI, Tavily/search, live
+fetches, or live writes. The next recommended task after HF-1 is P-M1
+dashboard_model_pipeline `_to_dicts` accumulator optimization.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

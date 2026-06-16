@@ -6,6 +6,8 @@ All tests block network to confirm no external connections are made.
 import json
 import socket
 
+import pytest
+
 import benchmark_dashboard_pipeline as bench
 from data_quality import market_history_store
 
@@ -105,18 +107,26 @@ EXPECTED_KEYS = {
 }
 
 
+@pytest.fixture(scope="module")
+def benchmark_result(tmp_path_factory):
+    monkeypatch = pytest.MonkeyPatch()
+    _block_network(monkeypatch)
+    try:
+        tmp_path = tmp_path_factory.mktemp("benchmark_result")
+        return bench.run_benchmark(
+            reports_dir=_minimal_reports_dir(tmp_path),
+            market_history_db_path=tmp_path / "absent.sqlite3",
+        )
+    finally:
+        monkeypatch.undo()
+
+
 # ---------------------------------------------------------------------------
 # test 1: runs without network
 # ---------------------------------------------------------------------------
 
-def test_benchmark_runs_without_network(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    reports_dir = _minimal_reports_dir(tmp_path)
-    result = bench.run_benchmark(
-        reports_dir=reports_dir,
-        market_history_db_path=tmp_path / "empty.sqlite3",
-    )
-    assert isinstance(result, dict)
+def test_benchmark_runs_without_network(benchmark_result):
+    assert isinstance(benchmark_result, dict)
 
 
 # ---------------------------------------------------------------------------
@@ -152,53 +162,31 @@ def test_benchmark_does_not_write_output_files(monkeypatch, tmp_path):
 # test 3: output includes all expected keys
 # ---------------------------------------------------------------------------
 
-def test_benchmark_output_has_expected_keys(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    reports_dir = _minimal_reports_dir(tmp_path)
-    result = bench.run_benchmark(
-        reports_dir=reports_dir,
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
-    missing = EXPECTED_KEYS - result.keys()
+def test_benchmark_output_has_expected_keys(benchmark_result):
+    missing = EXPECTED_KEYS - benchmark_result.keys()
     assert not missing, f"Benchmark output missing keys: {missing}"
 
 
-def test_benchmark_output_has_m3_context_fields(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    result = bench.run_benchmark(
-        reports_dir=_minimal_reports_dir(tmp_path),
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
-
-    assert result["pipeline_context_available"] is True
-    assert result["summary_reused_by_evidence"] is True
-    assert result["evidence_reused_by_manifest"] is True
-    assert result["estimated_rebuilds_avoided"] == 2
-    assert result["legacy_total_ms"] >= 0
-    assert result["shared_context_total_ms"] >= 0
-    assert result["shared_context_calls"]["summary_reused_by_evidence"] is True
-    assert result["shared_context_calls"]["evidence_reused_by_manifest"] is True
+def test_benchmark_output_has_m3_context_fields(benchmark_result):
+    assert benchmark_result["pipeline_context_available"] is True
+    assert benchmark_result["summary_reused_by_evidence"] is True
+    assert benchmark_result["evidence_reused_by_manifest"] is True
+    assert benchmark_result["estimated_rebuilds_avoided"] == 2
+    assert benchmark_result["legacy_total_ms"] >= 0
+    assert benchmark_result["shared_context_total_ms"] >= 0
+    assert benchmark_result["shared_context_calls"]["summary_reused_by_evidence"] is True
+    assert benchmark_result["shared_context_calls"]["evidence_reused_by_manifest"] is True
 
 
-def test_benchmark_slowest_sections_is_list(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    result = bench.run_benchmark(
-        reports_dir=_minimal_reports_dir(tmp_path),
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
-    assert isinstance(result["slowest_sections"], list)
-    assert len(result["slowest_sections"]) <= 3
-    for entry in result["slowest_sections"]:
+def test_benchmark_slowest_sections_is_list(benchmark_result):
+    assert isinstance(benchmark_result["slowest_sections"], list)
+    assert len(benchmark_result["slowest_sections"]) <= 3
+    for entry in benchmark_result["slowest_sections"]:
         assert "section" in entry
         assert "ms" in entry
 
 
-def test_benchmark_timings_are_non_negative(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    result = bench.run_benchmark(
-        reports_dir=_minimal_reports_dir(tmp_path),
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
+def test_benchmark_timings_are_non_negative(benchmark_result):
     for key in (
         "dashboard_summary_ms",
         "dashboard_evidence_table_ms",
@@ -209,7 +197,7 @@ def test_benchmark_timings_are_non_negative(monkeypatch, tmp_path):
         "d14_build_ms",
         "audit_total_ms",
     ):
-        assert result[key] >= 0, f"{key} must be non-negative"
+        assert benchmark_result[key] >= 0, f"{key} must be non-negative"
 
 
 # ---------------------------------------------------------------------------
@@ -246,13 +234,8 @@ def test_benchmark_does_not_expose_raw_holdings(monkeypatch, tmp_path):
 # test 5: does not expose raw provider payload
 # ---------------------------------------------------------------------------
 
-def test_benchmark_does_not_expose_raw_provider_payload(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    result = bench.run_benchmark(
-        reports_dir=_minimal_reports_dir(tmp_path),
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
-    serialized = json.dumps(result)
+def test_benchmark_does_not_expose_raw_provider_payload(benchmark_result):
+    serialized = json.dumps(benchmark_result)
     assert "raw_provider" not in serialized
 
 
@@ -260,13 +243,8 @@ def test_benchmark_does_not_expose_raw_provider_payload(monkeypatch, tmp_path):
 # test 6: does not include API keys
 # ---------------------------------------------------------------------------
 
-def test_benchmark_does_not_include_api_keys(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    result = bench.run_benchmark(
-        reports_dir=_minimal_reports_dir(tmp_path),
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
-    serialized = json.dumps(result)
+def test_benchmark_does_not_include_api_keys(benchmark_result):
+    serialized = json.dumps(benchmark_result)
     import re
     assert not re.search(r"sk-[A-Za-z0-9_-]{20,}", serialized), "API key pattern found in output"
     assert "DEEPSEEK_API_KEY" not in serialized
@@ -312,16 +290,10 @@ def test_benchmark_runs_with_populated_db(monkeypatch, tmp_path):
 # test 8: can run when market_history DB missing or empty
 # ---------------------------------------------------------------------------
 
-def test_benchmark_runs_with_missing_db(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    reports_dir = _minimal_reports_dir(tmp_path)
-    result = bench.run_benchmark(
-        reports_dir=reports_dir,
-        market_history_db_path=tmp_path / "nonexistent.sqlite3",
-    )
-    assert isinstance(result, dict)
-    assert result["market_history_observation_count"] == 0
-    assert result["db_index_audit"]["db_exists"] is False
+def test_benchmark_runs_with_missing_db(benchmark_result):
+    assert isinstance(benchmark_result, dict)
+    assert benchmark_result["market_history_observation_count"] == 0
+    assert benchmark_result["db_index_audit"]["db_exists"] is False
 
 
 def test_benchmark_runs_with_empty_db(monkeypatch, tmp_path):
@@ -341,13 +313,8 @@ def test_benchmark_runs_with_empty_db(monkeypatch, tmp_path):
 # test: call_path_audit structure
 # ---------------------------------------------------------------------------
 
-def test_benchmark_call_path_audit_structure(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    result = bench.run_benchmark(
-        reports_dir=_minimal_reports_dir(tmp_path),
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
-    audit = result["call_path_audit"]
+def test_benchmark_call_path_audit_structure(benchmark_result):
+    audit = benchmark_result["call_path_audit"]
     assert "confirmed_facts" in audit
     assert "resolved_hotspots" in audit
     assert "remaining_hotspots_for_m3" in audit
@@ -384,13 +351,8 @@ def test_guard_output_accepts_clean_data():
 # test: db_index_audit structure
 # ---------------------------------------------------------------------------
 
-def test_db_index_audit_keys_present_when_db_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    result = bench.run_benchmark(
-        reports_dir=_minimal_reports_dir(tmp_path),
-        market_history_db_path=tmp_path / "absent.sqlite3",
-    )
-    idx = result["db_index_audit"]
+def test_db_index_audit_keys_present_when_db_missing(benchmark_result):
+    idx = benchmark_result["db_index_audit"]
     assert "db_exists" in idx
     assert "explicit_index_names" in idx
     assert "has_explicit_metric_key_index" in idx

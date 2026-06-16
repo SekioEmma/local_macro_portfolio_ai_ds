@@ -142,14 +142,15 @@ explicitly requested later. It is not the default next task.
 
 ## Stage S - Scenario Stress / Explanation Refinement
 
-Status: S1 completed.
+Status: S1 completed. HF-1 Test Runtime Hotfix completed after S1.
 
 Stage S is the next modeling phase after Stage DF. Its purpose is to refine
 D16 scenario-stress explanation quality using existing evidence and metadata,
 without changing trigger semantics or introducing prediction behavior.
 
 Stage S0 Post-DF Roadmap Reconciliation is completed. S1 D16 Scenario Stress
-Refinement v1 is completed.
+Refinement v1 is completed. HF-1 Test Runtime Hotfix / DB-backed Fixture
+Batching is completed.
 
 S1 improves scenario explanation text, uncertainty drivers, missing/proxy/
 research_needed constraints, and component contribution metadata. It does not
@@ -159,8 +160,13 @@ actions, buy/sell/hedge/rebalance language, providers, endpoints, frontend UI,
 external AI, Tavily/search, live fetches, live writes, BAA10Y substitution for
 HY/IG OAS, or D13 gate relaxation.
 
-Next recommended task: S2 D16 scenario explanation tests / golden contract
-integration if needed, or S3 AI memo boundary template update only after S1/S2.
+HF-1 optimized DB-backed D13 test fixtures and benchmark result reuse only. It
+did not change D10-D19 model semantics, D13 formulas/gates, D16 behavior, AI
+context rules, providers, endpoints, frontend UI, external AI, Tavily/search,
+live fetches, or live writes.
+
+Next recommended task after HF-1: P-M1 dashboard_model_pipeline `_to_dicts`
+accumulator optimization.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

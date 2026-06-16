@@ -1,7 +1,11 @@
 from datetime import date, timedelta
 
 from data_quality import historical_percentile_metrics as percentile
-from data_quality import market_history_store
+from tests.helpers.market_history_fixtures import (
+    insert_market_observations_many_for_tests,
+    market_history_observation_for_tests,
+    seed_market_history_series_for_tests,
+)
 
 
 def test_percentile_zscore_and_robust_zscore_with_5y_history(tmp_path):
@@ -80,9 +84,17 @@ def test_stale_latest_input_blocks_ai_context(tmp_path):
 def test_lower_is_more_stress_band_for_drawdown_uses_damage_direction(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     start = date(2020, 1, 1)
-    for index in range(1900):
-        value = -1.0 * (index + 1)
-        _insert(db_path, "sp500_drawdown_3m", (start + timedelta(days=index)).isoformat(), value)
+    insert_market_observations_many_for_tests(
+        db_path,
+        [
+            market_history_observation_for_tests(
+                "sp500_drawdown_3m",
+                (start + timedelta(days=index)).isoformat(),
+                -1.0 * (index + 1),
+            )
+            for index in range(1900)
+        ],
+    )
 
     row = percentile.build_metric_payload(
         _spec(
@@ -180,17 +192,16 @@ def _insert_series(
     source_badge="official",
     source_series=None,
 ):
-    for index in range(count):
-        value = constant if constant is not None else float(index + 1)
-        _insert(
-            db_path,
-            metric_key,
-            (start_date + timedelta(days=index)).isoformat(),
-            value,
-            source=source,
-            source_badge=source_badge,
-            source_series=source_series,
-        )
+    seed_market_history_series_for_tests(
+        db_path,
+        metric_key,
+        start_date,
+        count,
+        constant=constant,
+        source=source,
+        source_badge=source_badge,
+        source_series=source_series,
+    )
 
 
 def _insert(
@@ -205,21 +216,18 @@ def _insert(
     status="ok",
     freshness_status="historical",
 ):
-    market_history_store.upsert_market_observation(
-        {
-            "metric_key": metric_key,
-            "observation_date": observation_date,
-            "value": value,
-            "status": status,
-            "source": source,
-            "source_badge": source_badge,
-            "provider": source,
-            "source_series": source_series or metric_key.upper(),
-            "generated_at": "2026-01-01T00:00:00+00:00",
-            "fetched_at": "2026-01-01T00:00:00+00:00",
-            "freshness_status": freshness_status,
-            "ai_context_allowed": status == "ok",
-            "metric_kind": "raw",
-        },
-        db_path=db_path,
+    insert_market_observations_many_for_tests(
+        db_path,
+        [
+            market_history_observation_for_tests(
+                metric_key,
+                observation_date,
+                value,
+                source=source,
+                source_badge=source_badge,
+                source_series=source_series,
+                status=status,
+                freshness_status=freshness_status,
+            )
+        ],
     )

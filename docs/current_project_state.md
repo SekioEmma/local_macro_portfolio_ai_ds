@@ -34,7 +34,8 @@ Current branch: `app-mvp`. `main` remains the stable baseline and should not be
 touched for current `app-mvp` work.
 
 Current phase: Stage S - Scenario Stress / Explanation Refinement. S1 D16
-Scenario Stress Refinement v1 is complete.
+Scenario Stress Refinement v1 is complete. HF-1 Test Runtime Hotfix is
+complete after S1.
 DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
 Historical Evidence-row Integration is complete. DF-2 D15/D16 Compliance Audit
 is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. DF-4
@@ -43,8 +44,9 @@ code edits that add explanatory metadata fields only. DF-4a Credit OAS history
 availability audit is complete. DF-4c Credit OAS coverage / provider-rebuild
 metadata integration is complete. Stage DF is concluded. Stage S0 Post-DF
 Roadmap Reconciliation is complete. S1 D16 Scenario Stress Refinement v1 is
-complete. Optional DF-4d BAA10Y reference documentation is deferred unless
-explicitly requested later.
+complete. HF-1 Test Runtime Hotfix / DB-backed Fixture Batching is complete.
+Optional DF-4d BAA10Y reference documentation is deferred unless explicitly
+requested later.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage 9 Chat / Memo / Report productization remains
@@ -340,6 +342,17 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   external AI, Tavily/search, persistence, live fetches, live writes, scenario
   probabilities, forecasts, return estimates, target prices, portfolio
   actions, D13 gate relaxation, BAA10Y substitution, or new hard triggers.
+- HF-1 Test Runtime Hotfix / DB-backed Fixture Batching
+  (`tests/helpers/market_history_fixtures.py`,
+  `tests/test_historical_percentile_metrics.py`,
+  `tests/test_d13_reliability_divergence_metadata.py`,
+  `tests/test_d13_credit_oas_coverage_metadata.py`,
+  `tests/test_benchmark_dashboard_pipeline.py`, and
+  `docs/test_runtime_hotfix.md`). HF-1 adds test-only SQLite fixture batching
+  and module-scope benchmark result reuse for read-only assertions. Production
+  code is unchanged. HF-1 does not change D13 formulas/gates, D16 behavior,
+  model semantics, AI context rules, providers, endpoints, frontend UI,
+  external AI, Tavily/search, live fetches, or live writes.
 
 ## Hard Boundaries
 
@@ -394,7 +407,8 @@ Tavily/search was added. Stage R1 Course Paper Research Recovery Note
 completed as docs-only research recovery. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is completed. Current phase is Stage S - Scenario
 Stress / Explanation Refinement. S1 D16 Scenario Stress Refinement v1 is
-completed. DF-0 roadmap arbitration and
+completed. HF-1 Test Runtime Hotfix is completed after S1. DF-0 roadmap
+arbitration and
 legacy document cleanup is completed. DF-1 D19 v1 historical evidence-row
 integration is completed. DF-2 D15/D16 compliance audit is completed. DF-3
 D17/D18 data gap and source-gate review is completed without production code
@@ -403,10 +417,10 @@ D13 production code edits that add explanatory metadata fields only. DF-4a
 Credit OAS history audit and DF-4c Credit OAS coverage/provider-rebuild
 metadata are complete. Stage DF is concluded. Stage S0 Post-DF Roadmap
 Reconciliation is complete. S1 D16 Scenario Stress Refinement v1 is complete.
-Optional DF-4d BAA10Y D19 proxy/reference documentation is deferred unless
-explicitly requested later. Next recommended task: S2 D16 scenario explanation
-tests / golden contract integration if needed, or S3 AI memo boundary template
-update only after S1/S2.
+HF-1 Test Runtime Hotfix / DB-backed Fixture Batching is complete. Optional
+DF-4d BAA10Y D19 proxy/reference documentation is deferred unless explicitly
+requested later. Next recommended task: P-M1 dashboard_model_pipeline
+`_to_dicts` accumulator optimization.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -432,8 +446,8 @@ reliability / divergence metadata is complete with scoped D13 production code
 edits that add explanatory metadata fields only. DF-4a Credit OAS history audit
 is complete. DF-4c Credit OAS coverage / provider-rebuild metadata integration
 is complete. Stage DF is concluded. Stage S0 is complete, and S1 D16 Scenario
-Stress Refinement v1 is complete. Optional DF-4d BAA10Y D19 proxy/reference
-documentation is deferred unless explicitly requested later. Next recommended
-task: S2 D16 scenario explanation tests / golden contract integration if
-needed, or S3 AI memo boundary template update only after S1/S2.
+Stress Refinement v1 is complete. HF-1 Test Runtime Hotfix is complete.
+Optional DF-4d BAA10Y D19 proxy/reference documentation is deferred unless
+explicitly requested later. Next recommended task: P-M1
+dashboard_model_pipeline `_to_dicts` accumulator optimization.
 Real AI Chat / Memo / Report integrations remain not implemented.

@@ -1,9 +1,9 @@
 import json
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 
 from data_quality import historical_percentile_metrics as percentile
-from data_quality import market_history_store
+from tests.helpers.market_history_fixtures import seed_market_history_series_for_tests
 
 
 COVERAGE_METADATA_KEYS = (
@@ -255,22 +255,10 @@ def _insert_series(db_path, metric_key, start_date, count):
         "high_yield_spread": "BAMLH0A0HYM2",
         "investment_grade_spread": "BAMLC0A0CM",
     }.get(metric_key, metric_key.upper())
-    for index in range(count):
-        market_history_store.upsert_market_observation(
-            {
-                "metric_key": metric_key,
-                "observation_date": (start_date + timedelta(days=index)).isoformat(),
-                "value": float(index + 1),
-                "status": "ok",
-                "source": "FRED",
-                "source_badge": "official",
-                "provider": "FRED",
-                "source_series": source_series,
-                "generated_at": "2026-01-01T00:00:00+00:00",
-                "fetched_at": "2026-01-01T00:00:00+00:00",
-                "freshness_status": "historical",
-                "ai_context_allowed": True,
-                "metric_kind": "raw",
-            },
-            db_path=db_path,
-        )
+    seed_market_history_series_for_tests(
+        db_path,
+        metric_key,
+        start_date,
+        count,
+        source_series=source_series,
+    )

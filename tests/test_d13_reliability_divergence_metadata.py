@@ -3,7 +3,11 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from data_quality import historical_percentile_metrics as percentile
-from data_quality import market_history_store
+from tests.helpers.market_history_fixtures import (
+    insert_market_observations_many_for_tests,
+    market_history_observation_for_tests,
+    seed_market_history_series_for_tests,
+)
 
 
 METADATA_KEYS = (
@@ -87,19 +91,22 @@ def test_sufficient_official_aligned_case_is_high_reliability(tmp_path):
     start = date(2020, 1, 1)
     # 1899 linearly increasing values (1..1899) then the latest sits at the
     # series median, so all three normalizations land in the "normal" band.
-    for index in range(1899):
-        _insert(
-            db_path,
+    rows = [
+        market_history_observation_for_tests(
             "high_yield_spread",
             (start + timedelta(days=index)).isoformat(),
             float(index + 1),
         )
-    _insert(
-        db_path,
-        "high_yield_spread",
-        (start + timedelta(days=1899)).isoformat(),
-        950.0,
+        for index in range(1899)
+    ]
+    rows.append(
+        market_history_observation_for_tests(
+            "high_yield_spread",
+            (start + timedelta(days=1899)).isoformat(),
+            950.0,
+        )
     )
+    insert_market_observations_many_for_tests(db_path, rows)
 
     row = percentile.build_metric_payload(
         _spec("high_yield_spread_percentile", "high_yield_spread", "percentile"),
@@ -178,28 +185,30 @@ def _insert_divergence_series(db_path):
     latest at the top of the dense cluster (~high band) while z-score and
     robust z-score, anchored on the full distribution, see it as ~normal."""
     start = date(2020, 1, 1)
-    for index in range(1600):
-        value = (index + 1) * 10.0 / 1600
-        _insert(
-            db_path,
+    rows = [
+        market_history_observation_for_tests(
             "high_yield_spread",
             (start + timedelta(days=index)).isoformat(),
-            value,
+            (index + 1) * 10.0 / 1600,
         )
-    for index in range(299):
-        value = 50.0 + (index + 1) * 50.0 / 300
-        _insert(
-            db_path,
+        for index in range(1600)
+    ]
+    rows.extend(
+        market_history_observation_for_tests(
             "high_yield_spread",
             (start + timedelta(days=1600 + index)).isoformat(),
-            value,
+            50.0 + (index + 1) * 50.0 / 300,
         )
-    _insert(
-        db_path,
-        "high_yield_spread",
-        (start + timedelta(days=1899)).isoformat(),
-        10.0,
+        for index in range(299)
     )
+    rows.append(
+        market_history_observation_for_tests(
+            "high_yield_spread",
+            (start + timedelta(days=1899)).isoformat(),
+            10.0,
+        )
+    )
+    insert_market_observations_many_for_tests(db_path, rows)
 
 
 def test_divergence_case_marks_divergence_without_promoting_trigger(tmp_path):
@@ -302,9 +311,17 @@ def test_zero_std_zscore_is_not_available_and_reliability_is_insufficient(tmp_pa
 def test_drawdown_direction_is_preserved_after_reliability_metadata(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     start = date(2020, 1, 1)
-    for index in range(1900):
-        value = -1.0 * (index + 1)
-        _insert(db_path, "sp500_drawdown_3m", (start + timedelta(days=index)).isoformat(), value)
+    insert_market_observations_many_for_tests(
+        db_path,
+        [
+            market_history_observation_for_tests(
+                "sp500_drawdown_3m",
+                (start + timedelta(days=index)).isoformat(),
+                -1.0 * (index + 1),
+            )
+            for index in range(1900)
+        ],
+    )
 
     row = percentile.build_metric_payload(
         _spec(
@@ -504,17 +521,16 @@ def _insert_series(
     source_badge="official",
     source_series=None,
 ):
-    for index in range(count):
-        value = constant if constant is not None else float(index + 1)
-        _insert(
-            db_path,
-            metric_key,
-            (start_date + timedelta(days=index)).isoformat(),
-            value,
-            source=source,
-            source_badge=source_badge,
-            source_series=source_series,
-        )
+    seed_market_history_series_for_tests(
+        db_path,
+        metric_key,
+        start_date,
+        count,
+        constant=constant,
+        source=source,
+        source_badge=source_badge,
+        source_series=source_series,
+    )
 
 
 def _insert(
@@ -529,21 +545,18 @@ def _insert(
     status="ok",
     freshness_status="historical",
 ):
-    market_history_store.upsert_market_observation(
-        {
-            "metric_key": metric_key,
-            "observation_date": observation_date,
-            "value": value,
-            "status": status,
-            "source": source,
-            "source_badge": source_badge,
-            "provider": source,
-            "source_series": source_series or metric_key.upper(),
-            "generated_at": "2026-01-01T00:00:00+00:00",
-            "fetched_at": "2026-01-01T00:00:00+00:00",
-            "freshness_status": freshness_status,
-            "ai_context_allowed": status == "ok",
-            "metric_kind": "raw",
-        },
-        db_path=db_path,
+    insert_market_observations_many_for_tests(
+        db_path,
+        [
+            market_history_observation_for_tests(
+                metric_key,
+                observation_date,
+                value,
+                source=source,
+                source_badge=source_badge,
+                source_series=source_series,
+                status=status,
+                freshness_status=freshness_status,
+            )
+        ],
     )
