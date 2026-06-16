@@ -14,11 +14,11 @@ Stage DF - Data Foundation & Historical Evidence Integration.
 ### P1
 
 1. DF-2 D15/D16 Compliance Audit: completed.
-2. DF-3 D17/D18 Data Gap and Source-gate Review: next engineering task.
+2. DF-3 D17/D18 Data Gap and Source-gate Review: completed.
 
 ### P2
 
-1. DF-4 D13 Reliability / Divergence Metadata.
+1. DF-4 D13 Reliability / Divergence Metadata: next engineering task.
 2. D16 scenario stress refinement, only after audit.
 
 ### Frozen
@@ -50,8 +50,8 @@ Stage DF - Data Foundation & Historical Evidence Integration.
 16. DF-0 Roadmap Arbitration and Legacy Document Cleanup: completed.
 17. DF-1 D19 v1 Historical Evidence-row Integration: completed.
 18. DF-2 D15/D16 Compliance Audit: completed.
-19. DF-3 D17/D18 Data Gap and Source-gate Review: next engineering task.
-20. DF-4 D13 Reliability / Divergence Metadata: optional/backlog.
+19. DF-3 D17/D18 Data Gap and Source-gate Review: completed.
+20. DF-4 D13 Reliability / Divergence Metadata: next engineering task.
 21. Stage 9 AI Chat / Memo / Report: not implemented.
 
 ## Current Task Boundary
@@ -84,8 +84,9 @@ to the D15/D19 core modeling roadmap. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is now completed as a static local-only registry and
 replay-row scaffold. DF-0 roadmap arbitration and legacy cleanup is completed.
 DF-1 D19 v1 historical evidence-row integration is completed. DF-2 D15/D16
-compliance audit is completed without production code changes. The next
-engineering task is DF-3 D17/D18 data gap and source-gate review.
+compliance audit is completed without production code changes. DF-3 D17/D18
+data gap and source-gate review is completed without production code changes.
+The next engineering task is DF-4 D13 reliability / divergence metadata.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

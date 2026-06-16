@@ -36,8 +36,8 @@ touched for current `app-mvp` work.
 Current phase: Stage DF - Data Foundation & Historical Evidence Integration.
 DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
 Historical Evidence-row Integration is complete. DF-2 D15/D16 Compliance Audit
-is complete. The next engineering task is DF-3 D17/D18 data gap and source-gate
-review.
+is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. The
+next engineering task is DF-4 D13 reliability / divergence metadata.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage R1 Course Paper Research Recovery Note is
@@ -279,6 +279,18 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   forecast, scenario-probability model, portfolio-action model, or return
   estimator. D15/D16 enter AI Context Manifest only as model outputs, not facts.
   DF-2 passed without production code changes.
+- DF-3 D17/D18 Data Gap and Source-gate Review
+  (`docs/d17_d18_data_gap_review.md` and
+  `tests/test_d17_d18_data_gap_review.py`). The audit confirms D17 remains a
+  growth/inflation context layer (not a recession call, business-cycle
+  forecast, or return estimate) with oil-alone, CPI-alone, single-labor, and
+  low-frequency inflation hard gates enforced. It confirms D18 remains a
+  valuation/equity-structure research and proxy context layer (not a timing
+  model, target-price model, or trading model) with source-gated
+  valuation/earnings facts, always-visible valuation/earnings/true-breadth
+  gaps, single-proxy-cannot-create-pressure, and proxy-breadth-not-true-breadth
+  hard gates enforced. D17/D18 enter AI Context Manifest only when per-row
+  `ai_context_allowed` is True. DF-3 passed without production code changes.
 
 ## Hard Boundaries
 
@@ -334,8 +346,10 @@ completed as docs-only research recovery. D19 v0 Historical Validation Event
 Registry + Replay Skeleton is completed. Current phase is Stage DF - Data
 Foundation & Historical Evidence Integration. DF-0 roadmap arbitration and
 legacy document cleanup is completed. DF-1 D19 v1 historical evidence-row
-integration is completed. DF-2 D15/D16 compliance audit is completed. The next
-engineering task is DF-3 D17/D18 data gap and source-gate review.
+integration is completed. DF-2 D15/D16 compliance audit is completed. DF-3
+D17/D18 data gap and source-gate review is completed without production code
+changes. The next engineering task is DF-4 D13 reliability / divergence
+metadata.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -355,5 +369,6 @@ complete. Stage R1 Course Paper Research Recovery Note is complete as docs-only
 research recovery. D19 v0 Historical Validation Event Registry + Replay
 Skeleton is complete as static local-only registry/replay scaffolding. DF-1 D19
 v1 historical evidence-row integration is complete. DF-2 D15/D16 compliance
-audit is complete without production code changes.
+audit is complete without production code changes. DF-3 D17/D18 data gap and
+source-gate review is complete without production code changes.
 Real AI Chat / Memo / Report integrations remain not implemented.

@@ -91,8 +91,8 @@ Stage order:
 1. DF-0 Roadmap arbitration and legacy cleanup: completed.
 2. DF-1 D19 v1 historical evidence-row integration: completed.
 3. DF-2 D15/D16 compliance audit: completed.
-4. DF-3 D17/D18 data gap and source-gate review: next.
-5. DF-4 D13 reliability/divergence metadata, optional/backlog.
+4. DF-3 D17/D18 data gap and source-gate review: completed.
+5. DF-4 D13 reliability/divergence metadata: next.
 
 DF-1 integrates existing historical validation summary information into D19
 replay rows through compact component metadata. D19 remains historical pressure
@@ -103,8 +103,14 @@ DF-2 reviewed the existing D15 and D16 implementations for compliance with
 current boundaries rather than inventing a parallel model. The audit passed
 without production code changes.
 
-DF-3 should prefer structured missing, stale, proxy, and source-gate states over
-weak data filling. D17 and D18 review should keep missing inputs visible.
+DF-3 reviewed the existing D17 Growth/Inflation Macro Pack and D18
+Valuation/Equity Structure for data coverage, source gates, proxy /
+research_needed / insufficient_history handling, and AI Context Manifest
+entry rules. The audit confirmed all D17/D18 hard gates remain enforced,
+missing valuation/earnings/true-breadth gaps remain visible, proxy-only
+inputs cannot strong-trigger labels, and research_needed/missing rows stay
+excluded from AI factual context. DF-3 passed without production code
+changes.
 
 External AI remains frozen. Stage DF does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
