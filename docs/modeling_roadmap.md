@@ -2,8 +2,14 @@
 
 ## Scope
 
-This document is roadmap control only. It does not authorize live fetches,
-provider writes, account actions, or portfolio instructions.
+This document is the modeling-history narrative and module-boundary record.
+It does not authorize live fetches, provider writes, account actions, or
+portfolio instructions.
+
+This document is not the source of truth for the immediate next task. The
+immediate route lives in `docs/short_term_development_plan.md`. For a
+one-page orientation, see `docs/INDEX.md`. For task-level rules, see
+`docs/task_governance_policy.md`.
 
 ## D15 Macro Regime Review v0
 

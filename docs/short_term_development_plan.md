@@ -1,9 +1,15 @@
 # Short-Term Development Plan
 
+`docs/short_term_development_plan.md` is the source of truth for the immediate
+route and the next engineering task. For a one-page orientation, see
+`docs/INDEX.md`. For task-level rules, see `docs/task_governance_policy.md`.
+
 ## Current Phase
 
 Stage S - Scenario Stress / Explanation Refinement. S1 D16 Scenario Stress
 Refinement v1 is completed. HF-1 Test Runtime Hotfix is completed after S1.
+HF-2 Project Namespace Index / Governance Light Cleanup is completed as a
+docs-only governance hotfix.
 
 ## Priority Route
 
@@ -11,7 +17,8 @@ Refinement v1 is completed. HF-1 Test Runtime Hotfix is completed after S1.
 
 1. S1 D16 Scenario Stress Refinement v1: completed.
 2. HF-1 Test Runtime Hotfix / DB-backed Fixture Batching: completed.
-3. P-M1 dashboard_model_pipeline `_to_dicts` accumulator optimization: next.
+3. HF-2 Project Namespace Index / Governance Light Cleanup: completed.
+4. P-M1 dashboard_model_pipeline `_to_dicts` accumulator optimization: next.
 
 ### P1
 
@@ -30,6 +37,7 @@ Refinement v1 is completed. HF-1 Test Runtime Hotfix is completed after S1.
 - S0 Post-DF Roadmap Reconciliation and S1 Entry Plan.
 - S1 D16 Scenario Stress Refinement v1.
 - HF-1 Test Runtime Hotfix / DB-backed Fixture Batching.
+- HF-2 Project Namespace Index / Governance Light Cleanup.
 
 ### Deferred
 
@@ -126,8 +134,18 @@ after S1/S2.
 HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
 test fixtures and benchmark result reuse only; it did not change model
 semantics, providers, endpoints, frontend UI, external AI, Tavily/search, live
-fetches, or live writes. The next recommended task after HF-1 is P-M1
-dashboard_model_pipeline `_to_dicts` accumulator optimization.
+fetches, or live writes.
+
+HF-2 Project Namespace Index / Governance Light Cleanup is completed as a
+docs-only governance hotfix. HF-2 added `docs/INDEX.md` as a one-page
+orientation map and `docs/task_governance_policy.md` as the task-level rule
+source. It did not change production code, tests, financial model semantics,
+D13 context shape, D16 behavior, AI context eligibility, providers,
+endpoints, frontend UI, external AI, Tavily/search, live fetches, or live
+writes.
+
+The next recommended task after HF-2 is P-M1 dashboard_model_pipeline
+`_to_dicts` accumulator optimization.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

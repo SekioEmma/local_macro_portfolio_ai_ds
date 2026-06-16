@@ -1,5 +1,10 @@
 # Current Project State
 
+For quick orientation, see `docs/INDEX.md`. The detailed historical state
+remains in this document. For the immediate route and the next engineering
+task, see `docs/short_term_development_plan.md`. For task-level rules, see
+`docs/task_governance_policy.md`.
+
 ## Identity
 
 Local Macro Portfolio AI DS is a local-first macro risk research workbench.
@@ -419,8 +424,9 @@ metadata are complete. Stage DF is concluded. Stage S0 Post-DF Roadmap
 Reconciliation is complete. S1 D16 Scenario Stress Refinement v1 is complete.
 HF-1 Test Runtime Hotfix / DB-backed Fixture Batching is complete. Optional
 DF-4d BAA10Y D19 proxy/reference documentation is deferred unless explicitly
-requested later. Next recommended task: P-M1 dashboard_model_pipeline
-`_to_dicts` accumulator optimization.
+requested later. HF-2 Project Namespace Index / Governance Light Cleanup is a
+docs-only governance hotfix completed after HF-1. Next recommended task:
+P-M1 dashboard_model_pipeline `_to_dicts` accumulator optimization.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio

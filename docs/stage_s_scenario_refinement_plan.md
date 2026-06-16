@@ -110,5 +110,12 @@ persistence, live fetches, live writes, scenario probabilities, forecast paths,
 return estimates, price targets, portfolio actions, D13 gate relaxation,
 BAA10Y substitution, or new hard triggers.
 
-Next recommended task: S2 D16 scenario explanation tests / golden contract
-integration if needed, or S3 AI memo boundary template update only after S1/S2.
+S1 is completed. Further S-line tasks (S2, S3) are deferred until after
+HF-1, HF-2, and P-M1 unless explicitly requested. See
+`docs/short_term_development_plan.md` for the current immediate route and
+`docs/INDEX.md` for the namespace map.
+
+Next recommended task: P-M1 dashboard_model_pipeline `_to_dicts` accumulator
+optimization. S2 D16 scenario explanation tests / golden contract integration
+or S3 AI memo boundary template update may follow only after explicit
+decision.
