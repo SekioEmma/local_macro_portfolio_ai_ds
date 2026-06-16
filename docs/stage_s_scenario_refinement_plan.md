@@ -31,14 +31,16 @@ Stage DF completed:
 The safe next modeling step is to let D16 consume existing explanatory metadata
 without changing trigger semantics.
 
-## S1 D16 Scenario Stress Refinement v1
+## S1 Scenario Stress Matrix Refinement v1 (legacy: D16)
 
 Status: completed.
 
 Goal:
 
-Use existing D13 reliability/divergence/OAS coverage metadata, D17/D18
-missing/source-gate notes, and D19 historical replay metadata to improve
+Use existing Historical Risk Normalization (legacy: D13)
+reliability/divergence/OAS coverage metadata, Growth & Inflation Context /
+Valuation & Equity Structure Context (legacy: D17/D18) missing/source-gate
+notes, and Historical Validation Replay (legacy: D19) metadata to improve
 scenario severity, uncertainty, and missing-constraint explanations.
 
 Allowed:
@@ -89,7 +91,8 @@ Not allowed:
 
 S1 is completed in `src/data_quality/scenario_stress.py` with focused contract
 coverage in `tests/test_s1_d16_scenario_refinement.py` and the implementation
-note in `docs/s1_d16_scenario_refinement.md`.
+note in `docs/s1_d16_scenario_refinement.md` (Scenario Stress Matrix,
+legacy: D16).
 
 The D16 public output keys remain unchanged. New explanation details are kept
 inside existing scenario component metadata:
@@ -115,7 +118,8 @@ HF-1, HF-2, and P-M1 unless explicitly requested. See
 `docs/short_term_development_plan.md` for the current immediate route and
 `docs/INDEX.md` for the namespace map.
 
-Next recommended task: P-M1 dashboard_model_pipeline `_to_dicts` accumulator
-optimization. S2 D16 scenario explanation tests / golden contract integration
-or S3 AI memo boundary template update may follow only after explicit
-decision.
+Next recommended task: P-M1 dashboard_model_pipeline row conversion
+accumulator, covering the model chain from Historical Risk Normalization
+(legacy: D13) through Scenario Stress Matrix (legacy: D16). S2 Scenario Stress
+Matrix explanation tests / golden contract integration or S3 AI memo boundary
+template update may follow only after explicit decision.

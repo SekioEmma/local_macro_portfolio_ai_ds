@@ -9,6 +9,8 @@ route is in `docs/short_term_development_plan.md`.
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
 - Last completed task: HF-2 Project Namespace Index / Governance Light Cleanup
+  (including D-line naming cleanup: plain-English names added, legacy D IDs
+  preserved as aliases, production identifiers unchanged)
 - Last completed engineering task before HF-2: HF-1 Test Runtime Hotfix /
   DB-backed Fixture Batching
 - Current immediate route: docs-only governance cleanup, then performance
@@ -46,18 +48,27 @@ discipline. Always check `short_term_development_plan.md` for the active item.
 
 ### D-line: Financial / Macro Model Modules
 
+New docs prefer plain-English module names; D IDs are legacy aliases. See
+[Legacy ID Translation](#legacy-id-translation) below.
+
 - D7-D9: data foundation, drawdowns, curves, cross-asset, labor mini-pack
-- D10: `financial_stress_composite` (pressure temperature, not probability)
-- D11: `pullback_systemic_risk_checklist` (current evidence review)
 - D12: AI Context Manifest / context preview (privacy and eligibility gate)
-- D13: `historical_risk_percentile` (percentile / z-score / robust z-score,
-  5Y/3Y windows, DF-4 reliability/divergence metadata, DF-4c OAS coverage)
-- D14: `liquidity_funding_stress`
-- D15: Macro Regime Review v0 (current evidence review, not classifier)
-- D16: Scenario Stress (S1 refinement; not a probability or forecast model)
-- D17: Growth / Inflation Macro Pack (not a recession call)
-- D18: Valuation / Equity Structure (not a timing model; proxy/research only)
-- D19: Historical Validation (event-window replay, not backtest)
+- Financial Stress Composite (legacy: D10): `financial_stress_composite`
+  (pressure temperature, not probability)
+- Pullback vs Systemic Risk Review (legacy: D11):
+  `pullback_systemic_risk_checklist` (current evidence review)
+- Historical Risk Normalization (legacy: D13): `historical_risk_percentile`
+  (percentile / z-score / robust z-score, 5Y/3Y windows, DF-4
+  reliability/divergence metadata, DF-4c OAS coverage)
+- Liquidity & Funding Stress (legacy: D14): `liquidity_funding_stress`
+- Macro Regime Review (legacy: D15): current evidence review, not classifier
+- Scenario Stress Matrix (legacy: D16): S1 refinement; not a probability or
+  forecast model
+- Growth & Inflation Context (legacy: D17): Growth / Inflation Macro Pack
+  (not a recession call)
+- Valuation & Equity Structure Context (legacy: D18): not a timing model;
+  proxy/research only
+- Historical Validation Replay (legacy: D19): event-window replay, not backtest
 
 ### M-line: Maintainability / Performance Work
 
@@ -69,10 +80,12 @@ discipline. Always check `short_term_development_plan.md` for the active item.
 - M6: frontend display registries organized (completed)
 - M7/M8-A: dashboard model pipeline extraction (completed; remaining work in
   `docs/foundation_stabilization_backlog.md`)
-- P-M1 planned: dashboard_model_pipeline `_to_dicts` accumulator
+- P-M1 planned: dashboard_model_pipeline row conversion accumulator
+  (Historical Risk Normalization through Scenario Stress Matrix)
 - P-M2 planned: dashboard_service helper split (M7/M8-B follow-up)
-- P-M3 planned: D13 metadata helper split (factor out reliability and OAS
-  coverage helpers to keep `build_metric_payload` lean)
+- P-M3 planned: Historical Risk Normalization (legacy: D13) metadata helper
+  split (factor out reliability and OAS coverage helpers to keep
+  `build_metric_payload` lean)
 - P-M4 planned: M11 cross-request shared context design
 
 ### DF-line: Data Foundation / Historical Evidence (concluded)
@@ -107,8 +120,8 @@ Stage DF is concluded. No default DF-5.
 
 ### Stage 8 / 8.5
 
-- Stage 8: Portfolio Exposure Overlay v0 (completed; downstream-only,
-  privacy-preserving)
+- Portfolio Exposure Overlay (legacy: Stage 8): v0 completed; downstream-only,
+  privacy-preserving
 - Stage 8.5: Foundation Stabilization Sprint (completed)
 
 ### Stage 9 / External AI (frozen)
@@ -149,16 +162,17 @@ validation requirements. The short version:
 
 ## Current Backlog (ordered)
 
-1. P-M1 dashboard_model_pipeline `_to_dicts` accumulator optimization
+1. P-M1 dashboard_model_pipeline row conversion accumulator, covering the model
+   chain from Historical Risk Normalization through Scenario Stress Matrix
 2. P-M2 dashboard_service helper split (M7/M8-B follow-up)
-3. P-M3 D13 metadata helper split (factor reliability + OAS coverage out of
-   `build_metric_payload`)
+3. P-M3 Historical Risk Normalization (legacy: D13) metadata helper split
+   (factor reliability + OAS coverage out of `build_metric_payload`)
 4. P-M4 M11 cross-request shared context design (only after P-M1/P-M2)
-5. S2 D16 scenario explanation tests / golden contract integration (only after
-   explicit decision)
+5. S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
+   integration (only after explicit decision)
 6. S3 AI memo boundary template update (only after S2)
-7. DF-4d BAA10Y D19 proxy/reference documentation (only if explicitly
-   requested)
+7. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+   documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,
 full-account DeepSeek context, account editing, live provider fetch/write,
@@ -170,3 +184,39 @@ Future task names and commit messages prefer human-readable names over deep
 stage codes. Stage IDs may remain in docs for historical mapping, but a commit
 message like `Speed up DB-backed test fixtures` is preferred over `Add HF-1
 test runtime hotfix`. See `docs/task_governance_policy.md`.
+
+## Legacy ID Translation
+
+The project historically used D10-D19 IDs for model modules. New docs should
+prefer plain-English names and keep D IDs only as legacy aliases.
+
+| Plain-English name | Legacy ID | Role |
+|---|---|---|
+| Financial Stress Composite | D10 | combines core financial stress evidence across rates, credit, equity, liquidity, and volatility |
+| Pullback vs Systemic Risk Review | D11 | distinguishes ordinary equity pullback from broader systemic-risk evidence |
+| Historical Risk Normalization | D13 | historical percentile, z-score, robust z-score, reliability/divergence metadata, and credit OAS coverage metadata |
+| Liquidity & Funding Stress | D14 | liquidity plumbing, short-term funding pressure, official stress references, and funding confirmation |
+| Macro Regime Review | D15 | current-evidence macro pressure review, not classifier/probability/forecast/trading model |
+| Scenario Stress Matrix | D16 | hypothetical scenario matrix and current evidence transmission review, not forecast/event-odds/return/action model |
+| Growth & Inflation Context | D17 | conservative growth, inflation, policy-constraint, and stagflation-watch context |
+| Valuation & Equity Structure Context | D18 | valuation, earnings, true-breadth gaps, equity structure, breadth/concentration proxy context |
+| Historical Validation Replay | D19 | historical event-window replay, coverage review, boundary validation, and reference-only historical context |
+| Portfolio Exposure Overlay | Stage 8 | downstream-only sanitized portfolio exposure explanation layer, not allocation advice or optimizer |
+
+**Pipeline order (human-readable):**
+
+```
+Historical Risk Normalization (legacy: D13)
+→ Liquidity & Funding Stress (legacy: D14)
+→ Financial Stress Composite (legacy: D10)
+→ Pullback vs Systemic Risk Review (legacy: D11)
+→ Growth & Inflation Context (legacy: D17)
+→ Valuation & Equity Structure Context (legacy: D18)
+→ Macro Regime Review (legacy: D15)
+→ Historical Validation Replay (legacy: D19)
+→ Scenario Stress Matrix (legacy: D16)
+→ Portfolio Exposure Overlay (legacy: Stage 8)
+```
+
+Production identifiers (`module_key`, `model_key`, `metric_key`, registry keys,
+and public output keys) are unchanged.

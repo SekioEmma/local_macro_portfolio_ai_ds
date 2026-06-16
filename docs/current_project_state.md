@@ -38,9 +38,9 @@ disabled-by-default, fake-client-only internal adapter contract.
 Current branch: `app-mvp`. `main` remains the stable baseline and should not be
 touched for current `app-mvp` work.
 
-Current phase: Stage S - Scenario Stress / Explanation Refinement. S1 D16
-Scenario Stress Refinement v1 is complete. HF-1 Test Runtime Hotfix is
-complete after S1.
+Current phase: Stage S - Scenario Stress / Explanation Refinement. S1 Scenario
+Stress Matrix Refinement v1 (legacy: D16) is complete. HF-1 Test Runtime
+Hotfix is complete after S1.
 DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
 Historical Evidence-row Integration is complete. DF-2 D15/D16 Compliance Audit
 is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. DF-4
@@ -424,9 +424,12 @@ metadata are complete. Stage DF is concluded. Stage S0 Post-DF Roadmap
 Reconciliation is complete. S1 D16 Scenario Stress Refinement v1 is complete.
 HF-1 Test Runtime Hotfix / DB-backed Fixture Batching is complete. Optional
 DF-4d BAA10Y D19 proxy/reference documentation is deferred unless explicitly
-requested later. HF-2 Project Namespace Index / Governance Light Cleanup is a
-docs-only governance hotfix completed after HF-1. Next recommended task:
-P-M1 dashboard_model_pipeline `_to_dicts` accumulator optimization.
+requested later. HF-2 Project Namespace Index / Governance Light Cleanup (including D-line
+naming cleanup: plain-English names added, legacy D IDs preserved as aliases,
+production identifiers unchanged) is a docs-only governance hotfix completed
+after HF-1. Next recommended task: P-M1 dashboard_model_pipeline row
+conversion accumulator, covering the model chain from Historical Risk
+Normalization (legacy: D13) through Scenario Stress Matrix (legacy: D16).
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio

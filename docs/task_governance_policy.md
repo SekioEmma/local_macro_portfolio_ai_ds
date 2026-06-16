@@ -131,6 +131,29 @@ Stage IDs may remain in `docs/INDEX.md`, `docs/short_term_development_plan.md`,
 but not every commit needs a nested stage code. The commit message should be
 readable on its own three months later.
 
+### Model Module Naming
+
+For model modules, prefer human-readable module names in task titles, docs, and
+commit messages. Legacy D IDs may remain in parentheses for traceability.
+
+Good:
+
+- `Refine Scenario Stress Matrix explanations`
+- `Add Historical Risk Normalization coverage metadata`
+- `Audit Valuation & Equity Structure source gates`
+- `Optimize Financial Stress pipeline row conversion`
+
+Avoid:
+
+- `Refine D16`
+- `Add D13 metadata`
+- `Audit D18`
+- `Optimize D10-D19 chain`
+
+See `docs/INDEX.md` Legacy ID Translation table for the full plain-English ↔
+D-ID mapping. Production code identifiers (`module_key`, `model_key`,
+`metric_key`, registry keys, public output keys) are not renamed.
+
 ## Governance Update Policy
 
 Do not update three governance docs for every L1 task.

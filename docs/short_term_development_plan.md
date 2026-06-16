@@ -6,19 +6,22 @@ route and the next engineering task. For a one-page orientation, see
 
 ## Current Phase
 
-Stage S - Scenario Stress / Explanation Refinement. S1 D16 Scenario Stress
-Refinement v1 is completed. HF-1 Test Runtime Hotfix is completed after S1.
-HF-2 Project Namespace Index / Governance Light Cleanup is completed as a
-docs-only governance hotfix.
+Stage S - Scenario Stress / Explanation Refinement. S1 Scenario Stress Matrix
+Refinement v1 (legacy: D16) is completed. HF-1 Test Runtime Hotfix is
+completed after S1. HF-2 Project Namespace Index / Governance Light Cleanup
+(including D-line naming cleanup) is completed as a docs-only governance
+hotfix.
 
 ## Priority Route
 
 ### P0
 
-1. S1 D16 Scenario Stress Refinement v1: completed.
+1. S1 Scenario Stress Matrix Refinement v1 (legacy: D16): completed.
 2. HF-1 Test Runtime Hotfix / DB-backed Fixture Batching: completed.
-3. HF-2 Project Namespace Index / Governance Light Cleanup: completed.
-4. P-M1 dashboard_model_pipeline `_to_dicts` accumulator optimization: next.
+3. HF-2 Project Namespace Index / Governance Light Cleanup (including D-line
+   naming cleanup): completed.
+4. P-M1 dashboard_model_pipeline row conversion accumulator (Historical Risk
+   Normalization through Scenario Stress Matrix): next.
 
 ### P1
 
@@ -144,8 +147,9 @@ D13 context shape, D16 behavior, AI context eligibility, providers,
 endpoints, frontend UI, external AI, Tavily/search, live fetches, or live
 writes.
 
-The next recommended task after HF-2 is P-M1 dashboard_model_pipeline
-`_to_dicts` accumulator optimization.
+The next recommended task after HF-2 is P-M1 dashboard_model_pipeline row
+conversion accumulator, covering the model chain from Historical Risk
+Normalization (legacy: D13) through Scenario Stress Matrix (legacy: D16).
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

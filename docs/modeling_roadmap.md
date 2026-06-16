@@ -151,28 +151,32 @@ explicitly requested later. It is not the default next task.
 Status: S1 completed. HF-1 Test Runtime Hotfix completed after S1.
 
 Stage S is the next modeling phase after Stage DF. Its purpose is to refine
-D16 scenario-stress explanation quality using existing evidence and metadata,
-without changing trigger semantics or introducing prediction behavior.
+Scenario Stress Matrix (legacy: D16) explanation quality using existing evidence
+and metadata, without changing trigger semantics or introducing prediction
+behavior.
 
-Stage S0 Post-DF Roadmap Reconciliation is completed. S1 D16 Scenario Stress
-Refinement v1 is completed. HF-1 Test Runtime Hotfix / DB-backed Fixture
-Batching is completed.
+Stage S0 Post-DF Roadmap Reconciliation is completed. S1 Scenario Stress Matrix
+Refinement v1 (legacy: D16) is completed. HF-1 Test Runtime Hotfix / DB-backed
+Fixture Batching is completed.
 
 S1 improves scenario explanation text, uncertainty drivers, missing/proxy/
 research_needed constraints, and component contribution metadata. It does not
-change D16 public output keys, support triggers, or severity rules. It does not
-add scenario probabilities, forecasts, expected returns, price paths, portfolio
-actions, buy/sell/hedge/rebalance language, providers, endpoints, frontend UI,
-external AI, Tavily/search, live fetches, live writes, BAA10Y substitution for
-HY/IG OAS, or D13 gate relaxation.
+change Scenario Stress Matrix (legacy: D16) public output keys, support
+triggers, or severity rules. It does not add scenario probabilities, forecasts,
+expected returns, price paths, portfolio actions, buy/sell/hedge/rebalance
+language, providers, endpoints, frontend UI, external AI, Tavily/search, live
+fetches, live writes, BAA10Y substitution for HY/IG OAS, or Historical Risk
+Normalization (legacy: D13) gate relaxation.
 
-HF-1 optimized DB-backed D13 test fixtures and benchmark result reuse only. It
-did not change D10-D19 model semantics, D13 formulas/gates, D16 behavior, AI
-context rules, providers, endpoints, frontend UI, external AI, Tavily/search,
-live fetches, or live writes.
+HF-1 optimized DB-backed Historical Risk Normalization (legacy: D13) test
+fixtures and benchmark result reuse only. It did not change model semantics,
+formulas/gates, Scenario Stress Matrix (legacy: D16) behavior, AI context
+rules, providers, endpoints, frontend UI, external AI, Tavily/search, live
+fetches, or live writes.
 
-Next recommended task after HF-1: P-M1 dashboard_model_pipeline `_to_dicts`
-accumulator optimization.
+Next recommended task after HF-1: P-M1 dashboard_model_pipeline row conversion
+accumulator, covering the model chain from Historical Risk Normalization
+(legacy: D13) through Scenario Stress Matrix (legacy: D16).
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
