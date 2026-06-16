@@ -56,6 +56,30 @@ counts, available/limited/insufficient-history counts, over/under-escalation
 flags, boundary/proxy/missing-data violation counts, privacy flags,
 model/formula versions, validation boundary, and compact coverage summaries.
 
+## D19 v0 Historical Validation Event Registry + Replay Skeleton
+
+Status: completed.
+
+The Stage R1 candidate event windows are now captured in a static, auditable
+D19 v0 event registry. The registry records controlled event types, expected
+pressure groups, ordinary-pullback markers, data-availability constraints,
+external-reference notes, historical archetypes, and interpretation
+boundaries.
+
+The replay skeleton converts those registry entries into structured event rows
+with `available`, `limited`, `insufficient`, or `reference_only` validation
+status. It is local-only and does not read DB files, outputs, private data,
+external model config, or live providers.
+
+D19 v0 event windows are historical interpretation references, not
+ground-truth labels. The skeleton does not add probability outputs, return
+estimates, trading advice, production clustering, cluster probability,
+cluster-to-action mapping, endpoints, frontend UI, external AI, or live
+fetch/ingest behavior.
+
+Next step: D15 Macro Regime Review v0 follow-up or D19 v1 historical
+evidence-row integration.
+
 ## Stage 8 Portfolio Exposure Overlay v0
 
 Status: completed.

@@ -27,6 +27,25 @@ Future event notes can use this schema:
 The schema is descriptive. It should not include trade direction, expected
 return, prediction accuracy, cluster probability, or portfolio action.
 
+## D19 v0 Implementation Status
+
+D19 v0 Historical Validation Event Registry + Replay Skeleton is completed.
+The candidate windows below are now represented in
+`src/app_backend/services/historical_validation_event_registry.py` with
+controlled event types, expected pressure groups, ordinary-pullback markers,
+external-reference notes, data-availability constraints, and interpretation
+boundaries.
+
+`src/app_backend/services/historical_validation_replay.py` converts those
+registry entries into structured replay rows. The default status is
+`reference_only` unless a caller supplies an existing local historical
+validation summary. `reference_only` and `limited` are coverage states, not
+risk labels.
+
+The implementation does not read DB files, outputs, holdings, private data,
+external AI config, or live providers. It does not add endpoints, frontend UI,
+production clustering, probabilities, return estimates, or trading advice.
+
 ## Candidate Windows
 
 ### 2000 Dot-com / Equity Valuation Unwind

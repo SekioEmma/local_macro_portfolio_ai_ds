@@ -32,8 +32,10 @@ disabled-by-default, fake-client-only internal adapter contract.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage R1 Course Paper Research Recovery Note is
-complete as docs-only research recovery. The next step is to return to the
-D15/D19 core modeling roadmap. Stage
+complete as docs-only research recovery. D19 v0 Historical Validation Event
+Registry + Replay Skeleton is complete as a static, local-only event registry
+and replay-row scaffold. The next step is D15 Macro Regime Review v0 follow-up
+or D19 v1 historical evidence-row integration. Stage
 9.3-A skeleton, Stage 9.3-A closeout / adapter guard hardening, Stage 9.3-B
 readiness seam audit, Stage 9.3-B-0 runtime approval gate, Stage 9.3-B-1
 minimal real adapter design + config contract, Stage 9.3-B-2a mocked
@@ -236,6 +238,19 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   event-note material only. It does not add production clustering, K-means/GMM
   classifier logic, cluster probability, cluster dashboard modules, trading
   signals, AI productization, endpoints, or external calls.
+- D19 v0 Historical Validation Event Registry + Replay Skeleton
+  (`src/app_backend/services/historical_validation_event_registry.py`,
+  `src/app_backend/services/historical_validation_replay.py`, and
+  `docs/d19_historical_validation_v0.md`). The Stage R1 event windows are now
+  represented as a static, auditable registry with controlled event types,
+  pressure groups, ordinary-pullback markers, data-availability constraints,
+  external-reference notes, and interpretation boundaries. The replay skeleton
+  converts registry events into `reference_only`, `limited`, `insufficient`, or
+  `available` rows without reading DB files, outputs, private data, external AI
+  config, or live providers. The CLI has optional read-only event-registry
+  display flags. No frontend, endpoint, external AI call, live ingest,
+  production clustering, probability output, return estimate, or trading advice
+  was added.
 
 ## Hard Boundaries
 
@@ -277,8 +292,9 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 Stage 9.3-B-2d internal one-shot manual invocation review completed.
 External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
 Tavily/search was added. Stage R1 Course Paper Research Recovery Note
-completed as docs-only research recovery. The next step is to return to the
-D15/D19 core modeling roadmap.
+completed as docs-only research recovery. D19 v0 Historical Validation Event
+Registry + Replay Skeleton is completed. The next step is D15 Macro Regime
+Review v0 follow-up or D19 v1 historical evidence-row integration.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -295,5 +311,6 @@ mocked transport adapter, Stage 9.3-B-2b real transport code, Stage 9.3-B-2c
 external response guard + validator integration, and Stage 9.3-B security
 closeout, and Stage 9.3-B-2d internal one-shot manual invocation review are
 complete. Stage R1 Course Paper Research Recovery Note is complete as docs-only
-research recovery.
+research recovery. D19 v0 Historical Validation Event Registry + Replay
+Skeleton is complete as static local-only registry/replay scaffolding.
 Real AI Chat / Memo / Report integrations remain not implemented.

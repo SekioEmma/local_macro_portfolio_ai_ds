@@ -12,6 +12,9 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from data_quality import historical_validation  # noqa: E402
+from app_backend.services.historical_validation_event_registry import (  # noqa: E402
+    get_historical_validation_event_registry,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,7 +44,27 @@ def main(argv: list[str] | None = None) -> int:
         default="json",
         help="Output format. Defaults to json.",
     )
+    parser.add_argument(
+        "--include-event-registry",
+        action="store_true",
+        help="Include the static D19 v0 event registry in JSON output.",
+    )
+    parser.add_argument(
+        "--show-events",
+        action="store_true",
+        help="Print the static D19 v0 event registry and exit.",
+    )
     args = parser.parse_args(argv)
+
+    if args.show_events:
+        registry = get_historical_validation_event_registry()
+        payload = (
+            _format_event_registry_text(registry)
+            if args.format == "text"
+            else json.dumps(registry, ensure_ascii=False, indent=2, sort_keys=True)
+        )
+        print(payload)
+        return 0
 
     event_windows = historical_validation.EVENT_WINDOWS
     if args.event_id:
@@ -57,6 +80,11 @@ def main(argv: list[str] | None = None) -> int:
         db_path=str(args.market_history_db) if args.market_history_db else None,
         event_windows=event_windows,
     )
+    if args.include_event_registry:
+        summary = {
+            **summary,
+            "d19_v0_event_registry": get_historical_validation_event_registry(),
+        }
     payload = (
         _format_text(summary)
         if args.format == "text"
@@ -87,6 +115,17 @@ def _format_text(summary: dict) -> str:
         lines.append(
             f"- {event['event_id']}: {event['coverage_status']} "
             f"({event['available_day_count']} available days)"
+        )
+    return "\n".join(lines)
+
+
+def _format_event_registry_text(registry: list[dict]) -> str:
+    lines = [f"d19_v0_event_registry_count: {len(registry)}"]
+    for event in registry:
+        groups = ", ".join(event["expected_pressure_groups"])
+        lines.append(
+            f"- {event['event_id']}: {event['event_type']} "
+            f"({event['start_date']} to {event['end_date']}; groups: {groups})"
         )
     return "\n".join(lines)
 

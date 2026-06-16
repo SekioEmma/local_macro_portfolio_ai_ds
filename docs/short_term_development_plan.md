@@ -16,8 +16,9 @@
 12. Stage 8.5 Foundation Stabilization Sprint: completed.
 13. Stage 9 preparation through Stage 9.3-B-2d: completed; external AI line frozen.
 14. Stage R1 Course Paper Research Recovery Note: completed as docs-only research recovery.
-15. Return to D15/D19 core modeling roadmap: current next phase.
-16. Stage 9 AI Chat / Memo / Report: not implemented.
+15. D19 v0 Historical Validation Event Registry + Replay Skeleton: completed.
+16. D15 Macro Regime Review v0 follow-up or D19 v1 historical evidence-row integration: current next phase.
+17. Stage 9 AI Chat / Memo / Report: not implemented.
 
 ## Current Task Boundary
 
@@ -45,7 +46,10 @@ items, and did not call DeepSeek or Tavily.
 Stage 9.3-B-2d completed the internal one-shot manual invocation review and
 froze the external AI line. Stage R1 completed course-paper research recovery
 as docs-only method and boundary material. The current next phase is a return
-to the D15/D19 core modeling roadmap.
+to the D15/D19 core modeling roadmap. D19 v0 Historical Validation Event
+Registry + Replay Skeleton is now completed as a static local-only registry and
+replay-row scaffold. The next step is D15 Macro Regime Review v0 follow-up or
+D19 v1 historical evidence-row integration.
 
 Stage 9 should be split into:
 
@@ -62,6 +66,11 @@ methodology, D15 historical archetype language, D19 event-note integration, and
 AI memo boundary wording. It does not add production clustering, K-means/GMM
 classifier logic, cluster probability, cluster-to-action mapping, cluster
 dashboard modules, live fetches, external calls, or trading signals.
+
+D19 v0 uses Stage R1 only as historical event-note source material. It adds
+static event registry and replay skeleton coverage only, not a Dashboard product
+surface, endpoint, external AI integration, live fetch, live ingest, production
+classifier, probability output, return estimate, or trading advice.
 
 ## Not Now
 
