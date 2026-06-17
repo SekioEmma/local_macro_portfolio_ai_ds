@@ -33,7 +33,9 @@ hotfix.
 11. S2 Scenario Stress Matrix explanation tests / golden contract integration:
     completed as tests + docs only (38 contract tests, 11 categories).
 12. S3 AI memo boundary template update: completed.
-13. Manual review / route decision: next.
+13. Dashboard Service Refactor Phase E - Module Builder Extraction: completed.
+14. Phase F1 dashboard metric characterization tests before metric builder
+    extraction: next.
 
 ### P1
 
@@ -61,6 +63,7 @@ hotfix.
 - P-M4-D AI Context Manifest Cache Review (review-only; implementation deferred).
 - S2 Scenario Stress Matrix Explanation Contract / Golden Integration.
 - S3 AI Memo Boundary Template Update.
+- Dashboard Service Refactor Phase E - Module Builder Extraction.
 
 ### Deferred
 
@@ -226,8 +229,21 @@ external AI, Tavily/search, live fetches, or live writes.
 P-M4-D AI Context Manifest Cache Review is completed as a review-only decision
 audit. The review found that P-M4-C evidence cache already eliminates the
 Manifest bottleneck (warm Manifest ~26 ms; Manifest-specific work ~2 ms).
-Implementation is deferred. The next recommended task is S2 Scenario Stress
-Matrix explanation tests / golden contract integration.
+Implementation is deferred.
+
+Dashboard Service Refactor Phase E - Module Builder Extraction is completed.
+It extracts `DashboardModule` construction helpers into
+`dashboard_module_builder.py` while preserving `dashboard_service.py`
+compatibility wrappers, dashboard public APIs, module keys, public output keys,
+key metric semantics, cache semantics, `write_last_good`, AI context
+eligibility, providers, endpoints, frontend UI, external AI, live fetches, live
+writes, prediction/probability outputs, return estimates, allocation outputs,
+and trading advice. See
+`docs/dashboard_service_refactor_phase_e_module_builder.md`.
+
+The next recommended task after Phase E is Phase F1 dashboard metric
+characterization tests before metric builder extraction. Do not jump directly
+to moving `_build_metric`.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

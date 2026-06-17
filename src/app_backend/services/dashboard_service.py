@@ -38,6 +38,18 @@ from app_backend.services.dashboard_filters import (
     apply_evidence_filters,
     evidence_row_matches,
 )
+from app_backend.services.dashboard_module_builder import (
+    build_modules as _module_builder_build_modules,
+    equity_historical_derived_metrics_available as _module_builder_equity_historical_derived_metrics_available,
+    latest_metric_generated_at as _module_builder_latest_metric_generated_at,
+    market_module as _module_builder_market_module,
+    market_stress_historical_derived_metrics_available as _module_builder_market_stress_historical_derived_metrics_available,
+    module as _module_builder_module,
+    module_status_with_coverage as _module_builder_module_status_with_coverage,
+    portfolio_module as _module_builder_portfolio_module,
+    proxy_historical_derived_metrics_available as _module_builder_proxy_historical_derived_metrics_available,
+    summary_with_coverage_note as _summary_with_coverage_note,
+)
 from app_backend.services.dashboard_report_loader import (
     OPTIONAL_METADATA_REPORT_FILES,
     REPORT_FILES,
@@ -866,84 +878,18 @@ def _build_modules(
     *,
     market_history_db_path: Path | str | None = None,
 ) -> dict[str, DashboardModule]:
-    market = reports["market_snapshot"]
-    temperature = reports["market_temperature"]
-    portfolio = reports["portfolio_snapshot"]
-    llm_context = reports.get("llm_context_pack")
-    market_metadata_reports = (market, llm_context) if llm_context else (market,)
-    market_temperature_metadata_reports = (
-        market,
-        temperature,
-        llm_context,
-    ) if llm_context else (market, temperature)
-    return {
-        "credit_stress": _market_module(
-            key="credit_stress",
-            label="credit stress",
-            reports=market_temperature_metadata_reports,
-            signal_terms=("financial_conditions", "high_yield_spread", "credit", "vix"),
-            key_metrics=_key_metrics_for_module("credit_stress", market_temperature_metadata_reports),
-        ),
-        "rate_pressure": _market_module(
-            key="rate_pressure",
-            label="rate pressure",
-            reports=market_metadata_reports,
-            signal_terms=("dgs10", "dgs30", "treasury_yields", "10y", "30y"),
-            key_metrics=_key_metrics_for_module("rate_pressure", market_metadata_reports),
-        ),
-        "real_yield_pressure": _market_module(
-            key="real_yield_pressure",
-            label="real yield pressure",
-            reports=market_metadata_reports,
-            signal_terms=("real_yield_10y", "dfii10", "real_yield"),
-            key_metrics=_key_metrics_for_module("real_yield_pressure", market_metadata_reports),
-        ),
-        "inflation_energy_pressure": _market_module(
-            key="inflation_energy_pressure",
-            label="inflation and energy pressure",
-            reports=market_temperature_metadata_reports,
-            signal_terms=("cpi", "pce", "ppi", "oil", "energy", "inflation"),
-            key_metrics=_key_metrics_for_module(
-                "inflation_energy_pressure",
-                market_temperature_metadata_reports,
-                market_history_db_path=market_history_db_path,
-            ),
-        ),
-        "equity_trend": _market_module(
-            key="equity_trend",
-            label="equity trend",
-            reports=market_temperature_metadata_reports,
-            signal_terms=("sp500", "nasdaq", "nasdaq100", "equity_temperature", "equity"),
-            key_metrics=_key_metrics_for_module(
-                "equity_trend",
-                market_temperature_metadata_reports,
-                market_history_db_path=market_history_db_path,
-            ),
-        ),
-        "breadth_concentration_proxy": _market_module(
-            key="breadth_concentration_proxy",
-            label="proxy breadth and concentration",
-            reports=market_temperature_metadata_reports,
-            signal_terms=("breadth", "concentration", "spy_proxy", "rsp_proxy", "qqq_proxy"),
-            key_metrics=_key_metrics_for_module(
-                "breadth_concentration_proxy",
-                market_temperature_metadata_reports,
-                market_history_db_path=market_history_db_path,
-            ),
-        ),
-        "market_stress_derived": _market_module(
-            key="market_stress_derived",
-            label="market stress derived",
-            reports=market_temperature_metadata_reports,
-            signal_terms=("drawdown", "curve", "tlt_proxy", "gld_proxy", "shy_proxy"),
-            key_metrics=_key_metrics_for_module(
-                "market_stress_derived",
-                market_temperature_metadata_reports,
-                market_history_db_path=market_history_db_path,
-            ),
-        ),
-        "portfolio_deviation": _portfolio_module(portfolio),
-    }
+    return _module_builder_build_modules(
+        reports,
+        market_history_db_path=market_history_db_path,
+        key_metrics_for_module=_key_metrics_for_module,
+        portfolio_deviation_compact=_portfolio_deviation_compact,
+        portfolio_compact_module_status=_portfolio_compact_module_status,
+        core_metric_keys=CORE_METRIC_KEYS,
+        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
+        equity_historical_derived_metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+        proxy_historical_derived_metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+        market_stress_historical_derived_metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
+    )
 
 
 def _market_module(
@@ -953,136 +899,28 @@ def _market_module(
     signal_terms: tuple[str, ...],
     key_metrics: list[DashboardMetric],
 ) -> DashboardModule:
-    error = _first_error(reports)
-    if error is not None:
-        return _module(
-            key=key,
-            status="error",
-            label=label,
-            summary=f"{label} report data is invalid",
-            source_badge="report_error",
-            error_summary=error,
-            key_metrics=key_metrics,
-        )
-
-    available_reports = [report for report in reports if report.data is not None]
-    if key == "equity_trend" and _equity_historical_derived_metrics_available(key_metrics):
-        return _module(
-            key=key,
-            status="ok",
-            label=label,
-            summary=(
-                "equity trend historical derived metrics available; risk "
-                "interpretation remains descriptive"
-            ),
-            source_badge="derived",
-            updated_at=_latest_metric_generated_at(key_metrics),
-            key_metrics=key_metrics,
-        )
-    if key == "breadth_concentration_proxy" and _proxy_historical_derived_metrics_available(key_metrics):
-        return _module(
-            key=key,
-            status="ok",
-            label=label,
-            summary=(
-                "proxy breadth and concentration metrics available; yfinance ETF "
-                "proxy boundary applies"
-            ),
-            source_badge="derived",
-            updated_at=_latest_metric_generated_at(key_metrics),
-            key_metrics=key_metrics,
-        )
-    if key == "market_stress_derived" and _market_stress_historical_derived_metrics_available(key_metrics):
-        return _module(
-            key=key,
-            status="ok",
-            label=label,
-            summary=(
-                "local drawdown, curve slope, and cross-asset proxy metrics "
-                "available; descriptive boundaries apply"
-            ),
-            source_badge="derived",
-            updated_at=_latest_metric_generated_at(key_metrics),
-            key_metrics=key_metrics,
-        )
-    if not available_reports:
-        return _module(
-            key=key,
-            status="missing",
-            label=label,
-            summary=f"{label} data missing",
-            source_badge="missing_report",
-            next_action=_run_reports_action(),
-            key_metrics=key_metrics,
-        )
-
-    if any(_contains_signal(report.data, signal_terms) for report in available_reports):
-        status = _coerce_status(_first_status(available_reports), default="ok")
-        return _module(
-            key=key,
-            status=status,
-            label=label,
-            summary=f"{label} compact data available",
-            source_badge="cached_report",
-            updated_at=_first_updated_at(available_reports),
-            key_metrics=key_metrics,
-        )
-
-    return _module(
+    return _module_builder_market_module(
         key=key,
-        status="missing",
         label=label,
-        summary=f"{label} compact signal missing",
-        source_badge="cached_report",
-        updated_at=_first_updated_at(available_reports),
-        next_action=_run_reports_action(),
+        reports=reports,
+        signal_terms=signal_terms,
         key_metrics=key_metrics,
+        core_metric_keys=CORE_METRIC_KEYS,
+        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
+        equity_historical_derived_metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+        proxy_historical_derived_metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+        market_stress_historical_derived_metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
 def _portfolio_module(report: ReportState) -> DashboardModule:
-    key_metrics = _key_metrics_for_module("portfolio_deviation", (report,))
-    if report.error_summary is not None:
-        return _module(
-            key="portfolio_deviation",
-            status="error",
-            label="portfolio deviation",
-            summary="portfolio snapshot invalid",
-            source_badge="report_error",
-            error_summary=report.error_summary,
-            key_metrics=key_metrics,
-        )
-    if report.data is None:
-        return _module(
-            key="portfolio_deviation",
-            status="missing",
-            label="missing",
-            summary="portfolio snapshot missing",
-            source_badge="missing_report",
-            next_action="python scripts/run_portfolio_check.py",
-            key_metrics=key_metrics,
-        )
-    compact = _portfolio_deviation_compact(report)
-    if compact is not None:
-        return _module(
-            key="portfolio_deviation",
-            status=_portfolio_compact_module_status(compact),
-            label="compact",
-            summary="portfolio deviation compact data available",
-            source_badge="cached_report",
-            updated_at=compact.generated_at,
-            key_metrics=key_metrics,
-        )
-    return _module(
-        key="portfolio_deviation",
-        status=_coerce_status(report.data.get("status"), default="ok"),
-        label="available",
-        summary="portfolio snapshot available",
-        source_badge="cached_report",
-        updated_at=_string_or_none(
-            report.data.get("generated_at") or report.data.get("updated_at")
-        ),
-        key_metrics=key_metrics,
+    return _module_builder_portfolio_module(
+        report,
+        key_metrics_for_module=_key_metrics_for_module,
+        portfolio_deviation_compact=_portfolio_deviation_compact,
+        portfolio_compact_module_status=_portfolio_compact_module_status,
+        core_metric_keys=CORE_METRIC_KEYS,
+        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
     )
 
 
@@ -1097,24 +935,18 @@ def _module(
     error_summary: str | None = None,
     key_metrics: list[DashboardMetric] | None = None,
 ) -> DashboardModule:
-    metrics = key_metrics or []
-    coerced_status = _coerce_status(status)
-    adjusted_status, coverage_note = _module_status_with_coverage(
+    return _module_builder_module(
         key,
-        coerced_status,
-        metrics,
-    )
-    adjusted_summary = _summary_with_coverage_note(summary, coverage_note)
-    return DashboardModule(
-        key=key,
-        status=adjusted_status,
-        label=label,
-        summary=adjusted_summary,
-        source_badge=source_badge,
+        status,
+        label,
+        summary,
+        source_badge,
         updated_at=updated_at,
         next_action=next_action,
-        error_summary=_safe_error_summary(error_summary),
-        key_metrics=metrics,
+        error_summary=error_summary,
+        key_metrics=key_metrics,
+        core_metric_keys=CORE_METRIC_KEYS,
+        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
     )
 
 
@@ -1740,47 +1572,32 @@ def _dashboard_historical_derived_hint(
 def _equity_historical_derived_metrics_available(
     metrics: list[DashboardMetric],
 ) -> bool:
-    return any(
-        metric.metric_key in EQUITY_HISTORICAL_DERIVED_METRIC_KEYS
-        and metric.status == "ok"
-        and metric.source_badge == "derived"
-        and metric.value is not None
-        for metric in metrics
+    return _module_builder_equity_historical_derived_metrics_available(
+        metrics,
+        metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
 def _proxy_historical_derived_metrics_available(
     metrics: list[DashboardMetric],
 ) -> bool:
-    return any(
-        metric.metric_key in PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS
-        and metric.status == "ok"
-        and metric.source_badge == "derived"
-        and metric.value is not None
-        for metric in metrics
+    return _module_builder_proxy_historical_derived_metrics_available(
+        metrics,
+        metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
 def _market_stress_historical_derived_metrics_available(
     metrics: list[DashboardMetric],
 ) -> bool:
-    return any(
-        metric.metric_key in MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS
-        and metric.status == "ok"
-        and metric.source_badge == "derived"
-        and metric.value is not None
-        for metric in metrics
+    return _module_builder_market_stress_historical_derived_metrics_available(
+        metrics,
+        metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
 def _latest_metric_generated_at(metrics: list[DashboardMetric]) -> str | None:
-    candidates = [
-        value
-        for metric in metrics
-        for value in [metric.generated_at or metric.observation_date]
-        if value
-    ]
-    return max(candidates) if candidates else None
+    return _module_builder_latest_metric_generated_at(metrics)
 
 
 def _portfolio_compact_metric(
@@ -2878,36 +2695,10 @@ def _module_status_with_coverage(
     status: str,
     key_metrics: list[DashboardMetric],
 ) -> tuple[str, str | None]:
-    if status in {"error", "missing", "stale"}:
-        return status, None
-    core_metrics = [
-        metric
-        for metric in key_metrics
-        if metric.metric_key in CORE_METRIC_KEYS.get(module_key, set())
-    ]
-    if not core_metrics:
-        return status, None
-
-    blocked = [
-        metric for metric in core_metrics if metric.status in AI_BLOCKED_METRIC_STATUSES
-    ]
-    stale = [metric for metric in core_metrics if metric.freshness_status == "stale"]
-    if len(blocked) == len(core_metrics):
-        return "unknown", "core metric coverage unavailable"
-    if stale:
-        return "stale", "one or more core metrics are stale"
-    if blocked and status == "ok":
-        return "unknown", "partial core metric coverage"
-    return status, None
-
-
-def _summary_with_coverage_note(summary: str | None, coverage_note: str | None) -> str | None:
-    if not coverage_note:
-        return summary
-    if not summary:
-        return coverage_note
-    if coverage_note in summary:
-        return summary
-    return f"{summary}; {coverage_note}"
-
-
+    return _module_builder_module_status_with_coverage(
+        module_key,
+        status,
+        key_metrics,
+        core_metric_keys=CORE_METRIC_KEYS,
+        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
+    )

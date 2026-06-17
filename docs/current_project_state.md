@@ -515,6 +515,18 @@ non-action wording. S3 does not change financial model semantics, Scenario
 Stress Matrix support/severity/uncertainty logic, public keys, module/model/
 metric/registry keys, AI Context Manifest semantics, AI memo schema, providers,
 endpoints, frontend UI, external AI, Tavily/search, live fetch, or live write.
-Next recommended task: manual review / route decision before any Stage 9
-product surface, or return to backlog decision.
+Dashboard Service Refactor Phase E - Module Builder Extraction is complete as a
+behavior-preserving extraction of `DashboardModule` construction helpers into
+`src/app_backend/services/dashboard_module_builder.py`. `dashboard_service.py`
+keeps compatibility wrappers for the legacy underscore helper surface. The new
+module receives key metric builders, portfolio compact builders, core metric
+keys, blocked statuses, and historical-derived key sets by
+callback/configuration, and does not import `dashboard_service.py`. No
+dashboard public API, module key, public output key, key metric semantic,
+financial model semantic, cache semantic, `write_last_good` behavior, AI
+context eligibility, provider, endpoint, frontend UI, external AI,
+Tavily/search, live fetch/write, prediction/probability output, return
+estimate, allocation output, or trading advice changed.
+Next recommended task: Phase F1 dashboard metric characterization tests before
+metric builder extraction.
 Real AI Chat / Memo / Report integrations remain not implemented.

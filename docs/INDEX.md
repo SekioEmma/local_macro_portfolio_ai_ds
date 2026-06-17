@@ -8,12 +8,13 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: S3 AI memo boundary template update
+- Last completed task: Dashboard Service Refactor Phase E - Module Builder
+  Extraction
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: manual review / route decision
-- Next engineering task: manual review before any Stage 9 product surface, or
-  return to backlog decision
+- Current immediate route: Phase F1 dashboard metric characterization tests
+- Next engineering task: Phase F1 characterization before metric builder
+  extraction
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -173,8 +174,12 @@ validation requirements. The short version:
 8. ~~S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
    integration~~ (completed)
 9. ~~S3 AI memo boundary template update~~ (completed)
-10. Manual review / route decision
-11. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+10. ~~Dashboard Service Refactor Phase E - Module Builder Extraction~~
+    (completed)
+11. Phase F1 dashboard metric characterization tests before metric builder
+    extraction
+12. Manual review / route decision
+13. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,

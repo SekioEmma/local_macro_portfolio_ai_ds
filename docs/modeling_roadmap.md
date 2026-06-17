@@ -254,8 +254,18 @@ Context Manifest semantics, AI memo schema, providers, endpoints, frontend UI,
 external AI, Tavily/search, live fetches, or live writes. See
 `docs/s3_ai_memo_boundary_template.md`.
 
-Next recommended task after S3: manual review / route decision before any Stage
-9 product surface, or return to backlog decision.
+Dashboard Service Refactor Phase E - Module Builder Extraction: completed.
+Behavior-preserving extraction of `DashboardModule` construction helpers to
+`dashboard_module_builder.py`, with callbacks/configuration used to avoid any
+reverse import from the new module to `dashboard_service.py`. No dashboard API,
+module key, public output key, key metric semantic, model semantic, cache,
+`write_last_good`, AI context eligibility, provider, endpoint, frontend,
+external AI, live fetch/write, prediction/probability, return, allocation, or
+trading behavior changed. See
+`docs/dashboard_service_refactor_phase_e_module_builder.md`.
+
+Next recommended task after Phase E: Phase F1 dashboard metric characterization
+tests before metric builder extraction.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
