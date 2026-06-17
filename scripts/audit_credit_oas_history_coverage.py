@@ -21,7 +21,8 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from data_quality import historical_validation, market_history_store  # noqa: E402
+from data_quality import historical_validation  # noqa: E402
+from data_providers import market_history_store  # noqa: E402
 
 
 TARGET_METRICS = {

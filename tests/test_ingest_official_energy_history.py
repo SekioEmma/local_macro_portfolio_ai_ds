@@ -1,5 +1,5 @@
 import ingest_official_energy_history as ingest
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 CONFIG_TEXT = """

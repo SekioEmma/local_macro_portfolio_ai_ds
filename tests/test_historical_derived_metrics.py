@@ -2,7 +2,7 @@ import math
 import socket
 
 from data_quality import historical_derived_metrics as derived
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 def test_period_return_with_sufficient_history(tmp_path):

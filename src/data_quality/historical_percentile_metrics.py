@@ -7,7 +7,7 @@ from statistics import mean, median, pstdev
 from typing import Any
 
 from data_quality import historical_percentile_metadata as metadata
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 INTERPRETATION_BOUNDARY = (

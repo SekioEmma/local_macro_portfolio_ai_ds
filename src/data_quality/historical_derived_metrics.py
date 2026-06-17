@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 DEFAULT_FRESHNESS_STATUS = "historical"

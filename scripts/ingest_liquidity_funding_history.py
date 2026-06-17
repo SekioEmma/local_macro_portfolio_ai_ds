@@ -16,7 +16,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from data_providers import fred_provider  # noqa: E402
 from data_quality import liquidity_funding_stress  # noqa: E402
-from data_quality import market_history_store  # noqa: E402
+from data_providers import market_history_store  # noqa: E402
 
 
 DEFAULT_LIMIT = 1600

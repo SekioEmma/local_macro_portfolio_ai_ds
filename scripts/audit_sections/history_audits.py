@@ -7,7 +7,7 @@ from app_backend.schemas.responses import DashboardEvidenceRow
 from data_providers import market_data_service
 from data_providers import yfinance_history_provider
 from data_quality import historical_derived_metrics, liquidity_funding_stress as d14_liquidity_funding
-from data_quality import market_history_store
+from data_providers import market_history_store
 import ingest_core_risk_history
 
 from .common import (

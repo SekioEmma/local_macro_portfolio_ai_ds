@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from data_providers import market_data_service
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

@@ -9,7 +9,7 @@ import socket
 import pytest
 
 import benchmark_dashboard_pipeline as bench
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 # ---------------------------------------------------------------------------

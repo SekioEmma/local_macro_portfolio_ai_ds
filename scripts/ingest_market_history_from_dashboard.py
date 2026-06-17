@@ -14,7 +14,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
-from data_quality import market_history_store  # noqa: E402
+from data_providers import market_history_store  # noqa: E402
 
 
 BLOCKED_SOURCE_BADGES = {"missing", "research_needed", "search-derived"}

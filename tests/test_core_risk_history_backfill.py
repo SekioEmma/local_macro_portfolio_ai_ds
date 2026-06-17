@@ -2,7 +2,7 @@ import json
 from datetime import date, timedelta
 
 import ingest_core_risk_history as ingest
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 def test_default_dry_run_does_not_fetch_or_write(tmp_path):

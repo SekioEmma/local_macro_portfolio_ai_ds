@@ -44,7 +44,7 @@ from app_backend.services.dashboard_evidence_policy import (
 from app_backend.services.dashboard_model_pipeline import build_dashboard_model_rows
 from data_quality import historical_derived_metrics
 from data_quality import last_good_cache
-from data_quality import market_history_store
+from data_providers import market_history_store
 from data_quality import official_macro_pack
 
 

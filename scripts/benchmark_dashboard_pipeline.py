@@ -30,7 +30,7 @@ from app_backend.services import dashboard_service  # noqa: E402
 from data_quality import financial_stress_composite  # noqa: E402
 from data_quality import historical_percentile_metrics  # noqa: E402
 from data_quality import liquidity_funding_stress  # noqa: E402
-from data_quality import market_history_store  # noqa: E402
+from data_providers import market_history_store  # noqa: E402
 from data_quality import pullback_systemic_checklist  # noqa: E402
 import audit_data_pipeline_coverage as audit  # noqa: E402
 

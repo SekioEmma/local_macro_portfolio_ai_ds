@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 def seed_market_history_series_for_tests(

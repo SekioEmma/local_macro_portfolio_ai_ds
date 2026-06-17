@@ -3,7 +3,7 @@ import subprocess
 import sys
 
 from data_quality import historical_validation as d19
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 def test_d19_event_window_registry_shape():

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 def test_equity_historical_derived_metrics_integrate_into_dashboard(monkeypatch, tmp_path):

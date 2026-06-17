@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
-from data_quality import market_history_store
+from data_providers import market_history_store
 from data_quality import official_macro_pack
 
 

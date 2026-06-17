@@ -5,7 +5,7 @@ import sys
 import pytest
 
 import ingest_market_history_from_dashboard as ingest
-from data_quality import market_history_store as store
+from data_providers import market_history_store as store
 
 
 def test_ingest_dry_run_does_not_create_db(monkeypatch, tmp_path):

@@ -9,7 +9,7 @@ from data_quality.historical_validation_replay import (
     get_historical_validation_replay_rows,
 )
 from data_quality import macro_regime_review
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 MODEL_KEY = "historical_validation_v1"

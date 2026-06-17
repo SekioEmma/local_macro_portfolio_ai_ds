@@ -2,7 +2,7 @@ import json
 from datetime import date, timedelta
 
 import audit_credit_oas_history_coverage as audit
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 def test_local_only_default_does_not_probe_network(tmp_path, monkeypatch):

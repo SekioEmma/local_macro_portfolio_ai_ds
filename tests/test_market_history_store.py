@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from data_quality import market_history_store as store
+from data_providers import market_history_store as store
 
 
 def test_initialize_market_history_db_is_idempotent(tmp_path):

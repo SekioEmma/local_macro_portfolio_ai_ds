@@ -2,7 +2,7 @@ import json
 import socket
 
 import ingest_yfinance_history as ingest
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 def test_default_dry_run_without_live_does_not_call_downloader_or_write(tmp_path):

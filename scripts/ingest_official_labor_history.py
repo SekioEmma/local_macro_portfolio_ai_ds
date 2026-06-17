@@ -15,7 +15,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from data_providers import fred_provider, market_data_service  # noqa: E402
-from data_quality import market_history_store  # noqa: E402
+from data_providers import market_history_store  # noqa: E402
 
 
 LABOR_SERIES: dict[str, dict[str, str]] = {

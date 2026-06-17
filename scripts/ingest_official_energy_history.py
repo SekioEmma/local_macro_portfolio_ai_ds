@@ -14,7 +14,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from data_providers import market_data_service, official_energy_history_provider  # noqa: E402
-from data_quality import market_history_store  # noqa: E402
+from data_providers import market_history_store  # noqa: E402
 
 
 def build_ingest_summary(

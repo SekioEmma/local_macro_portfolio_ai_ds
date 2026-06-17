@@ -16,7 +16,7 @@ import pytest
 
 from data_quality import historical_percentile_metrics as percentile
 from data_quality import liquidity_funding_stress as d14
-from data_quality import market_history_store as store
+from data_providers import market_history_store as store
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +266,7 @@ def test_migration_does_not_change_existing_data(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Part C: D13 row equivalence â€?batch path produces identical results
+# Part C: D13 row equivalence ï¿½?batch path produces identical results
 # ---------------------------------------------------------------------------
 
 def test_d13_batch_rows_identical_to_single_query_rows(tmp_path):
@@ -296,7 +296,7 @@ def test_d13_hy_ig_insufficient_history_gates_unchanged(tmp_path):
     This gate must not be bypassed by M2 batch optimization.
     """
     db_path = tmp_path / "mh.sqlite3"
-    # Insert only 10 observations â€?far below minimum of 60
+    # Insert only 10 observations ï¿½?far below minimum of 60
     start = date(2026, 1, 1)
     for i in range(10):
         _insert(db_path, "high_yield_spread", (start + timedelta(days=i)).isoformat(), float(4 + i * 0.1))
@@ -342,7 +342,7 @@ def test_d13_spec_count_unchanged():
 
 
 # ---------------------------------------------------------------------------
-# Part D: D14 row equivalence â€?batch path produces identical results
+# Part D: D14 row equivalence ï¿½?batch path produces identical results
 # ---------------------------------------------------------------------------
 
 def test_d14_batch_rows_count_unchanged(tmp_path):

@@ -5,7 +5,7 @@ import sys
 
 from app_backend.schemas.responses import DashboardEvidenceRow, DashboardMetric, DashboardModule
 import audit_data_pipeline_coverage as audit
-from data_quality import market_history_store
+from data_providers import market_history_store
 from modeling.model_registry import ModelRegistry
 
 

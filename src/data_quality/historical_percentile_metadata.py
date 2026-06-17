@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from data_quality import market_history_store
+from data_providers import market_history_store
 
 
 FALLBACK_WINDOW_DAYS = 365 * 3

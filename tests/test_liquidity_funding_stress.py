@@ -7,7 +7,7 @@ from app_backend.services import ai_context_service
 from app_backend.services import dashboard_service
 from data_quality import financial_stress_composite
 from data_quality import liquidity_funding_stress as d14
-from data_quality import market_history_store
+from data_providers import market_history_store
 from data_quality import pullback_systemic_checklist
 import ingest_liquidity_funding_history
 
