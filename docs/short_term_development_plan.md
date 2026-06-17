@@ -22,7 +22,8 @@ hotfix.
    naming cleanup): completed.
 4. P-M1 dashboard_model_pipeline row conversion accumulator (Historical Risk
    Normalization through Scenario Stress Matrix): completed.
-5. P-M2 dashboard_service helper split (M7/M8-B follow-up): next.
+5. P-M2 dashboard_service helper split (M7/M8-B follow-up): completed.
+6. P-M3 Historical Risk Normalization metadata helper split: next.
 
 ### P1
 
@@ -43,6 +44,7 @@ hotfix.
 - HF-1 Test Runtime Hotfix / DB-backed Fixture Batching.
 - HF-2 Project Namespace Index / Governance Light Cleanup.
 - P-M1 dashboard_model_pipeline row conversion accumulator.
+- P-M2 dashboard_service Evidence Row / AI Gate Helper Split.
 
 ### Deferred
 
@@ -149,9 +151,19 @@ D13 context shape, D16 behavior, AI context eligibility, providers,
 endpoints, frontend UI, external AI, Tavily/search, live fetches, or live
 writes.
 
-The next recommended task after HF-2 is P-M1 dashboard_model_pipeline row
-conversion accumulator, covering the model chain from Historical Risk
-Normalization (legacy: D13) through Scenario Stress Matrix (legacy: D16).
+P-M1 dashboard_model_pipeline row conversion accumulator is completed, covering
+the model chain from Historical Risk Normalization (legacy: D13) through
+Scenario Stress Matrix (legacy: D16).
+
+P-M2 dashboard_service Evidence Row / AI Gate Helper Split is completed as a
+behavior-preserving extraction. It moved evidence row construction and AI gate
+policy helpers into `dashboard_evidence_policy.py` while keeping private
+compatibility aliases in `dashboard_service.py`. It did not change model
+semantics, public keys, schemas, AI context semantics, providers, endpoints,
+frontend UI, external AI, Tavily/search, live fetches, or live writes.
+
+The next recommended task after P-M2 is P-M3 Historical Risk Normalization
+metadata helper split.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

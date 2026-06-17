@@ -8,12 +8,12 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: P-M1 dashboard_model_pipeline row conversion accumulator
-  optimization (behavior-preserving; no model semantics changed)
+- Last completed task: P-M2 dashboard_service helper split
+  (behavior-preserving; no model semantics changed)
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
 - Current immediate route: performance hardening
-- Next engineering task: P-M2 dashboard_service helper split
+- Next engineering task: P-M3 Historical Risk Normalization metadata helper split
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -79,7 +79,7 @@ New docs prefer plain-English module names; D IDs are legacy aliases. See
   `docs/foundation_stabilization_backlog.md`)
 - P-M1 completed: dashboard_model_pipeline row conversion accumulator
   (Historical Risk Normalization through Scenario Stress Matrix)
-- P-M2 planned: dashboard_service helper split (M7/M8-B follow-up)
+- P-M2 completed: dashboard_service helper split (M7/M8-B follow-up)
 - P-M3 planned: Historical Risk Normalization (legacy: D13) metadata helper
   split (factor out reliability and OAS coverage helpers to keep
   `build_metric_payload` lean)
@@ -160,7 +160,7 @@ validation requirements. The short version:
 ## Current Backlog (ordered)
 
 1. ~~P-M1 dashboard_model_pipeline row conversion accumulator~~ (completed)
-2. P-M2 dashboard_service helper split (M7/M8-B follow-up)
+2. ~~P-M2 dashboard_service helper split~~ (completed)
 3. P-M3 Historical Risk Normalization (legacy: D13) metadata helper split
    (factor reliability + OAS coverage out of `build_metric_payload`)
 4. P-M4 M11 cross-request shared context design (only after P-M1/P-M2)

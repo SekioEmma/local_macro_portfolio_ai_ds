@@ -180,7 +180,17 @@ reuses a shared dict accumulator. No model semantics, public output keys,
 module keys, endpoints, or external AI changed. See
 `docs/p_m1_pipeline_row_conversion_accumulator.md`.
 
-Next recommended task after P-M1: P-M2 dashboard_service helper split.
+P-M2 dashboard_service Evidence Row / AI Gate Helper Split: completed.
+Behavior-preserving helper extraction that moves evidence row construction,
+evidence value text, AI context allowed policy, blocked reason policy, PPI
+observation-date blocking, and derived dependency hint gating to
+`dashboard_evidence_policy.py`. `dashboard_service.py` keeps private
+compatibility aliases. No model semantics, public keys, schemas, AI context
+semantics, endpoints, frontend UI, providers, or external AI changed. See
+`docs/p_m2_dashboard_service_helper_split.md`.
+
+Next recommended task after P-M2: P-M3 Historical Risk Normalization metadata
+helper split.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

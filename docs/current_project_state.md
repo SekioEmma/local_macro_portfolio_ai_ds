@@ -459,6 +459,11 @@ explicitly requested later. P-M1 dashboard_model_pipeline row conversion
 accumulator optimization is complete as a behavior-preserving refactor; each
 row group is now converted to dicts once and reused through a shared
 accumulator. No model semantics, public output keys, module keys, endpoints,
-or external AI changed. Next recommended task: P-M2 dashboard_service helper
-split.
+or external AI changed. P-M2 dashboard_service Evidence Row / AI Gate Helper
+Split is complete as a behavior-preserving helper extraction; evidence row
+construction and AI context gate policy now live in
+`dashboard_evidence_policy.py`, with private compatibility aliases preserved
+in `dashboard_service.py`. No model semantics, public keys, schemas, AI context
+semantics, endpoints, frontend UI, providers, or external AI changed. Next
+recommended task: P-M3 Historical Risk Normalization metadata helper split.
 Real AI Chat / Memo / Report integrations remain not implemented.
