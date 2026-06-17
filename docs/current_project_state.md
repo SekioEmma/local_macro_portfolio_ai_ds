@@ -550,7 +550,20 @@ Final Demand / PPIACO boundary, cache semantic, `write_last_good` behavior,
 provider, endpoint, frontend UI, external AI, Tavily/search, live fetch/write,
 prediction/probability output, return estimate, allocation output, or trading
 advice changed.
-Next recommended task: manual review / Phase F3 route decision. If Phase F3
-proceeds, characterize historical-derived and portfolio-compact metric helper
-behavior before any extraction.
+Phase F/G Dashboard Service Refactor Completion is complete as the remaining
+dashboard service extraction. Historical-derived helpers now live in
+`dashboard_historical_derived.py`, sanitized portfolio compact helpers in
+`dashboard_portfolio_compact.py`, derived status metric helpers in
+`dashboard_derived_metrics.py`, static metric catalog data in
+`dashboard_metric_catalog.py`, and key-metric routing in
+`dashboard_key_metrics.py`. `dashboard_service.py` remains the public
+orchestration facade and compatibility surface, with local configuration and
+callbacks injected into extracted modules. No dashboard public API, module key,
+metric key, `DashboardMetric` schema, source_badge/freshness/AI-context
+semantic, PPI Final Demand / PPIACO boundary, historical-derived gate,
+portfolio compact privacy boundary, cache semantic, `write_last_good` behavior,
+provider, endpoint, frontend UI, external AI, Tavily/search, live fetch/write,
+prediction/probability output, return estimate, allocation output, or trading
+advice changed.
+Next recommended task: manual review / route decision.
 Real AI Chat / Memo / Report integrations remain not implemented.

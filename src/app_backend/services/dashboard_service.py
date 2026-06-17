@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
-from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +25,19 @@ from app_backend.services.dashboard_context_cache import (
     CachedDashboardContext,
     SharedDashboardContextCache,
 )
+from app_backend.services.dashboard_derived_metrics import (
+    blocked_dependency_metric as _blocked_dependency_metric,
+    credit_stress_status_metric as _derived_credit_stress_status_metric,
+    credit_status_from_values as _credit_status_from_values,
+    derived_metric as _derived_metrics_derived_metric,
+    derived_metric_response as _derived_metric_response,
+    has_breakout_history_evidence as _has_breakout_history_evidence,
+    latest_metric_observation_date as _derived_latest_metric_observation_date,
+    latest_metric_timestamp as _derived_latest_metric_timestamp,
+    real_yield_pressure_status_metric as _derived_real_yield_pressure_status_metric,
+    real_yield_status_from_values as _real_yield_status_from_values,
+    usable_numeric_metric as _derived_usable_numeric_metric,
+)
 from app_backend.services.dashboard_evidence_assembly import (
     build_evidence_table_response as _build_evidence_table_response,
     evidence_filters as _evidence_filters,
@@ -37,6 +48,44 @@ from app_backend.services.dashboard_evidence_assembly import (
 from app_backend.services.dashboard_filters import (
     apply_evidence_filters,
     evidence_row_matches,
+)
+from app_backend.services.dashboard_historical_derived import (
+    EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX,
+    EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+    LABOR_HISTORICAL_DERIVED_METRIC_KEYS,
+    MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
+    OIL_HISTORICAL_DERIVED_HINT_SUFFIX,
+    OIL_HISTORICAL_DERIVED_METRIC_KEYS,
+    PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS,
+    PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+    apply_historical_derived_metrics as _historical_derived_apply_historical_derived_metrics,
+    apply_labor_history_fallback as _historical_derived_apply_labor_history_fallback,
+    apply_ppi_final_demand_history as _historical_derived_apply_ppi_final_demand_history,
+    compact_dgs_fallback_observations as _historical_derived_compact_dgs_fallback_observations,
+    dashboard_historical_derived_hint as _dashboard_historical_derived_hint,
+    dashboard_historical_derived_value as _dashboard_historical_derived_value,
+    format_historical_derived_value as _format_historical_derived_value,
+    historical_derived_metric as _historical_derived_metric,
+    is_labor_official_metric as _is_labor_official_metric,
+    labor_history_fallback_needed as _labor_history_fallback_needed,
+    labor_history_freshness_status as _labor_history_freshness_status,
+    labor_history_metric as _labor_history_metric,
+    latest_official_labor_observation as _latest_official_labor_observation,
+    latest_ppifis_observation as _latest_ppifis_observation,
+    parse_iso_date as _parse_iso_date,
+    ppi_final_demand_history_metric as _ppi_final_demand_history_metric,
+)
+from app_backend.services.dashboard_key_metrics import (
+    key_metrics_for_module as _key_metrics_builder_key_metrics_for_module,
+)
+from app_backend.services.dashboard_metric_catalog import (
+    CORE_METRIC_KEYS,
+    DASHBOARD_MODULE_KEYS,
+    DERIVED_METRIC_KEYS,
+    DGS30_BREAKOUT_MISSING_REASON,
+    LABOR_METRIC_SPECS,
+    METRIC_ALIASES,
+    METRIC_SPECS,
 )
 from app_backend.services.dashboard_metric_builder import (
     ALLOWED_METRIC_STATUSES,
@@ -123,476 +172,35 @@ from app_backend.services.dashboard_evidence_policy import (
     ppi_observation_date_blocked_reason as _ppi_observation_date_blocked_reason,
 )
 from app_backend.services.dashboard_model_pipeline import build_dashboard_model_rows
-from data_quality import historical_derived_metrics
+from app_backend.services.dashboard_portfolio_compact import (
+    PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+    PORTFOLIO_DEFAULT_TARGET_WEIGHTS,
+    PORTFOLIO_TARGET_ASSET_CLASSES,
+    PortfolioDeviationCompact,
+    max_deviation_asset as _max_deviation_asset,
+    parse_date as _parse_date,
+    portfolio_cash_reserve_status as _portfolio_cash_reserve_status,
+    portfolio_compact_metric as _portfolio_compact_metric,
+    portfolio_compact_metric_status as _portfolio_compact_metric_status,
+    portfolio_compact_module_status as _portfolio_compact_module_status,
+    portfolio_deviation_compact as _portfolio_deviation_compact,
+    portfolio_deviation_pp_map as _portfolio_deviation_pp_map,
+    portfolio_deviation_status as _portfolio_deviation_status,
+    portfolio_holdings_updated_at as _portfolio_holdings_updated_at,
+    portfolio_stale_status as _portfolio_stale_status,
+    portfolio_weight_map as _portfolio_weight_map,
+    sum_weights as _sum_weights,
+    weight_fraction as _weight_fraction,
+)
 from data_quality import last_good_cache
 from data_providers import market_history_store
-from data_quality import official_macro_pack
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
 DEFAULT_REPORTS_DIR = PROJECT_REPORTS_DIR
 DEFAULT_MARKET_HISTORY_DB_PATH = market_history_store.get_default_market_history_db_path()
-DASHBOARD_MODULE_KEYS = (
-    "credit_stress",
-    "rate_pressure",
-    "real_yield_pressure",
-    "inflation_energy_pressure",
-    "equity_trend",
-    "breadth_concentration_proxy",
-    "market_stress_derived",
-    "portfolio_deviation",
-)
 _SHARED_DASHBOARD_CONTEXT_CACHE = SharedDashboardContextCache()
-DERIVED_METRIC_KEYS = {
-    "dgs10_5d_avg",
-    "dgs30_distance_to_5pct",
-    "dgs30_breakout_confirmed",
-    "sp500_30d_return",
-    "sp500_60d_return",
-    "nasdaq100_30d_return",
-    "nasdaq100_60d_return",
-    "nasdaq_vs_sp500_30d",
-    "wti_30d_change",
-    "brent_30d_change",
-    "spy_proxy_30d_return",
-    "spy_proxy_60d_return",
-    "rsp_proxy_30d_return",
-    "rsp_proxy_60d_return",
-    "qqq_proxy_30d_return",
-    "qqq_proxy_60d_return",
-    "spy_vs_rsp_30d",
-    "spy_vs_rsp_60d",
-    "qqq_vs_spy_30d",
-    "qqq_vs_spy_60d",
-    "hyg_vs_lqd_30d",
-    "hyg_vs_lqd_60d",
-    "sp500_drawdown_3m",
-    "sp500_drawdown_6m",
-    "nasdaq100_drawdown_3m",
-    "nasdaq100_drawdown_6m",
-    "dgs10_dgs2_curve_slope",
-    "dgs30_dgs10_curve_slope",
-    "tlt_proxy_30d_return",
-    "gld_proxy_30d_return",
-    "shy_proxy_30d_return",
-    "tlt_vs_shy_30d",
-    "unemployment_rate_3m_avg",
-    "unemployment_rate_12m_low_gap",
-    "initial_claims_4w_avg",
-    "continuing_claims_4w_avg",
-    "sahm_rule_proxy_status",
-    "labor_deterioration_status",
-    "financial_stress_score",
-    "financial_stress_status",
-    "financial_stress_dominant_pressure_source",
-    "financial_stress_component_contributions",
-    "financial_stress_missing_inputs",
-    "financial_stress_interpretation_boundary",
-    "financial_stress_percentile_context",
-    "financial_stress_funding_liquidity_context",
-    "pullback_classification",
-    "pullback_checklist_items",
-    "pullback_missing_critical_inputs",
-    "pullback_supporting_evidence",
-    "pullback_interpretation_boundary",
-    "pullback_percentile_context",
-    "pullback_liquidity_funding_context",
-    "sofr_effr_spread",
-    "effr_iorb_spread",
-    "cp_effr_spread",
-    "cp_sofr_spread",
-    "policy_plumbing_status",
-    "short_term_funding_pressure_status",
-    "official_stress_reference_status",
-    "liquidity_funding_stress_status",
-    "liquidity_funding_interpretation_boundary",
-    "growth_macro_status",
-    "growth_macro_supporting_evidence",
-    "growth_macro_missing_inputs",
-    "growth_macro_interpretation_boundary",
-    "inflation_macro_status",
-    "inflation_macro_supporting_evidence",
-    "inflation_macro_missing_inputs",
-    "inflation_macro_interpretation_boundary",
-    "policy_constraint_status",
-    "policy_constraint_supporting_evidence",
-    "policy_constraint_missing_inputs",
-    "policy_constraint_interpretation_boundary",
-    "stagflation_watch_status",
-    "stagflation_watch_supporting_evidence",
-    "stagflation_watch_missing_inputs",
-    "stagflation_watch_interpretation_boundary",
-    "growth_inflation_macro_pack_model_version",
-    "growth_inflation_macro_pack_formula_version",
-    "growth_inflation_macro_pack_as_of_date",
-    "valuation_context_status",
-    "valuation_pressure_hint",
-    "valuation_metric_source_quality",
-    "valuation_missing_inputs",
-    "valuation_interpretation_boundary",
-    "earnings_context_status",
-    "earnings_missing_inputs",
-    "earnings_interpretation_boundary",
-    "equity_structure_status",
-    "equity_structure_supporting_evidence",
-    "equity_structure_missing_inputs",
-    "equity_structure_interpretation_boundary",
-    "breadth_concentration_context_status",
-    "breadth_concentration_supporting_evidence",
-    "breadth_concentration_missing_inputs",
-    "breadth_concentration_interpretation_boundary",
-    "valuation_equity_structure_model_version",
-    "valuation_equity_structure_formula_version",
-    "valuation_equity_structure_as_of_date",
-    "macro_regime_label",
-    "support_band",
-    "evidence_quality_band",
-    "conflict_band",
-    "primary_pressure_ranking",
-    "supporting_evidence",
-    "conflicting_evidence",
-    "missing_inputs",
-    "blocked_inputs",
-    "interpretation_boundary",
-    "model_version",
-    "formula_version",
-    "as_of_date",
-    "historical_validation_status",
-    "historical_validation_event_count",
-    "historical_validation_available_event_count",
-    "historical_validation_insufficient_history_event_count",
-    "historical_validation_ordinary_pullback_over_escalation_count",
-    "historical_validation_stress_window_under_escalation_count",
-    "historical_validation_boundary_violation_count",
-    "historical_validation_event_window_summary",
-    "historical_validation_privacy_flags",
-    "historical_validation_validation_boundary",
-    "historical_validation_model_version",
-    "historical_validation_formula_version",
-    "historical_validation_as_of_date",
-    "historical_validation_coverage_summary",
-    "historical_validation_module_consistency_summary",
-    "historical_validation_proxy_constraint_summary",
-    "historical_validation_missing_data_summary",
-    "historical_validation_replay_version",
-    "scenario_stress_status",
-    "scenario_stress_scenario_count",
-    "scenario_stress_scenarios",
-    "scenario_stress_primary_scenario",
-    "scenario_stress_affected_groups",
-    "scenario_stress_transmission_channels",
-    "scenario_stress_severity_band",
-    "scenario_stress_uncertainty_band",
-    "scenario_stress_supporting_evidence",
-    "scenario_stress_missing_inputs",
-    "scenario_stress_interpretation_boundary",
-    "scenario_stress_model_version",
-    "scenario_stress_formula_version",
-    "scenario_stress_as_of_date",
-    "portfolio_exposure_overlay_status",
-    "portfolio_exposure_channel_summary",
-    "portfolio_exposure_primary_channels",
-    "portfolio_exposure_supporting_evidence",
-    "portfolio_exposure_missing_inputs",
-    "portfolio_exposure_private_input_policy",
-    "portfolio_exposure_interpretation_boundary",
-    "portfolio_exposure_model_version",
-    "portfolio_exposure_formula_version",
-    "portfolio_exposure_as_of_date",
-    "portfolio_exposure_equity_beta_context",
-    "portfolio_exposure_rates_duration_context",
-    "portfolio_exposure_credit_context",
-    "portfolio_exposure_liquidity_context",
-    "portfolio_exposure_inflation_energy_context",
-    "portfolio_exposure_concentration_context",
-    "portfolio_exposure_valuation_context",
-    "portfolio_exposure_cash_buffer_context",
-    "high_yield_spread_percentile",
-    "high_yield_spread_zscore",
-    "high_yield_spread_robust_zscore",
-    "investment_grade_spread_percentile",
-    "investment_grade_spread_zscore",
-    "investment_grade_spread_robust_zscore",
-    "vix_percentile",
-    "vix_zscore",
-    "vix_robust_zscore",
-    "dgs30_percentile",
-    "dgs30_zscore",
-    "dgs30_robust_zscore",
-    "dfii10_percentile",
-    "dfii10_zscore",
-    "dfii10_robust_zscore",
-    "sp500_drawdown_3m_percentile",
-    "sp500_drawdown_3m_robust_zscore",
-    "nasdaq100_drawdown_3m_percentile",
-    "nasdaq100_drawdown_3m_robust_zscore",
-    "initial_claims_4w_avg_percentile",
-    "initial_claims_4w_avg_robust_zscore",
-    "continuing_claims_4w_avg_percentile",
-    "continuing_claims_4w_avg_robust_zscore",
-}
-EQUITY_HISTORICAL_DERIVED_METRIC_KEYS = {
-    "sp500_30d_return",
-    "sp500_60d_return",
-    "nasdaq100_30d_return",
-    "nasdaq100_60d_return",
-    "nasdaq_vs_sp500_30d",
-}
-OIL_HISTORICAL_DERIVED_METRIC_KEYS = {
-    "wti_30d_change",
-    "brent_30d_change",
-}
-PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS = {
-    "ppi_final_demand_yoy",
-}
-PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS = {
-    "spy_proxy_30d_return",
-    "spy_proxy_60d_return",
-    "rsp_proxy_30d_return",
-    "rsp_proxy_60d_return",
-    "qqq_proxy_30d_return",
-    "qqq_proxy_60d_return",
-    "spy_vs_rsp_30d",
-    "spy_vs_rsp_60d",
-    "qqq_vs_spy_30d",
-    "qqq_vs_spy_60d",
-    "hyg_vs_lqd_30d",
-    "hyg_vs_lqd_60d",
-}
-MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS = {
-    "sp500_drawdown_3m",
-    "sp500_drawdown_6m",
-    "nasdaq100_drawdown_3m",
-    "nasdaq100_drawdown_6m",
-    "dgs10_dgs2_curve_slope",
-    "dgs30_dgs10_curve_slope",
-    "tlt_proxy_30d_return",
-    "gld_proxy_30d_return",
-    "shy_proxy_30d_return",
-    "tlt_vs_shy_30d",
-}
-LABOR_HISTORICAL_DERIVED_METRIC_KEYS = {
-    "unemployment_rate_3m_avg",
-    "unemployment_rate_12m_low_gap",
-    "initial_claims_4w_avg",
-    "continuing_claims_4w_avg",
-    "sahm_rule_proxy_status",
-    "labor_deterioration_status",
-}
-EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX = (
-    " Derived from local market history; underlying source includes yfinance "
-    "unofficial_fallback/proxy observations in the market history store; not an "
-    "official market breadth or valuation measure."
-)
-OIL_HISTORICAL_DERIVED_HINT_SUFFIX = (
-    " Derived from official FRED/EIA daily oil history in local market history; "
-    "this remains a derived energy-pressure input, not a real-time oil quote, "
-    "inflation forecast, or commodity trading signal."
-)
-METRIC_ALIASES = {
-    "wti_30d_change": ("wti_oil_30d_change",),
-    "brent_30d_change": ("brent_oil_30d_change",),
-}
-DGS30_BREAKOUT_MISSING_REASON = "Requires explicit confirmation rule and sufficient DGS30 history."
-LABOR_METRIC_SPECS = [
-    ("unemployment_rate", "Unemployment rate", "percent", "percent", "missing"),
-    ("initial_jobless_claims", "Initial jobless claims", "claims", "number", "missing"),
-    ("nonfarm_payrolls", "Nonfarm payrolls", "thousand_persons", "number", "missing"),
-    ("continuing_claims", "Continuing claims", "claims", "number", "missing"),
-    (
-        "unemployment_rate_3m_avg",
-        "Unemployment rate 3M average",
-        "percent",
-        "percent",
-        "insufficient_history",
-    ),
-    (
-        "unemployment_rate_12m_low_gap",
-        "Unemployment 12M low gap",
-        "pp",
-        "pp",
-        "insufficient_history",
-    ),
-    ("initial_claims_4w_avg", "Initial claims 4W average", "claims", "number", "insufficient_history"),
-    ("continuing_claims_4w_avg", "Continuing claims 4W average", "claims", "number", "insufficient_history"),
-    ("sahm_rule_proxy_status", "Sahm rule proxy status", None, "text", "insufficient_history"),
-    ("labor_deterioration_status", "Labor deterioration status", None, "text", "insufficient_history"),
-]
-CORE_METRIC_KEYS = {
-    "credit_stress": {"high_yield_spread", "investment_grade_spread", "vix", "credit_stress_status"},
-    "rate_pressure": {"dgs2", "dgs10", "dgs30", "dgs30_distance_to_5pct"},
-    "real_yield_pressure": {"dfii10", "t10yie", "real_yield_pressure_status"},
-    "inflation_energy_pressure": {
-        "core_cpi_yoy",
-        "core_pce_yoy",
-        "ppiaco_yoy",
-        "ppi_final_demand",
-        "ppi_final_demand_yoy",
-        "wti_30d_change",
-        "brent_30d_change",
-    },
-    "equity_trend": {
-        "sp500_30d_return",
-        "nasdaq100_30d_return",
-        "nasdaq_vs_sp500_30d",
-    },
-    "breadth_concentration_proxy": {
-        "spy_proxy_30d_return",
-        "rsp_proxy_30d_return",
-        "qqq_proxy_30d_return",
-        "spy_vs_rsp_30d",
-        "qqq_vs_spy_30d",
-        "hyg_vs_lqd_30d",
-    },
-    "market_stress_derived": {
-        "sp500_drawdown_3m",
-        "nasdaq100_drawdown_3m",
-        "dgs10_dgs2_curve_slope",
-        "dgs30_dgs10_curve_slope",
-        "tlt_vs_shy_30d",
-    },
-    "portfolio_deviation": {
-        "max_deviation_asset",
-        "max_deviation_pp",
-        "equity_total_deviation_pp",
-    },
-}
-METRIC_SPECS = {
-    "credit_stress": [
-        ("high_yield_spread", "High-yield spread", "percent", "percent", "missing"),
-        (
-            "investment_grade_spread",
-            "Investment-grade spread",
-            "percent",
-            "percent",
-            "missing",
-        ),
-        ("vix", "VIX", "index", "number", "missing"),
-        ("credit_stress_status", "Credit stress status", None, "text", "missing"),
-    ],
-    "rate_pressure": [
-        ("dgs2", "2Y Treasury yield", "percent", "percent", "missing"),
-        ("dgs10", "10Y Treasury yield", "percent", "percent", "missing"),
-        ("dgs30", "30Y Treasury yield", "percent", "percent", "missing"),
-        (
-            "dgs30_distance_to_5pct",
-            "30Y distance to 5%",
-            "pp",
-            "pp",
-            "missing",
-        ),
-        ("dgs10_5d_avg", "10Y 5D average", "percent", "percent", "insufficient_history"),
-        (
-            "dgs30_breakout_confirmed",
-            "30Y breakout confirmed",
-            None,
-            "bool",
-            "research_needed",
-        ),
-    ],
-    "real_yield_pressure": [
-        ("dfii10", "10Y real yield", "percent", "percent", "missing"),
-        ("t10yie", "10Y breakeven inflation", "percent", "percent", "missing"),
-        ("real_yield_pressure_status", "Real yield pressure status", None, "text", "missing"),
-    ],
-    "inflation_energy_pressure": [
-        ("core_cpi_yoy", "Core CPI YoY", "percent", "signed_percent", "missing"),
-        ("core_pce_yoy", "Core PCE YoY", "percent", "signed_percent", "missing"),
-        ("ppiaco_yoy", "PPIACO YoY", "percent", "signed_percent", "missing"),
-        ("ppi_final_demand", "PPI final demand", "index", "number", "missing"),
-        (
-            "ppi_final_demand_yoy",
-            "PPI final demand YoY",
-            "percent",
-            "signed_percent",
-            "insufficient_history",
-        ),
-        ("wti_30d_change", "WTI 30D change", "percent", "signed_percent", "insufficient_history"),
-        ("brent_30d_change", "Brent 30D change", "percent", "signed_percent", "insufficient_history"),
-    ],
-    "equity_trend": [
-        ("sp500_30d_return", "S&P 500 30D return", "percent", "signed_percent", "insufficient_history"),
-        ("sp500_60d_return", "S&P 500 60D return", "percent", "signed_percent", "insufficient_history"),
-        (
-            "nasdaq100_30d_return",
-            "Nasdaq 100 30D return",
-            "percent",
-            "signed_percent",
-            "insufficient_history",
-        ),
-        (
-            "nasdaq100_60d_return",
-            "Nasdaq 100 60D return",
-            "percent",
-            "signed_percent",
-            "insufficient_history",
-        ),
-        ("nasdaq_vs_sp500_30d", "Nasdaq vs S&P 500 30D", "pp", "pp", "insufficient_history"),
-    ],
-    "breadth_concentration_proxy": [
-        ("spy_proxy_30d_return", "SPY proxy 30D return", "percent", "signed_percent", "insufficient_history"),
-        ("spy_proxy_60d_return", "SPY proxy 60D return", "percent", "signed_percent", "insufficient_history"),
-        ("rsp_proxy_30d_return", "RSP proxy 30D return", "percent", "signed_percent", "insufficient_history"),
-        ("rsp_proxy_60d_return", "RSP proxy 60D return", "percent", "signed_percent", "insufficient_history"),
-        ("qqq_proxy_30d_return", "QQQ proxy 30D return", "percent", "signed_percent", "insufficient_history"),
-        ("qqq_proxy_60d_return", "QQQ proxy 60D return", "percent", "signed_percent", "insufficient_history"),
-        ("spy_vs_rsp_30d", "SPY vs RSP 30D", "pp", "pp", "insufficient_history"),
-        ("spy_vs_rsp_60d", "SPY vs RSP 60D", "pp", "pp", "insufficient_history"),
-        ("qqq_vs_spy_30d", "QQQ vs SPY 30D", "pp", "pp", "insufficient_history"),
-        ("qqq_vs_spy_60d", "QQQ vs SPY 60D", "pp", "pp", "insufficient_history"),
-        ("hyg_vs_lqd_30d", "HYG vs LQD 30D", "pp", "pp", "insufficient_history"),
-        ("hyg_vs_lqd_60d", "HYG vs LQD 60D", "pp", "pp", "insufficient_history"),
-    ],
-    "market_stress_derived": [
-        ("sp500_drawdown_3m", "S&P 500 3M drawdown", "percent", "signed_percent", "insufficient_history"),
-        ("sp500_drawdown_6m", "S&P 500 6M drawdown", "percent", "signed_percent", "insufficient_history"),
-        ("nasdaq100_drawdown_3m", "Nasdaq 100 3M drawdown", "percent", "signed_percent", "insufficient_history"),
-        ("nasdaq100_drawdown_6m", "Nasdaq 100 6M drawdown", "percent", "signed_percent", "insufficient_history"),
-        ("dgs10_dgs2_curve_slope", "10Y-2Y curve slope", "pp", "pp", "insufficient_history"),
-        ("dgs30_dgs10_curve_slope", "30Y-10Y curve slope", "pp", "pp", "insufficient_history"),
-        ("tlt_proxy_30d_return", "TLT proxy 30D return", "percent", "signed_percent", "insufficient_history"),
-        ("gld_proxy_30d_return", "GLD proxy 30D return", "percent", "signed_percent", "insufficient_history"),
-        ("shy_proxy_30d_return", "SHY proxy 30D return", "percent", "signed_percent", "insufficient_history"),
-        ("tlt_vs_shy_30d", "TLT vs SHY 30D", "pp", "pp", "insufficient_history"),
-    ],
-    "portfolio_deviation": [
-        ("max_deviation_asset", "Max deviation asset", None, "text", "missing"),
-        ("max_deviation_pp", "Max deviation", "pp", "pp", "missing"),
-        ("equity_total_deviation_pp", "Equity total deviation", "pp", "pp", "missing"),
-        ("cash_reserve_status", "Cash reserve status", None, "text", "missing"),
-        ("holdings_updated_at", "Holdings updated at", None, "text", "missing"),
-    ],
-}
-PORTFOLIO_TARGET_ASSET_CLASSES = ("sp500", "nasdaq100", "short_bond", "gold")
-PORTFOLIO_DEFAULT_TARGET_WEIGHTS = {
-    "sp500": 0.50,
-    "nasdaq100": 0.20,
-    "short_bond": 0.20,
-    "gold": 0.10,
-}
-PORTFOLIO_COMPACT_INTERPRETATION_HINT = (
-    "Cash reserve excluded from target mix; portfolio deviation is not "
-    "attributed to market factors; reference review only."
-)
-
-
-@dataclass(frozen=True)
-class PortfolioDeviationCompact:
-    generated_at: str | None
-    holdings_updated_at: str | None
-    target_weights: dict[str, float]
-    current_weights: dict[str, float]
-    deviation_pp: dict[str, float]
-    max_deviation_asset: str | None
-    max_deviation_pp: float | None
-    equity_total_current_weight: float | None
-    equity_total_target_weight: float | None
-    equity_total_deviation_pp: float | None
-    cash_reserve_status: str
-    stale_status: str
-    notes: list[str]
-
 
 def build_dashboard_summary(
     reports_dir: Path | str | None = None,
@@ -942,65 +550,23 @@ def _key_metrics_for_module(
     *,
     market_history_db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    metrics = [
-        _build_metric(module_key, reports, spec)
-        for spec in METRIC_SPECS.get(module_key, [])
-    ]
-    if module_key == "equity_trend":
-        return _apply_historical_derived_metrics(
-            metrics,
-            module_key="equity_trend",
-            metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
-            hint_suffix=EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX,
-            fallback_source="local_market_history",
-            db_path=market_history_db_path,
-        )
-    if module_key == "inflation_energy_pressure":
-        metrics = _apply_ppi_final_demand_history(
-            metrics,
-            db_path=market_history_db_path,
-        )
-        metrics = _apply_historical_derived_metrics(
-            metrics,
-            module_key="inflation_energy_pressure",
-            metric_keys=OIL_HISTORICAL_DERIVED_METRIC_KEYS,
-            hint_suffix=OIL_HISTORICAL_DERIVED_HINT_SUFFIX,
-            fallback_source="local_market_history",
-            required_dependency_source_badges={"official"},
-            replace_existing=True,
-            db_path=market_history_db_path,
-        )
-        return _apply_historical_derived_metrics(
-            metrics,
-            module_key="inflation_energy_pressure",
-            metric_keys=PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS,
-            hint_suffix="",
-            fallback_source="local_market_history",
-            required_dependency_source_badges={"official"},
-            replace_existing=True,
-            db_path=market_history_db_path,
-        )
-    if module_key == "breadth_concentration_proxy":
-        return _apply_historical_derived_metrics(
-            metrics,
-            module_key="breadth_concentration_proxy",
-            metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
-            hint_suffix="",
-            fallback_source="local_market_history",
-            required_dependency_source_badges={"proxy"},
-            db_path=market_history_db_path,
-        )
-    if module_key == "market_stress_derived":
-        return _apply_historical_derived_metrics(
-            metrics,
-            module_key="market_stress_derived",
-            metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
-            hint_suffix="",
-            fallback_source="local_market_history",
-            fallback_observations=_compact_dgs_fallback_observations(reports),
-            db_path=market_history_db_path,
-        )
-    return metrics
+    return _key_metrics_builder_key_metrics_for_module(
+        module_key,
+        reports,
+        market_history_db_path=market_history_db_path,
+        metric_specs=METRIC_SPECS,
+        build_metric=_build_metric,
+        apply_historical_derived_metrics=_apply_historical_derived_metrics,
+        apply_ppi_final_demand_history=_apply_ppi_final_demand_history,
+        compact_dgs_fallback_observations=_compact_dgs_fallback_observations,
+        equity_historical_derived_metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+        oil_historical_derived_metric_keys=OIL_HISTORICAL_DERIVED_METRIC_KEYS,
+        ppi_final_demand_historical_derived_metric_keys=PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS,
+        proxy_breadth_historical_derived_metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+        market_stress_historical_derived_metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
+        equity_historical_derived_hint_suffix=EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX,
+        oil_historical_derived_hint_suffix=OIL_HISTORICAL_DERIVED_HINT_SUFFIX,
+    )
 
 
 def _build_metric(
@@ -1035,27 +601,18 @@ def _apply_historical_derived_metrics(
     replace_existing: bool = False,
     db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
-    candidates = {
-        item.metric_key: item
-        for item in historical_derived_metrics.build_historical_dashboard_candidates(
-            db_path=target_db_path,
-            fallback_observations=fallback_observations,
-        ).get(module_key, [])
-        if item.metric_key in metric_keys
-    }
-    return [
-        _historical_derived_metric(
-            metric,
-            candidates.get(metric.metric_key),
-            metric_keys=metric_keys,
-            hint_suffix=hint_suffix,
-            fallback_source=fallback_source,
-            required_dependency_source_badges=required_dependency_source_badges,
-            replace_existing=replace_existing,
-        )
-        for metric in metrics
-    ]
+    return _historical_derived_apply_historical_derived_metrics(
+        metrics,
+        module_key=module_key,
+        metric_keys=metric_keys,
+        hint_suffix=hint_suffix,
+        fallback_source=fallback_source,
+        fallback_observations=fallback_observations,
+        required_dependency_source_badges=required_dependency_source_badges,
+        replace_existing=replace_existing,
+        db_path=db_path,
+        default_market_history_db_path=DEFAULT_MARKET_HISTORY_DB_PATH,
+    )
 
 
 def _apply_ppi_final_demand_history(
@@ -1063,16 +620,11 @@ def _apply_ppi_final_demand_history(
     *,
     db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
-    latest = _latest_ppifis_observation(target_db_path)
-    if latest is None:
-        return metrics
-    return [
-        _ppi_final_demand_history_metric(metric, latest)
-        if metric.metric_key == "ppi_final_demand"
-        else metric
-        for metric in metrics
-    ]
+    return _historical_derived_apply_ppi_final_demand_history(
+        metrics,
+        db_path=db_path,
+        default_market_history_db_path=DEFAULT_MARKET_HISTORY_DB_PATH,
+    )
 
 
 def _apply_labor_history_fallback(
@@ -1080,356 +632,22 @@ def _apply_labor_history_fallback(
     *,
     db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    target_db_path = db_path if db_path is not None else DEFAULT_MARKET_HISTORY_DB_PATH
-    latest_by_key = {
-        metric.metric_key: _latest_official_labor_observation(metric.metric_key, target_db_path)
-        for metric in metrics
-        if _is_labor_official_metric(metric.metric_key)
-    }
-    return [
-        _labor_history_metric(metric, latest_by_key.get(metric.metric_key))
-        if _labor_history_fallback_needed(metric, latest_by_key.get(metric.metric_key))
-        else metric
-        for metric in metrics
-    ]
-
-
-def _is_labor_official_metric(metric_key: str) -> bool:
-    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
-    return bool(
-        official_macro
-        and official_macro.module == "labor_macro"
-        and official_macro.source_series
-    )
-
-
-def _labor_history_fallback_needed(
-    metric: DashboardMetric,
-    observation: dict[str, Any] | None,
-) -> bool:
-    if observation is None:
-        return False
-    if metric.status != "ok" or metric.value is None:
-        return True
-    if metric.freshness_status in AI_BLOCKED_FRESHNESS_STATUSES:
-        return True
-    if not metric.observation_date:
-        return True
-    if not metric.generated_at:
-        return True
-    if metric.source_badge != "official":
-        return True
-    return False
-
-
-def _latest_official_labor_observation(
-    metric_key: str,
-    db_path: Path | str | None,
-) -> dict[str, Any] | None:
-    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
-    if official_macro is None or official_macro.module != "labor_macro":
-        return None
-    rows = market_history_store.list_market_observations(
-        metric_key=metric_key,
-        limit=100,
+    return _historical_derived_apply_labor_history_fallback(
+        metrics,
         db_path=db_path,
-    )
-    for row in rows:
-        if row.get("status") != "ok":
-            continue
-        if row.get("source_badge") != "official":
-            continue
-        if row.get("provider") != "FRED":
-            continue
-        if row.get("source_series") != official_macro.source_series:
-            continue
-        if row.get("value_numeric") is None:
-            continue
-        return row
-    return None
-
-
-def _labor_history_metric(
-    original: DashboardMetric,
-    observation: dict[str, Any] | None,
-) -> DashboardMetric:
-    if observation is None:
-        return original
-    official_macro = official_macro_pack.get_official_macro_metric(original.metric_key)
-    if official_macro is None:
-        return original
-    value = float(observation["value_numeric"])
-    observation_date = _string_or_none(observation.get("observation_date"))
-    generated_at = _string_or_none(observation.get("generated_at"))
-    fetched_at = _string_or_none(observation.get("fetched_at"))
-    freshness_status = _labor_history_freshness_status(
-        official_macro,
-        observation_date=observation_date,
-        stored_freshness=_string_or_none(observation.get("freshness_status")),
-    )
-    status = "stale" if freshness_status == "stale" else "ok"
-    interpretation_hint = official_macro.interpretation_hint
-    ai_context_allowed = bool(observation.get("ai_context_allowed")) and _ai_context_allowed(
-        status=status,
-        source="FRED",
-        source_badge="official",
-        observation_date=observation_date,
-        generated_at=generated_at or fetched_at,
-        freshness_status=freshness_status,
-        interpretation_hint=interpretation_hint,
-    )
-    return DashboardMetric(
-        metric_key=original.metric_key,
-        display_name=original.display_name,
-        value=value,
-        value_text=_format_value(value, "number" if original.unit != "percent" else "percent", status),
-        unit=original.unit,
-        status=status,
-        source="FRED",
-        source_badge="official",
-        source_series=official_macro.source_series,
-        observation_date=observation_date,
-        generated_at=generated_at or fetched_at,
-        freshness_status=freshness_status,
-        missing_reason=None,
-        interpretation_hint=interpretation_hint,
-        ai_context_allowed=ai_context_allowed,
-    )
-
-
-def _labor_history_freshness_status(
-    official_macro: official_macro_pack.OfficialMacroMetric,
-    *,
-    observation_date: str | None,
-    stored_freshness: str | None,
-) -> str:
-    parsed_date = _parse_iso_date(observation_date)
-    if parsed_date is None:
-        return stored_freshness or "unknown"
-    max_stale_days = 21 if official_macro.expected_frequency == "weekly" else 75
-    if (date.today() - parsed_date).days > max_stale_days:
-        return "stale"
-    if stored_freshness and stored_freshness not in AI_BLOCKED_FRESHNESS_STATUSES:
-        return stored_freshness
-    return "historical"
-
-
-def _parse_iso_date(value: str | None) -> date | None:
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(value[:10])
-    except ValueError:
-        return None
-
-
-def _latest_ppifis_observation(db_path: Path | str | None) -> dict[str, Any] | None:
-    rows = market_history_store.list_market_observations(
-        metric_key="ppi_final_demand",
-        limit=100,
-        db_path=db_path,
-    )
-    for row in rows:
-        if row.get("status") != "ok":
-            continue
-        if row.get("source_badge") != "official":
-            continue
-        if row.get("provider") != "FRED":
-            continue
-        if row.get("source_series") != "PPIFIS":
-            continue
-        if row.get("value_numeric") is None:
-            continue
-        return row
-    return None
-
-
-def _ppi_final_demand_history_metric(
-    original: DashboardMetric,
-    observation: dict[str, Any],
-) -> DashboardMetric:
-    official_macro = official_macro_pack.get_official_macro_metric("ppi_final_demand")
-    interpretation_hint = (
-        official_macro.interpretation_hint
-        if official_macro
-        else (
-            "PPI Final Demand is the official headline final demand PPI index relayed "
-            "by FRED PPIFIS; it is distinct from PPIACO and not consensus surprise data."
-        )
-    )
-    value = float(observation["value_numeric"])
-    generated_at = _string_or_none(observation.get("generated_at"))
-    freshness_status = str(observation.get("freshness_status") or "historical")
-    ai_context_allowed = bool(observation.get("ai_context_allowed")) and _ai_context_allowed(
-        status="ok",
-        source="FRED",
-        source_badge="official",
-        observation_date=_string_or_none(observation.get("observation_date")),
-        generated_at=generated_at,
-        freshness_status=freshness_status,
-        interpretation_hint=interpretation_hint,
-    )
-    return DashboardMetric(
-        metric_key=original.metric_key,
-        display_name=original.display_name,
-        value=value,
-        value_text=_format_value(value, "number", "ok"),
-        unit=original.unit,
-        status="ok",
-        source="FRED",
-        source_badge="official",
-        source_series="PPIFIS",
-        observation_date=_string_or_none(observation.get("observation_date")),
-        generated_at=generated_at,
-        freshness_status=freshness_status,
-        missing_reason=None,
-        interpretation_hint=interpretation_hint,
-        ai_context_allowed=ai_context_allowed,
-    )
-
-
-def _historical_derived_metric(
-    original: DashboardMetric,
-    candidate: historical_derived_metrics.HistoricalDerivedMetric | None,
-    *,
-    metric_keys: set[str],
-    hint_suffix: str,
-    fallback_source: str,
-    required_dependency_source_badges: set[str] | None,
-    replace_existing: bool,
-) -> DashboardMetric:
-    if original.metric_key not in metric_keys:
-        return original
-    if original.status != "insufficient_history" and not replace_existing:
-        return original
-    if candidate is None:
-        return original
-    if candidate.status in {"missing", "insufficient_history"}:
-        if original.metric_key != "labor_deterioration_status":
-            return original
-        return DashboardMetric(
-            metric_key=original.metric_key,
-            display_name=original.display_name,
-            value=None,
-            value_text=candidate.value_text,
-            unit=original.unit,
-            status=candidate.status,
-            source=fallback_source,
-            source_badge="derived",
-            source_series=", ".join(candidate.dependency_source_series or []) or None,
-            observation_date=candidate.observation_date,
-            generated_at=candidate.generated_at,
-            freshness_status=candidate.freshness_status,
-            missing_reason=candidate.missing_reason,
-            interpretation_hint=candidate.interpretation_hint,
-            ai_context_allowed=False,
-        )
-    if candidate.status not in {"ok", "watch", "pressure"} or candidate.value is None:
-        return original
-    if required_dependency_source_badges is not None:
-        source_badges = set(candidate.dependency_source_badges or [])
-        if not source_badges or not source_badges.issubset(required_dependency_source_badges):
-            return original
-    value = _dashboard_historical_derived_value(candidate)
-    hint = _dashboard_historical_derived_hint(candidate, hint_suffix=hint_suffix)
-    ai_context_allowed = bool(candidate.ai_context_allowed) and _ai_context_allowed(
-        status=candidate.status,
-        source=fallback_source,
-        source_badge="derived",
-        observation_date=candidate.observation_date,
-        generated_at=candidate.generated_at,
-        freshness_status=candidate.freshness_status,
-        interpretation_hint=hint,
-    )
-    return DashboardMetric(
-        metric_key=original.metric_key,
-        display_name=original.display_name,
-        value=value,
-        value_text=_format_historical_derived_value(value, candidate.unit),
-        unit=original.unit,
-        status="ok",
-        source=fallback_source,
-        source_badge="derived",
-        source_series=", ".join(candidate.dependency_source_series or []) or None,
-        observation_date=candidate.observation_date,
-        generated_at=candidate.generated_at,
-        freshness_status=candidate.freshness_status,
-        missing_reason=None,
-        interpretation_hint=hint,
-        ai_context_allowed=ai_context_allowed,
+        default_market_history_db_path=DEFAULT_MARKET_HISTORY_DB_PATH,
     )
 
 
 def _compact_dgs_fallback_observations(
     reports: tuple[ReportState, ...],
 ) -> dict[str, dict[str, Any]]:
-    observations: dict[str, dict[str, Any]] = {}
-    for metric_key in ("dgs2", "dgs10", "dgs30"):
-        found = _find_metric(metric_key, reports)
-        if found is None:
-            continue
-        value, payload, report = found
-        quality_metadata = _metric_quality_metadata(report, metric_key) or _first_metric_quality_metadata(reports, metric_key)
-        official_macro = official_macro_pack.get_official_macro_metric(metric_key)
-        numeric_value = _to_float(value)
-        source_badge = _metric_source_badge(payload, report, "rate_pressure", metric_key, quality_metadata)
-        source_series = _metric_source_series(payload, quality_metadata, official_macro=official_macro)
-        if source_series is None and source_badge == "official" and metric_key in {"dgs2", "dgs10", "dgs30"}:
-            source_series = metric_key.upper()
-        observations[metric_key] = {
-            "value": numeric_value if isinstance(numeric_value, float) else None,
-            "source": _metric_source(payload, report, quality_metadata),
-            "source_badge": source_badge,
-            "source_series": source_series,
-            "observation_date": _metric_observation_date(payload, quality_metadata),
-            "generated_at": _metric_generated_at(payload, report),
-            "freshness_status": _metric_freshness(
-                payload,
-                report,
-                metric_key=metric_key,
-                quality_metadata=quality_metadata,
-            ),
-            "ai_context_allowed": not _dependency_unusable(found),
-        }
-    return observations
-
-
-def _dashboard_historical_derived_value(
-    candidate: historical_derived_metrics.HistoricalDerivedMetric,
-) -> float | str | bool:
-    if isinstance(candidate.value, (str, bool)):
-        return candidate.value
-    value = float(candidate.value)
-    if candidate.unit in {"percent", "pp"}:
-        return value * 100.0
-    return value
-
-
-def _format_historical_derived_value(value: float | str | bool, unit: str | None) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, str):
-        return value
-    if unit == "percent":
-        return f"{value:+.2f}%"
-    if unit == "pp":
-        return f"{value:+.2f}pp"
-    if unit == "raw_pp":
-        return f"{value:+.2f}pp"
-    if unit == "raw_percent":
-        return f"{value:.2f}%"
-    if unit == "claims":
-        return f"{value:,.0f}"
-    return f"{value:.4g}"
-
-
-def _dashboard_historical_derived_hint(
-    candidate: historical_derived_metrics.HistoricalDerivedMetric,
-    *,
-    hint_suffix: str,
-) -> str:
-    base = (candidate.interpretation_hint or "").strip()
-    return (base + hint_suffix).strip()
+    return _historical_derived_compact_dgs_fallback_observations(
+        reports,
+        metric_aliases=METRIC_ALIASES,
+        derived_metric_keys=DERIVED_METRIC_KEYS,
+        source_badge_aliases=SOURCE_BADGE_ALIASES,
+    )
 
 
 def _equity_historical_derived_metrics_available(
@@ -1463,678 +681,33 @@ def _latest_metric_generated_at(metrics: list[DashboardMetric]) -> str | None:
     return _module_builder_latest_metric_generated_at(metrics)
 
 
-def _portfolio_compact_metric(
-    *,
-    module_key: str,
-    reports: tuple[ReportState, ...],
-    metric_key: str,
-    display_name: str,
-    unit: str | None,
-    format_kind: str,
-) -> DashboardMetric | None:
-    if module_key != "portfolio_deviation":
-        return None
-    report = next((item for item in reports if item.name == "portfolio_snapshot"), None)
-    if report is None:
-        return None
-    compact = _portfolio_deviation_compact(report)
-    if compact is None:
-        return None
-    value_map: dict[str, Any] = {
-        "max_deviation_asset": compact.max_deviation_asset,
-        "max_deviation_pp": compact.max_deviation_pp,
-        "equity_total_deviation_pp": compact.equity_total_deviation_pp,
-        "cash_reserve_status": compact.cash_reserve_status,
-        "holdings_updated_at": compact.holdings_updated_at,
-    }
-    if metric_key not in value_map:
-        return None
-
-    value = value_map[metric_key]
-    if value is None:
-        return _missing_metric(
-            metric_key=metric_key,
-            display_name=display_name,
-            unit=unit,
-            status="missing",
-            generated_at=compact.generated_at,
-            interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
-        )
-
-    status = _portfolio_compact_metric_status(compact, metric_key)
-    source = "local_portfolio_compact"
-    source_badge = "local"
-    observation_date = compact.holdings_updated_at
-    freshness_status = compact.stale_status
-    return DashboardMetric(
-        metric_key=metric_key,
-        display_name=display_name,
-        value=value,
-        value_text=_format_value(value, format_kind, status),
-        unit=unit,
-        status=status,
-        source=source,
-        source_badge=source_badge,
-        observation_date=observation_date,
-        generated_at=compact.generated_at,
-        freshness_status=freshness_status,
-        missing_reason=None,
-        interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
-        ai_context_allowed=_ai_context_allowed(
-            status=status,
-            source=source,
-            source_badge=source_badge,
-            observation_date=observation_date,
-            generated_at=compact.generated_at,
-            freshness_status=freshness_status,
-            interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
-        ),
-    )
-
-
-def _portfolio_deviation_compact(report: ReportState) -> PortfolioDeviationCompact | None:
-    if not isinstance(report.data, dict):
-        return None
-    data = report.data
-    embedded = data.get("portfolio_deviation_compact")
-    compact_payload = embedded if isinstance(embedded, dict) else data
-
-    target_weights = _portfolio_weight_map(
-        compact_payload.get("target_weights")
-        or compact_payload.get("target_allocation")
-        or PORTFOLIO_DEFAULT_TARGET_WEIGHTS,
-        default=PORTFOLIO_DEFAULT_TARGET_WEIGHTS,
-    )
-    current_weights = _portfolio_weight_map(
-        compact_payload.get("current_weights") or compact_payload.get("weights_ex_cash")
-    )
-    deviation_pp = _portfolio_deviation_pp_map(compact_payload, current_weights, target_weights)
-    if not current_weights and not deviation_pp:
-        return None
-
-    max_deviation_asset = _max_deviation_asset(deviation_pp)
-    max_deviation_pp = (
-        round(deviation_pp[max_deviation_asset], 4)
-        if max_deviation_asset is not None
-        else None
-    )
-    equity_current = _sum_weights(current_weights, ("sp500", "nasdaq100"))
-    equity_target = _sum_weights(target_weights, ("sp500", "nasdaq100"))
-    equity_deviation_pp = (
-        round((equity_current - equity_target) * 100.0, 4)
-        if equity_current is not None and equity_target is not None
-        else None
-    )
-    holdings_updated_at = _portfolio_holdings_updated_at(data)
-    generated_at = _string_or_none(
-        compact_payload.get("generated_at")
-        or data.get("generated_at")
-        or data.get("updated_at")
-    )
-    stale_status = _portfolio_stale_status(
-        holdings_updated_at=holdings_updated_at,
-        generated_at=generated_at,
-        existing_status=_string_or_none(
-            compact_payload.get("stale_status")
-            or data.get("holdings_freshness_status")
-        ),
-    )
-    cash_reserve_status = _portfolio_cash_reserve_status(data)
-
-    return PortfolioDeviationCompact(
-        generated_at=generated_at,
-        holdings_updated_at=holdings_updated_at,
-        target_weights={key: round(value * 100.0, 4) for key, value in target_weights.items()},
-        current_weights={key: round(value * 100.0, 4) for key, value in current_weights.items()},
-        deviation_pp={key: round(value, 4) for key, value in deviation_pp.items()},
-        max_deviation_asset=max_deviation_asset,
-        max_deviation_pp=max_deviation_pp,
-        equity_total_current_weight=round(equity_current * 100.0, 4)
-        if equity_current is not None
-        else None,
-        equity_total_target_weight=round(equity_target * 100.0, 4)
-        if equity_target is not None
-        else None,
-        equity_total_deviation_pp=equity_deviation_pp,
-        cash_reserve_status=cash_reserve_status,
-        stale_status=stale_status,
-        notes=[
-            "cash reserve excluded from target mix",
-            "portfolio deviation is not attributed to market factors",
-            "reference review only",
-        ],
-    )
-
-
-def _portfolio_weight_map(
-    value: Any,
-    default: dict[str, float] | None = None,
-) -> dict[str, float]:
-    payload = value if isinstance(value, dict) else {}
-    result: dict[str, float] = {}
-    for key in PORTFOLIO_TARGET_ASSET_CLASSES:
-        number = _to_float(payload.get(key))
-        if number is None and default is not None:
-            number = default[key]
-        if number is None:
-            continue
-        result[key] = _weight_fraction(number)
-    return result
-
-
-def _portfolio_deviation_pp_map(
-    payload: dict[str, Any],
-    current_weights: dict[str, float],
-    target_weights: dict[str, float],
-) -> dict[str, float]:
-    explicit = payload.get("deviation_pp")
-    if isinstance(explicit, dict):
-        return {
-            key: number
-            for key in PORTFOLIO_TARGET_ASSET_CLASSES
-            if (number := _to_float(explicit.get(key))) is not None
-        }
-    fractional = payload.get("deviation")
-    if isinstance(fractional, dict):
-        return {
-            key: round(_weight_fraction(number) * 100.0, 4)
-            for key in PORTFOLIO_TARGET_ASSET_CLASSES
-            if (number := _to_float(fractional.get(key))) is not None
-        }
-    return {
-        key: round((current_weights[key] - target_weights[key]) * 100.0, 4)
-        for key in PORTFOLIO_TARGET_ASSET_CLASSES
-        if key in current_weights and key in target_weights
-    }
-
-
-def _weight_fraction(value: float) -> float:
-    return value / 100.0 if abs(value) > 1.0 else value
-
-
-def _max_deviation_asset(deviation_pp: dict[str, float]) -> str | None:
-    if not deviation_pp:
-        return None
-    return max(deviation_pp, key=lambda key: abs(deviation_pp[key]))
-
-
-def _sum_weights(weights: dict[str, float], keys: tuple[str, ...]) -> float | None:
-    if not all(key in weights for key in keys):
-        return None
-    return sum(weights[key] for key in keys)
-
-
-def _portfolio_holdings_updated_at(data: dict[str, Any]) -> str | None:
-    value = data.get("holdings_updated_at")
-    if isinstance(value, dict):
-        value = value.get("value") or value.get("date") or value.get("updated_at")
-    return _string_or_none(value)
-
-
-def _portfolio_cash_reserve_status(data: dict[str, Any]) -> str:
-    if "cash_reserve_status" in data:
-        value = data["cash_reserve_status"]
-        if isinstance(value, dict):
-            value = value.get("value") or value.get("status")
-        text = _string_or_none(value)
-        if text in {
-            "cash_excluded_from_target_allocation",
-            "cash_missing",
-            "cash_present",
-            "unknown",
-        }:
-            return text
-    if any(key in data for key in ("cash", "cash_reserve_value")):
-        return "cash_excluded_from_target_allocation"
-    return "cash_missing"
-
-
-def _portfolio_stale_status(
-    *,
-    holdings_updated_at: str | None,
-    generated_at: str | None,
-    existing_status: str | None,
-) -> str:
-    holdings_date = _parse_date(holdings_updated_at)
-    generated_date = _parse_date(generated_at)
-    if holdings_date is not None and generated_date is not None:
-        age_days = max((generated_date - holdings_date).days, 0)
-        if age_days <= 14:
-            return "fresh"
-        if age_days <= 30:
-            return "watch"
-        return "stale"
-    status = (existing_status or "").lower()
-    if status in {"fresh", "ok"}:
-        return "fresh"
-    if status in {"watch", "aging"}:
-        return "watch"
-    if status in {"stale", "very_stale"}:
-        return "stale"
-    return "unknown"
-
-
-def _parse_date(value: Any) -> date | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    text = str(value).strip()
-    if not text:
-        return None
-    try:
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
-    except ValueError:
-        pass
-    try:
-        return date.fromisoformat(text[:10])
-    except ValueError:
-        return None
-
-
-def _portfolio_compact_metric_status(
-    compact: PortfolioDeviationCompact,
-    metric_key: str,
-) -> str:
-    if compact.stale_status == "stale":
-        return "stale"
-    if compact.stale_status == "unknown":
-        return "unknown"
-    if metric_key == "holdings_updated_at":
-        return "ok" if compact.stale_status in {"fresh", "watch"} else compact.stale_status
-    if metric_key == "cash_reserve_status":
-        return "ok" if compact.cash_reserve_status != "unknown" else "unknown"
-    return _portfolio_deviation_status(compact.max_deviation_pp)
-
-
-def _portfolio_compact_module_status(compact: PortfolioDeviationCompact) -> str:
-    if compact.stale_status in {"stale", "unknown"}:
-        return compact.stale_status
-    return _portfolio_deviation_status(compact.max_deviation_pp)
-
-
-def _portfolio_deviation_status(value: float | None) -> str:
-    if value is None:
-        return "unknown"
-    abs_value = abs(value)
-    if abs_value < 3.0:
-        return "ok"
-    if abs_value <= 5.0:
-        return "watch"
-    return "pressure"
-
-
 def _derived_metric(
     metric_key: str,
     reports: tuple[ReportState, ...],
 ) -> DashboardMetric | None:
-    if metric_key == "credit_stress_status":
-        if _find_metric("credit_stress_status", reports, include_aliases=False) is not None:
-            return None
-        return _credit_stress_status_metric(reports)
-    if metric_key == "real_yield_pressure_status":
-        if _find_metric("real_yield_pressure_status", reports, include_aliases=False) is not None:
-            return None
-        return _real_yield_pressure_status_metric(reports)
-    if metric_key == "dgs30_distance_to_5pct":
-        found = _find_metric("dgs30", reports)
-        if found is None or _dependency_unusable(found):
-            return _blocked_dependency_metric(
-                metric_key="dgs30_distance_to_5pct",
-                display_name="30Y distance to 5%",
-                unit="pp",
-                status="missing",
-                missing_reason="DGS30 is missing; distance to 5% cannot be calculated.",
-                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
-                interpretation_hint="Distance requires daily DGS30 compact evidence.",
-            )
-        dgs30_value = _to_float(found[0])
-        if not isinstance(dgs30_value, float):
-            return _blocked_dependency_metric(
-                metric_key="dgs30_distance_to_5pct",
-                display_name="30Y distance to 5%",
-                unit="pp",
-                status="missing",
-                missing_reason="DGS30 is missing; distance to 5% cannot be calculated.",
-                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
-                interpretation_hint="Distance requires numeric daily DGS30 compact evidence.",
-            )
-        value = round(dgs30_value - 5.0, 4)
-        return _derived_metric_response(
-            metric_key,
-            "30Y distance to 5%",
-            value,
-            "pp",
-            "pp",
-            found,
-            "Distance is derived from daily DGS30; it is not intraday.",
-        )
-    if metric_key == "dgs30_breakout_confirmed":
-        found = _find_metric("dgs30_breakout_confirmed", reports)
-        if found is None:
-            return _blocked_dependency_metric(
-                metric_key="dgs30_breakout_confirmed",
-                display_name="30Y breakout confirmed",
-                unit=None,
-                status="research_needed",
-                missing_reason=DGS30_BREAKOUT_MISSING_REASON,
-                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
-                interpretation_hint="Breakout confirmation requires explicit compact evidence; do not infer it.",
-            )
-        dgs30 = _find_metric("dgs30", reports)
-        if dgs30 is None or _dependency_unusable(dgs30):
-            return _blocked_dependency_metric(
-                metric_key="dgs30_breakout_confirmed",
-                display_name="30Y breakout confirmed",
-                unit=None,
-                status="missing",
-                missing_reason="DGS30 is missing; breakout confirmation cannot be evaluated.",
-                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
-                interpretation_hint="Breakout confirmation requires DGS30 and explicit compact history evidence.",
-            )
-        _, payload, report = found
-        if _dependency_unusable(found):
-            return None
-        if not _has_breakout_history_evidence(payload):
-            return _blocked_dependency_metric(
-                metric_key="dgs30_breakout_confirmed",
-                display_name="30Y breakout confirmed",
-                unit=None,
-                status="insufficient_history",
-                missing_reason="DGS30 breakout confirmation requires compact history window evidence.",
-                generated_at=_metric_generated_at(payload, report),
-                interpretation_hint="Breakout confirmation requires explicit compact evidence; do not infer it.",
-            )
-    if metric_key == "nasdaq_vs_sp500_30d":
-        nasdaq = _find_metric("nasdaq100_30d_return", reports)
-        sp500 = _find_metric("sp500_30d_return", reports)
-        if nasdaq is None or sp500 is None or _dependency_unusable(nasdaq) or _dependency_unusable(sp500):
-            return _blocked_dependency_metric(
-                metric_key="nasdaq_vs_sp500_30d",
-                display_name="Nasdaq vs S&P 500 30D",
-                unit="pp",
-                status="insufficient_history",
-                missing_reason="S&P 500 and Nasdaq 100 30D returns are both required.",
-                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
-                interpretation_hint="Derived spread requires both compact 30D return metrics.",
-            )
-        nasdaq_value = _to_float(nasdaq[0])
-        sp500_value = _to_float(sp500[0])
-        if not isinstance(nasdaq_value, float) or not isinstance(sp500_value, float):
-            return _blocked_dependency_metric(
-                metric_key="nasdaq_vs_sp500_30d",
-                display_name="Nasdaq vs S&P 500 30D",
-                unit="pp",
-                status="insufficient_history",
-                missing_reason="S&P 500 and Nasdaq 100 30D returns must both be numeric.",
-                generated_at=_first_updated_at([report for report in reports if report.data is not None]),
-                interpretation_hint="Derived spread requires numeric compact 30D return metrics.",
-            )
-        value = round(nasdaq_value - sp500_value, 4)
-        return _derived_metric_response(
-            metric_key,
-            "Nasdaq vs S&P 500 30D",
-            value,
-            "pp",
-            "pp",
-            nasdaq,
-            "Derived spread between compact 30D return metrics.",
-        )
-    return None
+    return _derived_metrics_derived_metric(
+        metric_key,
+        reports,
+        metric_aliases=METRIC_ALIASES,
+        dgs30_breakout_missing_reason=DGS30_BREAKOUT_MISSING_REASON,
+    )
 
 
 def _credit_stress_status_metric(
     reports: tuple[ReportState, ...],
 ) -> DashboardMetric:
-    high_yield = _usable_numeric_metric("high_yield_spread", reports)
-    investment_grade = _usable_numeric_metric("investment_grade_spread", reports)
-    vix = _usable_numeric_metric("vix", reports)
-    generated_at = _latest_metric_timestamp(
-        [item for item in (high_yield, investment_grade, vix) if item is not None]
-    ) or _first_updated_at([report for report in reports if report.data is not None])
-    observation_date = _latest_metric_observation_date(
-        [item for item in (high_yield, investment_grade, vix) if item is not None]
+    return _derived_credit_stress_status_metric(
+        reports,
+        metric_aliases=METRIC_ALIASES,
     )
-    hint = (
-        "Derived from available credit spread evidence plus VIX. VIX alone is not "
-        "sufficient to infer systemic credit stress or crisis."
-    )
-
-    if high_yield is None and investment_grade is None:
-        return _blocked_dependency_metric(
-            metric_key="credit_stress_status",
-            display_name="Credit stress status",
-            unit=None,
-            status="unknown" if vix is not None else "missing",
-            missing_reason=(
-                "Credit spread evidence is missing; VIX alone is not sufficient "
-                "to classify credit stress."
-            ),
-            generated_at=generated_at,
-            interpretation_hint=hint,
-        )
-
-    high_yield_value = high_yield[0] if high_yield else None
-    investment_grade_value = investment_grade[0] if investment_grade else None
-    vix_value = vix[0] if vix else None
-    status, value, missing_reason = _credit_status_from_values(
-        high_yield=high_yield_value,
-        investment_grade=investment_grade_value,
-        vix=vix_value,
-    )
-    return DashboardMetric(
-        metric_key="credit_stress_status",
-        display_name="Credit stress status",
-        value=value,
-        value_text=_format_value(value, "text", status),
-        unit=None,
-        status=status,
-        source="dashboard_compact",
-        source_badge="derived",
-        observation_date=observation_date,
-        generated_at=generated_at,
-        freshness_status="fresh" if observation_date or generated_at else "unknown",
-        missing_reason=missing_reason,
-        interpretation_hint=hint,
-        ai_context_allowed=_ai_context_allowed(
-            status=status,
-            source="dashboard_compact",
-            source_badge="derived",
-            observation_date=observation_date,
-            generated_at=generated_at,
-            freshness_status="fresh" if observation_date or generated_at else "unknown",
-            interpretation_hint=hint,
-        ),
-    )
-
-
-def _credit_status_from_values(
-    *,
-    high_yield: float | None,
-    investment_grade: float | None,
-    vix: float | None,
-) -> tuple[str, str, str | None]:
-    credit_values = [value for value in (high_yield, investment_grade) if value is not None]
-    if not credit_values:
-        return "unknown", "spread_data_missing", "Credit spread evidence is missing."
-
-    high_yield_stress = high_yield is not None and high_yield >= 8.0
-    investment_grade_stress = investment_grade is not None and investment_grade >= 3.0
-    high_yield_pressure = high_yield is not None and high_yield >= 5.0
-    investment_grade_pressure = investment_grade is not None and investment_grade >= 2.0
-    high_yield_watch = high_yield is not None and high_yield >= 3.5
-    investment_grade_watch = investment_grade is not None and investment_grade >= 1.5
-    vix_pressure = vix is not None and vix >= 30.0
-    vix_watch = vix is not None and vix >= 25.0
-
-    if high_yield_stress or investment_grade_stress:
-        return "stress", "credit_spreads_stressed", None
-    if high_yield_pressure or investment_grade_pressure or (
-        vix_pressure and (high_yield_watch or investment_grade_watch)
-    ):
-        return "pressure", "credit_pressure", None
-    if high_yield_watch or investment_grade_watch or vix_watch:
-        return "watch", "credit_watch", None
-    if investment_grade is None:
-        return (
-            "watch",
-            "partial_coverage",
-            "Investment-grade spread is missing; credit stress coverage is partial.",
-        )
-    return "ok", "credit_calm", None
 
 
 def _real_yield_pressure_status_metric(
     reports: tuple[ReportState, ...],
 ) -> DashboardMetric:
-    real_yield = _usable_numeric_metric("dfii10", reports)
-    breakeven = _usable_numeric_metric("t10yie", reports)
-    generated_at = _latest_metric_timestamp(
-        [item for item in (real_yield, breakeven) if item is not None]
-    ) or _first_updated_at([report for report in reports if report.data is not None])
-    observation_date = _latest_metric_observation_date(
-        [item for item in (real_yield, breakeven) if item is not None]
-    )
-    hint = (
-        "Derived from 10Y real yield (DFII10) and 10Y breakeven inflation (T10YIE). "
-        "Real yield pressure is a valuation and opportunity-cost mechanism, not a sole "
-        "driver of equities, gold, or portfolio action."
-    )
-    if real_yield is None or breakeven is None:
-        missing = []
-        if real_yield is None:
-            missing.append("DFII10")
-        if breakeven is None:
-            missing.append("T10YIE")
-        return _blocked_dependency_metric(
-            metric_key="real_yield_pressure_status",
-            display_name="Real yield pressure status",
-            unit=None,
-            status="missing",
-            missing_reason=(
-                "Real yield pressure status requires both "
-                f"{' and '.join(missing)} compact evidence."
-            ),
-            generated_at=generated_at,
-            interpretation_hint=hint,
-        )
-
-    status, value = _real_yield_status_from_values(
-        real_yield=real_yield[0],
-        breakeven=breakeven[0],
-    )
-    freshness_status = "fresh" if observation_date or generated_at else "unknown"
-    return DashboardMetric(
-        metric_key="real_yield_pressure_status",
-        display_name="Real yield pressure status",
-        value=value,
-        value_text=_format_value(value, "text", status),
-        unit=None,
-        status=status,
-        source="dashboard_compact",
-        source_badge="derived",
-        observation_date=observation_date,
-        generated_at=generated_at,
-        freshness_status=freshness_status,
-        missing_reason=None,
-        interpretation_hint=hint,
-        ai_context_allowed=_ai_context_allowed(
-            status=status,
-            source="dashboard_compact",
-            source_badge="derived",
-            observation_date=observation_date,
-            generated_at=generated_at,
-            freshness_status=freshness_status,
-            interpretation_hint=hint,
-        ),
-    )
-
-
-def _real_yield_status_from_values(
-    *,
-    real_yield: float,
-    breakeven: float,
-) -> tuple[str, str]:
-    if real_yield >= 2.0:
-        return "pressure", "real_yield_pressure"
-    if real_yield >= 1.5 or breakeven >= 2.5:
-        return "watch", "real_yield_watch"
-    return "ok", "real_yield_calm"
-
-
-def _derived_metric_response(
-    metric_key: str,
-    display_name: str,
-    value: float,
-    unit: str,
-    format_kind: str,
-    source_metric: tuple[Any, dict[str, Any], ReportState],
-    interpretation_hint: str,
-) -> DashboardMetric:
-    _, payload, report = source_metric
-    generated_at = _metric_generated_at(payload, report)
-    observation_date = _metric_observation_date(payload)
-    freshness_status = _metric_freshness(payload, report)
-    source = _metric_source(payload, report)
-    return DashboardMetric(
-        metric_key=metric_key,
-        display_name=display_name,
-        value=value,
-        value_text=_format_value(value, format_kind, "ok"),
-        unit=unit,
-        status="ok",
-        source=source,
-        source_badge="derived",
-        source_series=_metric_source_series(payload, None, None),
-        observation_date=observation_date,
-        generated_at=generated_at,
-        freshness_status=freshness_status,
-        missing_reason=None,
-        interpretation_hint=interpretation_hint,
-        ai_context_allowed=_ai_context_allowed(
-            status="ok",
-            source=source,
-            source_badge="derived",
-            observation_date=observation_date,
-            generated_at=generated_at,
-            freshness_status=freshness_status,
-            interpretation_hint=interpretation_hint,
-        ),
-    )
-
-
-def _blocked_dependency_metric(
-    *,
-    metric_key: str,
-    display_name: str,
-    unit: str | None,
-    status: str,
-    missing_reason: str,
-    generated_at: str | None,
-    interpretation_hint: str | None,
-) -> DashboardMetric:
-    normalized_status = _metric_status_value(status)
-    return DashboardMetric(
-        metric_key=metric_key,
-        display_name=display_name,
-        value=None,
-        value_text=_missing_value_text(normalized_status),
-        unit=unit,
-        status=normalized_status,
-        source=None,
-        source_badge="research_needed" if normalized_status == "research_needed" else "missing",
-        source_series=None,
-        observation_date=None,
-        generated_at=generated_at,
-        freshness_status="missing"
-        if normalized_status == "missing"
-        else "unknown" if normalized_status == "unknown"
-        else "insufficient_history",
-        missing_reason=missing_reason,
-        interpretation_hint=interpretation_hint,
-        ai_context_allowed=False,
+    return _derived_real_yield_pressure_status_metric(
+        reports,
+        metric_aliases=METRIC_ALIASES,
     )
 
 
@@ -2181,33 +754,23 @@ def _usable_numeric_metric(
     metric_key: str,
     reports: tuple[ReportState, ...],
 ) -> tuple[float, dict[str, Any], ReportState] | None:
-    found = _find_metric(metric_key, reports)
-    if found is None or _dependency_unusable(found):
-        return None
-    value = _to_float(found[0])
-    if not isinstance(value, float):
-        return None
-    return value, found[1], found[2]
+    return _derived_usable_numeric_metric(
+        metric_key,
+        reports,
+        metric_aliases=METRIC_ALIASES,
+    )
 
 
 def _latest_metric_timestamp(
     found_items: list[tuple[float, dict[str, Any], ReportState]],
 ) -> str | None:
-    candidates = [
-        _metric_generated_at(payload, report)
-        for _, payload, report in found_items
-    ]
-    return max([item for item in candidates if item], default=None)
+    return _derived_latest_metric_timestamp(found_items)
 
 
 def _latest_metric_observation_date(
     found_items: list[tuple[float, dict[str, Any], ReportState]],
 ) -> str | None:
-    candidates = [
-        _metric_observation_date(payload)
-        for _, payload, _ in found_items
-    ]
-    return max([item for item in candidates if item], default=None)
+    return _derived_latest_metric_observation_date(found_items)
 
 
 def _metric_source_badge(
@@ -2240,18 +803,6 @@ def _metric_interpretation_hint(metric_key: str, payload: dict[str, Any]) -> str
         metric_key,
         payload,
         portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
-    )
-
-
-def _has_breakout_history_evidence(payload: dict[str, Any]) -> bool:
-    return any(
-        key in payload
-        for key in (
-            "window_observation_count",
-            "above_5pct_days_5d",
-            "five_observation_average",
-            "calculation",
-        )
     )
 
 

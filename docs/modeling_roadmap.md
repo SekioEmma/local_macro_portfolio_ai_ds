@@ -287,9 +287,21 @@ AI-context semantic, PPI Final Demand / PPIACO boundary, cache,
 prediction/probability, return, allocation, or trading behavior changed. See
 `docs/dashboard_service_refactor_phase_f2_metric_builder.md`.
 
-Next recommended task after Phase F2: manual review / Phase F3 route decision.
-If Phase F3 proceeds, first characterize historical-derived and
-portfolio-compact metric helper behavior before extracting those helpers.
+Phase F/G Dashboard Service Refactor Completion: completed.
+Behavior-preserving extraction of historical-derived helper application,
+portfolio compact parsing/metric construction, derived status metric helpers,
+static metric catalog data, and key-metric routing into focused dashboard
+service modules. `dashboard_service.py` remains the public facade and
+compatibility surface, and extracted modules receive callbacks/configuration
+instead of importing `dashboard_service.py`. No dashboard API, module key,
+metric key, `DashboardMetric` schema, source_badge/freshness/AI-context
+semantic, PPI Final Demand / PPIACO boundary, historical-derived gate,
+portfolio privacy boundary, cache, `write_last_good`, provider, endpoint,
+frontend, external AI, live fetch/write, prediction/probability, return,
+allocation, or trading behavior changed. See
+`docs/dashboard_service_refactor_phase_fg_completion.md`.
+
+Next recommended task after Phase F/G: manual review / route decision.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

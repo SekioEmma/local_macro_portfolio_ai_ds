@@ -37,7 +37,8 @@ hotfix.
 14. Phase F1 dashboard metric characterization tests before metric builder
     extraction: completed.
 15. Phase F2 extract dashboard metric builder: completed.
-16. Manual review / Phase F3 route decision: next.
+16. Phase F/G complete remaining dashboard_service refactor: completed.
+17. Manual review / route decision: next.
 
 ### P1
 
@@ -68,6 +69,7 @@ hotfix.
 - Dashboard Service Refactor Phase E - Module Builder Extraction.
 - Phase F1 Dashboard Metric Characterization Tests.
 - Phase F2 Dashboard Metric Builder Extraction.
+- Phase F/G Dashboard Service Refactor Completion.
 
 ### Deferred
 
@@ -270,9 +272,18 @@ search, live fetches, live writes, prediction, probability, return,
 allocation, or trading outputs. See
 `docs/dashboard_service_refactor_phase_f2_metric_builder.md`.
 
-The next recommended task after Phase F2 is manual review / Phase F3 route
-decision. If Phase F3 proceeds, characterize historical-derived and
-portfolio-compact metric helper behavior before any extraction.
+Phase F/G Dashboard Service Refactor Completion is completed. It extracts
+historical-derived metric helpers, portfolio compact helpers, derived status
+metric helpers, static metric catalog data, and key-metric routing into focused
+modules while preserving `dashboard_service.py` as the public orchestration
+facade with compatibility wrappers and re-exports. It does not change
+dashboard public APIs, module keys, metric keys, `DashboardMetric` schema,
+source_badge/freshness/AI-context semantics, cache behavior, `write_last_good`,
+providers, endpoints, frontend UI, external AI, live fetches, live writes,
+prediction, probability, return, allocation, or trading outputs. See
+`docs/dashboard_service_refactor_phase_fg_completion.md`.
+
+The next recommended task after Phase F/G is manual review / route decision.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,
