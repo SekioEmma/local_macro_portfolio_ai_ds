@@ -8,11 +8,12 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: Phase F1 Dashboard Metric Characterization Tests
+- Last completed task: Phase F2 Dashboard Metric Builder Extraction
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: Phase F2 dashboard metric builder extraction
-- Next engineering task: Phase F2 extract dashboard metric builder
+- Current immediate route: manual review / Phase F3 route decision
+- Next engineering task: Phase F3 characterization for historical-derived /
+  portfolio-compact metric helpers, only after route confirmation
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -176,8 +177,8 @@ validation requirements. The short version:
     (completed)
 11. ~~Phase F1 dashboard metric characterization tests before metric builder
     extraction~~ (completed)
-12. Phase F2 extract dashboard metric builder
-13. Manual review / route decision
+12. ~~Phase F2 extract dashboard metric builder~~ (completed)
+13. Manual review / Phase F3 route decision
 14. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 

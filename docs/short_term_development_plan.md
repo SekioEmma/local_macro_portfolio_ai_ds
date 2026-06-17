@@ -36,7 +36,8 @@ hotfix.
 13. Dashboard Service Refactor Phase E - Module Builder Extraction: completed.
 14. Phase F1 dashboard metric characterization tests before metric builder
     extraction: completed.
-15. Phase F2 extract dashboard metric builder: next.
+15. Phase F2 extract dashboard metric builder: completed.
+16. Manual review / Phase F3 route decision: next.
 
 ### P1
 
@@ -66,6 +67,7 @@ hotfix.
 - S3 AI Memo Boundary Template Update.
 - Dashboard Service Refactor Phase E - Module Builder Extraction.
 - Phase F1 Dashboard Metric Characterization Tests.
+- Phase F2 Dashboard Metric Builder Extraction.
 
 ### Deferred
 
@@ -255,8 +257,22 @@ endpoints, frontend UI, external AI, live fetches, live writes, prediction,
 probability, return, allocation, or trading outputs. See
 `docs/dashboard_service_refactor_phase_f1_metric_characterization.md`.
 
-The next recommended task after Phase F1 is Phase F2 extract dashboard metric
-builder.
+Phase F2 Dashboard Metric Builder Extraction is completed. It extracts metric
+object construction, source/freshness/status metadata helpers, YoY index-level
+guard helpers, metric lookup helpers, and formatting helpers into
+`dashboard_metric_builder.py`. `dashboard_service.py` keeps the legacy private
+callable surface and constants through imports or thin wrappers with
+configuration/callback injection. It does not change dashboard public APIs,
+module keys, metric keys, `DashboardMetric` schema, source_badge/freshness/
+AI-context semantics, PPI Final Demand / PPIACO boundaries, cache behavior,
+`write_last_good`, providers, endpoints, frontend UI, external AI, Tavily/
+search, live fetches, live writes, prediction, probability, return,
+allocation, or trading outputs. See
+`docs/dashboard_service_refactor_phase_f2_metric_builder.md`.
+
+The next recommended task after Phase F2 is manual review / Phase F3 route
+decision. If Phase F3 proceeds, characterize historical-derived and
+portfolio-compact metric helper behavior before any extraction.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

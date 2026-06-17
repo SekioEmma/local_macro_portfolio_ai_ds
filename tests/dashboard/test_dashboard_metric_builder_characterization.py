@@ -3,8 +3,27 @@ from pathlib import Path
 import pytest
 
 from app_backend.schemas.responses import DashboardMetric
-from app_backend.services import dashboard_service
+from app_backend.services import dashboard_metric_builder, dashboard_service
 from app_backend.services.dashboard_report_loader import ReportState
+
+
+def test_dashboard_metric_builder_module_has_no_reverse_import():
+    source = Path(dashboard_metric_builder.__file__).read_text(encoding="utf-8")
+
+    assert "dashboard_service" not in source
+
+
+def test_dashboard_metric_builder_reexport_surface_characterization():
+    assert dashboard_service._format_value is dashboard_metric_builder.format_value
+    assert dashboard_service._metric_status is dashboard_metric_builder.metric_status
+    assert dashboard_service._metric_freshness is dashboard_metric_builder.metric_freshness
+    assert dashboard_service._build_metric is not dashboard_metric_builder.build_metric
+    assert (
+        dashboard_service.INDEX_LEVEL_YOY_MISSING_REASON
+        == dashboard_metric_builder.INDEX_LEVEL_YOY_MISSING_REASON
+    )
+    assert dashboard_service.SOURCE_BADGE_ALIASES == dashboard_metric_builder.SOURCE_BADGE_ALIASES
+    assert dashboard_service.INFLATION_YOY_METRIC_KEYS == dashboard_metric_builder.INFLATION_YOY_METRIC_KEYS
 
 
 def test_build_metric_missing_official_macro_metric_characterization():

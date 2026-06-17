@@ -538,5 +538,19 @@ metric semantics, change dashboard public APIs, alter cache or
 `write_last_good`, add providers, endpoints, frontend UI, external AI, live
 fetches, live writes, prediction, probability, return, allocation, or trading
 outputs.
-Next recommended task: Phase F2 extract dashboard metric builder.
+Phase F2 Dashboard Metric Builder Extraction is complete as a
+behavior-preserving extraction of metric object construction and metric
+metadata helpers into `src/app_backend/services/dashboard_metric_builder.py`.
+`dashboard_service.py` keeps compatibility aliases or thin wrappers for the
+legacy underscore helper surface, with local configuration and callbacks
+injected into the new builder module. The new module does not import
+`dashboard_service.py`. No dashboard public API, module key, metric key,
+`DashboardMetric` schema, source_badge/freshness/AI-context semantic, PPI
+Final Demand / PPIACO boundary, cache semantic, `write_last_good` behavior,
+provider, endpoint, frontend UI, external AI, Tavily/search, live fetch/write,
+prediction/probability output, return estimate, allocation output, or trading
+advice changed.
+Next recommended task: manual review / Phase F3 route decision. If Phase F3
+proceeds, characterize historical-derived and portfolio-compact metric helper
+behavior before any extraction.
 Real AI Chat / Memo / Report integrations remain not implemented.

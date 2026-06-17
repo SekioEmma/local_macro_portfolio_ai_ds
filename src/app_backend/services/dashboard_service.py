@@ -38,6 +38,34 @@ from app_backend.services.dashboard_filters import (
     apply_evidence_filters,
     evidence_row_matches,
 )
+from app_backend.services.dashboard_metric_builder import (
+    ALLOWED_METRIC_STATUSES,
+    ALLOWED_SOURCE_BADGES,
+    INDEX_LEVEL_YOY_MISSING_REASON,
+    INFLATION_YOY_METRIC_KEYS,
+    SOURCE_BADGE_ALIASES,
+    build_metric as _metric_builder_build_metric,
+    dependency_unusable as _dependency_unusable,
+    find_metric as _metric_builder_find_metric,
+    find_metric_payload as _find_metric_payload,
+    first_metric_quality_metadata as _first_metric_quality_metadata,
+    format_value as _format_value,
+    interpretation_hint as _metric_builder_interpretation_hint,
+    metric_freshness as _metric_freshness,
+    metric_generated_at as _metric_generated_at,
+    metric_interpretation_hint as _metric_builder_metric_interpretation_hint,
+    metric_observation_date as _metric_observation_date,
+    metric_quality_metadata as _metric_quality_metadata,
+    metric_source as _metric_source,
+    metric_source_badge as _metric_builder_metric_source_badge,
+    metric_source_series as _metric_source_series,
+    metric_status as _metric_status,
+    metric_status_value as _metric_status_value,
+    missing_metric as _metric_builder_missing_metric,
+    normalize_inflation_yoy_value as _normalize_inflation_yoy_value,
+    payload_declares_index_level as _payload_declares_index_level,
+    to_float as _to_float,
+)
 from app_backend.services.dashboard_module_builder import (
     build_modules as _module_builder_build_modules,
     equity_historical_derived_metrics_available as _module_builder_equity_historical_derived_metrics_available,
@@ -116,31 +144,6 @@ DASHBOARD_MODULE_KEYS = (
     "portfolio_deviation",
 )
 _SHARED_DASHBOARD_CONTEXT_CACHE = SharedDashboardContextCache()
-ALLOWED_METRIC_STATUSES = {
-    "ok",
-    "watch",
-    "pressure",
-    "stress",
-    "missing",
-    "stale",
-    "unknown",
-    "research_needed",
-    "insufficient_history",
-    "not_available",
-    "insufficient_evidence",
-    "limited_evidence",
-}
-ALLOWED_SOURCE_BADGES = {
-    "official",
-    "official_fallback",
-    "unofficial_fallback",
-    "proxy",
-    "search-derived",
-    "missing",
-    "research_needed",
-    "local",
-    "derived",
-}
 DERIVED_METRIC_KEYS = {
     "dgs10_5d_avg",
     "dgs30_distance_to_5pct",
@@ -391,15 +394,6 @@ METRIC_ALIASES = {
     "wti_30d_change": ("wti_oil_30d_change",),
     "brent_30d_change": ("brent_oil_30d_change",),
 }
-INFLATION_YOY_METRIC_KEYS = {
-    "core_cpi_yoy",
-    "core_pce_yoy",
-    "ppiaco_yoy",
-    "ppi_final_demand_yoy",
-}
-INDEX_LEVEL_YOY_MISSING_REASON = (
-    "Only index level is available; YoY requires historical comparison."
-)
 DGS30_BREAKOUT_MISSING_REASON = "Requires explicit confirmation rule and sufficient DGS30 history."
 LABOR_METRIC_SPECS = [
     ("unemployment_rate", "Unemployment rate", "percent", "percent", "missing"),
@@ -425,14 +419,6 @@ LABOR_METRIC_SPECS = [
     ("sahm_rule_proxy_status", "Sahm rule proxy status", None, "text", "insufficient_history"),
     ("labor_deterioration_status", "Labor deterioration status", None, "text", "insufficient_history"),
 ]
-SOURCE_BADGE_ALIASES = {
-    "official_api": "official",
-    "official_or_public_data_api": "official",
-    "public_data_api": "official",
-    "third_party_api": "proxy",
-    "manual": "local",
-    "cached_report": "derived",
-}
 CORE_METRIC_KEYS = {
     "credit_stress": {"high_yield_spread", "investment_grade_spread", "vix", "credit_stress_status"},
     "rate_pressure": {"dgs2", "dgs10", "dgs30", "dgs30_distance_to_5pct"},
@@ -1022,141 +1008,18 @@ def _build_metric(
     reports: tuple[ReportState, ...],
     spec: tuple[str, str, str | None, str, str],
 ) -> DashboardMetric:
-    metric_key, display_name, unit, format_kind, missing_status = spec
-    derived = _derived_metric(metric_key, reports)
-    if derived is not None:
-        return derived
-    compact = _portfolio_compact_metric(
-        module_key=module_key,
-        reports=reports,
-        metric_key=metric_key,
-        display_name=display_name,
-        unit=unit,
-        format_kind=format_kind,
-    )
-    if compact is not None:
-        return compact
-
-    found = _find_metric(metric_key, reports)
-    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
-    interpretation_hint = _interpretation_hint(metric_key)
-    if found is None:
-        return _missing_metric(
-            metric_key=metric_key,
-            display_name=display_name,
-            unit=unit,
-            status=official_macro.status_when_missing if official_macro else missing_status,
-            generated_at=_first_updated_at([report for report in reports if report.data is not None]),
-            interpretation_hint=interpretation_hint,
-            source=official_macro.source if official_macro else None,
-            source_badge=(
-                official_macro.source_badge
-                if official_macro and official_macro.source_badge == "research_needed"
-                else None
-            ),
-            missing_reason=official_macro.missing_reason if official_macro else None,
-        )
-
-    value, payload, report = found
-    interpretation_hint = _metric_interpretation_hint(metric_key, payload)
-    quality_metadata = _metric_quality_metadata(report, metric_key) or _first_metric_quality_metadata(reports, metric_key)
-    status = _metric_status(payload)
-    if (
-        official_macro
-        and official_macro.source_series
-        and status == "research_needed"
-        and official_macro.status_when_missing != "research_needed"
-    ):
-        status = official_macro.status_when_missing
-    freshness_status = _metric_freshness(
-        payload,
-        report,
-        metric_key=metric_key,
-        quality_metadata=quality_metadata,
-    )
-    if freshness_status == "stale" and status == "ok":
-        status = "stale"
-
-    source = _metric_source(payload, report, quality_metadata)
-    source_series = _metric_source_series(payload, quality_metadata, official_macro)
-    source_badge = _metric_source_badge(payload, report, module_key, metric_key, quality_metadata)
-    if (
-        official_macro
-        and official_macro.source_series
-        and status in AI_BLOCKED_METRIC_STATUSES
-        and status != "research_needed"
-    ):
-        source_badge = "missing"
-    if official_macro and source is None and source_badge == "missing":
-        source = official_macro.source
-        source_badge = official_macro.source_badge
-    if official_macro and source_badge == "missing":
-        source_badge = official_macro.source_badge
-    if official_macro and source is None:
-        source = official_macro.source
-    if (
-        official_macro
-        and official_macro.source_series
-        and value is None
-        and status in AI_BLOCKED_METRIC_STATUSES
-        and status != "research_needed"
-    ):
-        source_badge = "missing"
-    observation_date = _metric_observation_date(payload, quality_metadata)
-    generated_at = _metric_generated_at(payload, report)
-    missing_reason = _string_or_none(payload.get("missing_reason")) if isinstance(payload, dict) else None
-    yoy_result = _normalize_inflation_yoy_value(metric_key, value, payload)
-    if yoy_result == "index_level":
-        return DashboardMetric(
-            metric_key=metric_key,
-            display_name=display_name,
-            value=None,
-            value_text=_missing_value_text("insufficient_history"),
-            unit=unit,
-            status="insufficient_history",
-            source=source,
-            source_badge="missing",
-            source_series=source_series,
-            observation_date=None,
-            generated_at=generated_at,
-            freshness_status="insufficient_history",
-            missing_reason=INDEX_LEVEL_YOY_MISSING_REASON,
-            interpretation_hint=interpretation_hint,
-            ai_context_allowed=False,
-        )
-    if isinstance(yoy_result, float):
-        value = yoy_result
-    if official_macro and status in AI_BLOCKED_METRIC_STATUSES and missing_reason is None:
-        missing_reason = official_macro.missing_reason
-
-    return DashboardMetric(
-        metric_key=metric_key,
-        display_name=display_name,
-        value=value,
-        value_text=_format_value(value, format_kind, status),
-        unit=unit,
-        status=status,
-        source=source,
-        source_badge=source_badge,
-        source_series=source_series,
-        observation_date=observation_date,
-        generated_at=generated_at,
-        freshness_status=freshness_status,
-        missing_reason=missing_reason,
-        interpretation_hint=interpretation_hint,
-        ai_context_allowed=_ai_context_allowed(
-            status=status,
-            source=source,
-            source_badge=source_badge,
-            observation_date=observation_date,
-            generated_at=generated_at,
-            freshness_status=freshness_status,
-            interpretation_hint=interpretation_hint,
-        )
-        and not (
-            metric_key in {"ppi_final_demand", "ppi_final_demand_yoy"}
-            and not observation_date
-        ),
+    return _metric_builder_build_metric(
+        module_key,
+        reports,
+        spec,
+        derived_metric=_derived_metric,
+        portfolio_compact_metric=_portfolio_compact_metric,
+        find_metric_callback=_find_metric,
+        derived_metric_keys=DERIVED_METRIC_KEYS,
+        metric_aliases=METRIC_ALIASES,
+        source_badge_aliases=SOURCE_BADGE_ALIASES,
+        portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+        dgs30_breakout_missing_reason=DGS30_BREAKOUT_MISSING_REASON,
     )
 
 
@@ -2286,33 +2149,17 @@ def _missing_metric(
     source_badge: str | None = None,
     missing_reason: str | None = None,
 ) -> DashboardMetric:
-    normalized_status = _metric_status_value(status)
-    normalized_source_badge = (
-        source_badge
-        if source_badge in ALLOWED_SOURCE_BADGES
-        else "research_needed" if normalized_status == "research_needed" else "missing"
-    )
-    return DashboardMetric(
+    return _metric_builder_missing_metric(
         metric_key=metric_key,
         display_name=display_name,
-        value=None,
-        value_text=_missing_value_text(normalized_status),
         unit=unit,
-        status=normalized_status,
-        source=source,
-        source_badge=normalized_source_badge,
-        source_series=None,
-        observation_date=None,
+        status=status,
         generated_at=generated_at,
-        freshness_status="unknown",
-        missing_reason=missing_reason
-        or (
-            DGS30_BREAKOUT_MISSING_REASON
-            if metric_key == "dgs30_breakout_confirmed"
-            else _missing_value_text(normalized_status)
-        ),
         interpretation_hint=interpretation_hint,
-        ai_context_allowed=False,
+        source=source,
+        source_badge=source_badge,
+        missing_reason=missing_reason,
+        dgs30_breakout_missing_reason=DGS30_BREAKOUT_MISSING_REASON,
     )
 
 
@@ -2322,23 +2169,12 @@ def _find_metric(
     *,
     include_aliases: bool = True,
 ) -> tuple[Any, dict[str, Any], ReportState] | None:
-    metric_keys = (
-        (metric_key, *METRIC_ALIASES.get(metric_key, ()), *official_macro_pack.aliases_for(metric_key))
-        if include_aliases
-        else (metric_key,)
+    return _metric_builder_find_metric(
+        metric_key,
+        reports,
+        include_aliases=include_aliases,
+        metric_aliases=METRIC_ALIASES,
     )
-    for report in reports:
-        if report.data is None:
-            continue
-        for key in metric_keys:
-            found = _find_metric_payload(report.data, key)
-            if found is None:
-                continue
-            if key != metric_key and _alias_payload_unusable(found):
-                continue
-            value, payload = found
-            return value, payload, report
-    return None
 
 
 def _usable_numeric_metric(
@@ -2374,113 +2210,6 @@ def _latest_metric_observation_date(
     return max([item for item in candidates if item], default=None)
 
 
-def _alias_payload_unusable(found: tuple[Any, dict[str, Any]]) -> bool:
-    value, payload = found
-    if not isinstance(payload, dict):
-        return value is None
-    if "value" not in payload and "value_text" not in payload:
-        return True
-    return value is None
-
-
-def _find_metric_payload(value: Any, metric_key: str) -> tuple[Any, dict[str, Any]] | None:
-    if isinstance(value, dict):
-        for key, child in value.items():
-            if str(key).lower() == metric_key.lower():
-                if isinstance(child, dict):
-                    child_value = _extract_metric_value(child)
-                    return child_value, child
-                return child, {"value": child}
-        for child in value.values():
-            found = _find_metric_payload(child, metric_key)
-            if found is not None:
-                return found
-    elif isinstance(value, list):
-        for child in value:
-            found = _find_metric_payload(child, metric_key)
-            if found is not None:
-                return found
-    return None
-
-
-def _extract_metric_value(payload: dict[str, Any]) -> Any:
-    if "value" in payload:
-        return payload.get("value")
-    for key in ("value", "value_text", "status", "label", "date", "updated_at"):
-        if key in payload and payload.get(key) is not None:
-            return payload.get(key)
-    return None
-
-
-def _metric_status(payload: dict[str, Any]) -> str:
-    return _metric_status_value(payload.get("status") or "ok")
-
-
-def _metric_status_value(value: Any) -> str:
-    status = str(value or "unknown").lower()
-    return status if status in ALLOWED_METRIC_STATUSES else "unknown"
-
-
-def _metric_freshness(
-    payload: dict[str, Any],
-    report: ReportState,
-    metric_key: str | None = None,
-    quality_metadata: dict[str, Any] | None = None,
-) -> str:
-    freshness = payload.get("freshness_status")
-    if freshness is None and isinstance(payload.get("freshness"), dict):
-        freshness = payload["freshness"].get("freshness_status")
-    if freshness is None and isinstance(payload.get("freshness"), str):
-        freshness = payload.get("freshness")
-    if freshness is None and quality_metadata:
-        freshness = quality_metadata.get("freshness_status") or quality_metadata.get("freshness")
-    if freshness is None and metric_key:
-        quality = _metric_quality_metadata(report, metric_key)
-        freshness = quality.get("freshness_status") or quality.get("freshness")
-    if freshness is None and metric_key == "holdings_updated_at" and isinstance(report.data, dict):
-        freshness = report.data.get("holdings_freshness_status")
-    if freshness is None and _contains_signal(payload, ("stale_cache",)):
-        freshness = "stale"
-    if freshness is None and report.data is not None and _contains_signal(report.data, ("stale_cache",)):
-        freshness = "stale"
-    return str(freshness or "unknown").lower()
-
-
-def _metric_source(
-    payload: dict[str, Any],
-    report: ReportState,
-    quality_metadata: dict[str, Any] | None = None,
-) -> str | None:
-    source = payload.get("source")
-    if source is None and isinstance(payload.get("metadata"), dict):
-        source = payload["metadata"].get("source")
-    if source is None and quality_metadata:
-        source = quality_metadata.get("source") or quality_metadata.get("provider")
-    if source is None and isinstance(report.data, dict):
-        source = report.data.get("source")
-    if source is None and report.name == "portfolio_snapshot":
-        source = "local"
-    return _string_or_none(source)
-
-
-def _metric_source_series(
-    payload: dict[str, Any],
-    quality_metadata: dict[str, Any] | None = None,
-    official_macro: official_macro_pack.OfficialMacroMetric | None = None,
-) -> str | None:
-    source_series = payload.get("source_series")
-    if source_series is None and isinstance(payload.get("metadata"), dict):
-        source_series = payload["metadata"].get("source_series")
-    if source_series is None and quality_metadata:
-        source_series = quality_metadata.get("source_series")
-    if source_series is None and official_macro:
-        source_series = official_macro.source_series
-    text = _string_or_none(source_series)
-    if text and ":" in text:
-        return text.split(":")[-1]
-    return text
-
-
 def _metric_source_badge(
     payload: dict[str, Any],
     report: ReportState,
@@ -2488,194 +2217,30 @@ def _metric_source_badge(
     metric_key: str | None = None,
     quality_metadata: dict[str, Any] | None = None,
 ) -> str:
-    if module_key == "portfolio_deviation":
-        return "local"
-    if metric_key in DERIVED_METRIC_KEYS and (
-        payload.get("source_series") is not None
-        or payload.get("derived_from") is not None
-        or metric_key in {"dgs10_5d_avg", "dgs30_distance_to_5pct", "nasdaq_vs_sp500_30d"}
-    ):
-        return "derived"
-    badge = payload.get("source_badge") or payload.get("source_tier")
-    if badge is None and isinstance(payload.get("freshness"), dict):
-        badge = payload["freshness"].get("source_tier")
-    if badge is None and quality_metadata:
-        badge = quality_metadata.get("source_badge") or quality_metadata.get("source_tier")
-    if badge is None and isinstance(report.data, dict):
-        badge = report.data.get("source_badge") or report.data.get("source_tier")
-    badge_text = str(badge or "missing").lower()
-    badge_text = SOURCE_BADGE_ALIASES.get(badge_text, badge_text)
-    if badge_text in {"official", "official_fallback", "unofficial_fallback", "proxy", "search-derived"}:
-        return badge_text
-    return badge_text if badge_text in ALLOWED_SOURCE_BADGES else "missing"
-
-
-def _metric_observation_date(
-    payload: dict[str, Any],
-    quality_metadata: dict[str, Any] | None = None,
-) -> str | None:
-    return _string_or_none(
-        payload.get("observation_date")
-        or payload.get("date")
-        or payload.get("updated_at")
-        or (quality_metadata or {}).get("observation_date")
+    return _metric_builder_metric_source_badge(
+        payload,
+        report,
+        module_key,
+        metric_key,
+        quality_metadata,
+        derived_metric_keys=DERIVED_METRIC_KEYS,
+        source_badge_aliases=SOURCE_BADGE_ALIASES,
     )
 
 
-def _metric_generated_at(payload: dict[str, Any], report: ReportState) -> str | None:
-    if payload.get("generated_at") is not None:
-        return _string_or_none(payload.get("generated_at"))
-    if isinstance(report.data, dict):
-        return _string_or_none(report.data.get("generated_at") or report.data.get("updated_at"))
-    return None
-
-
-def _metric_quality_metadata(report: ReportState, metric_key: str) -> dict[str, Any]:
-    if not isinstance(report.data, dict):
-        return {}
-    data_quality = report.data.get("data_quality")
-    if isinstance(data_quality, dict):
-        market_quality = data_quality.get("market_data_quality")
-        if isinstance(market_quality, dict) and isinstance(market_quality.get(metric_key), dict):
-            return market_quality[metric_key]
-    if report.name == "portfolio_snapshot" and metric_key == "holdings_updated_at":
-        return {
-            "source": "local",
-            "source_badge": "local",
-            "observation_date": report.data.get("holdings_updated_at"),
-            "freshness_status": report.data.get("holdings_freshness_status"),
-        }
-    return {}
-
-
-def _first_metric_quality_metadata(
-    reports: tuple[ReportState | None, ...],
-    metric_key: str,
-) -> dict[str, Any]:
-    for report in reports:
-        if report is None:
-            continue
-        metadata = _metric_quality_metadata(report, metric_key)
-        if metadata:
-            return metadata
-    return {}
-
-
-def _format_value(value: Any, format_kind: str, status: str) -> str:
-    if status in {"missing", "research_needed", "insufficient_history", "not_available"}:
-        return _missing_value_text(status)
-    if status == "stale" and value is None:
-        return "stale"
-    if value is None:
-        return "missing"
-    if format_kind == "bool":
-        if isinstance(value, bool):
-            return "true" if value else "false"
-        return "unknown"
-    if format_kind == "percent":
-        number = _to_float(value)
-        return f"{number:.2f}%" if isinstance(number, float) else str(value)
-    if format_kind == "signed_percent":
-        number = _to_float(value)
-        return f"{number:+.2f}%" if isinstance(number, float) else str(value)
-    if format_kind == "pp":
-        number = _to_float(value)
-        return f"{number:+.1f}pp" if isinstance(number, float) else str(value)
-    if format_kind == "number":
-        number = _to_float(value)
-        if isinstance(number, float):
-            return f"{number:,.0f}" if number.is_integer() else f"{number:,.1f}"
-        return str(value)
-    return str(value)
-
-
-def _normalize_inflation_yoy_value(
-    metric_key: str,
-    value: Any,
-    payload: dict[str, Any],
-) -> float | str | None:
-    if metric_key not in INFLATION_YOY_METRIC_KEYS:
-        return None
-    number = _to_float(value)
-    if number is None:
-        return None
-    if _payload_declares_index_level(payload) or abs(number) > 50.0:
-        return "index_level"
-    if -1.0 < number < 1.0 and number != 0.0:
-        return round(number * 100.0, 6)
-    return number
-
-
-def _payload_declares_index_level(payload: dict[str, Any]) -> bool:
-    for key in ("value_type", "metric_kind", "calculation", "unit"):
-        text = str(payload.get(key) or "").lower()
-        if "index" in text and "yoy" not in text and "year" not in text:
-            return True
-    metadata = payload.get("metadata")
-    if isinstance(metadata, dict):
-        return _payload_declares_index_level(metadata)
-    return False
-
-
-def _to_float(value: Any) -> float | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip().replace("%", ""))
-        except ValueError:
-            return None
-    return None
-
-
 def _interpretation_hint(metric_key: str) -> str | None:
-    official_macro = official_macro_pack.get_official_macro_metric(metric_key)
-    if official_macro is not None:
-        return official_macro.interpretation_hint
-    if metric_key in {"dgs10", "dgs10_5d_avg", "dgs30_distance_to_5pct"}:
-        return "FRED Treasury yield series are daily, not intraday."
-    if metric_key == "dgs30_breakout_confirmed":
-        return "Breakout confirmation requires explicit compact evidence; do not infer it."
-    if metric_key == "ppiaco_yoy":
-        return "PPIACO is not final demand PPI."
-    if metric_key in {
-        "max_deviation_asset",
-        "max_deviation_pp",
-        "equity_total_deviation_pp",
-        "cash_reserve_status",
-    }:
-        return PORTFOLIO_COMPACT_INTERPRETATION_HINT
-    return None
+    return _metric_builder_interpretation_hint(
+        metric_key,
+        portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+    )
 
 
 def _metric_interpretation_hint(metric_key: str, payload: dict[str, Any]) -> str | None:
-    hint = _string_or_none(payload.get("interpretation_hint"))
-    if metric_key == "ppiaco_yoy" and hint:
-        if "final demand" not in hint.lower():
-            return f"{hint} PPIACO is not final demand PPI."
-        return hint
-    if metric_key in {"ppi_final_demand", "ppi_final_demand_yoy"} and hint:
-        text = hint.lower()
-        if "ppiaco" not in text or "consensus" not in text:
-            return (
-                f"{hint} PPI Final Demand is distinct from PPIACO and must not be "
-                "described as above or below consensus without consensus data."
-            )
-        return hint
-    return hint or _interpretation_hint(metric_key)
-
-
-def _dependency_unusable(found: tuple[Any, dict[str, Any], ReportState]) -> bool:
-    value, payload, report = found
-    status = _metric_status(payload)
-    freshness = _metric_freshness(payload, report)
-    if status in AI_BLOCKED_METRIC_STATUSES:
-        return True
-    if freshness in {"missing", "insufficient_history", "stale"}:
-        return True
-    return value is None
+    return _metric_builder_metric_interpretation_hint(
+        metric_key,
+        payload,
+        portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+    )
 
 
 def _has_breakout_history_evidence(payload: dict[str, Any]) -> bool:

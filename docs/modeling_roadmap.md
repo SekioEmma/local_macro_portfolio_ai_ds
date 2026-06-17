@@ -274,8 +274,22 @@ extraction. No production code, model semantics, public keys, schema, cache,
 prediction/probability, return, allocation, or trading behavior changed. See
 `docs/dashboard_service_refactor_phase_f1_metric_characterization.md`.
 
-Next recommended task after Phase F1: Phase F2 extract dashboard metric
-builder.
+Phase F2 Dashboard Metric Builder Extraction: completed.
+Behavior-preserving extraction of metric object construction, metric lookup,
+source/freshness/status/date metadata, source badge normalization, formatting,
+inflation YoY index-level guard, and interpretation hint helpers to
+`dashboard_metric_builder.py`. `dashboard_service.py` keeps compatibility
+aliases or thin wrappers and injects local configuration/callbacks into the new
+builder; the new module does not import `dashboard_service.py`. No dashboard
+API, module key, metric key, `DashboardMetric` schema, source_badge/freshness/
+AI-context semantic, PPI Final Demand / PPIACO boundary, cache,
+`write_last_good`, provider, endpoint, frontend, external AI, live fetch/write,
+prediction/probability, return, allocation, or trading behavior changed. See
+`docs/dashboard_service_refactor_phase_f2_metric_builder.md`.
+
+Next recommended task after Phase F2: manual review / Phase F3 route decision.
+If Phase F3 proceeds, first characterize historical-derived and
+portfolio-compact metric helper behavior before extracting those helpers.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
