@@ -14,9 +14,13 @@ from app_backend.schemas.responses import (
     DashboardModule,
     DashboardSummaryResponse,
 )
-from app_backend.services.dashboard_cache_key import (
-    build_dashboard_cache_key,
-    cache_bypass_reason,
+from app_backend.services.dashboard_cache_adapter import (
+    DASHBOARD_CONTEXT_CACHE_SCHEMA_MARKER,
+    build_dashboard_cache_key_for_request as _build_dashboard_cache_key_for_request,
+    resolve_dashboard_market_history_db_path,
+    resolved_path as _resolved_path,
+    same_path as _same_path,
+    shared_cache_bypass_reason,
 )
 from app_backend.services.dashboard_context import DashboardPipelineContext
 from app_backend.services.dashboard_context_cache import (
@@ -70,7 +74,6 @@ DASHBOARD_MODULE_KEYS = (
     "market_stress_derived",
     "portfolio_deviation",
 )
-DASHBOARD_CONTEXT_CACHE_SCHEMA_MARKER = "m11-dashboard-summary-evidence-cache-v1"
 _SHARED_DASHBOARD_CONTEXT_CACHE = SharedDashboardContextCache()
 ALLOWED_METRIC_STATUSES = {
     "ok",
@@ -810,17 +813,16 @@ def _evidence_request_is_unfiltered(
     )
 
 
-def _build_dashboard_cache_key_for_request(
-    *,
-    reports_dir: Path | str,
-    market_history_db_path: Path | str,
-):
-    return build_dashboard_cache_key(
-        reports_dir=reports_dir,
-        market_history_db_path=market_history_db_path,
-        required_report_files=REPORT_FILES,
-        optional_report_files=OPTIONAL_METADATA_REPORT_FILES,
-        schema_marker=DASHBOARD_CONTEXT_CACHE_SCHEMA_MARKER,
+def _dashboard_market_history_db_path(
+    reports_dir: Path,
+    market_history_db_path: Path | str | None,
+) -> Path | str:
+    return resolve_dashboard_market_history_db_path(
+        reports_dir,
+        market_history_db_path,
+        default_market_history_db_path=DEFAULT_MARKET_HISTORY_DB_PATH,
+        project_reports_dir=PROJECT_REPORTS_DIR,
+        current_default_provider=market_history_store.get_default_market_history_db_path,
     )
 
 
@@ -836,45 +838,15 @@ def _shared_cache_bypass_reason(
         DEFAULT_REPORTS_DIR,
         None,
     )
-    return cache_bypass_reason(
+    return shared_cache_bypass_reason(
+        reports_dir=reports_dir,
+        base_dir=base_dir,
+        market_history_db_path=market_history_db_path,
+        dashboard_market_history_db_path=dashboard_market_history_db_path,
         write_last_good=write_last_good,
-        reports_dir_is_default=_same_path(base_dir, DEFAULT_REPORTS_DIR),
-        market_history_db_path_is_default=_same_path(
-            dashboard_market_history_db_path,
-            default_market_history_db_path,
-        )
-        if market_history_db_path is not None
-        else _same_path(dashboard_market_history_db_path, default_market_history_db_path),
+        default_reports_dir=DEFAULT_REPORTS_DIR,
+        default_market_history_db_path_for_default_reports=default_market_history_db_path,
     )
-
-
-def _same_path(left: Path | str, right: Path | str) -> bool:
-    return _resolved_path(left) == _resolved_path(right)
-
-
-def _resolved_path(path: Path | str) -> Path:
-    target = Path(path).expanduser()
-    try:
-        return target.resolve(strict=False)
-    except OSError:
-        return target.absolute()
-
-
-def _dashboard_market_history_db_path(
-    reports_dir: Path,
-    market_history_db_path: Path | str | None,
-) -> Path | str:
-    if market_history_db_path is not None:
-        return market_history_db_path
-    default_path = market_history_store.get_default_market_history_db_path()
-    if Path(DEFAULT_MARKET_HISTORY_DB_PATH) != default_path:
-        return DEFAULT_MARKET_HISTORY_DB_PATH
-    try:
-        if reports_dir.resolve() == PROJECT_REPORTS_DIR.resolve():
-            return DEFAULT_MARKET_HISTORY_DB_PATH
-    except OSError:
-        pass
-    return reports_dir / "market_history.sqlite3"
 
 
 def _evidence_rows_from_summary(
