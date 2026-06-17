@@ -14,7 +14,7 @@ call live providers, and does not add endpoints or frontend UI.
 ## Event Registry
 
 The registry lives in
-`src/app_backend/services/historical_validation_event_registry.py`.
+`src/data_quality/historical_validation_event_registry.py`.
 
 Each event includes:
 
@@ -76,7 +76,7 @@ ground-truth labels for probabilities or live model targets.
 ## Replay Skeleton
 
 The replay skeleton lives in
-`src/app_backend/services/historical_validation_replay.py`.
+`src/data_quality/historical_validation_replay.py`.
 
 It converts registry events into structured replay rows with:
 

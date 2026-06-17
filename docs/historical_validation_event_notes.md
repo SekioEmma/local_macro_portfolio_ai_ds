@@ -31,12 +31,12 @@ return, prediction accuracy, cluster probability, or portfolio action.
 
 D19 v0 Historical Validation Event Registry + Replay Skeleton is completed.
 The candidate windows below are now represented in
-`src/app_backend/services/historical_validation_event_registry.py` with
+`src/data_quality/historical_validation_event_registry.py` with
 controlled event types, expected pressure groups, ordinary-pullback markers,
 external-reference notes, data-availability constraints, and interpretation
 boundaries.
 
-`src/app_backend/services/historical_validation_replay.py` converts those
+`src/data_quality/historical_validation_replay.py` converts those
 registry entries into structured replay rows. The default status is
 `reference_only` unless a caller supplies an existing local historical
 validation summary. `reference_only` and `limited` are coverage states, not

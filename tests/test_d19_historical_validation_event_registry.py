@@ -2,7 +2,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-from app_backend.services.historical_validation_event_registry import (
+from data_quality.historical_validation_event_registry import (
     ALLOWED_EVENT_TYPES,
     ALLOWED_PRESSURE_GROUPS,
     build_historical_validation_event_registry,
@@ -86,7 +86,7 @@ def test_d19_v0_registry_boundary_language_is_output_safe():
 
 def test_d19_v0_registry_code_has_no_production_clustering():
     source = Path(
-        "src/app_backend/services/historical_validation_event_registry.py"
+        "src/data_quality/historical_validation_event_registry.py"
     ).read_text(encoding="utf-8")
 
     for token in (

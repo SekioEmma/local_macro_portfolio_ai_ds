@@ -3,10 +3,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app_backend.services.historical_validation_event_registry import (
+from data_quality.historical_validation_event_registry import (
     build_historical_validation_event_registry,
 )
-from app_backend.services.historical_validation_replay import (
+from data_quality.historical_validation_replay import (
     ALLOWED_VALIDATION_STATUSES,
     build_historical_validation_replay_rows,
     get_historical_validation_replay_rows,
@@ -217,8 +217,8 @@ def test_d19_v0_replay_code_has_no_production_clustering_or_forbidden_surfaces()
     service_sources = "\n".join(
         Path(path).read_text(encoding="utf-8")
         for path in (
-            "src/app_backend/services/historical_validation_event_registry.py",
-            "src/app_backend/services/historical_validation_replay.py",
+            "src/data_quality/historical_validation_event_registry.py",
+            "src/data_quality/historical_validation_replay.py",
         )
     )
 

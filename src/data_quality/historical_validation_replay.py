@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-from app_backend.services.historical_validation_event_registry import (
+from data_quality.historical_validation_event_registry import (
     HistoricalValidationEvent,
     build_historical_validation_event_registry,
 )

@@ -12,7 +12,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from data_quality import historical_validation  # noqa: E402
-from app_backend.services.historical_validation_event_registry import (  # noqa: E402
+from data_quality.historical_validation_event_registry import (  # noqa: E402
     get_historical_validation_event_registry,
 )
 

@@ -262,8 +262,8 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   classifier logic, cluster probability, cluster dashboard modules, trading
   signals, AI productization, endpoints, or external calls.
 - D19 v0 Historical Validation Event Registry + Replay Skeleton
-  (`src/app_backend/services/historical_validation_event_registry.py`,
-  `src/app_backend/services/historical_validation_replay.py`, and
+  (`src/data_quality/historical_validation_event_registry.py`,
+  `src/data_quality/historical_validation_replay.py`, and
   `docs/d19_historical_validation_v0.md`). The Stage R1 event windows are now
   represented as a static, auditable registry with controlled event types,
   pressure groups, ordinary-pullback markers, data-availability constraints,
@@ -275,7 +275,7 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
   production clustering, probability output, return estimate, or trading advice
   was added.
 - DF-1 D19 v1 Historical Evidence-row Integration
-  (`src/app_backend/services/historical_validation_replay.py` and
+  (`src/data_quality/historical_validation_replay.py` and
   `src/data_quality/historical_validation.py`). The static D19 registry/replay
   skeleton now consumes existing D19 historical validation summary data when
   available. D19 public rows carry compact `d19_v1_replay_rows` and

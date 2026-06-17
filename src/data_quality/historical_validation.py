@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from app_backend.services.historical_validation_replay import (
+from data_quality.historical_validation_replay import (
     get_historical_validation_replay_rows,
 )
 from data_quality import macro_regime_review
