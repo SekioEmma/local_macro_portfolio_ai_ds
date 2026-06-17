@@ -226,6 +226,11 @@ caching, or `write_last_good` behavior change was implemented.
 - Add tests for invalidation, custom path bypass or separate keys, no side
   effects, and defensive copies.
 
+Status: completed. P-M4-C added an in-process single-slot cache for default-path
+summary and unfiltered evidence table responses when `write_last_good=False`.
+Filtered responses are derived from cached unfiltered rows and are not cached
+directly. AI Context Manifest cache remains unimplemented.
+
 ### P-M4-D
 
 - Optional manifest reuse from cached evidence table.

@@ -45,6 +45,15 @@ def test_file_signature_missing_and_existing_files(tmp_path):
     assert second != first
 
 
+def test_file_signature_expands_user_path_for_missing_file():
+    signature = file_signature("~/codex_missing_dashboard_signature_test.json")
+
+    assert signature.exists is False
+    assert signature.size_bytes is None
+    assert signature.mtime_ns is None
+    assert "~" not in signature.path
+
+
 def test_digest_is_deterministic_and_mapping_order_independent(tmp_path):
     reports_dir = _write_reports(tmp_path / "reports")
     db_path = _write_db(tmp_path / "market_history.sqlite3")
@@ -193,12 +202,16 @@ def test_private_payload_content_is_excluded_from_key_material(tmp_path):
         assert sentinel not in payload_text
 
 
-def test_no_runtime_cache_symbols_added_outside_helper():
-    helper = Path("src/app_backend/services/dashboard_cache_key.py").resolve()
+def test_no_runtime_cache_diagnostics_added_outside_cache_modules():
+    allowed_paths = {
+        Path("src/app_backend/services/dashboard_cache_key.py").resolve(),
+        Path("src/app_backend/services/dashboard_context_cache.py").resolve(),
+        Path("src/app_backend/services/dashboard_service.py").resolve(),
+    }
     production_files = [
         path
         for path in Path("src/app_backend").rglob("*.py")
-        if path.resolve() != helper
+        if path.resolve() not in allowed_paths
     ]
 
     for path in production_files:
@@ -208,6 +221,7 @@ def test_no_runtime_cache_symbols_added_outside_helper():
             "_GLOBAL_DASHBOARD_CACHE",
             "cache_hit",
             "cache_miss",
+            "cache_key_payload",
         ):
             assert token not in text, f"{token!r} unexpectedly found in {path}"
 

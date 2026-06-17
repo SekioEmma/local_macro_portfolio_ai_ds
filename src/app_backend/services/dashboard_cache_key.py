@@ -39,7 +39,7 @@ def resolve_path_for_key(path: Path | str) -> str:
 
 
 def file_signature(path: Path | str) -> FileSignature:
-    target = Path(path)
+    target = Path(path).expanduser()
     resolved = resolve_path_for_key(target)
     try:
         stat_result = target.stat()
@@ -70,7 +70,7 @@ def build_dashboard_cache_key(
 ) -> DashboardCacheKey:
     resolved_reports_dir = resolve_path_for_key(reports_dir)
     resolved_market_history_db_path = resolve_path_for_key(market_history_db_path)
-    reports_path = Path(reports_dir)
+    reports_path = Path(reports_dir).expanduser()
 
     required_reports = tuple(
         file_signature(reports_path / required_report_files[key])

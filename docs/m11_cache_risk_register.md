@@ -4,9 +4,13 @@ This register supports P-M4-A design review only. No runtime cache is
 implemented by this document.
 
 P-M4-B adds deterministic cache key and file signature helpers only. It includes
-tests that private report contents are excluded from key payloads and digests;
-runtime cache risks below still require implementation-phase tests before any
-P-M4-C cache is wired in.
+tests that private report contents are excluded from key payloads and digests.
+
+P-M4-C adds the initial in-process summary/unfiltered-evidence cache. It covers
+the implementation-phase tests for report/DB signature invalidation,
+`write_last_good` bypass, custom path bypass, filtered-table non-poisoning,
+defensive copies, and absence of public cache diagnostics. AI Context Manifest
+cache remains unimplemented and still requires separate P-M4-D review.
 
 | Risk | Failure Mode | Impact | Mitigation | Test Required Before Implementation |
 |---|---|---|---|---|

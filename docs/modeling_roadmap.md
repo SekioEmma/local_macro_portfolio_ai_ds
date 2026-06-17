@@ -221,8 +221,19 @@ keys, open SQLite contents, change AI Context Manifest semantics, or add
 providers, endpoints, frontend UI, external AI, Tavily/search, live fetches, or
 live writes. See `docs/p_m4b_cache_key_file_signature_helpers.md`.
 
-Next recommended task after P-M4-B: manual review before any P-M4-C
-implementation.
+P-M4-C In-process Summary / Evidence Cache: completed.
+Production performance change that adds a process-local single-slot cache for
+default-path dashboard summary and unfiltered evidence table responses when
+`write_last_good=False`. The cache uses P-M4-B file signatures for invalidation,
+returns defensive copies, filters cached unfiltered rows for filtered requests,
+and bypasses custom paths and explicit `write_last_good=True` calls. It does
+not cache AI Context Manifest, change dashboard API schema, alter model
+semantics, change AI context eligibility, persist cache to disk, add providers,
+endpoints, frontend UI, external AI, Tavily/search, live fetches, or live
+writes. See `docs/p_m4c_in_process_dashboard_cache.md`.
+
+Next recommended task after P-M4-C: P-M4-D optional AI Context Manifest cache
+review, or defer cache work and return to S2 only after explicit decision.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

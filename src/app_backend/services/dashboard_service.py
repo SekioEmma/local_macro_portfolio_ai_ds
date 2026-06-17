@@ -14,7 +14,15 @@ from app_backend.schemas.responses import (
     DashboardModule,
     DashboardSummaryResponse,
 )
+from app_backend.services.dashboard_cache_key import (
+    build_dashboard_cache_key,
+    cache_bypass_reason,
+)
 from app_backend.services.dashboard_context import DashboardPipelineContext
+from app_backend.services.dashboard_context_cache import (
+    CachedDashboardContext,
+    SharedDashboardContextCache,
+)
 from app_backend.services.dashboard_filters import (
     apply_evidence_filters,
     evidence_row_matches,
@@ -64,6 +72,8 @@ REPORT_FILES = {
 OPTIONAL_METADATA_REPORT_FILES = {
     "llm_context_pack": "llm_context_pack.json",
 }
+DASHBOARD_CONTEXT_CACHE_SCHEMA_MARKER = "m11-dashboard-summary-evidence-cache-v1"
+_SHARED_DASHBOARD_CONTEXT_CACHE = SharedDashboardContextCache()
 ALLOWED_METRIC_STATUSES = {
     "ok",
     "watch",
@@ -577,6 +587,22 @@ def build_dashboard_summary(
         base_dir,
         market_history_db_path,
     )
+    cache_key = _build_dashboard_cache_key_for_request(
+        reports_dir=base_dir,
+        market_history_db_path=dashboard_market_history_db_path,
+    )
+    if _shared_cache_bypass_reason(
+        reports_dir=reports_dir,
+        base_dir=base_dir,
+        market_history_db_path=market_history_db_path,
+        dashboard_market_history_db_path=dashboard_market_history_db_path,
+        write_last_good=False,
+    ) is None:
+        cached = _SHARED_DASHBOARD_CONTEXT_CACHE.get(cache_key.digest)
+        if cached is not None:
+            if context is not None:
+                context.summary = cached.summary
+            return cached.summary
     reports = _load_dashboard_reports(base_dir)
     provider_health = _provider_health_summary(
         base_dir / REPORT_FILES["provider_health"]
@@ -614,14 +640,53 @@ def build_dashboard_evidence_table(
     if (
         context is not None
         and context.evidence_table is not None
-        and module is None
-        and status is None
-        and source_badge is None
-        and ai_context_allowed is None
+        and _evidence_request_is_unfiltered(
+            module=module,
+            status=status,
+            source_badge=source_badge,
+            ai_context_allowed=ai_context_allowed,
+        )
         and write_last_good is False
     ):
         return context.evidence_table
     base_dir = Path(reports_dir) if reports_dir is not None else DEFAULT_REPORTS_DIR
+    context_summary_preloaded = context is not None and context.summary is not None
+    dashboard_market_history_db_path = _dashboard_market_history_db_path(
+        base_dir,
+        market_history_db_path,
+    )
+    cache_key = _build_dashboard_cache_key_for_request(
+        reports_dir=base_dir,
+        market_history_db_path=dashboard_market_history_db_path,
+    )
+    cache_bypass = _shared_cache_bypass_reason(
+        reports_dir=reports_dir,
+        base_dir=base_dir,
+        market_history_db_path=market_history_db_path,
+        dashboard_market_history_db_path=dashboard_market_history_db_path,
+        write_last_good=write_last_good,
+    )
+    cache_allowed = cache_bypass is None and not context_summary_preloaded
+    if cache_allowed:
+        cached = _SHARED_DASHBOARD_CONTEXT_CACHE.get(cache_key.digest)
+        if cached is not None:
+            evidence_table = _evidence_table_from_unfiltered(
+                cached.unfiltered_evidence_table,
+                module=module,
+                status=status,
+                source_badge=source_badge,
+                ai_context_allowed=ai_context_allowed,
+            )
+            if context is not None:
+                context.summary = cached.summary
+                if _evidence_request_is_unfiltered(
+                    module=module,
+                    status=status,
+                    source_badge=source_badge,
+                    ai_context_allowed=ai_context_allowed,
+                ):
+                    context.evidence_table = evidence_table
+            return evidence_table
     if context is not None and context.summary is not None:
         summary = context.summary
     else:
@@ -631,10 +696,6 @@ def build_dashboard_evidence_table(
             context=context,
         )
     reports = _load_dashboard_reports(base_dir)
-    dashboard_market_history_db_path = _dashboard_market_history_db_path(
-        base_dir,
-        market_history_db_path,
-    )
     base_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(
         reports,
         db_path=dashboard_market_history_db_path,
@@ -647,15 +708,55 @@ def build_dashboard_evidence_table(
     all_rows = base_rows + _pipeline.rows
     if write_last_good and _last_good_write_allowed(reports_dir):
         _save_last_good_candidates(all_rows)
-    filtered_rows = apply_evidence_filters(
-        all_rows,
+    unfiltered_evidence_table = _build_evidence_table_response(
+        summary=summary,
+        all_rows=all_rows,
+        filtered_rows=all_rows,
+        module=None,
+        status=None,
+        source_badge=None,
+        ai_context_allowed=None,
+    )
+    if cache_allowed:
+        _SHARED_DASHBOARD_CONTEXT_CACHE.set(
+            CachedDashboardContext(
+                key_digest=cache_key.digest,
+                summary=summary,
+                unfiltered_evidence_table=unfiltered_evidence_table,
+            )
+        )
+    evidence_table = _evidence_table_from_unfiltered(
+        unfiltered_evidence_table,
         module=module,
         status=status,
         source_badge=source_badge,
         ai_context_allowed=ai_context_allowed,
     )
+    if (
+        context is not None
+        and _evidence_request_is_unfiltered(
+            module=module,
+            status=status,
+            source_badge=source_badge,
+            ai_context_allowed=ai_context_allowed,
+        )
+        and write_last_good is False
+    ):
+        context.evidence_table = evidence_table
+    return evidence_table
 
-    evidence_table = DashboardEvidenceTableResponse(
+
+def _build_evidence_table_response(
+    *,
+    summary: DashboardSummaryResponse,
+    all_rows: list[DashboardEvidenceRow],
+    filtered_rows: list[DashboardEvidenceRow],
+    module: str | None,
+    status: str | None,
+    source_badge: str | None,
+    ai_context_allowed: bool | None,
+) -> DashboardEvidenceTableResponse:
+    return DashboardEvidenceTableResponse(
         generated_at=summary.generated_at,
         overall_status=summary.overall_status,
         row_count=len(filtered_rows),
@@ -670,16 +771,104 @@ def build_dashboard_evidence_table(
         ),
         next_actions=summary.next_actions,
     )
-    if (
-        context is not None
-        and module is None
+
+
+def _evidence_table_from_unfiltered(
+    unfiltered_evidence_table: DashboardEvidenceTableResponse,
+    *,
+    module: str | None,
+    status: str | None,
+    source_badge: str | None,
+    ai_context_allowed: bool | None,
+) -> DashboardEvidenceTableResponse:
+    all_rows = list(unfiltered_evidence_table.rows)
+    filtered_rows = apply_evidence_filters(
+        all_rows,
+        module=module,
+        status=status,
+        source_badge=source_badge,
+        ai_context_allowed=ai_context_allowed,
+    )
+    return DashboardEvidenceTableResponse(
+        generated_at=unfiltered_evidence_table.generated_at,
+        overall_status=unfiltered_evidence_table.overall_status,
+        row_count=len(filtered_rows),
+        modules=sorted({row.module for row in all_rows}),
+        rows=filtered_rows,
+        filters=_evidence_filters(
+            all_rows,
+            module=module,
+            status=status,
+            source_badge=source_badge,
+            ai_context_allowed=ai_context_allowed,
+        ),
+        next_actions=list(unfiltered_evidence_table.next_actions),
+    )
+
+
+def _evidence_request_is_unfiltered(
+    *,
+    module: str | None,
+    status: str | None,
+    source_badge: str | None,
+    ai_context_allowed: bool | None,
+) -> bool:
+    return (
+        module is None
         and status is None
         and source_badge is None
         and ai_context_allowed is None
-        and write_last_good is False
-    ):
-        context.evidence_table = evidence_table
-    return evidence_table
+    )
+
+
+def _build_dashboard_cache_key_for_request(
+    *,
+    reports_dir: Path | str,
+    market_history_db_path: Path | str,
+):
+    return build_dashboard_cache_key(
+        reports_dir=reports_dir,
+        market_history_db_path=market_history_db_path,
+        required_report_files=REPORT_FILES,
+        optional_report_files=OPTIONAL_METADATA_REPORT_FILES,
+        schema_marker=DASHBOARD_CONTEXT_CACHE_SCHEMA_MARKER,
+    )
+
+
+def _shared_cache_bypass_reason(
+    *,
+    reports_dir: Path | str | None,
+    base_dir: Path,
+    market_history_db_path: Path | str | None,
+    dashboard_market_history_db_path: Path | str,
+    write_last_good: bool,
+) -> str | None:
+    default_market_history_db_path = _dashboard_market_history_db_path(
+        DEFAULT_REPORTS_DIR,
+        None,
+    )
+    return cache_bypass_reason(
+        write_last_good=write_last_good,
+        reports_dir_is_default=_same_path(base_dir, DEFAULT_REPORTS_DIR),
+        market_history_db_path_is_default=_same_path(
+            dashboard_market_history_db_path,
+            default_market_history_db_path,
+        )
+        if market_history_db_path is not None
+        else _same_path(dashboard_market_history_db_path, default_market_history_db_path),
+    )
+
+
+def _same_path(left: Path | str, right: Path | str) -> bool:
+    return _resolved_path(left) == _resolved_path(right)
+
+
+def _resolved_path(path: Path | str) -> Path:
+    target = Path(path).expanduser()
+    try:
+        return target.resolve(strict=False)
+    except OSError:
+        return target.absolute()
 
 
 def _load_dashboard_reports(base_dir: Path) -> dict[str, ReportState]:

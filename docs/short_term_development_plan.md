@@ -26,7 +26,9 @@ hotfix.
 6. P-M3 Historical Risk Normalization metadata helper split: completed.
 7. P-M4-A M11 cross-request shared context cache design review: completed.
 8. P-M4-B M11 cache key / file signature helpers: completed.
-9. Manual review before P-M4-C implementation: next.
+9. P-M4-C In-process Summary / Evidence Cache: completed.
+10. P-M4-D optional AI Context Manifest cache review, or defer cache work and
+    return to S2 only after explicit decision: next.
 
 ### P1
 
@@ -51,6 +53,7 @@ hotfix.
 - P-M3 Historical Risk Normalization Metadata Helper Split.
 - P-M4-A M11 Cross-request Shared Context Cache Design Review.
 - P-M4-B M11 Cache Key / File Signature Helpers.
+- P-M4-C In-process Summary / Evidence Cache.
 
 ### Deferred
 
@@ -191,8 +194,19 @@ routes, change dashboard service behavior, change `write_last_good`, read report
 contents into keys, open SQLite contents, or add providers, endpoints, frontend
 UI, external AI, Tavily/search, live fetches, or live writes.
 
-The next recommended task after P-M4-B is manual review before any P-M4-C
-implementation.
+P-M4-C In-process Summary / Evidence Cache is completed as a narrow runtime
+performance change. It adds a process-local single-slot cache for default-path
+summary and unfiltered evidence table responses when `write_last_good=False`.
+Filtered calls may filter the cached unfiltered table, but filtered responses
+are not cached directly. `write_last_good=True` and custom paths bypass the
+shared cache. P-M4-C does not cache AI Context Manifest, persist cache to disk,
+change dashboard API schema, change model semantics, change AI context
+eligibility, change `write_last_good`, add providers, endpoints, frontend UI,
+external AI, Tavily/search, live fetches, or live writes.
+
+The next recommended task after P-M4-C is P-M4-D optional AI Context Manifest
+cache review, or defer cache work and return to S2 only after explicit
+decision.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

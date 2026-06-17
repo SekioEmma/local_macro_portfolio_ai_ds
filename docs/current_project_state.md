@@ -486,6 +486,16 @@ path/file-signature and digest helpers plus cache bypass reason policy only. It
 did not implement runtime cache, wire routes, change dashboard service behavior,
 alter `write_last_good`, read report contents into keys, open SQLite contents,
 change AI Context Manifest semantics, add providers, endpoints, frontend UI,
-external AI, Tavily/search, live fetch, or live write. Next recommended task:
-manual review before any P-M4-C implementation.
+external AI, Tavily/search, live fetch, or live write. P-M4-C In-process
+Summary / Evidence Cache is complete as a narrow runtime performance change. It
+adds a process-local single-slot cache for default-path summary and unfiltered
+evidence table responses when `write_last_good=False`; filtered calls may
+filter cached unfiltered rows, while filtered responses are not cached directly.
+It bypasses custom paths and explicit `write_last_good=True` calls, returns
+defensive copies, and does not cache AI Context Manifest, persist cache to disk,
+change dashboard API schema, alter model semantics, change AI context
+eligibility, or add providers, endpoints, frontend UI, external AI,
+Tavily/search, live fetch, or live write. Next recommended task: P-M4-D
+optional AI Context Manifest cache review, or defer cache work and return to S2
+only after explicit decision.
 Real AI Chat / Memo / Report integrations remain not implemented.
