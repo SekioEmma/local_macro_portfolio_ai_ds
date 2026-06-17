@@ -35,7 +35,8 @@ hotfix.
 12. S3 AI memo boundary template update: completed.
 13. Dashboard Service Refactor Phase E - Module Builder Extraction: completed.
 14. Phase F1 dashboard metric characterization tests before metric builder
-    extraction: next.
+    extraction: completed.
+15. Phase F2 extract dashboard metric builder: next.
 
 ### P1
 
@@ -64,6 +65,7 @@ hotfix.
 - S2 Scenario Stress Matrix Explanation Contract / Golden Integration.
 - S3 AI Memo Boundary Template Update.
 - Dashboard Service Refactor Phase E - Module Builder Extraction.
+- Phase F1 Dashboard Metric Characterization Tests.
 
 ### Deferred
 
@@ -241,9 +243,20 @@ writes, prediction/probability outputs, return estimates, allocation outputs,
 and trading advice. See
 `docs/dashboard_service_refactor_phase_e_module_builder.md`.
 
-The next recommended task after Phase E is Phase F1 dashboard metric
-characterization tests before metric builder extraction. Do not jump directly
-to moving `_build_metric`.
+Phase F1 Dashboard Metric Characterization Tests is completed. It adds
+characterization coverage for `_build_metric`, `_key_metrics_for_module`,
+official macro missing behavior, PPI Final Demand / PPIACO boundaries, source /
+freshness / date metadata, derived-first and portfolio-compact-first order, AI
+context gate outcomes, dependency unusable behavior, and the legacy callable
+surface. It does not move `_build_metric`, move `_key_metrics_for_module`, add
+`dashboard_metric_builder.py`, change production metric semantics, change
+dashboard public APIs, alter cache or `write_last_good`, add providers,
+endpoints, frontend UI, external AI, live fetches, live writes, prediction,
+probability, return, allocation, or trading outputs. See
+`docs/dashboard_service_refactor_phase_f1_metric_characterization.md`.
+
+The next recommended task after Phase F1 is Phase F2 extract dashboard metric
+builder.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

@@ -527,6 +527,16 @@ financial model semantic, cache semantic, `write_last_good` behavior, AI
 context eligibility, provider, endpoint, frontend UI, external AI,
 Tavily/search, live fetch/write, prediction/probability output, return
 estimate, allocation output, or trading advice changed.
-Next recommended task: Phase F1 dashboard metric characterization tests before
-metric builder extraction.
+Phase F1 Dashboard Metric Characterization Tests is complete as tests and docs
+only. It locks current `_build_metric`, `_key_metrics_for_module`, official
+macro missing behavior, PPI Final Demand / PPIACO boundaries, source/freshness/
+date metadata, derived-first and portfolio-compact-first order, dependency
+unusable behavior, AI context gate outcomes, and the legacy callable surface
+before metric builder extraction. It does not move `_build_metric`, move
+`_key_metrics_for_module`, add `dashboard_metric_builder.py`, change production
+metric semantics, change dashboard public APIs, alter cache or
+`write_last_good`, add providers, endpoints, frontend UI, external AI, live
+fetches, live writes, prediction, probability, return, allocation, or trading
+outputs.
+Next recommended task: Phase F2 extract dashboard metric builder.
 Real AI Chat / Memo / Report integrations remain not implemented.

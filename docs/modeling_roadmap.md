@@ -264,8 +264,18 @@ external AI, live fetch/write, prediction/probability, return, allocation, or
 trading behavior changed. See
 `docs/dashboard_service_refactor_phase_e_module_builder.md`.
 
-Next recommended task after Phase E: Phase F1 dashboard metric characterization
-tests before metric builder extraction.
+Phase F1 Dashboard Metric Characterization Tests: completed. Tests lock current
+`_build_metric`, `_key_metrics_for_module`, official macro missing behavior,
+PPI Final Demand / PPIACO boundaries, source/freshness/date metadata,
+derived-first and portfolio-compact-first order, dependency unusable behavior,
+AI context gate outcomes, and legacy callable surface before metric builder
+extraction. No production code, model semantics, public keys, schema, cache,
+`write_last_good`, provider, endpoint, frontend, external AI, live fetch/write,
+prediction/probability, return, allocation, or trading behavior changed. See
+`docs/dashboard_service_refactor_phase_f1_metric_characterization.md`.
+
+Next recommended task after Phase F1: Phase F2 extract dashboard metric
+builder.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
