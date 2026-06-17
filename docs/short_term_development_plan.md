@@ -32,11 +32,12 @@ hotfix.
     Manifest bottleneck.
 11. S2 Scenario Stress Matrix explanation tests / golden contract integration:
     completed as tests + docs only (38 contract tests, 11 categories).
-12. S3 AI memo boundary template update: next (only after S2).
+12. S3 AI memo boundary template update: completed.
+13. Manual review / route decision: next.
 
 ### P1
 
-1. S3 AI memo boundary template update only after S2.
+1. Manual review / route decision before any Stage 9 product surface.
 
 ### Completed
 
@@ -59,6 +60,7 @@ hotfix.
 - P-M4-C In-process Summary / Evidence Cache.
 - P-M4-D AI Context Manifest Cache Review (review-only; implementation deferred).
 - S2 Scenario Stress Matrix Explanation Contract / Golden Integration.
+- S3 AI Memo Boundary Template Update.
 
 ### Deferred
 
@@ -151,6 +153,18 @@ portfolio-action model.
 S2 D16 scenario explanation tests / golden contract integration is completed
 as tests + docs only. The next recommended task is S3 AI memo boundary
 template update only after S2.
+
+S3 AI memo boundary template update is completed. It hardens the local
+deterministic memo preview template so Scenario Stress Matrix appears as
+model-output scenario matrix context only, with compact scenario metadata and
+validator-safe non-forecast / non-action wording. It does not change Scenario
+Stress Matrix semantics, support/severity/uncertainty logic, public keys, AI
+Context Manifest semantics, AI memo schema, endpoints, frontend UI, external
+AI, Tavily/search, live fetches, or live writes.
+
+The next recommended task after S3 is manual review / route decision. Do not
+automatically proceed to AI Chat, Tavily, frontend AI UI, or external AI
+productization.
 
 HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
 test fixtures and benchmark result reuse only; it did not change model

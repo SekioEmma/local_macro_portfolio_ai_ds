@@ -137,18 +137,33 @@ PRIVACY_FORBIDDEN_TERMS = (
 )
 
 MODEL_MODULE_LABELS = {
+    "financial_stress_composite": "Financial Stress Composite (legacy: D10)",
+    "pullback_systemic_risk_checklist": "Pullback vs Systemic Risk Review (legacy: D11)",
+    "macro_regime_review": "Macro Regime Review (legacy: D15)",
+    "scenario_stress": "Scenario Stress Matrix (legacy: D16)",
+    "growth_inflation_macro_pack": "Growth & Inflation Context (legacy: D17)",
+    "valuation_equity_structure": "Valuation & Equity Structure Context (legacy: D18)",
+    "historical_validation": "Historical Validation Replay (legacy: D19)",
+    "portfolio_exposure_overlay": "Portfolio Exposure Overlay (legacy: Stage 8)",
+}
+EXCLUDED_RENDER_METRIC_KEYS = {
+    "macro_regime_score",
+}
+SCENARIO_STRESS_LABEL = MODEL_MODULE_LABELS["scenario_stress"]
+MODEL_MODULE_RENDER_ALIASES = {
     "financial_stress_composite": "D10 financial stress",
     "pullback_systemic_risk_checklist": "D11 pullback/systemic review",
     "macro_regime_review": "D15 macro regime review",
-    "scenario_stress": "D16 scenario stress",
     "growth_inflation_macro_pack": "D17 growth/inflation context",
     "valuation_equity_structure": "D18 valuation/equity structure",
     "historical_validation": "D19 historical validation",
     "portfolio_exposure_overlay": "Stage 8 portfolio exposure overlay",
 }
-EXCLUDED_RENDER_METRIC_KEYS = {
-    "macro_regime_score",
-}
+SCENARIO_BOUNDARY_NOTICE = (
+    "Scenario Stress Matrix is model-output scenario context only; not a "
+    "forecast, not an event-odds model, not a return-estimation model, and not "
+    "an action directive."
+)
 
 
 def render_ai_memo_preview(memo_type: str, manifest: Any) -> AIMemoPreview:
@@ -253,7 +268,7 @@ def _section_content(section_key: str, manifest: dict[str, Any]) -> tuple[str, l
             {"financial_stress_composite", "macro_regime_review", "growth_inflation_macro_pack"},
         )
         return _summarize_models(rows), _context_ids(rows)
-    if section_key in {"missing_or_excluded_constraints", "missing_constraints", "missing_inputs"}:
+    if section_key in {"missing_or_excluded_constraints", "missing_constraints"}:
         return _summarize_constraints(excluded_facts, excluded_models), _context_ids(excluded_facts + excluded_models)
     if section_key in {"interpretation_boundaries", "boundary_notice", "boundary_and_privacy_notes"}:
         return _summarize_boundaries(risk_boundaries), ["manifest.risk_boundaries"]
@@ -266,12 +281,22 @@ def _section_content(section_key: str, manifest: dict[str, Any]) -> tuple[str, l
     if section_key == "liquidity_funding_context":
         rows = _rows_by_modules(included_facts + included_models, {"liquidity_funding_stress"})
         return _summarize_rows(rows, "Liquidity/funding context"), _context_ids(rows)
-    if section_key in {"scenario_stress_notes", "selected_scenario", "affected_evidence_groups", "transmission_channels", "uncertainty_conditions"}:
-        rows = _rows_by_modules(included_models + excluded_models, {"scenario_stress"})
-        extra = "D16 remains a scenario matrix; no forecast phrasing or scenario odds."
-        return _with_extra(_summarize_models(rows), extra), _context_ids(rows)
+    if section_key in {
+        "scenario_stress_notes",
+        "selected_scenario",
+        "affected_evidence_groups",
+        "transmission_channels",
+        "uncertainty_conditions",
+        "missing_inputs",
+    }:
+        included_rows = _rows_by_modules(included_models, {"scenario_stress"})
+        excluded_rows = _rows_by_modules(excluded_models, {"scenario_stress"})
+        return (
+            _scenario_section_summary(section_key, included_rows, excluded_rows),
+            _context_ids(included_rows + excluded_rows),
+        )
     if section_key == "not_a_forecast_notice":
-        return "D16 remains a scenario matrix; not a forecast and not an event-odds model.", ["stage9.boundary.d16"]
+        return f"D16 remains a scenario matrix. {SCENARIO_BOUNDARY_NOTICE}", ["stage9.boundary.scenario_stress"]
     if section_key == "sanitized_portfolio_context_policy":
         policy = manifest.get("portfolio_context_policy") or {}
         mode = _safe(policy.get("mode")) or "compact_summary_only"
@@ -301,7 +326,12 @@ def _section_content(section_key: str, manifest: dict[str, Any]) -> tuple[str, l
     if section_key == "privacy_policy_summary":
         return _privacy_policy_summary(manifest), ["manifest.privacy_policy", "manifest.persistence_policy", "manifest.search_policy"]
     if section_key == "validator_findings":
-        return "Validator checks are required before display; current local template is validator-gated.", ["stage9.validator"]
+        return (
+            "Validator checks are required before display; current local template is "
+            "validator-gated. Scenario Stress Matrix outputs stay bounded as "
+            "model-output scenario context.",
+            ["stage9.validator", "scenario_stress.boundary"],
+        )
     if section_key == "human_review_required":
         return "Human review is required before relying on this local deterministic preview.", ["stage9.human_review_required"]
     return NO_ELIGIBLE_CONTEXT, []
@@ -382,10 +412,181 @@ def _summarize_models(rows: list[dict[str, Any]]) -> str:
     labels = []
     for row in rows[:6]:
         module = row.get("module")
-        prefix = MODEL_MODULE_LABELS.get(str(module), str(module or "model context"))
+        prefix = _model_module_render_label(str(module or "model context"))
         labels.append(f"{prefix}: {_row_label(row)}")
-    suffix = f" Additional eligible model rows: {len(rows) - 6}." if len(rows) > 6 else ""
+    suffix = ""
+    if len(rows) > 6:
+        additional_modules = _unique_nonempty(
+            [
+                _model_module_render_label(str(row.get("module") or "model context"))
+                for row in rows[6:]
+            ]
+        )
+        suffix = (
+            f" Additional eligible model rows: {len(rows) - 6}; "
+            f"additional modules: {', '.join(additional_modules)}."
+        )
     return "Model context: " + " | ".join(labels) + suffix
+
+
+def _model_module_render_label(module: str) -> str:
+    label = MODEL_MODULE_LABELS.get(module, module)
+    alias = MODEL_MODULE_RENDER_ALIASES.get(module)
+    if not alias:
+        return label
+    return f"{label} (alias: {alias})"
+
+
+def _scenario_section_summary(
+    section_key: str,
+    included_rows: list[dict[str, Any]],
+    excluded_rows: list[dict[str, Any]],
+) -> str:
+    scenarios = _scenario_metadata(included_rows)
+    if section_key == "scenario_stress_notes":
+        if scenarios:
+            return f"{_scenario_matrix_summary(included_rows)} {SCENARIO_BOUNDARY_NOTICE}"
+        return f"{_excluded_scenario_summary(excluded_rows)} {SCENARIO_BOUNDARY_NOTICE}"
+    if section_key == "selected_scenario":
+        if not scenarios:
+            return (
+                f"{SCENARIO_STRESS_LABEL}: no included Scenario Stress Matrix "
+                "model output is available; selected scenario is not rendered. "
+                f"{_excluded_scenario_summary(excluded_rows)}"
+            )
+        scenario = _select_scenario(scenarios)
+        return (
+            f"{SCENARIO_STRESS_LABEL}: selected scenario context: "
+            f"scenario_name={_safe(scenario.get('scenario_name') or 'unknown')}; "
+            f"support_band={_safe(scenario.get('support_band') or 'unknown')}; "
+            f"severity_band={_safe(scenario.get('severity_band') or 'unknown')}; "
+            f"uncertainty_band={_safe(scenario.get('uncertainty_band') or 'unknown')}. "
+            f"{SCENARIO_BOUNDARY_NOTICE}"
+        )
+    if section_key == "affected_evidence_groups":
+        return _scenario_list_summary(
+            label="Affected evidence groups",
+            values=_scenario_values(scenarios, "affected_evidence_groups"),
+            excluded_rows=excluded_rows,
+        )
+    if section_key == "transmission_channels":
+        return _scenario_list_summary(
+            label="Transmission channels",
+            values=_scenario_values(scenarios, "transmission_channels"),
+            excluded_rows=excluded_rows,
+        )
+    if section_key == "uncertainty_conditions":
+        values = (
+            _scenario_values(scenarios, "scenario_uncertainty_drivers")
+            + _scenario_values(scenarios, "scenario_proxy_constraints")
+            + _scenario_values(scenarios, "scenario_source_gate_constraints")
+        )
+        return _scenario_list_summary(
+            label="Uncertainty drivers and proxy/source-gate constraints",
+            values=values,
+            excluded_rows=excluded_rows,
+        )
+    if section_key == "missing_inputs":
+        values = (
+            _scenario_values(scenarios, "scenario_missing_constraints")
+            + _scenario_values(scenarios, "missing_inputs")
+            + _scenario_values(scenarios, "blocked_inputs")
+        )
+        return _scenario_list_summary(
+            label="Missing or blocked scenario constraints",
+            values=values,
+            excluded_rows=excluded_rows,
+        )
+    return f"{NO_ELIGIBLE_CONTEXT} {SCENARIO_BOUNDARY_NOTICE}"
+
+
+def _scenario_matrix_summary(rows: list[dict[str, Any]]) -> str:
+    scenarios = _scenario_metadata(rows)
+    if not scenarios:
+        return _with_extra(_summarize_models(rows), SCENARIO_BOUNDARY_NOTICE)
+    summaries = []
+    for scenario in scenarios[:3]:
+        summaries.append(
+            "scenario_name="
+            f"{_safe(scenario.get('scenario_name') or 'unknown')}; "
+            f"support_band={_safe(scenario.get('support_band') or 'unknown')}; "
+            f"severity_band={_safe(scenario.get('severity_band') or 'unknown')}; "
+            f"uncertainty_band={_safe(scenario.get('uncertainty_band') or 'unknown')}"
+        )
+    suffix = f" Additional scenarios: {len(scenarios) - 3}." if len(scenarios) > 3 else ""
+    return f"{SCENARIO_STRESS_LABEL} scenario matrix context: " + " | ".join(summaries) + suffix
+
+
+def _scenario_metadata(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    scenarios: list[dict[str, Any]] = []
+    for row in rows:
+        contributions = row.get("component_contributions")
+        if not isinstance(contributions, dict):
+            continue
+        raw_scenarios = contributions.get("scenarios")
+        if isinstance(raw_scenarios, list):
+            scenarios.extend(
+                scenario for scenario in raw_scenarios if isinstance(scenario, dict)
+            )
+    return scenarios
+
+
+def _select_scenario(scenarios: list[dict[str, Any]]) -> dict[str, Any]:
+    for scenario in scenarios:
+        support = str(scenario.get("support_band") or "").lower()
+        status = str(scenario.get("scenario_status") or "").lower()
+        if support not in {"", "none", "not_supported"} and status != "not_supported":
+            return scenario
+    return scenarios[0]
+
+
+def _scenario_values(scenarios: list[dict[str, Any]], field: str) -> list[str]:
+    values: list[str] = []
+    for scenario in scenarios:
+        raw_value = scenario.get(field)
+        if isinstance(raw_value, list):
+            values.extend(_safe(item) for item in raw_value if item)
+        elif raw_value:
+            values.append(_safe(raw_value))
+    return _unique_nonempty(values)
+
+
+def _scenario_list_summary(
+    *,
+    label: str,
+    values: list[str],
+    excluded_rows: list[dict[str, Any]],
+) -> str:
+    if values:
+        shown = values[:8]
+        suffix = f" Additional items: {len(values) - 8}." if len(values) > 8 else ""
+        return f"{SCENARIO_STRESS_LABEL} {label}: " + ", ".join(shown) + suffix
+    return (
+        f"{SCENARIO_STRESS_LABEL} {label}: no included scenario metadata is "
+        f"available. {_excluded_scenario_summary(excluded_rows)}"
+    )
+
+
+def _excluded_scenario_summary(excluded_rows: list[dict[str, Any]]) -> str:
+    if not excluded_rows:
+        return "No excluded Scenario Stress Matrix rows are present."
+    labels = []
+    for row in excluded_rows[:3]:
+        reason = _safe(row.get("excluded_reason") or row.get("missing_reason") or "excluded")
+        labels.append(f"{_safe(row.get('metric_key') or 'scenario_stress')}; constraint={reason}")
+    suffix = f" Additional excluded scenario rows: {len(excluded_rows) - 3}." if len(excluded_rows) > 3 else ""
+    return "Excluded Scenario Stress Matrix constraints: " + " | ".join(labels) + suffix
+
+
+def _unique_nonempty(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
 
 
 def _summarize_constraints(

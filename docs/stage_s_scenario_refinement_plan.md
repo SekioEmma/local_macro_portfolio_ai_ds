@@ -116,7 +116,10 @@ BAA10Y substitution, or new hard triggers.
 S1 is completed. S2 Scenario Stress Matrix Explanation Contract / Golden
 Integration is completed as tests + docs only (38 contract tests, 11
 categories). See `docs/s2_scenario_stress_contract.md` for the S2 closeout.
+S3 AI memo boundary template update is completed. See
+`docs/s3_ai_memo_boundary_template.md` for the S3 closeout.
 
-Next recommended task: S3 AI memo boundary template update only after S2.
+Next recommended task: manual review / route decision before any Stage 9
+product surface, or return to backlog decision.
 See `docs/short_term_development_plan.md` for the current immediate route
 and `docs/INDEX.md` for the namespace map.

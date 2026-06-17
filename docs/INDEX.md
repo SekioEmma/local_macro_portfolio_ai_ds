@@ -8,12 +8,12 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: S2 Scenario Stress Matrix Explanation Contract / Golden
-  Integration (tests + docs only; 38 contract tests, 11 categories)
+- Last completed task: S3 AI memo boundary template update
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: return to S-line scenario/explanation work
-- Next engineering task: S3 AI memo boundary template update (only after S2)
+- Current immediate route: manual review / route decision
+- Next engineering task: manual review before any Stage 9 product surface, or
+  return to backlog decision
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -108,7 +108,7 @@ Stage DF is concluded. No default DF-5.
 - HF-2: Project Namespace Index / Governance Light Cleanup (current; docs-only)
 - S2: D16 scenario explanation tests / golden contract integration (completed;
   38 contract tests, 11 categories)
-- S3: AI memo boundary template update (deferred; only after S2)
+- S3: AI memo boundary template update (completed)
 
 ### R-line: Research Recovery
 
@@ -172,8 +172,9 @@ validation requirements. The short version:
    implementation deferred)
 8. ~~S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
    integration~~ (completed)
-9. S3 AI memo boundary template update (only after S2): next
-10. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+9. ~~S3 AI memo boundary template update~~ (completed)
+10. Manual review / route decision
+11. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,

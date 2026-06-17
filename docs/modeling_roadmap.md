@@ -244,7 +244,18 @@ output, AI Context Manifest, and AI memo validation. S2 does not change
 production code, financial model semantics, support/severity/uncertainty
 calculation, frontend, endpoints, or external AI.
 
-Next recommended task: S3 AI memo boundary template update only after S2.
+S3 AI Memo Boundary Template Update: completed.
+Boundary-template hardening for the local deterministic AI memo preview. It
+updates Scenario Stress Matrix labels, scenario review rendering, risk review
+scenario notes, macro report model-output treatment, and validator-safe
+non-forecast / non-action wording. S3 does not change model semantics,
+Scenario Stress Matrix support/severity/uncertainty logic, public keys, AI
+Context Manifest semantics, AI memo schema, providers, endpoints, frontend UI,
+external AI, Tavily/search, live fetches, or live writes. See
+`docs/s3_ai_memo_boundary_template.md`.
+
+Next recommended task after S3: manual review / route decision before any Stage
+9 product surface, or return to backlog decision.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
