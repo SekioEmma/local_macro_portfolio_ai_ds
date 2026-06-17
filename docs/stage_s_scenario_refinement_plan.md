@@ -113,13 +113,10 @@ persistence, live fetches, live writes, scenario probabilities, forecast paths,
 return estimates, price targets, portfolio actions, D13 gate relaxation,
 BAA10Y substitution, or new hard triggers.
 
-S1 is completed. Further S-line tasks (S2, S3) are deferred until after
-HF-1, HF-2, and P-M1 unless explicitly requested. See
-`docs/short_term_development_plan.md` for the current immediate route and
-`docs/INDEX.md` for the namespace map.
+S1 is completed. S2 Scenario Stress Matrix Explanation Contract / Golden
+Integration is completed as tests + docs only (38 contract tests, 11
+categories). See `docs/s2_scenario_stress_contract.md` for the S2 closeout.
 
-Next recommended task: P-M1 dashboard_model_pipeline row conversion
-accumulator, covering the model chain from Historical Risk Normalization
-(legacy: D13) through Scenario Stress Matrix (legacy: D16). S2 Scenario Stress
-Matrix explanation tests / golden contract integration or S3 AI memo boundary
-template update may follow only after explicit decision.
+Next recommended task: S3 AI memo boundary template update only after S2.
+See `docs/short_term_development_plan.md` for the current immediate route
+and `docs/INDEX.md` for the namespace map.

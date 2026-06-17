@@ -31,13 +31,12 @@ hotfix.
     Implementation deferred; P-M4-C evidence cache already eliminates
     Manifest bottleneck.
 11. S2 Scenario Stress Matrix explanation tests / golden contract integration:
-    next.
+    completed as tests + docs only (38 contract tests, 11 categories).
+12. S3 AI memo boundary template update: next (only after S2).
 
 ### P1
 
-1. S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
-   integration if needed.
-2. S3 AI memo boundary template update only after S2.
+1. S3 AI memo boundary template update only after S2.
 
 ### Completed
 
@@ -59,6 +58,7 @@ hotfix.
 - P-M4-B M11 Cache Key / File Signature Helpers.
 - P-M4-C In-process Summary / Evidence Cache.
 - P-M4-D AI Context Manifest Cache Review (review-only; implementation deferred).
+- S2 Scenario Stress Matrix Explanation Contract / Golden Integration.
 
 ### Deferred
 
@@ -148,9 +148,9 @@ is completed as explanation refinement, not a prediction model,
 scenario-probability model, return-estimate model, price-path model, or
 portfolio-action model.
 
-The next recommended task is S2 D16 scenario explanation tests / golden
-contract integration if needed, or S3 AI memo boundary template update only
-after S1/S2.
+S2 D16 scenario explanation tests / golden contract integration is completed
+as tests + docs only. The next recommended task is S3 AI memo boundary
+template update only after S2.
 
 HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
 test fixtures and benchmark result reuse only; it did not change model

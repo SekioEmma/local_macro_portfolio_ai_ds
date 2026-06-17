@@ -8,14 +8,12 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: P-M4-D AI Context Manifest Cache Review (review-only;
-  implementation deferred because P-M4-C evidence cache already eliminates
-  the Manifest bottleneck)
+- Last completed task: S2 Scenario Stress Matrix Explanation Contract / Golden
+  Integration (tests + docs only; 38 contract tests, 11 categories)
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
 - Current immediate route: return to S-line scenario/explanation work
-- Next engineering task: S2 Scenario Stress Matrix explanation tests / golden
-  contract integration
+- Next engineering task: S3 AI memo boundary template update (only after S2)
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -108,8 +106,8 @@ Stage DF is concluded. No default DF-5.
 - S1: D16 Scenario Stress Refinement v1 (completed)
 - HF-1: Test Runtime Hotfix / DB-backed Fixture Batching (completed)
 - HF-2: Project Namespace Index / Governance Light Cleanup (current; docs-only)
-- S2: D16 scenario explanation tests / golden contract integration (deferred
-  until after performance work unless explicitly requested)
+- S2: D16 scenario explanation tests / golden contract integration (completed;
+  38 contract tests, 11 categories)
 - S3: AI memo boundary template update (deferred; only after S2)
 
 ### R-line: Research Recovery
@@ -172,9 +170,9 @@ validation requirements. The short version:
 6. ~~P-M4-C In-process Summary / Evidence Cache~~ (completed)
 7. ~~P-M4-D AI Context Manifest cache review~~ (completed as review-only;
    implementation deferred)
-8. S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
-   integration: next
-9. S3 AI memo boundary template update (only after S2)
+8. ~~S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
+   integration~~ (completed)
+9. S3 AI memo boundary template update (only after S2): next
 10. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 

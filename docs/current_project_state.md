@@ -500,6 +500,13 @@ Review is complete as a review-only decision audit. The review found that
 P-M4-C evidence cache already reduces warm Manifest calls from ~3350 ms to
 ~26 ms; Manifest-specific row classification takes ~2 ms. A dedicated Manifest
 cache is deferred because the ~24 ms saving does not justify the
-stale/privacy/AI context eligibility risk. Next recommended task: S2 Scenario
-Stress Matrix explanation tests / golden contract integration.
+stale/privacy/AI context eligibility risk. S2 Scenario Stress Matrix
+Explanation Contract / Golden Integration is complete as tests + docs only
+(38 new contract tests across 11 categories covering public output keys,
+metadata shape, forbidden language, D13/D17/D18/D19 context boundaries,
+golden integration, AI Context Manifest integration, AI memo contract
+integration, and D15/D16 compliance audit reinforcement). S2 does not change
+production code, financial model semantics, support/severity/uncertainty
+calculation, frontend, endpoints, or external AI. Next recommended task: S3
+AI memo boundary template update only after S2.
 Real AI Chat / Memo / Report integrations remain not implemented.
