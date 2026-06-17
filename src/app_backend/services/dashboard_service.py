@@ -45,6 +45,29 @@ from app_backend.services.dashboard_report_loader import (
     load_dashboard_reports as _load_dashboard_reports,
     load_report as _load_report,
 )
+from app_backend.services.dashboard_summary_assembly import (
+    MAX_ERROR_SUMMARY_LENGTH,
+    coerce_status as _coerce_status,
+    compact_missing_entries as _compact_missing_entries,
+    contains_signal as _contains_signal,
+    data_freshness as _data_freshness,
+    first_error as _first_error,
+    first_generated_at as _first_generated_at,
+    first_status as _first_status,
+    first_updated_at as _first_updated_at,
+    freshness_status as _freshness_status,
+    missing_data as _missing_data,
+    model_to_dict as _model_to_dict,
+    next_action_for_report as _next_action_for_report,
+    next_actions as _next_actions,
+    overall_risk_level as _overall_risk_level,
+    overall_status as _overall_status,
+    provider_health_summary as _provider_health_summary,
+    report_status as _report_status,
+    run_reports_action as _run_reports_action,
+    safe_error_summary as _safe_error_summary,
+    string_or_none as _string_or_none,
+)
 from app_backend.services import provider_service
 from app_backend.services.dashboard_evidence_policy import (
     AI_BLOCKED_FRESHNESS_STATUSES,
@@ -70,7 +93,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
 DEFAULT_REPORTS_DIR = PROJECT_REPORTS_DIR
 DEFAULT_MARKET_HISTORY_DB_PATH = market_history_store.get_default_market_history_db_path()
-MAX_ERROR_SUMMARY_LENGTH = 200
 DASHBOARD_MODULE_KEYS = (
     "credit_stress",
     "rate_pressure",
@@ -837,19 +859,6 @@ def _evidence_row_matches(
         source_badge=source_badge,
         ai_context_allowed=ai_context_allowed,
     )
-
-
-def _provider_health_summary(health_path: Path) -> dict:
-    response = provider_service.build_provider_health(health_path)
-    payload = _model_to_dict(response)
-    return {
-        "generated_at": payload.get("generated_at"),
-        "overall_status": payload.get("overall_status"),
-        "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
-        "checks": payload.get("checks") if isinstance(payload.get("checks"), list) else [],
-        "next_action": payload.get("next_action"),
-        "error_summary": payload.get("error_summary"),
-    }
 
 
 def _build_modules(
@@ -2902,255 +2911,3 @@ def _summary_with_coverage_note(summary: str | None, coverage_note: str | None) 
     return f"{summary}; {coverage_note}"
 
 
-def _missing_data(reports: dict[str, ReportState]) -> list[dict]:
-    missing = []
-    for name, report in reports.items():
-        if not report.exists:
-            missing.append(
-                {
-                    "key": name,
-                    "status": "missing",
-                    "summary": f"{report.path.name} missing",
-                    "next_action": _next_action_for_report(name),
-                }
-            )
-        elif report.error_summary is not None:
-            missing.append(
-                {
-                    "key": name,
-                    "status": "error",
-                    "summary": report.error_summary,
-                    "next_action": _next_action_for_report(name),
-                }
-            )
-        else:
-            compact_missing = _compact_missing_entries(report.data)
-            for entry in compact_missing:
-                missing.append({"key": name, **entry})
-    return missing
-
-
-def _compact_missing_entries(data: dict[str, Any] | None) -> list[dict]:
-    if not isinstance(data, dict):
-        return []
-    entries = []
-    for field in (
-        "missing_required_inputs",
-        "missing_optional_inputs",
-        "research_needed",
-        "not_available",
-    ):
-        value = data.get(field)
-        if isinstance(value, list):
-            entries.append(
-                {
-                    "status": "missing",
-                    "summary": f"{field}: {len(value)} item(s)",
-                }
-            )
-    return entries
-
-
-def _data_freshness(reports: dict[str, ReportState], provider_health: dict) -> dict:
-    files = {}
-    for name, report in reports.items():
-        files[name] = {
-            "status": _report_status(report),
-            "generated_at": _string_or_none(
-                report.data.get("generated_at")
-                if isinstance(report.data, dict)
-                else None
-            ),
-            "stale_cache": _contains_signal(report.data, ("stale_cache",)),
-            "next_action": _next_action_for_report(name)
-            if _report_status(report) in {"missing", "error", "stale"}
-            else None,
-        }
-    return {
-        "status": _freshness_status(files),
-        "files": files,
-        "provider_health_generated_at": provider_health.get("generated_at"),
-    }
-
-
-def _next_actions(modules: dict[str, DashboardModule], provider_health: dict) -> list[str]:
-    actions = []
-    for module in modules.values():
-        if module.next_action:
-            actions.append(module.next_action)
-    provider_action = provider_health.get("next_action")
-    if provider_action:
-        actions.append(str(provider_action))
-    return sorted(set(actions))
-
-
-def _overall_status(modules: dict[str, DashboardModule], provider_health: dict) -> str:
-    statuses = {module.status for module in modules.values()}
-    provider_status = provider_health.get("overall_status")
-    if "error" in statuses or provider_status == "error":
-        return "error"
-    if statuses == {"missing"} and provider_status == "not_run_yet":
-        return "missing"
-    if statuses & {"missing", "stale", "degraded", "unknown", "watch", "pressure", "stress"} or provider_status in {
-        "degraded",
-        "transient_error",
-        "not_run_yet",
-    }:
-        return "degraded"
-    if statuses == {"ok"} and provider_status in {"ok", None}:
-        return "ok"
-    return "unknown"
-
-
-def _overall_risk_level(reports: dict[str, ReportState]) -> str | None:
-    for report in (reports["market_temperature"], reports["market_snapshot"]):
-        if report.data is None:
-            continue
-        for key in ("overall_risk_level", "risk_level", "temperature_label"):
-            value = _string_or_none(report.data.get(key))
-            if value:
-                return value
-    return None
-
-
-def _first_generated_at(reports: dict[str, ReportState], provider_health: dict) -> str | None:
-    for report in (
-        reports["market_temperature"],
-        reports["market_snapshot"],
-        reports["portfolio_snapshot"],
-    ):
-        if report.data is None:
-            continue
-        value = _string_or_none(report.data.get("generated_at"))
-        if value:
-            return value
-    return _string_or_none(provider_health.get("generated_at"))
-
-
-def _first_error(reports: tuple[ReportState, ...]) -> str | None:
-    for report in reports:
-        if report.error_summary is not None:
-            return report.error_summary
-    return None
-
-
-def _first_status(reports: list[ReportState]) -> str | None:
-    for report in reports:
-        value = _string_or_none(report.data.get("status") if report.data else None)
-        if value:
-            return value
-    return None
-
-
-def _first_updated_at(reports: list[ReportState]) -> str | None:
-    for report in reports:
-        if report.data is None:
-            continue
-        value = _string_or_none(
-            report.data.get("generated_at") or report.data.get("updated_at")
-        )
-        if value:
-            return value
-    return None
-
-
-def _contains_signal(value: Any, signal_terms: tuple[str, ...]) -> bool:
-    terms = tuple(term.lower() for term in signal_terms)
-    return _contains_signal_key(value, terms)
-
-
-def _contains_signal_key(value: Any, signal_terms: tuple[str, ...]) -> bool:
-    if isinstance(value, dict):
-        for key, child in value.items():
-            key_text = str(key).lower()
-            if any(term in key_text for term in signal_terms):
-                return True
-            if _contains_signal_key(child, signal_terms):
-                return True
-    elif isinstance(value, list):
-        return any(_contains_signal_key(item, signal_terms) for item in value)
-    elif isinstance(value, str):
-        text = value.lower()
-        return any(text == term for term in signal_terms)
-    return False
-
-
-def _report_status(report: ReportState) -> str:
-    if not report.exists:
-        return "missing"
-    if report.error_summary is not None:
-        return "error"
-    if report.data is None:
-        return "unknown"
-    if _contains_signal(report.data, ("stale_cache",)):
-        return "stale"
-    return _coerce_status(report.data.get("status"), default="ok")
-
-
-def _freshness_status(files: dict[str, dict]) -> str:
-    statuses = {item["status"] for item in files.values()}
-    if "error" in statuses:
-        return "error"
-    if "stale" in statuses:
-        return "stale"
-    if "missing" in statuses:
-        return "degraded"
-    if statuses == {"ok"}:
-        return "ok"
-    return "unknown"
-
-
-def _next_action_for_report(name: str) -> str:
-    if name == "provider_health":
-        return provider_service.NEXT_ACTION
-    if name == "portfolio_snapshot":
-        return "python scripts/run_portfolio_check.py"
-    return _run_reports_action()
-
-
-def _run_reports_action() -> str:
-    return "python scripts/run_market_data_check.py"
-
-
-def _coerce_status(value: Any, default: str = "unknown") -> str:
-    allowed = {
-        "ok",
-        "watch",
-        "pressure",
-        "stress",
-        "missing",
-        "stale",
-        "degraded",
-        "error",
-        "not_run_yet",
-        "unknown",
-    }
-    status = str(value or default).lower()
-    return status if status in allowed else default
-
-
-def _string_or_none(value: Any) -> str | None:
-    if value is None:
-        return None
-    return str(value)
-
-
-def _safe_error_summary(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = re.sub(r"\s+", " ", str(value)).strip()
-    text = re.sub(r"sk-[A-Za-z0-9_-]{20,}", "[redacted]", text)
-    text = re.sub(
-        r"(?i)(api[_-]?key|apikey|token|secret)=([^&\s]+)",
-        r"\1=[redacted]",
-        text,
-    )
-    if len(text) > MAX_ERROR_SUMMARY_LENGTH:
-        return text[:MAX_ERROR_SUMMARY_LENGTH].rstrip()
-    return text
-
-
-def _model_to_dict(value: Any) -> dict:
-    if hasattr(value, "model_dump"):
-        return value.model_dump()
-    return value.dict()
