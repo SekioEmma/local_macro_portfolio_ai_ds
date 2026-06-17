@@ -3,15 +3,18 @@
 Validates that build_dashboard_model_rows produces the same row groups, module
 keys, row ordering, and public metric_key sets as the original inline sequence
 in build_dashboard_evidence_table. These tests lock behavior for M7/M8-A.
+P-M1 adds conversion-count and input-order regression tests.
 """
 import json
 import socket
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
+from app_backend.services import dashboard_model_pipeline
 from app_backend.services import dashboard_service
 from app_backend.services.dashboard_model_pipeline import (
     DashboardModelPipelineResult,
@@ -298,6 +301,147 @@ def test_no_search_endpoint(monkeypatch, tmp_path):
     client = TestClient(app)
     response = client.get("/api/search", params={"q": "test"})
     assert response.status_code in {404, 405}
+
+
+# ---------------------------------------------------------------------------
+# P-M1: Row conversion count regression
+# ---------------------------------------------------------------------------
+
+
+def test_pm1_model_to_dict_called_once_per_row(monkeypatch, tmp_path):
+    """Each DashboardEvidenceRow should be converted to dict at most once."""
+    _block_network(monkeypatch)
+    call_count = 0
+    original_fn = dashboard_model_pipeline._model_to_dict
+
+    def counting_model_to_dict(value):
+        nonlocal call_count
+        call_count += 1
+        return original_fn(value)
+
+    monkeypatch.setattr(
+        dashboard_model_pipeline, "_model_to_dict", counting_model_to_dict
+    )
+    result = _build_pipeline(monkeypatch, tmp_path)
+
+    total_row_objects = len(result.rows)
+    # base_rows are also converted once; count them from the pipeline helper
+    _write_fake_reports(tmp_path)
+    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
+    summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
+    base_rows = (
+        dashboard_service._evidence_rows_from_summary(summary)
+        + dashboard_service._labor_macro_evidence_rows(
+            dashboard_service._load_dashboard_reports(tmp_path),
+            db_path=None,
+        )
+    )
+    max_expected = len(base_rows) + total_row_objects
+    assert call_count <= max_expected, (
+        f"_model_to_dict called {call_count} times but only "
+        f"{max_expected} unique rows exist (base={len(base_rows)}, "
+        f"pipeline={total_row_objects}). Repeated conversion detected."
+    )
+
+
+def test_pm1_no_repeated_base_row_conversion(monkeypatch, tmp_path):
+    """base_rows should be converted exactly once, not once per downstream model."""
+    _block_network(monkeypatch)
+    converted_ids: list[int] = []
+    original_fn = dashboard_model_pipeline._model_to_dict
+
+    def tracking_model_to_dict(value):
+        converted_ids.append(id(value))
+        return original_fn(value)
+
+    monkeypatch.setattr(
+        dashboard_model_pipeline, "_model_to_dict", tracking_model_to_dict
+    )
+    _build_pipeline(monkeypatch, tmp_path)
+
+    from collections import Counter
+    counts = Counter(converted_ids)
+    repeated = {obj_id: c for obj_id, c in counts.items() if c > 1}
+    assert not repeated, (
+        f"{len(repeated)} row objects were converted more than once. "
+        f"Max repeat count: {max(repeated.values())}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# P-M1: Input order preservation for Scenario Stress Matrix and
+#        Portfolio Exposure Overlay
+# ---------------------------------------------------------------------------
+
+
+def test_pm1_scenario_stress_input_includes_historical_validation(monkeypatch, tmp_path):
+    """Scenario Stress Matrix input must include Historical Validation Replay
+    rows after Macro Regime Review rows."""
+    _block_network(monkeypatch)
+    captured_input: list[dict] = []
+
+    from data_quality import scenario_stress as ss_mod
+    original_build = ss_mod.build_scenario_stress_rows
+
+    def capturing_build(input_dicts, **kwargs):
+        captured_input.extend(input_dicts)
+        return original_build(input_dicts, **kwargs)
+
+    monkeypatch.setattr(ss_mod, "build_scenario_stress_rows", capturing_build)
+    _build_pipeline(monkeypatch, tmp_path)
+
+    modules_in_input = [d.get("module", "") for d in captured_input]
+    has_macro_regime = "macro_regime_review" in modules_in_input
+    has_historical_validation = "historical_validation" in modules_in_input
+    assert has_macro_regime, "Scenario Stress input missing macro_regime_review rows"
+    assert has_historical_validation, "Scenario Stress input missing historical_validation rows"
+
+    last_macro_idx = max(
+        i for i, m in enumerate(modules_in_input) if m == "macro_regime_review"
+    )
+    first_validation_idx = next(
+        i for i, m in enumerate(modules_in_input) if m == "historical_validation"
+    )
+    assert first_validation_idx > last_macro_idx, (
+        "Historical Validation Replay rows must appear after Macro Regime Review "
+        "rows in Scenario Stress Matrix input"
+    )
+
+
+def test_pm1_portfolio_overlay_input_order(monkeypatch, tmp_path):
+    """Portfolio Exposure Overlay input must include Scenario Stress Matrix
+    before Historical Validation Replay."""
+    _block_network(monkeypatch)
+    captured_input: list[dict] = []
+
+    from data_quality import portfolio_exposure_overlay as peo_mod
+    original_build = peo_mod.build_portfolio_exposure_overlay_rows
+
+    def capturing_build(input_dicts, **kwargs):
+        captured_input.extend(input_dicts)
+        return original_build(input_dicts, **kwargs)
+
+    monkeypatch.setattr(
+        peo_mod, "build_portfolio_exposure_overlay_rows", capturing_build
+    )
+    _build_pipeline(monkeypatch, tmp_path)
+
+    modules_in_input = [d.get("module", "") for d in captured_input]
+    has_scenario = "scenario_stress" in modules_in_input
+    has_validation = "historical_validation" in modules_in_input
+    assert has_scenario, "Portfolio Overlay input missing scenario_stress rows"
+    assert has_validation, "Portfolio Overlay input missing historical_validation rows"
+
+    last_scenario_idx = max(
+        i for i, m in enumerate(modules_in_input) if m == "scenario_stress"
+    )
+    first_validation_idx = next(
+        i for i, m in enumerate(modules_in_input) if m == "historical_validation"
+    )
+    assert last_scenario_idx < first_validation_idx, (
+        "Scenario Stress Matrix rows must appear before Historical Validation "
+        "Replay rows in Portfolio Exposure Overlay input"
+    )
 
 
 # ---------------------------------------------------------------------------

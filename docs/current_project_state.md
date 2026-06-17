@@ -427,9 +427,7 @@ DF-4d BAA10Y D19 proxy/reference documentation is deferred unless explicitly
 requested later. HF-2 Project Namespace Index / Governance Light Cleanup (including D-line
 naming cleanup: plain-English names added, legacy D IDs preserved as aliases,
 production identifiers unchanged) is a docs-only governance hotfix completed
-after HF-1. Next recommended task: P-M1 dashboard_model_pipeline row
-conversion accumulator, covering the model chain from Historical Risk
-Normalization (legacy: D13) through Scenario Stress Matrix (legacy: D16).
+after HF-1.
 
 Stage 8 Portfolio Exposure Overlay v0 is complete as a downstream-only,
 privacy-preserving explanatory layer. It maps sanitized compact portfolio
@@ -457,6 +455,10 @@ is complete. DF-4c Credit OAS coverage / provider-rebuild metadata integration
 is complete. Stage DF is concluded. Stage S0 is complete, and S1 D16 Scenario
 Stress Refinement v1 is complete. HF-1 Test Runtime Hotfix is complete.
 Optional DF-4d BAA10Y D19 proxy/reference documentation is deferred unless
-explicitly requested later. Next recommended task: P-M1
-dashboard_model_pipeline `_to_dicts` accumulator optimization.
+explicitly requested later. P-M1 dashboard_model_pipeline row conversion
+accumulator optimization is complete as a behavior-preserving refactor; each
+row group is now converted to dicts once and reused through a shared
+accumulator. No model semantics, public output keys, module keys, endpoints,
+or external AI changed. Next recommended task: P-M2 dashboard_service helper
+split.
 Real AI Chat / Memo / Report integrations remain not implemented.

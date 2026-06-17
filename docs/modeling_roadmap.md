@@ -174,9 +174,13 @@ formulas/gates, Scenario Stress Matrix (legacy: D16) behavior, AI context
 rules, providers, endpoints, frontend UI, external AI, Tavily/search, live
 fetches, or live writes.
 
-Next recommended task after HF-1: P-M1 dashboard_model_pipeline row conversion
-accumulator, covering the model chain from Historical Risk Normalization
-(legacy: D13) through Scenario Stress Matrix (legacy: D16).
+P-M1 dashboard_model_pipeline row conversion accumulator: completed.
+Behavior-preserving refactor that converts each row group to dicts once and
+reuses a shared dict accumulator. No model semantics, public output keys,
+module keys, endpoints, or external AI changed. See
+`docs/p_m1_pipeline_row_conversion_accumulator.md`.
+
+Next recommended task after P-M1: P-M2 dashboard_service helper split.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

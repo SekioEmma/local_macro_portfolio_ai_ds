@@ -21,7 +21,8 @@ hotfix.
 3. HF-2 Project Namespace Index / Governance Light Cleanup (including D-line
    naming cleanup): completed.
 4. P-M1 dashboard_model_pipeline row conversion accumulator (Historical Risk
-   Normalization through Scenario Stress Matrix): next.
+   Normalization through Scenario Stress Matrix): completed.
+5. P-M2 dashboard_service helper split (M7/M8-B follow-up): next.
 
 ### P1
 
@@ -41,6 +42,7 @@ hotfix.
 - S1 D16 Scenario Stress Refinement v1.
 - HF-1 Test Runtime Hotfix / DB-backed Fixture Batching.
 - HF-2 Project Namespace Index / Governance Light Cleanup.
+- P-M1 dashboard_model_pipeline row conversion accumulator.
 
 ### Deferred
 

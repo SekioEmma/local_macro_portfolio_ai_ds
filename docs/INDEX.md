@@ -8,15 +8,12 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: HF-2 Project Namespace Index / Governance Light Cleanup
-  (including D-line naming cleanup: plain-English names added, legacy D IDs
-  preserved as aliases, production identifiers unchanged)
-- Last completed engineering task before HF-2: HF-1 Test Runtime Hotfix /
-  DB-backed Fixture Batching
-- Current immediate route: docs-only governance cleanup, then performance
-  hardening
-- Next engineering task: P-M1 dashboard_model_pipeline `_to_dicts` accumulator
-  optimization
+- Last completed task: P-M1 dashboard_model_pipeline row conversion accumulator
+  optimization (behavior-preserving; no model semantics changed)
+- Last completed governance task: HF-2 Project Namespace Index / Governance
+  Light Cleanup
+- Current immediate route: performance hardening
+- Next engineering task: P-M2 dashboard_service helper split
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -80,7 +77,7 @@ New docs prefer plain-English module names; D IDs are legacy aliases. See
 - M6: frontend display registries organized (completed)
 - M7/M8-A: dashboard model pipeline extraction (completed; remaining work in
   `docs/foundation_stabilization_backlog.md`)
-- P-M1 planned: dashboard_model_pipeline row conversion accumulator
+- P-M1 completed: dashboard_model_pipeline row conversion accumulator
   (Historical Risk Normalization through Scenario Stress Matrix)
 - P-M2 planned: dashboard_service helper split (M7/M8-B follow-up)
 - P-M3 planned: Historical Risk Normalization (legacy: D13) metadata helper
@@ -162,8 +159,7 @@ validation requirements. The short version:
 
 ## Current Backlog (ordered)
 
-1. P-M1 dashboard_model_pipeline row conversion accumulator, covering the model
-   chain from Historical Risk Normalization through Scenario Stress Matrix
+1. ~~P-M1 dashboard_model_pipeline row conversion accumulator~~ (completed)
 2. P-M2 dashboard_service helper split (M7/M8-B follow-up)
 3. P-M3 Historical Risk Normalization (legacy: D13) metadata helper split
    (factor reliability + OAS coverage out of `build_metric_payload`)
