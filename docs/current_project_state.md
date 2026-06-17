@@ -473,6 +473,13 @@ preserved in `historical_percentile_metrics.py`. No D13 formula, 5Y/3Y gate,
 exact 1095-day fallback behavior, output field, AI context eligibility,
 trigger eligibility, BAA10Y proxy/reference policy, provider, endpoint,
 frontend UI, external AI, Tavily/search, live fetch, or live write changed.
-Next recommended task: P-M4 M11 cross-request shared context cache design, or
-pause for manual review before cache work.
+P-M4-A M11 Cross-request Shared Context Cache Design Review is complete as a
+docs-first design audit. It documents the current per-call-only
+`DashboardPipelineContext`, future cache key and invalidation boundaries,
+`write_last_good` side-effect limits, privacy limits, AI Context Manifest
+consistency requirements, and M11 cache risk register. It did not implement
+runtime cache, change dashboard API behavior, alter model semantics, change AI
+Context Manifest semantics, add providers, endpoints, frontend UI, external AI,
+Tavily/search, live fetch, or live write. Next recommended task: manual review
+before any P-M4-B implementation.
 Real AI Chat / Memo / Report integrations remain not implemented.

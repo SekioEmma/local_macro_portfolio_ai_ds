@@ -24,8 +24,8 @@ hotfix.
    Normalization through Scenario Stress Matrix): completed.
 5. P-M2 dashboard_service helper split (M7/M8-B follow-up): completed.
 6. P-M3 Historical Risk Normalization metadata helper split: completed.
-7. P-M4 M11 cross-request shared context cache design, or pause for manual
-   review before cache work: next.
+7. P-M4-A M11 cross-request shared context cache design review: completed.
+8. Manual review before P-M4-B implementation: next.
 
 ### P1
 
@@ -48,6 +48,7 @@ hotfix.
 - P-M1 dashboard_model_pipeline row conversion accumulator.
 - P-M2 dashboard_service Evidence Row / AI Gate Helper Split.
 - P-M3 Historical Risk Normalization Metadata Helper Split.
+- P-M4-A M11 Cross-request Shared Context Cache Design Review.
 
 ### Deferred
 
@@ -174,8 +175,15 @@ gates, exact 1095-day fallback behavior, output fields, AI context eligibility,
 trigger eligibility, BAA10Y proxy/reference policy, providers, endpoints,
 frontend UI, external AI, Tavily/search, live fetches, or live writes.
 
-The next recommended task after P-M3 is P-M4 M11 cross-request shared context
-cache design, or pause for manual review before cache work.
+P-M4-A M11 Cross-request Shared Context Cache Design Review is completed as a
+docs-first design audit. It defines future cache key, scope, invalidation,
+`write_last_good`, privacy, AI Context Manifest, and risk-register boundaries.
+It did not implement runtime cache, change dashboard API behavior, change model
+semantics, change AI Context Manifest semantics, add providers, endpoints,
+frontend UI, external AI, Tavily/search, live fetches, or live writes.
+
+The next recommended task after P-M4-A is manual review before any P-M4-B
+implementation.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

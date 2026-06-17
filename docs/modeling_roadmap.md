@@ -200,8 +200,20 @@ eligibility, BAA10Y proxy/reference, endpoint, frontend, provider, or external
 AI behavior changed. See
 `docs/p_m3_historical_risk_normalization_metadata_split.md`.
 
-Next recommended task after P-M3: P-M4 M11 cross-request shared context cache
-design, or pause for manual review before cache work.
+P-M4-A M11 Cross-request Shared Context Cache Design Review: completed.
+Docs-first design audit for a future cross-request shared dashboard context
+cache. It documents the current per-call-only `DashboardPipelineContext`, route
+call paths, future cache key shape, invalidation triggers, `write_last_good`
+side-effect boundaries, privacy limits, AI Context Manifest consistency, and
+risk register. It does not implement runtime cache, change dashboard API
+behavior, change model semantics, alter AI Context Manifest inclusion/exclusion,
+add providers, endpoints, frontend UI, external AI, Tavily/search, live
+fetches, or live writes. See
+`docs/p_m4a_m11_shared_context_cache_design.md` and
+`docs/m11_cache_risk_register.md`.
+
+Next recommended task after P-M4-A: manual review before any P-M4-B
+implementation.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
