@@ -232,8 +232,12 @@ semantics, change AI context eligibility, persist cache to disk, add providers,
 endpoints, frontend UI, external AI, Tavily/search, live fetches, or live
 writes. See `docs/p_m4c_in_process_dashboard_cache.md`.
 
-Next recommended task after P-M4-C: P-M4-D optional AI Context Manifest cache
-review, or defer cache work and return to S2 only after explicit decision.
+P-M4-D AI Context Manifest Cache Review: completed as review-only. P-M4-C
+evidence cache already reduces warm Manifest from ~3350 ms to ~26 ms; dedicated
+Manifest cache deferred. See `docs/p_m4d_ai_context_manifest_cache_review.md`.
+
+Next recommended task: S2 Scenario Stress Matrix explanation tests / golden
+contract integration.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

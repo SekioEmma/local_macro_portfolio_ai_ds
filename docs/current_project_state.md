@@ -495,7 +495,11 @@ It bypasses custom paths and explicit `write_last_good=True` calls, returns
 defensive copies, and does not cache AI Context Manifest, persist cache to disk,
 change dashboard API schema, alter model semantics, change AI context
 eligibility, or add providers, endpoints, frontend UI, external AI,
-Tavily/search, live fetch, or live write. Next recommended task: P-M4-D
-optional AI Context Manifest cache review, or defer cache work and return to S2
-only after explicit decision.
+Tavily/search, live fetch, or live write. P-M4-D AI Context Manifest Cache
+Review is complete as a review-only decision audit. The review found that
+P-M4-C evidence cache already reduces warm Manifest calls from ~3350 ms to
+~26 ms; Manifest-specific row classification takes ~2 ms. A dedicated Manifest
+cache is deferred because the ~24 ms saving does not justify the
+stale/privacy/AI context eligibility risk. Next recommended task: S2 Scenario
+Stress Matrix explanation tests / golden contract integration.
 Real AI Chat / Memo / Report integrations remain not implemented.

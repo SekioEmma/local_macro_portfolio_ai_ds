@@ -27,13 +27,17 @@ hotfix.
 7. P-M4-A M11 cross-request shared context cache design review: completed.
 8. P-M4-B M11 cache key / file signature helpers: completed.
 9. P-M4-C In-process Summary / Evidence Cache: completed.
-10. P-M4-D optional AI Context Manifest cache review, or defer cache work and
-    return to S2 only after explicit decision: next.
+10. P-M4-D AI Context Manifest cache review: completed as review-only.
+    Implementation deferred; P-M4-C evidence cache already eliminates
+    Manifest bottleneck.
+11. S2 Scenario Stress Matrix explanation tests / golden contract integration:
+    next.
 
 ### P1
 
-1. S3 AI memo boundary template update only after S1/S2.
-2. S2 D16 scenario explanation tests / golden contract integration if needed.
+1. S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
+   integration if needed.
+2. S3 AI memo boundary template update only after S2.
 
 ### Completed
 
@@ -54,6 +58,7 @@ hotfix.
 - P-M4-A M11 Cross-request Shared Context Cache Design Review.
 - P-M4-B M11 Cache Key / File Signature Helpers.
 - P-M4-C In-process Summary / Evidence Cache.
+- P-M4-D AI Context Manifest Cache Review (review-only; implementation deferred).
 
 ### Deferred
 
@@ -204,9 +209,11 @@ change dashboard API schema, change model semantics, change AI context
 eligibility, change `write_last_good`, add providers, endpoints, frontend UI,
 external AI, Tavily/search, live fetches, or live writes.
 
-The next recommended task after P-M4-C is P-M4-D optional AI Context Manifest
-cache review, or defer cache work and return to S2 only after explicit
-decision.
+P-M4-D AI Context Manifest Cache Review is completed as a review-only decision
+audit. The review found that P-M4-C evidence cache already eliminates the
+Manifest bottleneck (warm Manifest ~26 ms; Manifest-specific work ~2 ms).
+Implementation is deferred. The next recommended task is S2 Scenario Stress
+Matrix explanation tests / golden contract integration.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

@@ -8,13 +8,14 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: P-M4-C In-process Summary / Evidence Cache
-  (summary + unfiltered evidence only; no Manifest cache)
+- Last completed task: P-M4-D AI Context Manifest Cache Review (review-only;
+  implementation deferred because P-M4-C evidence cache already eliminates
+  the Manifest bottleneck)
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: performance hardening
-- Next engineering task: P-M4-D optional AI Context Manifest cache review, or
-  defer cache work and return to S2 only after explicit decision
+- Current immediate route: return to S-line scenario/explanation work
+- Next engineering task: S2 Scenario Stress Matrix explanation tests / golden
+  contract integration
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -169,10 +170,10 @@ validation requirements. The short version:
    (completed; design-only)
 5. ~~P-M4-B M11 cache key / file signature helpers~~ (completed)
 6. ~~P-M4-C In-process Summary / Evidence Cache~~ (completed)
-7. P-M4-D optional AI Context Manifest cache review, or defer cache work and
-   return to S2 only after explicit decision
+7. ~~P-M4-D AI Context Manifest cache review~~ (completed as review-only;
+   implementation deferred)
 8. S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
-   integration (only after explicit decision)
+   integration: next
 9. S3 AI memo boundary template update (only after S2)
 10. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)

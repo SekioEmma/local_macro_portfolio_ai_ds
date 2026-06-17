@@ -9,8 +9,15 @@ tests that private report contents are excluded from key payloads and digests.
 P-M4-C adds the initial in-process summary/unfiltered-evidence cache. It covers
 the implementation-phase tests for report/DB signature invalidation,
 `write_last_good` bypass, custom path bypass, filtered-table non-poisoning,
-defensive copies, and absence of public cache diagnostics. AI Context Manifest
-cache remains unimplemented and still requires separate P-M4-D review.
+defensive copies, and absence of public cache diagnostics.
+
+P-M4-D completed as a review-only decision audit. The review found that P-M4-C
+evidence cache already reduces warm Manifest calls from ~3350 ms to ~26 ms.
+Manifest-specific row classification takes ~2 ms. Implementation of a dedicated
+Manifest cache is deferred because the benefit (~24 ms) does not justify the
+stale/privacy/AI context eligibility risk. The "AI Context Manifest
+inclusion/exclusion drift" risk row below remains relevant for any future
+reconsideration.
 
 | Risk | Failure Mode | Impact | Mitigation | Test Required Before Implementation |
 |---|---|---|---|---|
