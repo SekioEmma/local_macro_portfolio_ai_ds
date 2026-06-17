@@ -52,6 +52,9 @@ Roadmap Reconciliation is complete. S1 D16 Scenario Stress Refinement v1 is
 complete. HF-1 Test Runtime Hotfix / DB-backed Fixture Batching is complete.
 Optional DF-4d BAA10Y reference documentation is deferred unless explicitly
 requested later.
+Data Foundation Gap Fill v1 is completed after the Phase F/G dashboard service
+refactor as an offline source-registry, audit, tests, and governance-doc task
+before frontend work.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage 9 Chat / Memo / Report productization remains
@@ -565,5 +568,12 @@ portfolio compact privacy boundary, cache semantic, `write_last_good` behavior,
 provider, endpoint, frontend UI, external AI, Tavily/search, live fetch/write,
 prediction/probability output, return estimate, allocation output, or trading
 advice changed.
-Next recommended task: manual review / route decision.
+Data Foundation Gap Fill v1 is complete as an offline source-gated cleanup
+before frontend work. It updates the PPI Final Demand source tier, adds the
+read-only `audit_data_foundation_gaps.py` CLI, locks D14 source mappings,
+keeps `ofr_fsi`, valuation, FedWatch, and BAA reference-only boundaries gated,
+and records the validation plan in `docs/data_foundation_gap_fill_v1.md`.
+Next recommended task: manual local data refresh only with explicit user
+approval, or UI-0/UI-1 frontend data-display work using existing backend APIs
+and source gates.
 Real AI Chat / Memo / Report integrations remain not implemented.

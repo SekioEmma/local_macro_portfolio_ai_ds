@@ -382,8 +382,9 @@ data_quality:
   ppi_final_demand:
     expected_frequency: "monthly"
     max_stale_days: 75
-    source_tier: "research_needed"
+    source_tier: "official_or_public_data_api"
     importance: "deepseek_market_data_package"
+    definition_note: "PPI final demand uses FRED PPIFIS / official final demand PPI index. It is distinct from PPIACO. Index level must not be treated as YoY; YoY requires historical comparison and sufficient PPIFIS observations."
   wti_oil:
     expected_frequency: "daily"
     max_stale_days: 7

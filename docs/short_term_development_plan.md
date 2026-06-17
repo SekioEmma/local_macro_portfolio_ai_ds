@@ -11,6 +11,8 @@ Refinement v1 (legacy: D16) is completed. HF-1 Test Runtime Hotfix is
 completed after S1. HF-2 Project Namespace Index / Governance Light Cleanup
 (including D-line naming cleanup) is completed as a docs-only governance
 hotfix.
+Data Foundation Gap Fill v1 is completed as an offline source-registry,
+audit, tests, and docs task before frontend work.
 
 ## Priority Route
 
@@ -38,7 +40,10 @@ hotfix.
     extraction: completed.
 15. Phase F2 extract dashboard metric builder: completed.
 16. Phase F/G complete remaining dashboard_service refactor: completed.
-17. Manual review / route decision: next.
+17. Data Foundation Gap Fill v1 source-gated cleanup before frontend:
+    completed.
+18. Manual local data refresh approval or UI-0/UI-1 frontend data-display
+    route: next.
 
 ### P1
 
@@ -70,6 +75,7 @@ hotfix.
 - Phase F1 Dashboard Metric Characterization Tests.
 - Phase F2 Dashboard Metric Builder Extraction.
 - Phase F/G Dashboard Service Refactor Completion.
+- Data Foundation Gap Fill v1.
 
 ### Deferred
 
@@ -171,9 +177,11 @@ Stress Matrix semantics, support/severity/uncertainty logic, public keys, AI
 Context Manifest semantics, AI memo schema, endpoints, frontend UI, external
 AI, Tavily/search, live fetches, or live writes.
 
-The next recommended task after S3 is manual review / route decision. Do not
-automatically proceed to AI Chat, Tavily, frontend AI UI, or external AI
-productization.
+S3 was followed by dashboard-service refactor completion and Data Foundation
+Gap Fill v1. The current next route is manual local data refresh only with
+explicit user approval, or UI-0/UI-1 frontend data-display work using existing
+backend APIs and source gates. Do not automatically proceed to AI Chat, Tavily,
+frontend AI UI, or external AI productization.
 
 HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
 test fixtures and benchmark result reuse only; it did not change model
@@ -283,7 +291,20 @@ providers, endpoints, frontend UI, external AI, live fetches, live writes,
 prediction, probability, return, allocation, or trading outputs. See
 `docs/dashboard_service_refactor_phase_fg_completion.md`.
 
-The next recommended task after Phase F/G is manual review / route decision.
+Data Foundation Gap Fill v1 is completed as an offline source-gated cleanup
+before frontend work. It reclassifies the already verified FRED `PPIFIS` PPI
+Final Demand registry entry, adds a read-only source-governance audit CLI,
+locks D14 liquidity/funding source mappings, keeps `ofr_fsi` research-gated,
+keeps valuation and FedWatch outside the factual layer, and preserves BAA10Y /
+BAA10YM as reference-only credit proxy series. It does not change production
+model semantics, dashboard APIs, frontend, endpoints, AI context behavior,
+providers, live fetches, live writes, external AI, prediction/probability
+outputs, or trading/allocation language. See
+`docs/data_foundation_gap_fill_v1.md`.
+
+The next recommended task after Data Foundation Gap Fill v1 is manual local
+data refresh only with explicit user approval, or UI-0/UI-1 frontend
+data-display work using existing backend APIs and source gates.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

@@ -301,7 +301,21 @@ frontend, external AI, live fetch/write, prediction/probability, return,
 allocation, or trading behavior changed. See
 `docs/dashboard_service_refactor_phase_fg_completion.md`.
 
-Next recommended task after Phase F/G: manual review / route decision.
+Data Foundation Gap Fill v1: completed.
+Offline source-gated cleanup before frontend work. It updates the already
+verified FRED `PPIFIS` PPI Final Demand registry tier, keeps PPI Final Demand
+separate from `PPIACO`, keeps YoY history-gated, adds a read-only source
+governance audit CLI, locks D14 liquidity/funding source mappings, keeps
+`ofr_fsi` research-gated, keeps valuation and FedWatch out of the factual
+layer, and preserves BAA10Y / BAA10YM as reference-only credit proxy series.
+No production model semantics, dashboard APIs, endpoints, frontend, AI context
+behavior, providers, live fetches, live writes, external AI,
+prediction/probability, return, allocation, or trading behavior changed. See
+`docs/data_foundation_gap_fill_v1.md`.
+
+Next recommended task after Data Foundation Gap Fill v1: manual local data
+refresh only with explicit user approval, or UI-0/UI-1 frontend data-display
+work using existing backend APIs and source gates.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

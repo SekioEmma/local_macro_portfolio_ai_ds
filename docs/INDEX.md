@@ -8,11 +8,13 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: Phase F/G Dashboard Service Refactor Completion
+- Last completed task: Data Foundation Gap Fill v1
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: manual review / route decision
-- Next engineering task: none selected; choose next route manually
+- Current immediate route: manual local data refresh approval or UI-0/UI-1
+  frontend data-display route
+- Next engineering task: choose between explicit-approved local data refresh
+  and source-gated frontend display work
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -96,6 +98,8 @@ New docs prefer plain-English module names; D IDs are legacy aliases. See
 - DF-4c: Credit OAS coverage / provider-rebuild metadata (completed)
 - DF-4d: BAA10Y D19 proxy/reference documentation (deferred unless explicitly
   requested)
+- Data Foundation Gap Fill v1: source-gated registry cleanup before frontend
+  work (completed; offline audit/tests/docs only)
 
 Stage DF is concluded. No default DF-5.
 
@@ -138,6 +142,7 @@ Stage DF is concluded. No default DF-5.
 | `docs/short_term_development_plan.md` | immediate route and next task |
 | `docs/current_project_state.md` | detailed project state and completed baseline |
 | `docs/modeling_roadmap.md` | modeling-history narrative and module boundaries |
+| `docs/data_foundation_gap_fill_v1.md` | G0 source-gated registry cleanup and validation |
 | `docs/foundation_stabilization_backlog.md` | M-line backlog (M7-M12) |
 | stage-specific closeout docs | per-stage evidence and contract |
 
@@ -178,8 +183,9 @@ validation requirements. The short version:
     extraction~~ (completed)
 12. ~~Phase F2 extract dashboard metric builder~~ (completed)
 13. ~~Phase F/G complete remaining dashboard_service refactor~~ (completed)
-14. Manual review / route decision
-15. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+14. ~~Data Foundation Gap Fill v1 source-gated cleanup~~ (completed)
+15. Manual local data refresh approval or UI-0/UI-1 frontend data-display route
+16. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,
