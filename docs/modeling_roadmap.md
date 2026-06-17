@@ -189,8 +189,19 @@ compatibility aliases. No model semantics, public keys, schemas, AI context
 semantics, endpoints, frontend UI, providers, or external AI changed. See
 `docs/p_m2_dashboard_service_helper_split.md`.
 
-Next recommended task after P-M2: P-M3 Historical Risk Normalization metadata
-helper split.
+P-M3 Historical Risk Normalization Metadata Helper Split: completed.
+Behavior-preserving helper extraction that moves reliability/divergence
+metadata, method agreement/alignment, credit OAS coverage metadata, provider
+rebuild status, OAS substitution policy, and current-level availability to
+`historical_percentile_metadata.py`. `historical_percentile_metrics.py` keeps
+private compatibility aliases. No percentile, z-score, robust-z, 5Y/3Y gate,
+exact 1095-day fallback, output field, AI context eligibility, trigger
+eligibility, BAA10Y proxy/reference, endpoint, frontend, provider, or external
+AI behavior changed. See
+`docs/p_m3_historical_risk_normalization_metadata_split.md`.
+
+Next recommended task after P-M3: P-M4 M11 cross-request shared context cache
+design, or pause for manual review before cache work.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

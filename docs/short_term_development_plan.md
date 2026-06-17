@@ -23,7 +23,9 @@ hotfix.
 4. P-M1 dashboard_model_pipeline row conversion accumulator (Historical Risk
    Normalization through Scenario Stress Matrix): completed.
 5. P-M2 dashboard_service helper split (M7/M8-B follow-up): completed.
-6. P-M3 Historical Risk Normalization metadata helper split: next.
+6. P-M3 Historical Risk Normalization metadata helper split: completed.
+7. P-M4 M11 cross-request shared context cache design, or pause for manual
+   review before cache work: next.
 
 ### P1
 
@@ -45,6 +47,7 @@ hotfix.
 - HF-2 Project Namespace Index / Governance Light Cleanup.
 - P-M1 dashboard_model_pipeline row conversion accumulator.
 - P-M2 dashboard_service Evidence Row / AI Gate Helper Split.
+- P-M3 Historical Risk Normalization Metadata Helper Split.
 
 ### Deferred
 
@@ -162,8 +165,17 @@ compatibility aliases in `dashboard_service.py`. It did not change model
 semantics, public keys, schemas, AI context semantics, providers, endpoints,
 frontend UI, external AI, Tavily/search, live fetches, or live writes.
 
-The next recommended task after P-M2 is P-M3 Historical Risk Normalization
-metadata helper split.
+P-M3 Historical Risk Normalization Metadata Helper Split is completed as a
+behavior-preserving extraction. It moved reliability/divergence metadata and
+credit OAS coverage/provider-rebuild metadata helpers into
+`historical_percentile_metadata.py`, while preserving compatibility aliases in
+`historical_percentile_metrics.py`. It did not change D13 formulas, 5Y/3Y
+gates, exact 1095-day fallback behavior, output fields, AI context eligibility,
+trigger eligibility, BAA10Y proxy/reference policy, providers, endpoints,
+frontend UI, external AI, Tavily/search, live fetches, or live writes.
+
+The next recommended task after P-M3 is P-M4 M11 cross-request shared context
+cache design, or pause for manual review before cache work.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

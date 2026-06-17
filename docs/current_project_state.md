@@ -464,6 +464,15 @@ Split is complete as a behavior-preserving helper extraction; evidence row
 construction and AI context gate policy now live in
 `dashboard_evidence_policy.py`, with private compatibility aliases preserved
 in `dashboard_service.py`. No model semantics, public keys, schemas, AI context
-semantics, endpoints, frontend UI, providers, or external AI changed. Next
-recommended task: P-M3 Historical Risk Normalization metadata helper split.
+semantics, endpoints, frontend UI, providers, or external AI changed. P-M3
+Historical Risk Normalization Metadata Helper Split is complete as a
+behavior-preserving extraction; reliability/divergence metadata and credit OAS
+coverage/provider-rebuild helpers now live in
+`historical_percentile_metadata.py`, with private compatibility aliases
+preserved in `historical_percentile_metrics.py`. No D13 formula, 5Y/3Y gate,
+exact 1095-day fallback behavior, output field, AI context eligibility,
+trigger eligibility, BAA10Y proxy/reference policy, provider, endpoint,
+frontend UI, external AI, Tavily/search, live fetch, or live write changed.
+Next recommended task: P-M4 M11 cross-request shared context cache design, or
+pause for manual review before cache work.
 Real AI Chat / Memo / Report integrations remain not implemented.
