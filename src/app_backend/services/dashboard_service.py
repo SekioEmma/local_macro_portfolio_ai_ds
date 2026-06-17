@@ -27,6 +27,13 @@ from app_backend.services.dashboard_filters import (
     apply_evidence_filters,
     evidence_row_matches,
 )
+from app_backend.services.dashboard_report_loader import (
+    OPTIONAL_METADATA_REPORT_FILES,
+    REPORT_FILES,
+    ReportState,
+    load_dashboard_reports as _load_dashboard_reports,
+    load_report as _load_report,
+)
 from app_backend.services import provider_service
 from app_backend.services.dashboard_evidence_policy import (
     AI_BLOCKED_FRESHNESS_STATUSES,
@@ -63,15 +70,6 @@ DASHBOARD_MODULE_KEYS = (
     "market_stress_derived",
     "portfolio_deviation",
 )
-REPORT_FILES = {
-    "market_snapshot": "market_snapshot.json",
-    "market_temperature": "market_temperature.json",
-    "portfolio_snapshot": "portfolio_snapshot.json",
-    "provider_health": "provider_health_check.json",
-}
-OPTIONAL_METADATA_REPORT_FILES = {
-    "llm_context_pack": "llm_context_pack.json",
-}
 DASHBOARD_CONTEXT_CACHE_SCHEMA_MARKER = "m11-dashboard-summary-evidence-cache-v1"
 _SHARED_DASHBOARD_CONTEXT_CACHE = SharedDashboardContextCache()
 ALLOWED_METRIC_STATUSES = {
@@ -550,15 +548,6 @@ PORTFOLIO_COMPACT_INTERPRETATION_HINT = (
 
 
 @dataclass(frozen=True)
-class ReportState:
-    name: str
-    path: Path
-    exists: bool
-    data: dict[str, Any] | None = None
-    error_summary: str | None = None
-
-
-@dataclass(frozen=True)
 class PortfolioDeviationCompact:
     generated_at: str | None
     holdings_updated_at: str | None
@@ -869,40 +858,6 @@ def _resolved_path(path: Path | str) -> Path:
         return target.resolve(strict=False)
     except OSError:
         return target.absolute()
-
-
-def _load_dashboard_reports(base_dir: Path) -> dict[str, ReportState]:
-    reports = {
-        key: _load_report(key, base_dir / file_name)
-        for key, file_name in REPORT_FILES.items()
-    }
-    for key, file_name in OPTIONAL_METADATA_REPORT_FILES.items():
-        path = base_dir / file_name
-        if path.exists():
-            reports[key] = _load_report(key, path)
-    return reports
-
-
-def _load_report(name: str, path: Path) -> ReportState:
-    if not path.exists():
-        return ReportState(name=name, path=path, exists=False)
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-        return ReportState(
-            name=name,
-            path=path,
-            exists=True,
-            error_summary=f"{path.name} is invalid or unreadable",
-        )
-    if not isinstance(payload, dict):
-        return ReportState(
-            name=name,
-            path=path,
-            exists=True,
-            error_summary=f"{path.name} is not a JSON object",
-        )
-    return ReportState(name=name, path=path, exists=True, data=payload)
 
 
 def _dashboard_market_history_db_path(
