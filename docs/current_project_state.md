@@ -480,6 +480,12 @@ docs-first design audit. It documents the current per-call-only
 consistency requirements, and M11 cache risk register. It did not implement
 runtime cache, change dashboard API behavior, alter model semantics, change AI
 Context Manifest semantics, add providers, endpoints, frontend UI, external AI,
-Tavily/search, live fetch, or live write. Next recommended task: manual review
-before any P-M4-B implementation.
+Tavily/search, live fetch, or live write. P-M4-B M11 Cache Key / File Signature
+Helpers is complete as a production helper foundation. It added deterministic
+path/file-signature and digest helpers plus cache bypass reason policy only. It
+did not implement runtime cache, wire routes, change dashboard service behavior,
+alter `write_last_good`, read report contents into keys, open SQLite contents,
+change AI Context Manifest semantics, add providers, endpoints, frontend UI,
+external AI, Tavily/search, live fetch, or live write. Next recommended task:
+manual review before any P-M4-C implementation.
 Real AI Chat / Memo / Report integrations remain not implemented.

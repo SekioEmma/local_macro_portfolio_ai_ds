@@ -215,6 +215,10 @@ local dashboard/context services.
 - Add tests for file signatures, custom path keying, and forbidden private
   payload inputs.
 
+Status: completed. P-M4-B added deterministic cache key and file signature
+helpers only. No runtime cache, route integration, summary/evidence/manifest
+caching, or `write_last_good` behavior change was implemented.
+
 ### P-M4-C
 
 - Cache summary and unfiltered evidence table in process.

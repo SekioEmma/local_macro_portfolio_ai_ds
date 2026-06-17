@@ -212,7 +212,16 @@ fetches, or live writes. See
 `docs/p_m4a_m11_shared_context_cache_design.md` and
 `docs/m11_cache_risk_register.md`.
 
-Next recommended task after P-M4-A: manual review before any P-M4-B
+P-M4-B M11 Cache Key / File Signature Helpers: completed.
+Production helper foundation for future cache work. It adds deterministic file
+signature, dashboard cache key payload/digest, and cache bypass reason helpers.
+It does not implement runtime cache, wire FastAPI routes, change dashboard
+service behavior, alter `write_last_good`, read report contents into cache
+keys, open SQLite contents, change AI Context Manifest semantics, or add
+providers, endpoints, frontend UI, external AI, Tavily/search, live fetches, or
+live writes. See `docs/p_m4b_cache_key_file_signature_helpers.md`.
+
+Next recommended task after P-M4-B: manual review before any P-M4-C
 implementation.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,

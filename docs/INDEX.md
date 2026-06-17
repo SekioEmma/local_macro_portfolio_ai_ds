@@ -8,12 +8,12 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: P-M4-A M11 shared context cache design review
-  (design-only; no runtime cache implemented)
+- Last completed task: P-M4-B M11 cache key / file signature helpers
+  (helper-only; no runtime cache implemented)
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
 - Current immediate route: performance hardening
-- Next engineering task: manual review before P-M4-B implementation
+- Next engineering task: manual review before P-M4-C implementation
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -83,7 +83,8 @@ New docs prefer plain-English module names; D IDs are legacy aliases. See
 - P-M3 completed: Historical Risk Normalization (legacy: D13) metadata helper
   split (reliability/divergence and OAS coverage helpers extracted)
 - P-M4-A completed: M11 cross-request shared context cache design review
-- P-M4-B planned: cache key / file signature helpers after manual review
+- P-M4-B completed: cache key / file signature helpers
+- P-M4-C planned: in-process summary/evidence cache after manual review
 
 ### DF-line: Data Foundation / Historical Evidence (concluded)
 
@@ -165,11 +166,12 @@ validation requirements. The short version:
    (completed)
 4. ~~P-M4-A M11 cross-request shared context cache design review~~
    (completed; design-only)
-5. Manual review before P-M4-B implementation
-6. S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
+5. ~~P-M4-B M11 cache key / file signature helpers~~ (completed)
+6. Manual review before P-M4-C implementation
+7. S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
    integration (only after explicit decision)
-7. S3 AI memo boundary template update (only after S2)
-8. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+8. S3 AI memo boundary template update (only after S2)
+9. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,

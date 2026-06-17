@@ -3,6 +3,11 @@
 This register supports P-M4-A design review only. No runtime cache is
 implemented by this document.
 
+P-M4-B adds deterministic cache key and file signature helpers only. It includes
+tests that private report contents are excluded from key payloads and digests;
+runtime cache risks below still require implementation-phase tests before any
+P-M4-C cache is wired in.
+
 | Risk | Failure Mode | Impact | Mitigation | Test Required Before Implementation |
 |---|---|---|---|---|
 | stale report cache | A report JSON changes after a cache key is created, but the cached summary/evidence table remains served. | Dashboard and AI Context Manifest can show outdated status, source, or freshness information. | Include required report file mtimes and sizes in the cache key; invalidate on any signature change. | Modify a report fixture between calls and assert cache invalidation plus identical uncached output after rebuild. |

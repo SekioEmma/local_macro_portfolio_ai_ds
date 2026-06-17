@@ -25,7 +25,8 @@ hotfix.
 5. P-M2 dashboard_service helper split (M7/M8-B follow-up): completed.
 6. P-M3 Historical Risk Normalization metadata helper split: completed.
 7. P-M4-A M11 cross-request shared context cache design review: completed.
-8. Manual review before P-M4-B implementation: next.
+8. P-M4-B M11 cache key / file signature helpers: completed.
+9. Manual review before P-M4-C implementation: next.
 
 ### P1
 
@@ -49,6 +50,7 @@ hotfix.
 - P-M2 dashboard_service Evidence Row / AI Gate Helper Split.
 - P-M3 Historical Risk Normalization Metadata Helper Split.
 - P-M4-A M11 Cross-request Shared Context Cache Design Review.
+- P-M4-B M11 Cache Key / File Signature Helpers.
 
 ### Deferred
 
@@ -182,7 +184,14 @@ It did not implement runtime cache, change dashboard API behavior, change model
 semantics, change AI Context Manifest semantics, add providers, endpoints,
 frontend UI, external AI, Tavily/search, live fetches, or live writes.
 
-The next recommended task after P-M4-A is manual review before any P-M4-B
+P-M4-B M11 Cache Key / File Signature Helpers is completed as a production
+helper foundation. It added deterministic path/file-signature and digest helpers
+plus cache bypass reason policy only. It did not implement runtime cache, wire
+routes, change dashboard service behavior, change `write_last_good`, read report
+contents into keys, open SQLite contents, or add providers, endpoints, frontend
+UI, external AI, Tavily/search, live fetches, or live writes.
+
+The next recommended task after P-M4-B is manual review before any P-M4-C
 implementation.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
