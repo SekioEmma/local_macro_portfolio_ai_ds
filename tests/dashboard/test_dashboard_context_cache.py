@@ -89,7 +89,7 @@ def test_cache_invalidates_on_market_history_db_stat_change(tmp_path):
     assert cache.get(second_key.digest) is None
 
 
-def test_write_last_good_true_bypasses_shared_cache(monkeypatch, tmp_path):
+def test_write_last_good_uses_cache_but_still_saves(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     _install_default_reports(monkeypatch, tmp_path)
     calls = _count_pipeline_builds(monkeypatch)
@@ -105,7 +105,7 @@ def test_write_last_good_true_bypasses_shared_cache(monkeypatch, tmp_path):
     dashboard_service.build_dashboard_evidence_table(write_last_good=True)
     dashboard_service.build_dashboard_evidence_table(write_last_good=True)
 
-    assert calls["count"] == 3
+    assert calls["count"] == 1
     assert saves["count"] == 2
 
 

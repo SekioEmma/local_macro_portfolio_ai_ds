@@ -17,12 +17,13 @@ T = TypeVar("T")
 class CachedDashboardContext:
     key_digest: str
     summary: DashboardSummaryResponse
-    unfiltered_evidence_table: DashboardEvidenceTableResponse
+    unfiltered_evidence_table: DashboardEvidenceTableResponse | None = None
 
 
 class SharedDashboardContextCache:
     def __init__(self) -> None:
         self._lock = RLock()
+        self._build_lock = RLock()
         self._cached: CachedDashboardContext | None = None
 
     def get(self, key_digest: str) -> CachedDashboardContext | None:
@@ -39,6 +40,10 @@ class SharedDashboardContextCache:
         with self._lock:
             self._cached = None
 
+    @property
+    def build_lock(self) -> RLock:
+        return self._build_lock
+
 
 def _copy_model(value: T) -> T:
     if hasattr(value, "model_copy"):
@@ -50,5 +55,9 @@ def _copy_cached_context(item: CachedDashboardContext) -> CachedDashboardContext
     return CachedDashboardContext(
         key_digest=item.key_digest,
         summary=_copy_model(item.summary),
-        unfiltered_evidence_table=_copy_model(item.unfiltered_evidence_table),
+        unfiltered_evidence_table=(
+            _copy_model(item.unfiltered_evidence_table)
+            if item.unfiltered_evidence_table is not None
+            else None
+        ),
     )
