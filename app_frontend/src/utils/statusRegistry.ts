@@ -3,6 +3,7 @@ export const statusLabels: Record<string, string> = {
   watch: "观察",
   pressure: "承压",
   stress: "压力显著",
+  mixed: "混合",
   missing: "缺失",
   unknown: "未知",
   insufficient_history: "历史不足",
