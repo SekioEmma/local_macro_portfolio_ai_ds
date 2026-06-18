@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  fetchAIContextManifest,
   fetchDashboardEvidenceTable,
   fetchDashboardSummary,
   fetchFavorites,
@@ -9,10 +10,13 @@ import {
   fetchStatus,
   fetchStorageStatus
 } from "./api/client";
+import { AIContextPreviewPage } from "./components/AIContextPreviewPage";
 import { DashboardHomepage } from "./components/DashboardHomepage";
+import { EvidenceAuditPage } from "./components/EvidenceAuditPage";
 import type { AppViewKey } from "./components/AppShell";
 import type {
   ApiResult,
+  AIContextManifestResponse,
   AppSettingsResponse,
   DashboardEvidenceFilters,
   DashboardEvidenceRow,
@@ -77,6 +81,9 @@ export default function App() {
   const [dashboard, setDashboard] = useState<
     ApiResult<DashboardSummaryResponse>
   >({ data: null, error: null });
+  const [manifest, setManifest] = useState<
+    ApiResult<AIContextManifestResponse>
+  >({ data: null, error: null });
   const [evidence, setEvidence] = useState<
     ApiResult<DashboardEvidenceTableResponse>
   >({ data: null, error: null });
@@ -110,6 +117,7 @@ export default function App() {
       fetchStatus(),
       fetchProviderHealth(),
       fetchDashboardSummary(),
+      fetchAIContextManifest(),
       fetchDashboardEvidenceTable(),
       fetchDashboardEvidenceTable(toApiEvidenceFilters(nextEvidenceFilters)),
       fetchStorageStatus(),
@@ -122,6 +130,7 @@ export default function App() {
           statusResult,
           providerResult,
           dashboardResult,
+          manifestResult,
           evidenceResult,
           filteredEvidenceResult,
           storageResult,
@@ -132,6 +141,7 @@ export default function App() {
           setStatus(statusResult);
           setProviderHealth(providerResult);
           setDashboard(dashboardResult);
+          setManifest(manifestResult);
           setEvidence(evidenceResult);
           setFilteredEvidence(filteredEvidenceResult);
           setStorage(storageResult);
@@ -182,17 +192,10 @@ export default function App() {
           />
         )}
         {activeView === "evidence" && (
-          <EvidenceTableView
+          <EvidenceAuditPage
             evidence={filteredEvidence}
-            filters={evidenceFilters}
+            manifest={manifest}
             isLoading={isLoading}
-            onFiltersChange={(nextFilters) => {
-              setEvidenceFilters(nextFilters);
-              setIsLoading(true);
-              fetchDashboardEvidenceTable(toApiEvidenceFilters(nextFilters))
-                .then(setFilteredEvidence)
-                .finally(() => setIsLoading(false));
-            }}
           />
         )}
         {activeView === "scenario" && (
@@ -208,9 +211,11 @@ export default function App() {
           />
         )}
         {activeView === "ai-context" && (
-          <PlaceholderView
-            title="AI 记忆（只读）"
-            text="当前页面只用于受控上下文预览，不发送数据、不调用外部模型或搜索，也不保存对话。"
+          <AIContextPreviewPage
+            dashboard={dashboard}
+            evidence={evidence}
+            isLoading={isLoading}
+            manifest={manifest}
           />
         )}
         {activeView === "portfolio" && (

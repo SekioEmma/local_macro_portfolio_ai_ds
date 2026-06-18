@@ -50,7 +50,7 @@ export function fetchDashboardEvidenceTable(
 export function fetchAIContextManifest(): Promise<
   ApiResult<AIContextManifestResponse>
 > {
-  return requestJson<AIContextManifestResponse>("/api/ai/context-preview");
+  return requestJson<AIContextManifestResponse>("/api/context/manifest");
 }
 
 export function fetchStorageStatus(): Promise<ApiResult<StorageStatusResponse>> {
