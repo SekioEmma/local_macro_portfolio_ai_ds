@@ -50,7 +50,14 @@ remains local and uncommitted.
     only.
 20. UI-1 Dashboard homepage data-display polish using existing backend APIs
     and source gates only: next.
-21. G2 official-source refresh-command implementation: only if remaining
+21. AI-1a backend foundation for AI Context Manifest consumption (evidence
+    cards, priority ranking, financial semantic validator): completed as
+    additive local primitives; not yet wired into preview service.
+22. AI-1b wire AI-1a primitives into preview service and Chinese-ify memo
+    section content: deferred to CODEX as a separate L3 task.
+23. AI-1c frontend Evidence Cards / Semantic Validator panels and Prompt
+    Preview page: deferred to CODEX, follows AI-1b.
+24. G2 official-source refresh-command implementation: only if remaining
     history gaps block UI work and the user explicitly approves it.
 
 ### P1

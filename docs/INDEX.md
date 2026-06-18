@@ -150,6 +150,7 @@ Stage DF is concluded. No default DF-5.
 | `docs/data_foundation_gap_fill_v1.md` | G0 source-gated registry cleanup and validation |
 | `docs/data_foundation_local_refresh_g1.md` | G1 controlled local refresh evidence and remaining coverage gaps |
 | `docs/frontend_information_architecture_audit.md` | UI-0 frontend shell, page, API-contract, placeholder, and display-gap audit |
+| `docs/ai_1a_card_priority_semantic_foundation.md` | AI-1a backend primitives: evidence cards, priority ranking, financial semantic validator (not yet wired into preview service) |
 | `docs/foundation_stabilization_backlog.md` | M-line backlog (M7-M12) |
 | `docs/frontend_baseline_pre_redesign.md` | Frontend stack / route / API / token snapshot before Era 1 redesign |
 | stage-specific closeout docs | per-stage evidence and contract |
@@ -196,11 +197,18 @@ validation requirements. The short version:
     (completed)
 16. ~~UI-0 Frontend Information Architecture Audit~~ (completed; docs/audit
     only)
-17. UI-1 Dashboard homepage data-display polish using existing backend APIs
+17. ~~AI-1a backend foundation for AI Context Manifest consumption -
+    evidence cards, priority ranking, financial semantic validator~~
+    (completed; new local primitives, not yet wired into preview service)
+18. UI-1 Dashboard homepage data-display polish using existing backend APIs
     and source gates only
-18. G2 official-source refresh-command implementation only with explicit
+19. AI-1b Wire AI-1a primitives into preview service: schema extension,
+    Chinese-ify memo templates, contract test updates
+20. AI-1c Frontend Evidence Cards / Semantic Validator panels and Prompt
+    Preview page
+21. G2 official-source refresh-command implementation only with explicit
     approval if the remaining history gaps block UI work
-19. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+22. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,
