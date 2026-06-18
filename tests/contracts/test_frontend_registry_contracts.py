@@ -1,80 +1,180 @@
+"""Frontend registry contract tests (semantic form).
+
+These tests assert structural invariants between the backend ModelRegistry
+and the frontend display registries, instead of pinning literal source
+strings. The previous version asserted exact JSX / import / label strings,
+which blocked any non-trivial refactor of the frontend. Keep these checks
+implementation-agnostic so a frontend redesign can change file structure,
+component names, and import paths without breaking the contract.
+
+What is enforced:
+- Every backend model_output module key has a label entry and an
+  interpretation boundary entry in moduleRegistry.ts.
+- Every model_output public output key has a label entry in
+  metricRegistry.ts (so the UI never shows a raw key).
+- displayLabels.ts exposes the expected helper functions and pulls from
+  the registry files (no inline label tables).
+- ModuleDetailDrawer reads boundary text from the registry helper rather
+  than defining its own boundary table.
+- No frontend source file contains raw provider / raw holdings payload
+  identifiers (privacy guard).
+
+What is NOT enforced anymore:
+- Exact literal lines of TS source.
+- Specific Chinese / English label text.
+- File names of frontend components (registry helpers must exist by name
+  but the components that consume them may move).
+"""
+
+from __future__ import annotations
+
+import re
 from pathlib import Path
 
 from modeling.model_registry import ModelRegistry
 
 
 FRONTEND_SRC = Path("app_frontend/src")
+MODULE_REGISTRY_PATH = FRONTEND_SRC / "utils/moduleRegistry.ts"
+METRIC_REGISTRY_PATH = FRONTEND_SRC / "utils/metricRegistry.ts"
+DISPLAY_LABELS_PATH = FRONTEND_SRC / "utils/displayLabels.ts"
+MODULE_DRAWER_PATH = FRONTEND_SRC / "components/ModuleDetailDrawer.tsx"
 
 
-def test_frontend_registry_preserves_required_labels_and_boundaries():
-    module_registry = (FRONTEND_SRC / "utils/moduleRegistry.ts").read_text(encoding="utf-8")
-    metric_registry = (FRONTEND_SRC / "utils/metricRegistry.ts").read_text(encoding="utf-8")
+_LABEL_ENTRY_RE = re.compile(
+    r"""(?P<key>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*["'][^"']+["']"""
+)
 
-    assert 'financial_stress_composite: "Financial stress composite"' in module_registry
-    assert (
-        'growth_inflation_macro_pack: "Growth/inflation macro pack"'
-        in module_registry
+
+def _read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def _keys_in_block(text: str, block_name: str) -> set[str]:
+    """Return the set of object keys declared inside any object literal
+    whose identifier matches `block_name`. Handles both
+    `const X: Type = { ... };` and `Object.assign(X, { ... });` forms,
+    accumulating across multiple declarations.
+    """
+    keys: set[str] = set()
+    pattern_decl = re.compile(
+        rf"\b{re.escape(block_name)}\b[^=]*=\s*\{{",
     )
-    assert 'valuation_equity_structure: "Valuation/equity structure"' in module_registry
-    assert (
-        'pullback_systemic_risk_checklist: "Pullback/systemic risk checklist"'
-        in module_registry
+    pattern_assign = re.compile(
+        rf"Object\.assign\(\s*{re.escape(block_name)}\s*,\s*\{{",
     )
-    assert 'historical_risk_percentile: "Historical risk percentile"' in module_registry
-    assert 'liquidity_funding_stress: "Liquidity/funding stress"' in module_registry
-    assert 'macro_regime_review: "Macro regime review"' in module_registry
-    assert 'scenario_stress: "Scenario stress"' in module_registry
-    assert 'historical_validation: "Historical validation"' in module_registry
-    for module_key in ModelRegistry().model_output_module_keys():
-        assert f"{module_key}:" in module_registry
+    for opener in list(pattern_decl.finditer(text)) + list(
+        pattern_assign.finditer(text)
+    ):
+        start = opener.end() - 1
+        depth = 0
+        end = None
+        for idx in range(start, len(text)):
+            ch = text[idx]
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = idx
+                    break
+        if end is None:
+            continue
+        block = text[start + 1 : end]
+        for match in _LABEL_ENTRY_RE.finditer(block):
+            keys.add(match.group("key"))
+    return keys
 
-    assert 'financial_stress_score: "Financial stress score"' in metric_registry
-    assert 'growth_macro_status: "Growth macro status"' in metric_registry
-    assert 'valuation_context_status: "Valuation context status"' in metric_registry
-    assert 'pullback_classification: "Pullback classification"' in metric_registry
-    assert 'high_yield_spread_percentile: "High-yield spread percentile"' in metric_registry
-    assert (
-        'liquidity_funding_stress_status: "Liquidity/funding stress status"'
-        in metric_registry
+
+def test_module_registry_covers_every_backend_model_module():
+    registry = ModelRegistry()
+    text = _read(MODULE_REGISTRY_PATH)
+
+    declared_labels = _keys_in_block(text, "moduleLabels")
+    declared_boundaries = _keys_in_block(text, "interpretationBoundaries")
+    expected = set(registry.model_output_module_keys())
+
+    missing_labels = expected - declared_labels
+    missing_boundaries = expected - declared_boundaries
+    assert not missing_labels, (
+        f"moduleRegistry.ts is missing labels for backend modules: "
+        f"{sorted(missing_labels)}"
     )
-    assert 'macro_regime_label: "Macro regime label"' in metric_registry
-    assert 'primary_pressure_ranking: "Primary pressure ranking"' in metric_registry
-    assert (
-        'historical_validation_status: "Historical validation status"'
-        in metric_registry
-    )
-    assert 'scenario_stress_status: "Scenario stress status"' in metric_registry
-
-    assert "event-odds model" in module_registry
-    assert "current-evidence context" in module_registry
-    assert "research/proxy context" in module_registry
-    assert "allocation directive" in module_registry
-    assert "not a forecast" in module_registry
-    assert "scenario matrix" in module_registry
-    assert "reference evidence" in module_registry
-    assert "current evidence review" in module_registry
-    assert "historical replay" in module_registry
-
-
-def test_display_label_helpers_keep_unknown_fallbacks():
-    display_labels = (FRONTEND_SRC / "utils/displayLabels.ts").read_text(encoding="utf-8")
-    module_registry = (FRONTEND_SRC / "utils/moduleRegistry.ts").read_text(encoding="utf-8")
-
-    assert "return moduleLabels[moduleKey] || moduleKey;" in display_labels
-    assert "return metricLabels[metricKey] || metricKey;" in display_labels
-    assert "return statusLabels[status] || status;" in display_labels
-    assert "return sourceBadgeLabels[sourceBadge] || sourceBadge;" in display_labels
-    assert "return interpretationBoundaries[moduleKey] ||" in module_registry
-
-
-def test_module_detail_drawer_uses_registry_boundary():
-    drawer = (FRONTEND_SRC / "components/ModuleDetailDrawer.tsx").read_text(
-        encoding="utf-8"
+    assert not missing_boundaries, (
+        f"moduleRegistry.ts is missing interpretation boundaries for "
+        f"backend modules: {sorted(missing_boundaries)}"
     )
 
-    assert 'import { getModuleBoundary } from "../utils/moduleRegistry";' in drawer
-    assert "<InterpretationBoundary moduleKey={moduleKey} />" in drawer
-    assert "const interpretationBoundaries" not in drawer
+
+def test_metric_registry_covers_every_public_output_key():
+    registry = ModelRegistry()
+    text = _read(METRIC_REGISTRY_PATH)
+    declared_metric_labels = _keys_in_block(text, "metricLabels")
+
+    missing: list[str] = []
+    for module_key in sorted(registry.module_keys()):
+        for output_key in registry.public_output_keys(module_key):
+            if output_key not in declared_metric_labels:
+                missing.append(f"{module_key}.{output_key}")
+    assert not missing, (
+        "metricRegistry.ts is missing labels for backend public output "
+        f"keys: {missing[:10]}{' ...' if len(missing) > 10 else ''}"
+    )
+
+
+def test_display_labels_expose_required_helpers():
+    text = _read(DISPLAY_LABELS_PATH)
+    required_helpers = (
+        "getModuleLabel",
+        "getStatusLabel",
+        "getSourceBadgeLabel",
+        "getFreshnessLabel",
+        "getAiContextLabel",
+        "getMissingReasonLabel",
+        "getMetricLabel",
+    )
+    missing = [
+        name
+        for name in required_helpers
+        if not re.search(rf"\bexport\s+function\s+{name}\b", text)
+    ]
+    assert not missing, (
+        f"displayLabels.ts must export helpers: {missing}"
+    )
+
+
+def test_display_labels_pull_from_registry_files():
+    text = _read(DISPLAY_LABELS_PATH)
+    required_imports = ("moduleLabels", "metricLabels", "statusLabels")
+    missing = [name for name in required_imports if name not in text]
+    assert not missing, (
+        "displayLabels.ts must import label tables from registry files, "
+        f"missing references: {missing}"
+    )
+
+
+def test_module_drawer_uses_registry_boundary_not_inline_table():
+    text = _read(MODULE_DRAWER_PATH)
+    assert "getModuleBoundary" in text, (
+        "ModuleDetailDrawer.tsx must read boundary text from the registry "
+        "helper getModuleBoundary, not from inline literals."
+    )
+    assert not re.search(r"const\s+interpretationBoundaries\s*[:=]", text), (
+        "ModuleDetailDrawer.tsx must not declare its own "
+        "interpretationBoundaries map; use moduleRegistry.ts as the source "
+        "of truth."
+    )
+
+
+def test_interpretation_boundary_lookup_has_fallback():
+    text = _read(MODULE_REGISTRY_PATH)
+    assert re.search(
+        r"interpretationBoundaries\s*\[\s*moduleKey\s*\]\s*\|\|",
+        text,
+    ), (
+        "moduleRegistry.ts must expose a boundary lookup that falls back "
+        "to a default when an unknown moduleKey is passed."
+    )
 
 
 def test_frontend_files_do_not_contain_raw_provider_or_holdings_payload_logic():
@@ -87,5 +187,7 @@ def test_frontend_files_do_not_contain_raw_provider_or_holdings_payload_logic():
         for token in forbidden:
             if token in text:
                 offenders.append(f"{path}:{token}")
-
-    assert offenders == []
+    assert offenders == [], (
+        "Frontend sources must never reference raw provider payloads or "
+        f"raw holdings rows: {offenders}"
+    )

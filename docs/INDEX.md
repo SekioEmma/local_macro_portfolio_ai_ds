@@ -8,14 +8,16 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: UI-0 Frontend Information Architecture Audit
+- Last completed task: Frontend redesign pre-flight (loosened
+  `test_frontend_registry_contracts.py` to semantic form, added
+  `test_api_response_shape.py` API field-set lock, wrote
+  `docs/frontend_baseline_pre_redesign.md` snapshot)
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: UI-1 Dashboard homepage data-display polish using
-  existing backend APIs and source gates only
-- Next engineering task: UI-1 Dashboard homepage data-display polish; use a
-  separate G2 task only if missing official-source history refresh commands
-  are required and explicitly approved
+- Current immediate route: open a `frontend-redesign` branch and begin
+  Era 1 frontend beautification with `ui-ux-pro-max-skill`
+- Next engineering task: Era 1.1 design-system bootstrap — install the
+  skill, generate baseline tokens, decide Tailwind / shadcn adoption
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -149,6 +151,7 @@ Stage DF is concluded. No default DF-5.
 | `docs/data_foundation_local_refresh_g1.md` | G1 controlled local refresh evidence and remaining coverage gaps |
 | `docs/frontend_information_architecture_audit.md` | UI-0 frontend shell, page, API-contract, placeholder, and display-gap audit |
 | `docs/foundation_stabilization_backlog.md` | M-line backlog (M7-M12) |
+| `docs/frontend_baseline_pre_redesign.md` | Frontend stack / route / API / token snapshot before Era 1 redesign |
 | stage-specific closeout docs | per-stage evidence and contract |
 
 When these disagree, `docs/short_term_development_plan.md` is the immediate
