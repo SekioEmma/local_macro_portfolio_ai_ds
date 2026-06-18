@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -575,18 +576,17 @@ def build_historical_validation_rows(
 
 def _event_daily_replay(
     event: EventWindow,
-    observations_by_metric: dict[str, list[dict[str, Any]]],
+    observations_by_metric: dict[str, _SanitizedSeries],
 ) -> list[dict[str, Any]]:
     start = _parse_date(event.start_date)
     end = _parse_date(event.end_date)
-    candidate_dates = sorted(
-        {
-            _parse_date(str(item["observation_date"]))
-            for items in observations_by_metric.values()
-            for item in items
-            if _date_in_range(str(item.get("observation_date")), start, end)
-        }
-    )
+    candidate_dates_set: set[date] = set()
+    for series in observations_by_metric.values():
+        lo = bisect.bisect_left(series.dates, start)
+        hi = bisect.bisect_right(series.dates, end)
+        for i in range(lo, hi):
+            candidate_dates_set.add(series.dates[i])
+    candidate_dates = sorted(candidate_dates_set)
     if not candidate_dates:
         return [
             _unavailable_daily_row(
@@ -805,33 +805,46 @@ def _overall_summary(event_summaries: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+@dataclass
+class _SanitizedSeries:
+    items: list[dict[str, Any]]
+    dates: list[date]
+
+
 def _sanitize_observations(
     observations_by_metric: dict[str, list[dict[str, Any]]],
-) -> dict[str, list[dict[str, Any]]]:
-    result: dict[str, list[dict[str, Any]]] = {}
+) -> dict[str, _SanitizedSeries]:
+    result: dict[str, _SanitizedSeries] = {}
     for metric_key, observations in observations_by_metric.items():
-        clean = [
-            item
-            for item in observations
-            if item.get("metric_key") == metric_key
-            and item.get("status") not in market_history_store.BLOCKED_STATUSES
-            and item.get("source_badge") not in market_history_store.BLOCKED_SOURCE_BADGES
-            and item.get("value_numeric") is not None
-        ]
-        result[metric_key] = sorted(
-            clean,
-            key=lambda item: str(item.get("observation_date") or ""),
+        clean: list[dict[str, Any]] = []
+        for item in observations:
+            if item.get("metric_key") != metric_key:
+                continue
+            if item.get("status") in market_history_store.BLOCKED_STATUSES:
+                continue
+            if item.get("source_badge") in market_history_store.BLOCKED_SOURCE_BADGES:
+                continue
+            if item.get("value_numeric") is None:
+                continue
+            parsed = _parse_date(str(item.get("observation_date") or ""))
+            if parsed is not None:
+                item["_date"] = parsed
+                clean.append(item)
+        sorted_clean = sorted(clean, key=lambda item: item["_date"])
+        result[metric_key] = _SanitizedSeries(
+            items=sorted_clean,
+            dates=[item["_date"] for item in sorted_clean],
         )
     return result
 
 
 def _evidence_rows_as_of(
     as_of: date,
-    observations_by_metric: dict[str, list[dict[str, Any]]],
+    observations_by_metric: dict[str, _SanitizedSeries],
 ) -> list[dict[str, Any]]:
     rows = []
-    for metric_key, observations in observations_by_metric.items():
-        item = _latest_observation_as_of(as_of, observations)
+    for metric_key, series in observations_by_metric.items():
+        item = _latest_observation_as_of(as_of, series)
         if item is None:
             continue
         stale = _is_stale(as_of, str(item["observation_date"]))
@@ -862,16 +875,14 @@ def _evidence_rows_as_of(
 
 def _latest_observation_as_of(
     as_of: date,
-    observations: list[dict[str, Any]],
+    series: _SanitizedSeries,
 ) -> dict[str, Any] | None:
-    latest: dict[str, Any] | None = None
-    for item in observations:
-        observation_date = _parse_date(str(item.get("observation_date")))
-        if observation_date <= as_of:
-            latest = item
-        elif observation_date > as_of:
-            break
-    return latest
+    if not series.items:
+        return None
+    idx = bisect.bisect_right(series.dates, as_of)
+    if idx == 0:
+        return None
+    return series.items[idx - 1]
 
 
 def _unavailable_daily_row(

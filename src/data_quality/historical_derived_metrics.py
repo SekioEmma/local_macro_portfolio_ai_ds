@@ -1015,10 +1015,50 @@ def calculate_labor_deterioration_status(
 
 
 _CANDIDATES_CACHE: dict[str, dict[str, list[HistoricalDerivedMetric]]] = {}
+_OBSERVATIONS_CACHE: dict[tuple[str, str], list[dict[str, Any]]] = {}
 
 
 def invalidate_historical_candidates_cache() -> None:
     _CANDIDATES_CACHE.clear()
+    _OBSERVATIONS_CACHE.clear()
+
+
+def _prefetch_all_observations(db_path: Path | str | None) -> None:
+    keys: set[str] = set()
+    for spec in DERIVED_METRIC_SPECS.values():
+        if "metric_key" in spec:
+            keys.add(spec["metric_key"])
+        if "numerator_metric_key" in spec:
+            keys.add(spec["numerator_metric_key"])
+        if "denominator_metric_key" in spec:
+            keys.add(spec["denominator_metric_key"])
+    batch = market_history_store.list_market_observations_batch(
+        sorted(keys), limit_per_key=500, db_path=db_path,
+    )
+    db_key = str(db_path or "")
+    for metric_key, rows in batch.items():
+        results: list[dict[str, Any]] = []
+        for obs in rows:
+            value = obs.get("value_numeric")
+            parsed = _parse_date(obs.get("observation_date"))
+            if value is None or parsed is None:
+                continue
+            results.append(
+                {
+                    "value": float(value),
+                    "date": parsed,
+                    "observation_date": obs.get("observation_date"),
+                    "generated_at": obs.get("generated_at"),
+                    "source": obs.get("source"),
+                    "source_badge": obs.get("source_badge"),
+                    "source_series": obs.get("source_series"),
+                    "freshness_status": obs.get("freshness_status"),
+                    "ai_context_allowed": obs.get("ai_context_allowed"),
+                }
+            )
+        _OBSERVATIONS_CACHE[(metric_key, db_key)] = sorted(
+            results, key=lambda item: item["date"]
+        )
 
 
 def build_historical_dashboard_candidates(
@@ -1029,6 +1069,7 @@ def build_historical_dashboard_candidates(
     cache_key = str(db_path or "") if fallback_observations is None else ""
     if cache_key and cache_key in _CANDIDATES_CACHE:
         return _CANDIDATES_CACHE[cache_key]
+    _prefetch_all_observations(db_path)
     candidates: dict[str, list[HistoricalDerivedMetric]] = {}
     for output_key, spec in DERIVED_METRIC_SPECS.items():
         module = spec["module"]
@@ -1191,6 +1232,10 @@ def _numeric_observations(
     *,
     db_path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
+    cache_key = (metric_key, str(db_path or ""))
+    cached = _OBSERVATIONS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     observations = market_history_store.list_market_observations(
         metric_key=metric_key,
         limit=500,
@@ -1215,7 +1260,9 @@ def _numeric_observations(
                 "ai_context_allowed": observation.get("ai_context_allowed"),
             }
         )
-    return sorted(results, key=lambda item: item["date"])
+    result = sorted(results, key=lambda item: item["date"])
+    _OBSERVATIONS_CACHE[cache_key] = result
+    return result
 
 
 def _latest_on_or_before(
