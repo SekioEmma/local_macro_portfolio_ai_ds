@@ -7,6 +7,7 @@ import {
 } from "../utils/displayLabels";
 import { compactText, recordEntries } from "../utils/evidence";
 import { getModuleBoundary } from "../utils/moduleRegistry";
+import { useBodyScrollLock } from "../utils/useBodyScrollLock";
 import { ResearchIcon } from "./ResearchIcon";
 import {
   AIContextBadge,
@@ -35,6 +36,7 @@ export function EvidenceRowDrawer({
   row: DashboardEvidenceRow;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const [activeTab, setActiveTab] =
     useState<EvidenceDrawerTab>("overview");
   const [copyStatus, setCopyStatus] = useState<string | null>(null);

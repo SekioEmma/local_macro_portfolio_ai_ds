@@ -17,6 +17,7 @@ import {
 } from "../utils/displayLabels";
 import { blockedStatuses, uniqueValues } from "../utils/evidence";
 import { getModuleBoundary } from "../utils/moduleRegistry";
+import { useBodyScrollLock } from "../utils/useBodyScrollLock";
 import { ResearchIcon } from "./ResearchIcon";
 import {
   AIContextBadge,
@@ -86,6 +87,7 @@ export function ModuleDetailDrawer({
   evidenceError,
   onClose
 }: ModuleDetailDrawerProps) {
+  useBodyScrollLock();
   const [activeTab, setActiveTab] = useState<DrawerTab>("overview");
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const missingRows = evidenceRows.filter((row) =>

@@ -764,10 +764,11 @@ button {
 .drawer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 100;
   display: flex;
   justify-content: flex-end;
   background: rgba(32, 35, 31, 0.48);
+  overscroll-behavior: none;
 }
 
 .module-detail-drawer {
@@ -3042,6 +3043,8 @@ button {
   width: min(720px, 100vw);
   height: 100vh;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--panel-bg);
   box-shadow: var(--shadow-drawer);
 }
@@ -3582,14 +3585,16 @@ button {
 
 .evidence-audit-table-wrap {
   max-height: calc(100vh - 330px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   border: 1px solid var(--panel-border);
   background: var(--panel-bg);
 }
 
 .evidence-audit-table {
   width: 100%;
-  min-width: 1220px;
+  min-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 10px;
@@ -3598,6 +3603,7 @@ button {
 .evidence-audit-table th,
 .evidence-audit-table td {
   border-bottom: 1px solid var(--panel-border-soft);
+  overflow: hidden;
   padding: 9px 8px;
   text-align: left;
   vertical-align: middle;
@@ -3618,7 +3624,7 @@ button {
   position: sticky;
   left: 0;
   z-index: 2;
-  width: 150px;
+  width: 130px;
   background: var(--panel-bg);
 }
 
@@ -3628,19 +3634,39 @@ button {
 }
 
 .evidence-audit-table th:nth-child(2) {
-  width: 180px;
+  width: 160px;
 }
 
 .evidence-audit-table th:nth-child(3) {
-  width: 110px;
+  width: 96px;
+}
+
+.evidence-audit-table th:nth-child(4) {
+  width: 74px;
+}
+
+.evidence-audit-table th:nth-child(5) {
+  width: 120px;
+}
+
+.evidence-audit-table th:nth-child(6) {
+  width: 82px;
+}
+
+.evidence-audit-table th:nth-child(7) {
+  width: 112px;
+}
+
+.evidence-audit-table th:nth-child(8) {
+  width: 100px;
 }
 
 .evidence-audit-table th:nth-child(9) {
-  width: 220px;
+  width: 180px;
 }
 
 .evidence-audit-table th:last-child {
-  width: 44px;
+  width: 48px;
 }
 
 .evidence-audit-table tbody tr:hover td {
@@ -3664,6 +3690,10 @@ button {
 }
 
 .evidence-value-cell {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: Georgia, "Noto Serif SC", "Songti SC", serif;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
@@ -3696,6 +3726,8 @@ button {
   width: min(780px, 100vw);
   height: 100vh;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--panel-bg);
   box-shadow: var(--shadow-drawer);
 }
@@ -4899,6 +4931,14 @@ button {
 }
 
 @media (max-width: 1120px) {
+  .evidence-audit-table-wrap {
+    overflow-x: auto;
+  }
+
+  .evidence-audit-table {
+    min-width: 1102px;
+  }
+
   .model-overview-grid,
   .historical-coverage-grid,
   .portfolio-summary-grid,
@@ -4955,5 +4995,123 @@ button {
   .portfolio-overlay-page,
   .diagnostics-page {
     font-size: 16px;
+  }
+}
+
+/* Final responsive and accessibility pass */
+
+.drawer-close-button,
+.evidence-row-button {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.clear-filter-button,
+.evidence-filter-control select,
+.evidence-search-control > div,
+.evidence-copy-bar button {
+  min-height: 44px;
+}
+
+button,
+select,
+input {
+  touch-action: manipulation;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 680px) {
+  body {
+    font-size: 16px;
+  }
+
+  .paper-app-shell {
+    padding-bottom: 0;
+  }
+
+  .paper-sidebar {
+    position: sticky;
+    z-index: 40;
+    top: 0;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    display: block;
+    width: 100%;
+    height: auto;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--panel-border);
+    padding: 6px 8px;
+    box-shadow: 0 8px 22px rgba(50, 43, 34, 0.06);
+  }
+
+  .paper-nav {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    padding: 0 0 3px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .paper-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .paper-nav button {
+    grid-template-columns: 1fr;
+    flex: 0 0 88px;
+    min-height: 56px;
+    justify-items: center;
+    padding: 5px 4px;
+  }
+
+  .paper-nav button small {
+    font-size: 10px;
+  }
+
+  .paper-main {
+    padding-top: 18px;
+  }
+
+  .evidence-filter-control select,
+  .evidence-search-control input {
+    font-size: 16px;
+  }
+
+  .clear-filter-button,
+  .evidence-copy-bar button,
+  .module-quick-filters button,
+  .compact-evidence-card button,
+  .supporting-context-card button {
+    min-height: 44px;
+  }
+
+  .module-quick-filters button {
+    padding-inline: 12px;
+  }
+
+  .research-subtitle,
+  .model-section-header > p,
+  .research-section-heading > p,
+  .boundary-notice,
+  .disabled-surface-notice p {
+    font-size: 14px;
+  }
+
+  .scenario-card-section ul,
+  .constraint-panel ul,
+  .event-detail-section ul,
+  .diagnostic-list li strong,
+  .boundary-check-list li,
+  .exposure-channel-card > p,
+  .supporting-boundary {
+    font-size: 12px;
   }
 }
