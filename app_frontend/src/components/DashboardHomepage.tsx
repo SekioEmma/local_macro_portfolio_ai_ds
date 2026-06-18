@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import type {
   ApiResult,
   DashboardEvidenceRow,
@@ -9,336 +9,347 @@ import type {
   ProviderHealthResponse
 } from "../types";
 import {
-  formatCompactHint,
   formatEvidenceValueText,
-  getAiContextLabel,
-  getFreshnessLabel,
-  getMissingReasonLabel,
   getModuleLabel,
-  getSourceBadgeLabel,
   getStatusLabel
 } from "../utils/displayLabels";
-import { getModuleBoundary } from "../utils/moduleRegistry";
 import {
-  aiContextClass,
-  freshnessClass,
-  sourceBadgeClass,
-  statusClass
-} from "../utils/styleClasses";
+  blockedStatuses,
+  findEvidenceRow,
+  findMetric,
+  groupRowsByModule,
+  moduleUpdatedAt,
+  usableMetric
+} from "../utils/evidence";
+import type { AppViewKey } from "./AppShell";
 import { ModuleDetailDrawer } from "./ModuleDetailDrawer";
+import { ResearchIcon, type ResearchIconName } from "./ResearchIcon";
+import {
+  AIContextBadge,
+  BoundaryNotice,
+  ErrorState,
+  formatTimestamp,
+  FreshnessBadge,
+  LoadingState,
+  MetaStrip,
+  MetricValue,
+  PageHeader,
+  SectionHeading,
+  SourceBadge,
+  StatusBadge
+} from "./ResearchUI";
 
 type DashboardHomepageProps = {
   dashboard: ApiResult<DashboardSummaryResponse>;
   evidence: ApiResult<DashboardEvidenceTableResponse>;
   providerHealth: ApiResult<ProviderHealthResponse>;
   isLoading: boolean;
-  onOpenEvidence: () => void;
+  onNavigate: (view: AppViewKey) => void;
 };
 
-type DataQualityStatus =
-  | "fresh"
-  | "historical"
-  | "normal_lag"
-  | "stale"
-  | "missing"
-  | "research_needed"
-  | "insufficient_history"
-  | "not_available"
-  | "unknown";
+const riskChannels: Array<{
+  key: string;
+  icon: ResearchIconName;
+  primary: string;
+  secondary: string;
+}> = [
+  {
+    key: "credit_stress",
+    icon: "shield",
+    primary: "high_yield_spread",
+    secondary: "investment_grade_spread"
+  },
+  {
+    key: "rate_pressure",
+    icon: "layers",
+    primary: "dgs10",
+    secondary: "dgs30_distance_to_5pct"
+  },
+  {
+    key: "real_yield_pressure",
+    icon: "diagnostics",
+    primary: "dfii10",
+    secondary: "t10yie"
+  },
+  {
+    key: "inflation_energy_pressure",
+    icon: "database",
+    primary: "core_cpi_yoy",
+    secondary: "core_pce_yoy"
+  },
+  {
+    key: "equity_trend",
+    icon: "dashboard",
+    primary: "sp500_30d_return",
+    secondary: "nasdaq100_30d_return"
+  },
+  {
+    key: "breadth_concentration_proxy",
+    icon: "evidence",
+    primary: "spy_vs_rsp_30d",
+    secondary: "qqq_vs_spy_30d"
+  },
+  {
+    key: "market_stress_derived",
+    icon: "scenario",
+    primary: "sp500_drawdown_3m",
+    secondary: "dgs10_dgs2_curve_slope"
+  },
+  {
+    key: "portfolio_deviation",
+    icon: "portfolio",
+    primary: "max_deviation_pp",
+    secondary: "equity_total_deviation_pp"
+  }
+];
 
-const primaryMarketModuleKeys = [
-  "credit_stress",
-  "rate_pressure",
-  "real_yield_pressure",
-  "inflation_energy_pressure",
-  "equity_trend",
-  "market_stress_derived"
-] as const;
-
-const supportingModuleKeys = [
-  "breadth_concentration_proxy",
-  "portfolio_deviation"
-] as const;
-
-const marketModuleKeys = new Set<string>([
-  ...primaryMarketModuleKeys,
-  "breadth_concentration_proxy"
-]);
+const coreEvidenceKeys = riskChannels
+  .filter((channel) =>
+    [
+      "credit_stress",
+      "rate_pressure",
+      "real_yield_pressure",
+      "inflation_energy_pressure",
+      "equity_trend",
+      "market_stress_derived"
+    ].includes(channel.key)
+  )
+  .map((channel) => channel.key);
 
 const pressureStatuses = new Set(["watch", "pressure", "stress"]);
-const blockedMetricStatuses = new Set([
-  "missing",
-  "research_needed",
-  "insufficient_history",
-  "not_available",
-  "stale"
-]);
-
-const moduleDescriptions: Record<string, string> = {
-  credit_stress: "信用利差与波动率证据，用于观察信用环境是否出现压力。",
-  rate_pressure: "国债收益率与曲线证据；DGS 为日度观测，不是盘中行情。",
-  real_yield_pressure: "实际收益率与通胀预期机制，用于解释估值与机会成本压力。",
-  inflation_energy_pressure: "通胀与能源输入的低频证据，不用于生成方向预测。",
-  equity_trend: "指数趋势与相对表现证据；回撤本身不能确认系统性风险。",
-  breadth_concentration_proxy:
-    "ETF 与指数关系形成的代理观察，不等同于真实成分股广度。",
-  market_stress_derived:
-    "基于历史窗口的回撤、曲线与跨资产派生证据，不是交易信号。",
-  portfolio_deviation:
-    "本地组合相对目标权重的紧凑偏离摘要，只用于风险暴露解释。"
-};
-
-const pressureLabels: Record<string, string> = {
-  credit_stress: "信用",
-  rate_pressure: "利率",
-  real_yield_pressure: "实际收益率",
-  inflation_energy_pressure: "通胀与能源",
-  equity_trend: "权益趋势",
-  breadth_concentration_proxy: "宽度代理",
-  market_stress_derived: "市场压力派生"
-};
 
 export function DashboardHomepage({
   dashboard,
   evidence,
   providerHealth,
   isLoading,
-  onOpenEvidence
+  onNavigate
 }: DashboardHomepageProps) {
-  const [selectedModuleKey, setSelectedModuleKey] = useState<string | null>(null);
+  const [selectedModuleKey, setSelectedModuleKey] = useState<string | null>(
+    null
+  );
   const data = dashboard.data;
   const evidenceRows = evidence.data?.rows || [];
+  const rowsByModule = useMemo(
+    () => groupRowsByModule(evidenceRows),
+    [evidenceRows]
+  );
 
-  const rowsByModule = useMemo(() => {
-    const grouped = new Map<string, DashboardEvidenceRow[]>();
-    for (const row of evidenceRows) {
-      const rows = grouped.get(row.module) || [];
-      rows.push(row);
-      grouped.set(row.module, rows);
-    }
-    return grouped;
-  }, [evidenceRows]);
-
-  if (isLoading) {
-    return <PaperLoadingState />;
-  }
+  if (isLoading) return <LoadingState title="正在整理今日市场状态" />;
   if (dashboard.error || !data) {
-    return <PaperErrorState message={dashboard.error} />;
+    return <ErrorState title="首页证据暂不可用" message={dashboard.error} />;
   }
 
+  const stressScoreRow = findEvidenceRow(
+    evidenceRows,
+    "financial_stress_composite",
+    "financial_stress_score"
+  );
+  const stressStatusRow = findEvidenceRow(
+    evidenceRows,
+    "financial_stress_composite",
+    "financial_stress_status"
+  );
+  const dominantPressureRow = findEvidenceRow(
+    evidenceRows,
+    "financial_stress_composite",
+    "financial_stress_dominant_pressure_source"
+  );
+  const macroPressureRow = findEvidenceRow(
+    evidenceRows,
+    "macro_regime_review",
+    "primary_pressure_ranking"
+  );
+  const stressScore =
+    typeof stressScoreRow?.value === "number"
+      ? Math.max(0, Math.min(100, stressScoreRow.value))
+      : null;
+  const marketModules = riskChannels
+    .filter((channel) => channel.key !== "portfolio_deviation")
+    .map((channel) => data.modules[channel.key])
+    .filter((module): module is DashboardModule => Boolean(module));
+  const pressureModules = marketModules.filter((module) =>
+    pressureStatuses.has(module.status)
+  );
+  const pressureNames = pressureModules.map((module) =>
+    getModuleLabel(module.key)
+  );
+  const dataQuality = summarizeDataQuality(evidenceRows);
+  const providerStatus =
+    providerHealth.data?.overall_status ||
+    data.provider_health.overall_status ||
+    "unknown";
   const selectedModule =
     selectedModuleKey && data.modules[selectedModuleKey]
       ? data.modules[selectedModuleKey]
       : null;
-  const selectedRows = selectedModuleKey
-    ? rowsByModule.get(selectedModuleKey) || []
-    : [];
-  const marketModules = Object.entries(data.modules).filter(([key]) =>
-    marketModuleKeys.has(key)
-  );
-  const usableMarketModuleCount = marketModules.filter(
-    ([, module]) => !blockedMetricStatuses.has(module.status)
-  ).length;
-  const pressureModules = marketModules.filter(([, module]) =>
-    pressureStatuses.has(module.status)
-  );
-  const macroRegimeRows = rowsByModule.get("macro_regime_review") || [];
-  const macroPressureRanking = evidenceValue(
-    macroRegimeRows,
-    "primary_pressure_ranking"
-  );
-  const pressureSummary = pressureModules.length
-    ? pressureModules
-        .map(([key]) => pressureLabels[key] || getModuleLabel(key))
-        .join(" / ")
-    : macroPressureRanking
-      ? formatEvidenceEnum(macroPressureRanking)
-      : null;
-  const quality = summarizeDataQuality(evidenceRows);
 
   return (
-    <section className="paper-dashboard">
-      <header className="paper-report-header">
-        <div>
-          <p className="paper-kicker">LOCAL MACRO RISK BRIEFING · READ ONLY</p>
-          <h2>今日市场状态</h2>
-          <p className="paper-subtitle">
-            Risk Monitoring and Evidence Panel
-          </p>
-        </div>
-        <dl className="report-meta">
-          <div>
-            <dt>AS OF</dt>
-            <dd>{formatTimestamp(data.generated_at)}</dd>
-          </div>
-          <div>
-            <dt>EVIDENCE ROWS</dt>
-            <dd>{evidence.data?.row_count ?? evidenceRows.length}</dd>
-          </div>
-          <div>
-            <dt>MODE</dt>
-            <dd>Local · Read only</dd>
-          </div>
-        </dl>
-      </header>
-
-      <section className="overview-strip" aria-label="首页证据总览">
-        <OverviewBlock
-          index="01"
-          label="Market Evidence Status"
-          value={usableMarketModuleCount > 0 ? "证据可用" : "输入不足"}
-          note={`${usableMarketModuleCount}/${marketModules.length} 个市场模块可供复核；组合偏离不计入市场证据状态。`}
-          tone={usableMarketModuleCount > 0 ? "ink" : "muted"}
+    <section className="dashboard-briefing">
+      <div className="dashboard-heading-row">
+        <PageHeader
+          eyebrow="LOCAL MACRO RISK RESEARCH WORKBENCH · READ ONLY"
+          subtitle="Local Macro Risk Briefing · Read Only"
+          title="今日市场状态"
         />
-        <MacroRegimeOverview rows={macroRegimeRows} />
-        <OverviewBlock
-          index="03"
-          label="Main Pressure Sources"
-          value={pressureSummary || "暂无确认的市场压力"}
-          note={
-            pressureSummary
-              ? "来自市场证据模块状态；本地组合偏离单独展示。"
-              : "No confirmed market stress from available evidence."
-          }
-          tone={pressureSummary ? "pressure" : "ok"}
+        <MetaStrip
+          items={[
+            { label: "AS OF", value: formatTimestamp(data.generated_at) },
+            {
+              label: "EVIDENCE ROWS",
+              value: evidence.data?.row_count ?? evidenceRows.length
+            },
+            { label: "MODE", value: "Local · Read only" },
+            {
+              label: "PROVIDER HEALTH",
+              value: <StatusBadge status={providerStatus} />
+            }
+          ]}
         />
-        <DataQualityOverview quality={quality} />
-        <OverviewBlock
-          index="05"
-          label="Provider Health"
-          value={providerHealthLabel(
-            providerHealth.data?.overall_status ||
-              data.provider_health.overall_status
-          )}
-          note={
-            providerHealth.data?.error_summary ||
-            data.provider_health.error_summary ||
-            "数据管线状态，不代表市场风险状态。"
-          }
-          tone="muted"
+      </div>
+
+      <EvidenceTemperatureBar
+        score={stressScore}
+        status={stressStatusRow?.status || stressScoreRow?.status || "unknown"}
+        valueText={
+          stressScoreRow
+            ? formatEvidenceValueText(
+                stressScoreRow.value_text,
+                stressScoreRow.status
+              )
+            : "not available"
+        }
+      />
+
+      <ExecutiveBrief
+        dataQuality={dataQuality}
+        dominantPressure={
+          dominantPressureRow?.value_text || macroPressureRow?.value_text || null
+        }
+        pressureNames={pressureNames}
+        stressStatus={stressStatusRow?.value_text || stressStatusRow?.status}
+      />
+
+      <section className="dashboard-section-stack">
+        <SectionHeading
+          description="八个风险通道展示金融状态、主指标、辅助指标与来源类别；点击进入模块审计抽屉。"
+          index="I · RISK CHANNEL MAP"
+          title="风险通道概览"
         />
-      </section>
-
-      <section className="pressure-summary" aria-label="当前证据摘要">
-        <div>
-          <p className="section-index">CURRENT EVIDENCE</p>
-          <h3>
-            {pressureSummary
-              ? `主要市场压力集中在：${pressureSummary.split(" / ").join("、")}`
-              : "当前可用证据未确认显著市场压力"}
-          </h3>
-        </div>
-        <p>
-          Financial Stress Composite 是压力温度；Pullback/Systemic Risk 是当前证据复核。
-          VIX、回撤或代理证据不能单独确认系统性压力。
-        </p>
-      </section>
-
-      <DashboardSection
-        eyebrow="I · CORE MARKET EVIDENCE"
-        title="核心市场证据"
-        description="先看信用、利率、实际收益率、通胀能源、权益趋势与市场压力派生。"
-      >
-        <div className="paper-module-grid">
-          {primaryMarketModuleKeys.map((moduleKey) => {
-            const module = data.modules[moduleKey];
+        <div className="risk-channel-map">
+          {riskChannels.map((channel) => {
+            const module = data.modules[channel.key];
             if (!module) return null;
             return (
-              <EvidenceModuleCard
-                key={moduleKey}
-                moduleKey={moduleKey}
+              <RiskChannelTile
+                key={channel.key}
+                channel={channel}
                 module={module}
-                onShowAll={() => setSelectedModuleKey(moduleKey)}
+                onClick={() => setSelectedModuleKey(channel.key)}
               />
             );
           })}
         </div>
-      </DashboardSection>
+      </section>
 
-      <DashboardSection
-        eyebrow="II · SUPPORTING CONTEXT"
-        title="辅助证据与本地约束"
-        description="代理宽度只能辅助观察；组合偏离只改变风险暴露解释，不触发市场状态。"
-      >
-        <div className="supporting-grid">
-          {supportingModuleKeys.map((moduleKey) => {
+      <section className="dashboard-section-stack">
+        <SectionHeading
+          description="首页只保留每个核心模块最关键的 2-3 项证据；完整来源、历史窗口与边界进入抽屉。"
+          index="II · CORE EVIDENCE"
+          title="核心市场证据"
+        />
+        <div className="compact-evidence-grid">
+          {coreEvidenceKeys.map((moduleKey) => {
             const module = data.modules[moduleKey];
             if (!module) return null;
             return (
-              <EvidenceModuleCard
+              <CompactEvidenceCard
                 key={moduleKey}
-                moduleKey={moduleKey}
                 module={module}
-                variant={
-                  moduleKey === "portfolio_deviation" ? "portfolio" : "proxy"
-                }
-                onShowAll={() => setSelectedModuleKey(moduleKey)}
+                moduleKey={moduleKey}
+                onClick={() => setSelectedModuleKey(moduleKey)}
               />
             );
           })}
-          <MissingDataPanel items={data.missing_data} />
-          <FreshnessPanel data={data.data_freshness} />
         </div>
-      </DashboardSection>
+      </section>
 
-      <DashboardSection
-        eyebrow="III · SYSTEM & REVIEW SURFACES"
-        title="系统状态与复核入口"
-        description="只有已有页面可以进入；未完成或冻结表面保持明确禁用。"
-      >
-        <div className="system-review-grid">
-          <ProviderHealthPanel
-            providerHealth={providerHealth}
-            fallback={data.provider_health}
+      <section className="dashboard-section-stack">
+        <SectionHeading
+          description="代理、本地组合和数据质量不与核心市场证据等权，且不能单独确认系统性压力。"
+          index="III · SUPPORTING CONTEXT"
+          title="辅助与本地约束"
+        />
+        <div className="supporting-context-grid">
+          <SupportingContextCard
+            boundary="proxy only · not true breadth · cannot confirm systemic risk alone"
+            module={data.modules.breadth_concentration_proxy}
+            title="宽度 / 集中度代理"
+            onClick={() => setSelectedModuleKey("breadth_concentration_proxy")}
           />
-          <ReviewEntry
-            title="全量证据表"
-            description="按模块、状态、来源与 AI 事实层资格审计所有证据行。"
-            actionLabel="打开 Evidence Table"
-            onClick={onOpenEvidence}
+          <SupportingContextCard
+            boundary="local only · does not trigger macro regime or systemic stress"
+            module={data.modules.portfolio_deviation}
+            title="组合偏离 / Local Portfolio Overlay"
+            onClick={() => setSelectedModuleKey("portfolio_deviation")}
           />
-          <ReviewEntry
-            title="Scenario Stress Matrix"
-            description="情景是压力传导复核，不代表发生概率、收益路径或交易动作。"
-            actionLabel="专用页面未开放"
-            disabled
-          />
-          <ReviewEntry
-            title="Historical Validation Replay"
-            description="历史复核不是回测，也不用于评价预测能力或交易表现。"
-            actionLabel="专用页面未开放"
-            disabled
-          />
-          <ReviewEntry
-            title="AI Context Preview"
-            description="仅预览事实进入与阻断边界；不调用外部模型，不保存对话。"
-            actionLabel="专用页面未开放"
-            disabled
+          <DataQualityCard
+            dataQuality={dataQuality}
+            missingData={data.missing_data}
+            totalRows={evidenceRows.length}
           />
         </div>
-      </DashboardSection>
+      </section>
 
-      {data.next_actions.length > 0 && (
-        <section className="paper-note" aria-label="本地后续动作">
-          <div>
-            <p className="section-index">LOCAL NEXT ACTIONS</p>
-            <h3>数据底座提示</h3>
-          </div>
-          <ul>
-            {data.next_actions.map((action) => (
-              <li key={action}>{action}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <section className="dashboard-section-stack">
+        <SectionHeading
+          description="专门页面承接全量审计、情景传导、历史覆盖与受控 AI 上下文。"
+          index="IV · REVIEW SURFACES"
+          title="复核入口"
+        />
+        <div className="review-surface-grid">
+          <ReviewSurfaceCard
+            description="筛选、搜索并追溯每一条事实、来源、新鲜度、AI 资格与解释边界。"
+            icon="evidence"
+            label="Evidence Audit"
+            title="全量证据"
+            onClick={() => onNavigate("evidence")}
+          />
+          <ReviewSurfaceCard
+            description="查看假设冲击如何通过证据组传导；不是预测，也不输出事件概率。"
+            icon="scenario"
+            label="Scenario Stress Matrix"
+            title="情景压力"
+            onClick={() => onNavigate("scenario")}
+          />
+          <ReviewSurfaceCard
+            description="复核历史事件窗口的证据覆盖与边界一致性；不是策略回测。"
+            icon="history"
+            label="Historical Validation Replay"
+            title="历史验证"
+            onClick={() => onNavigate("historical")}
+          />
+          <ReviewSurfaceCard
+            description="审计哪些事实与模型输出可进入本地 AI factual context。"
+            icon="ai"
+            label="AI Context Preview"
+            title="AI 记忆（只读）"
+            onClick={() => onNavigate("ai-context")}
+          />
+        </div>
+      </section>
+
+      <BoundaryNotice title="研究边界">
+        本页仅组织现有宏观风险证据与模型解释。证据温度不是事件概率，页面不提供交易动作、收益路径或配置指令。
+      </BoundaryNotice>
 
       {selectedModuleKey && selectedModule && (
         <ModuleDetailDrawer
+          evidenceError={evidence.error}
+          evidenceRows={rowsByModule.get(selectedModuleKey) || []}
           moduleKey={selectedModuleKey}
           moduleLabel={getModuleLabel(selectedModuleKey)}
           moduleSummary={selectedModule}
-          evidenceRows={selectedRows}
-          evidenceError={evidence.error}
           onClose={() => setSelectedModuleKey(null)}
         />
       )}
@@ -346,467 +357,435 @@ export function DashboardHomepage({
   );
 }
 
-function DashboardSection({
-  eyebrow,
-  title,
-  description,
-  children
+function EvidenceTemperatureBar({
+  score,
+  status,
+  valueText
 }: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: React.ReactNode;
+  score: number | null;
+  status: string;
+  valueText: string;
 }) {
+  const style =
+    score === null
+      ? undefined
+      : ({
+          "--temperature-position": `${score}%`
+        } as CSSProperties);
   return (
-    <section className="dashboard-section">
-      <header className="section-heading">
+    <section className="evidence-temperature-card">
+      <header>
         <div>
-          <p className="section-index">{eyebrow}</p>
-          <h3>{title}</h3>
+          <p className="research-kicker">MARKET EVIDENCE TEMPERATURE</p>
+          <h2>整体证据温度</h2>
         </div>
-        <p>{description}</p>
+        <div className="temperature-reading">
+          {score === null ? (
+            <>
+              <strong>not available</strong>
+              <StatusBadge status={status} />
+            </>
+          ) : (
+            <>
+              <strong>{valueText}</strong>
+              <small>压力温度</small>
+            </>
+          )}
+        </div>
       </header>
-      {children}
+      <div className="temperature-scale" style={style}>
+        <div className="temperature-gradient" />
+        {score !== null && (
+          <span
+            aria-label={`当前证据温度 ${score.toFixed(2)} / 100`}
+            className="temperature-marker"
+          />
+        )}
+      </div>
+      <div className="temperature-labels">
+        <span>低压 / 宽松</span>
+        <span>中性 / 关注</span>
+        <span>高压 / 承压</span>
+      </div>
+      <p>压力温度，不是事件概率，不是交易信号。</p>
     </section>
   );
 }
 
-function OverviewBlock({
-  index,
-  label,
-  value,
-  note,
-  tone
+function ExecutiveBrief({
+  pressureNames,
+  dominantPressure,
+  stressStatus,
+  dataQuality
 }: {
-  index: string;
-  label: string;
-  value: string;
-  note: string;
-  tone: "ink" | "ok" | "pressure" | "muted";
+  pressureNames: string[];
+  dominantPressure: string | null;
+  stressStatus: string | null | undefined;
+  dataQuality: ReturnType<typeof summarizeDataQuality>;
 }) {
+  const primaryPressure = pressureNames.length
+    ? pressureNames.join("、")
+    : dominantPressure
+      ? humanizeEvidenceText(dominantPressure)
+      : "当前证据未形成明确的主要压力排序";
+  const unconfirmed =
+    dataQuality.blocked > 0
+      ? `${dataQuality.blocked} 行证据因缺失、过期、历史不足或研究约束未进入完整判断`
+      : "未发现由数据约束造成的新增阻断";
   return (
-    <article className={`overview-block overview-${tone}`}>
-      <div className="overview-label">
-        <span>{index}</span>
-        <p>{label}</p>
+    <section className="executive-brief-card">
+      <div className="executive-emblem">
+        <ResearchIcon name="evidence" size={26} />
       </div>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </article>
+      <div className="executive-copy">
+        <p className="research-kicker">EXECUTIVE BRIEF</p>
+        <h2>当前主要压力集中在：{primaryPressure}。</h2>
+        <div className="executive-points">
+          <article>
+            <span className="point-dot point-pressure" />
+            <div>
+              <strong>主要压力</strong>
+              <p>{primaryPressure}</p>
+            </div>
+          </article>
+          <article>
+            <span className="point-dot point-watch" />
+            <div>
+              <strong>未确认风险</strong>
+              <p>{unconfirmed}</p>
+            </div>
+          </article>
+          <article>
+            <span className="point-dot point-quality" />
+            <div>
+              <strong>数据质量</strong>
+              <p>
+                fresh {dataQuality.fresh} · blocked {dataQuality.blocked} · AI
+                allowed {dataQuality.aiAllowed}
+              </p>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div className="executive-status">
+        <span>Financial Stress</span>
+        <strong>{humanizeEvidenceText(stressStatus || "not available")}</strong>
+      </div>
+    </section>
   );
 }
 
-function MacroRegimeOverview({ rows }: { rows: DashboardEvidenceRow[] }) {
-  const label = evidenceValue(rows, "macro_regime_label");
-  const support = evidenceValue(rows, "support_band");
-  const quality = evidenceValue(rows, "evidence_quality_band");
-  const conflict = evidenceValue(rows, "conflict_band");
-  const ranking = evidenceValue(rows, "primary_pressure_ranking");
-  const available = label !== null;
-
-  return (
-    <article className="overview-block overview-regime">
-      <div className="overview-label">
-        <span>02</span>
-        <p>Macro Regime Review</p>
-      </div>
-      <strong>{available && label ? formatEvidenceEnum(label) : "未生成"}</strong>
-      <small>
-        {available
-          ? `支持 ${formatEvidenceEnum(support || "未标注")} · 质量 ${formatEvidenceEnum(
-              quality || "未标注"
-            )} · 冲突 ${formatEvidenceEnum(conflict || "未标注")}${
-              ranking ? ` · 压力 ${formatEvidenceEnum(ranking)}` : ""
-            } · 当前证据复核`
-          : "Dashboard modules available; regime summary not generated."}
-      </small>
-    </article>
-  );
-}
-
-function DataQualityOverview({
-  quality
-}: {
-  quality: ReturnType<typeof summarizeDataQuality>;
-}) {
-  const value =
-    quality.stale + quality.missing + quality.researchNeeded > 0
-      ? "存在数据约束"
-      : "数据状态可用";
-  return (
-    <article className="overview-block overview-quality">
-      <div className="overview-label">
-        <span>04</span>
-        <p>Data Quality</p>
-      </div>
-      <strong>{value}</strong>
-      <ul className="quality-inline-list">
-        <li>fresh {quality.fresh}</li>
-        <li>stale {quality.stale}</li>
-        <li>missing {quality.missing}</li>
-        <li>research {quality.researchNeeded}</li>
-        <li>history {quality.insufficientHistory}</li>
-      </ul>
-    </article>
-  );
-}
-
-function EvidenceModuleCard({
-  moduleKey,
+function RiskChannelTile({
+  channel,
   module,
-  variant = "market",
-  onShowAll
+  onClick
 }: {
-  moduleKey: string;
+  channel: (typeof riskChannels)[number];
   module: DashboardModule;
-  variant?: "market" | "proxy" | "portfolio";
-  onShowAll: () => void;
+  onClick: () => void;
 }) {
-  const dataStatus = moduleDataStatus(module.key_metrics);
-  const sourceBadges = Array.from(
-    new Set(
-      [
-        module.source_badge,
-        ...module.key_metrics.map((metric) => metric.source_badge)
-      ].filter((value): value is string => Boolean(value))
-    )
-  );
-
+  const primary = findMetric(module, channel.primary) || module.key_metrics[0];
+  const secondary =
+    findMetric(module, channel.secondary) ||
+    module.key_metrics.find((metric) => metric.metric_key !== primary?.metric_key);
   return (
-    <article className={`evidence-module-card module-${variant}`}>
-      <header className="evidence-module-header">
+    <button className="risk-channel-tile" onClick={onClick} type="button">
+      <header>
+        <ResearchIcon name={channel.icon} size={21} />
         <div>
-          <p className="module-key">{moduleKey}</p>
-          <h4>
-            {moduleKey === "portfolio_deviation"
-              ? "组合偏离 / Local Portfolio Overlay"
-              : getModuleLabel(moduleKey)}
-          </h4>
+          <strong>{getModuleLabel(channel.key)}</strong>
+          <small>{channel.key}</small>
         </div>
-        <span className="module-number">
-          {String(
-            [...primaryMarketModuleKeys, ...supportingModuleKeys].indexOf(
-              moduleKey as (typeof primaryMarketModuleKeys)[number]
-            ) + 1
-          ).padStart(2, "0")}
-        </span>
+        <StatusBadge status={module.status} />
       </header>
-
-      <p className="module-explanation">
-        {moduleDescriptions[moduleKey] || module.summary || "当前证据模块。"}
-      </p>
-
-      <div className="dual-status-row">
-        <LabeledBadge
-          label="金融状态"
-          value={getStatusLabel(module.status)}
-          className={statusClass(module.status)}
-        />
-        <LabeledBadge
-          label="数据状态"
-          value={dataQualityLabel(dataStatus)}
-          className={dataQualityClass(dataStatus)}
-        />
+      <div className="channel-readings">
+        <ChannelReading metric={primary} />
+        <ChannelReading metric={secondary} secondary />
       </div>
-
-      {variant === "proxy" && (
-        <BoundaryCallout>
-          仅为 proxy breadth / concentration observation，不等同于真实市场广度，
-          不能单独确认系统性风险。
-        </BoundaryCallout>
-      )}
-      {variant === "portfolio" && (
-        <BoundaryCallout>
-          Local context only · 不触发宏观状态 · 不触发系统性压力 · 不构成配置建议。
-        </BoundaryCallout>
-      )}
-
-      <div className="paper-metric-list">
-        {module.key_metrics.slice(0, 5).map((metric) => (
-          <MetricPaperRow key={metric.metric_key} metric={metric} />
-        ))}
-      </div>
-
-      <footer className="evidence-module-footer">
-        <div>
-          <span className="footer-label">SOURCE SUMMARY</span>
-          <span className="source-summary">
-            {sourceBadges.slice(0, 4).map((sourceBadge) => (
-              <SourceBadge key={sourceBadge} sourceBadge={sourceBadge} />
-            ))}
-          </span>
-        </div>
-        <div>
-          <span className="footer-label">UPDATED</span>
-          <strong>{formatTimestamp(moduleUpdatedAt(module))}</strong>
-        </div>
-        <button
-          className="paper-button"
-          type="button"
-          onClick={onShowAll}
-          aria-label={`查看${getModuleLabel(moduleKey)}详情`}
-        >
-          查看详情
-        </button>
+      <footer>
+        <SourceBadge
+          sourceBadge={primary?.source_badge || module.source_badge}
+        />
+        <ResearchIcon name="chevron" size={15} />
       </footer>
-
-      {(module.error_summary || module.next_action) && (
-        <div className="module-system-note">
-          {module.error_summary && <p>{module.error_summary}</p>}
-          {module.next_action && <p>{module.next_action}</p>}
-        </div>
-      )}
-    </article>
+    </button>
   );
 }
 
-function MetricPaperRow({ metric }: { metric: DashboardMetric }) {
-  const needsExplanation = blockedMetricStatuses.has(metric.status);
-  const explanation =
-    getMissingReasonLabel(metric.missing_reason) ||
-    formatCompactHint(metric.interpretation_hint) ||
-    (needsExplanation ? getStatusLabel(metric.status) : "");
-
-  return (
-    <article className="paper-metric-row">
-      <div className="metric-paper-heading">
-        <div>
-          <strong>{metric.display_name}</strong>
-          <small>{metric.metric_key}</small>
-        </div>
-        <span className={`status-stamp ${statusClass(metric.status)}`}>
-          {getStatusLabel(metric.status)}
-        </span>
-      </div>
-      <div className="metric-reading">
-        <span>{formatEvidenceValueText(metric.value_text, metric.status)}</span>
-        {metric.unit && <small>{metric.unit}</small>}
-      </div>
-      <div className="metric-metadata">
-        <SourceBadge sourceBadge={metric.source_badge} />
-        <span
-          className={`data-chip freshness-chip ${freshnessClass(
-            metric.freshness_status
-          )}`}
-        >
-          {getFreshnessLabel(metric.freshness_status)}
-        </span>
-        {metric.ai_context_tier === "model_output" && (
-          <span className="data-chip source-chip source-model-output">
-            模型输出
-          </span>
-        )}
-        <span
-          className={`data-chip ai-chip ${aiContextClass(
-            metric.ai_context_allowed
-          )}`}
-        >
-          {getAiContextLabel(metric.ai_context_allowed)}
-        </span>
-      </div>
-      <div className="metric-paper-foot">
-        <span>{metric.observation_date || "观测日期不可用"}</span>
-        {metric.source_series && <span>{metric.source_series}</span>}
-      </div>
-      {explanation && (
-        <p className="metric-interpretation" title={metric.interpretation_hint || ""}>
-          {explanation}
-        </p>
-      )}
-    </article>
-  );
-}
-
-function LabeledBadge({
-  label,
-  value,
-  className
+function ChannelReading({
+  metric,
+  secondary = false
 }: {
-  label: string;
-  value: string;
-  className: string;
+  metric: DashboardMetric | undefined;
+  secondary?: boolean;
 }) {
+  if (!metric) {
+    return (
+      <div className={secondary ? "channel-reading secondary" : "channel-reading"}>
+        <span>not available</span>
+        <strong>—</strong>
+      </div>
+    );
+  }
   return (
-    <div className="labeled-badge">
-      <span>{label}</span>
-      <strong className={`status-stamp ${className}`}>{value}</strong>
+    <div className={secondary ? "channel-reading secondary" : "channel-reading"}>
+      <span>{metric.display_name}</span>
+      <MetricValue
+        status={metric.status}
+        unit={metric.unit}
+        valueText={metric.value_text}
+      />
     </div>
   );
 }
 
-function SourceBadge({ sourceBadge }: { sourceBadge: string }) {
-  return (
-    <span
-      className={`data-chip source-chip ${sourceBadgeClass(sourceBadge)}`}
-      title={sourceBadge}
-    >
-      {getSourceBadgeLabel(sourceBadge)}
-    </span>
-  );
-}
-
-function BoundaryCallout({ children }: { children: React.ReactNode }) {
-  return <p className="boundary-callout">{children}</p>;
-}
-
-function MissingDataPanel({
-  items
+function CompactEvidenceCard({
+  moduleKey,
+  module,
+  onClick
 }: {
-  items: Array<Record<string, unknown>>;
+  moduleKey: string;
+  module: DashboardModule;
+  onClick: () => void;
 }) {
+  const metrics = compactMetrics(moduleKey, module);
   return (
-    <article className="paper-context-panel">
-      <header>
-        <p className="section-index">MISSING DATA</p>
-        <h4>缺失与输入约束</h4>
-      </header>
-      {items.length === 0 ? (
-        <p className="panel-empty">当前 dashboard 未报告缺失数据。</p>
-      ) : (
-        <ul className="paper-list">
-          {items.slice(0, 6).map((item, index) => (
-            <li key={`${String(item.key || "missing")}-${index}`}>
-              <strong>{String(item.key || "unknown")}</strong>
-              <span>{String(item.summary || item.status || "missing")}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </article>
-  );
-}
-
-function FreshnessPanel({ data }: { data: Record<string, unknown> }) {
-  const files =
-    data.files && typeof data.files === "object"
-      ? Object.entries(data.files as Record<string, Record<string, unknown>>)
-      : [];
-  return (
-    <article className="paper-context-panel">
-      <header>
-        <p className="section-index">DATA FRESHNESS</p>
-        <h4>数据新鲜度</h4>
-      </header>
-      {files.length === 0 ? (
-        <p className="panel-empty">新鲜度摘要不可用。</p>
-      ) : (
-        <ul className="paper-list">
-          {files.slice(0, 6).map(([key, value]) => (
-            <li key={key}>
-              <strong>{key}</strong>
-              <span>
-                {getStatusLabel(String(value.status || "unknown"))} ·{" "}
-                {formatTimestamp(String(value.generated_at || ""))}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </article>
-  );
-}
-
-function ProviderHealthPanel({
-  providerHealth,
-  fallback
-}: {
-  providerHealth: ApiResult<ProviderHealthResponse>;
-  fallback: DashboardSummaryResponse["provider_health"];
-}) {
-  const data = providerHealth.data;
-  const status = data?.overall_status || fallback.overall_status || "unknown";
-  return (
-    <article className="paper-context-panel provider-panel">
+    <article className="compact-evidence-card">
       <header>
         <div>
-          <p className="section-index">PROVIDER HEALTH</p>
-          <h4>数据管线状态</h4>
+          <p className="research-kicker">{moduleKey}</p>
+          <h3>{getModuleLabel(moduleKey)}</h3>
         </div>
-        <span className={`status-stamp ${statusClass(status)}`}>
-          {providerHealthLabel(status)}
-        </span>
+        <StatusBadge status={module.status} />
       </header>
-      <p className="provider-boundary">Provider 状态不代表市场风险状态。</p>
-      {data?.checks && data.checks.length > 0 ? (
-        <ul className="paper-list compact-provider-list">
-          {data.checks.slice(0, 5).map((check) => (
-            <li key={check.key}>
-              <strong>{check.provider}</strong>
-              <span>
-                {getStatusLabel(check.status)}
-                {check.observation_date ? ` · ${check.observation_date}` : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="panel-empty">
-          {data?.error_summary ||
-            fallback.error_summary ||
-            "尚无 provider 检查明细。"}
-        </p>
+      {moduleKey === "rate_pressure" && <YieldCurveStrip module={module} />}
+      {moduleKey === "equity_trend" && <MomentumBars metrics={metrics} />}
+      {moduleKey === "market_stress_derived" && (
+        <DrawdownBars metrics={metrics} />
       )}
+      {!["rate_pressure", "equity_trend", "market_stress_derived"].includes(
+        moduleKey
+      ) && (
+        <div className="compact-metric-list">
+          {metrics.map((metric) => (
+            <div key={metric.metric_key}>
+              <span>{metric.display_name}</span>
+              <MetricValue
+                status={metric.status}
+                unit={metric.unit}
+                valueText={metric.value_text}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      <footer>
+        <span>{formatTimestamp(moduleUpdatedAt(module))}</span>
+        <button onClick={onClick} type="button">
+          查看详情 <ResearchIcon name="chevron" size={14} />
+        </button>
+      </footer>
     </article>
   );
 }
 
-function ReviewEntry({
+function YieldCurveStrip({ module }: { module: DashboardModule }) {
+  const points = ["dgs2", "dgs10", "dgs30"]
+    .map((key) => findMetric(module, key))
+    .filter((metric): metric is DashboardMetric => Boolean(metric));
+  return (
+    <div className="yield-curve-strip">
+      {points.map((metric, index) => (
+        <div key={metric.metric_key}>
+          <span>{["2Y", "10Y", "30Y"][index]}</span>
+          <strong>
+            {formatEvidenceValueText(metric.value_text, metric.status)}
+          </strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MomentumBars({ metrics }: { metrics: DashboardMetric[] }) {
+  return (
+    <div className="mini-bar-list">
+      {metrics.map((metric) => (
+        <div key={metric.metric_key}>
+          <span>{metric.display_name}</span>
+          <div className="mini-bar-track">
+            <i style={{ width: `${normalizedBarWidth(metric.value)}%` }} />
+          </div>
+          <strong>
+            {formatEvidenceValueText(metric.value_text, metric.status)}
+          </strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DrawdownBars({ metrics }: { metrics: DashboardMetric[] }) {
+  return (
+    <div className="mini-bar-list drawdown-list">
+      {metrics.map((metric) => (
+        <div key={metric.metric_key}>
+          <span>{metric.display_name}</span>
+          <div className="mini-bar-track">
+            <i style={{ width: `${normalizedBarWidth(metric.value, 20)}%` }} />
+          </div>
+          <strong>
+            {formatEvidenceValueText(metric.value_text, metric.status)}
+          </strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SupportingContextCard({
   title,
-  description,
-  actionLabel,
-  disabled = false,
+  boundary,
+  module,
   onClick
 }: {
   title: string;
-  description: string;
-  actionLabel: string;
-  disabled?: boolean;
-  onClick?: () => void;
+  boundary: string;
+  module: DashboardModule | undefined;
+  onClick: () => void;
 }) {
   return (
-    <article className={`review-entry ${disabled ? "is-disabled" : ""}`}>
-      <div>
-        <p className="section-index">REVIEW SURFACE</p>
-        <h4>{title}</h4>
-        <p>{description}</p>
-      </div>
-      <button
-        className="paper-button"
-        type="button"
-        disabled={disabled}
-        onClick={onClick}
-      >
-        {actionLabel}
+    <article className="supporting-context-card">
+      <header>
+        <div>
+          <p className="research-kicker">SUPPORTING CONTEXT</p>
+          <h3>{title}</h3>
+        </div>
+        {module && <StatusBadge status={module.status} />}
+      </header>
+      {module ? (
+        <div className="compact-metric-list">
+          {module.key_metrics.slice(0, 3).map((metric) => (
+            <div key={metric.metric_key}>
+              <span>{metric.display_name}</span>
+              <MetricValue
+                status={metric.status}
+                unit={metric.unit}
+                valueText={metric.value_text}
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="not-available-copy">not available</p>
+      )}
+      <p className="supporting-boundary">{boundary}</p>
+      <button disabled={!module} onClick={onClick} type="button">
+        查看详情 <ResearchIcon name="chevron" size={14} />
       </button>
     </article>
   );
 }
 
-function PaperLoadingState() {
+function DataQualityCard({
+  dataQuality,
+  missingData,
+  totalRows
+}: {
+  dataQuality: ReturnType<typeof summarizeDataQuality>;
+  missingData: Array<Record<string, unknown>>;
+  totalRows: number;
+}) {
+  const usable = Math.max(0, totalRows - dataQuality.blocked);
   return (
-    <section className="paper-state" aria-live="polite">
-      <p className="paper-kicker">LOCAL MACRO RISK BRIEFING</p>
-      <h2>正在整理今日证据</h2>
-      <p>读取本地 Dashboard 与 Evidence Table，不调用外部服务。</p>
-      <div className="paper-loading-rule" />
-    </section>
+    <article className="supporting-context-card">
+      <header>
+        <div>
+          <p className="research-kicker">DATA QUALITY</p>
+          <h3>缺失与新鲜度</h3>
+        </div>
+        <FreshnessBadge freshness={dataQuality.stale > 0 ? "stale" : "fresh"} />
+      </header>
+      <div className="quality-bar" aria-label="证据可用比例">
+        <i
+          style={{
+            width: `${totalRows ? Math.round((usable / totalRows) * 100) : 0}%`
+          }}
+        />
+      </div>
+      <dl className="quality-stat-grid">
+        <div>
+          <dt>Fresh</dt>
+          <dd>{dataQuality.fresh}</dd>
+        </div>
+        <div>
+          <dt>Blocked</dt>
+          <dd>{dataQuality.blocked}</dd>
+        </div>
+        <div>
+          <dt>AI allowed</dt>
+          <dd>{dataQuality.aiAllowed}</dd>
+        </div>
+        <div>
+          <dt>Missing summary</dt>
+          <dd>{missingData.length}</dd>
+        </div>
+      </dl>
+      <p className="supporting-boundary">
+        missing / stale / research_needed / insufficient_history 均保留可见。
+      </p>
+    </article>
   );
 }
 
-function PaperErrorState({ message }: { message: string | null }) {
+function ReviewSurfaceCard({
+  label,
+  title,
+  description,
+  icon,
+  onClick
+}: {
+  label: string;
+  title: string;
+  description: string;
+  icon: ResearchIconName;
+  onClick: () => void;
+}) {
   return (
-    <section className="paper-state" role="alert">
-      <p className="paper-kicker">DASHBOARD UNAVAILABLE</p>
-      <h2>首页证据暂不可用</h2>
-      <p>{message || "请确认本地后端已启动。"}</p>
-    </section>
+    <button className="review-surface-card" onClick={onClick} type="button">
+      <ResearchIcon name={icon} size={25} />
+      <div>
+        <p className="research-kicker">{label}</p>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <ResearchIcon name="chevron" size={17} />
+    </button>
   );
 }
 
-function evidenceValue(rows: DashboardEvidenceRow[], metricKey: string) {
-  const row = rows.find((candidate) => candidate.metric_key === metricKey);
-  if (!row || blockedMetricStatuses.has(row.status)) return null;
-  return formatEvidenceValueText(row.value_text, row.status);
+function compactMetrics(moduleKey: string, module: DashboardModule) {
+  const preferred: Record<string, string[]> = {
+    credit_stress: ["high_yield_spread", "investment_grade_spread", "vix"],
+    rate_pressure: ["dgs2", "dgs10", "dgs30"],
+    real_yield_pressure: ["dfii10", "t10yie"],
+    inflation_energy_pressure: [
+      "core_cpi_yoy",
+      "core_pce_yoy",
+      "wti_30d_change",
+      "ppi_final_demand_yoy"
+    ],
+    equity_trend: ["sp500_30d_return", "nasdaq100_30d_return"],
+    market_stress_derived: [
+      "sp500_drawdown_3m",
+      "nasdaq100_drawdown_3m",
+      "dgs10_dgs2_curve_slope"
+    ]
+  };
+  const selected = (preferred[moduleKey] || [])
+    .map((key) => findMetric(module, key))
+    .filter((metric): metric is DashboardMetric => Boolean(metric));
+  return (selected.length ? selected : module.key_metrics).slice(0, 3);
 }
 
 function summarizeDataQuality(rows: DashboardEvidenceRow[]) {
@@ -816,117 +795,19 @@ function summarizeDataQuality(rows: DashboardEvidenceRow[]) {
       if (row.freshness_status === "stale" || row.status === "stale") {
         summary.stale += 1;
       }
-      if (row.status === "missing") summary.missing += 1;
-      if (row.status === "research_needed") summary.researchNeeded += 1;
-      if (row.status === "insufficient_history") {
-        summary.insufficientHistory += 1;
-      }
+      if (blockedStatuses.has(row.status)) summary.blocked += 1;
+      if (row.ai_context_allowed) summary.aiAllowed += 1;
       return summary;
     },
-    {
-      fresh: 0,
-      stale: 0,
-      missing: 0,
-      researchNeeded: 0,
-      insufficientHistory: 0
-    }
+    { fresh: 0, stale: 0, blocked: 0, aiAllowed: 0 }
   );
 }
 
-function moduleDataStatus(metrics: DashboardMetric[]): DataQualityStatus {
-  if (metrics.length === 0) return "unknown";
-  if (
-    metrics.some(
-      (metric) =>
-        metric.status === "stale" || metric.freshness_status === "stale"
-    )
-  ) {
-    return "stale";
-  }
-  if (metrics.some((metric) => metric.status === "missing")) return "missing";
-  if (metrics.some((metric) => metric.status === "research_needed")) {
-    return "research_needed";
-  }
-  if (metrics.some((metric) => metric.status === "insufficient_history")) {
-    return "insufficient_history";
-  }
-  if (metrics.some((metric) => metric.status === "not_available")) {
-    return "not_available";
-  }
-  if (metrics.every((metric) => metric.freshness_status === "historical")) {
-    return "historical";
-  }
-  if (metrics.some((metric) => metric.freshness_status === "normal_lag")) {
-    return "normal_lag";
-  }
-  if (metrics.some((metric) => metric.freshness_status === "fresh")) {
-    return "fresh";
-  }
-  return "unknown";
+function normalizedBarWidth(value: DashboardMetric["value"], scale = 10) {
+  if (typeof value !== "number") return 0;
+  return Math.max(4, Math.min(100, Math.abs(value) * scale));
 }
 
-function dataQualityLabel(status: DataQualityStatus) {
-  if (status === "research_needed") return "需研究数据源";
-  if (status === "not_available") return "不可用";
-  if (["fresh", "historical", "normal_lag"].includes(status)) {
-    return getFreshnessLabel(status);
-  }
-  return getStatusLabel(status);
-}
-
-function dataQualityClass(status: DataQualityStatus) {
-  if (["fresh", "historical", "normal_lag"].includes(status)) {
-    return freshnessClass(status);
-  }
-  return statusClass(status);
-}
-
-function providerHealthLabel(status: string | null | undefined) {
-  if (status === "not_run_yet") return "尚未运行";
-  return getStatusLabel(status || "unknown");
-}
-
-function formatTimestamp(value: string | null | undefined) {
-  if (!value) return "not available";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(parsed);
-}
-
-function moduleUpdatedAt(module: DashboardModule) {
-  if (module.updated_at) return module.updated_at;
-  return (
-    module.key_metrics.find((metric) => metric.generated_at)?.generated_at ||
-    module.key_metrics.find((metric) => metric.observation_date)
-      ?.observation_date ||
-    null
-  );
-}
-
-function formatEvidenceEnum(value: string) {
-  const normalized = value.trim();
-  const labels: Record<string, string> = {
-    rates_pressure: "利率压力",
-    real_yield_pressure: "实际收益率压力",
-    rates_real_yield: "利率 / 实际收益率",
-    credit_pressure: "信用压力",
-    inflation_pressure: "通胀压力",
-    equity_pressure: "权益压力",
-    mixed_pressure: "混合压力",
-    high: "高",
-    moderate: "中等",
-    medium: "中等",
-    low: "低",
-    limited: "有限",
-    balanced: "均衡",
-    benign: "温和"
-  };
-  return labels[normalized] || normalized.split("_").join(" ");
+function humanizeEvidenceText(value: string) {
+  return value.replace(/_/g, " ").replace(/\s+/g, " ").trim();
 }

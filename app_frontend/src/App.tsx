@@ -10,6 +10,7 @@ import {
   fetchStorageStatus
 } from "./api/client";
 import { DashboardHomepage } from "./components/DashboardHomepage";
+import type { AppViewKey } from "./components/AppShell";
 import type {
   ApiResult,
   AppSettingsResponse,
@@ -38,7 +39,7 @@ import {
   statusClass
 } from "./utils/styleClasses";
 
-type ViewKey = "dashboard" | "evidence" | "chat" | "account" | "diagnostics";
+type ViewKey = AppViewKey;
 
 type EvidenceFilterState = {
   module: string;
@@ -57,8 +58,10 @@ const defaultEvidenceFilters: EvidenceFilterState = {
 const navItems: Array<{ key: ViewKey; label: string }> = [
   { key: "dashboard", label: "市场仪表盘" },
   { key: "evidence", label: "全量证据表" },
-  { key: "chat", label: "AI 对话（冻结）" },
-  { key: "account", label: "账户概览（只读）" },
+  { key: "scenario", label: "情景压力" },
+  { key: "historical", label: "历史验证" },
+  { key: "ai-context", label: "AI 记忆（只读）" },
+  { key: "portfolio", label: "账户概览（只读）" },
   { key: "diagnostics", label: "诊断" }
 ];
 
@@ -175,7 +178,7 @@ export default function App() {
             evidence={evidence}
             providerHealth={providerHealth}
             isLoading={isLoading}
-            onOpenEvidence={() => setActiveView("evidence")}
+            onNavigate={setActiveView}
           />
         )}
         {activeView === "evidence" && (
@@ -192,13 +195,25 @@ export default function App() {
             }}
           />
         )}
-        {activeView === "chat" && (
+        {activeView === "scenario" && (
           <PlaceholderView
-            title="AI 对话"
-            text="该产品表面尚未批准并保持冻结。当前页面不发送数据、不调用 DeepSeek 或 Tavily，也不保存对话。"
+            title="情景压力"
+            text="专用压力传导复核页面将在下一阶段接入现有 Scenario Stress evidence rows。"
           />
         )}
-        {activeView === "account" && (
+        {activeView === "historical" && (
+          <PlaceholderView
+            title="历史验证"
+            text="专用历史覆盖与边界复核页面将在下一阶段接入现有 Historical Validation evidence rows。"
+          />
+        )}
+        {activeView === "ai-context" && (
+          <PlaceholderView
+            title="AI 记忆（只读）"
+            text="当前页面只用于受控上下文预览，不发送数据、不调用外部模型或搜索，也不保存对话。"
+          />
+        )}
+        {activeView === "portfolio" && (
           <PlaceholderView
             title="账户概览"
             text="当前仅保留本地只读占位，不提供账户、持仓或目标权重编辑。"
