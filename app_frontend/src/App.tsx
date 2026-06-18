@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   fetchDashboardEvidenceTable,
   fetchDashboardSummary,
@@ -9,15 +9,13 @@ import {
   fetchStatus,
   fetchStorageStatus
 } from "./api/client";
-import { ModuleDetailDrawer } from "./components/ModuleDetailDrawer";
+import { DashboardHomepage } from "./components/DashboardHomepage";
 import type {
   ApiResult,
   AppSettingsResponse,
   DashboardEvidenceFilters,
   DashboardEvidenceRow,
   DashboardEvidenceTableResponse,
-  DashboardMetric,
-  DashboardModule,
   DashboardSummaryResponse,
   FavoriteAnswer,
   ProviderHealthResponse,
@@ -26,7 +24,6 @@ import type {
   StorageStatusResponse
 } from "./types";
 import {
-  formatCompactHint,
   getAiContextLabel,
   getFreshnessLabel,
   getMissingReasonLabel,
@@ -60,8 +57,8 @@ const defaultEvidenceFilters: EvidenceFilterState = {
 const navItems: Array<{ key: ViewKey; label: string }> = [
   { key: "dashboard", label: "市场仪表盘" },
   { key: "evidence", label: "全量证据表" },
-  { key: "chat", label: "AI 对话" },
-  { key: "account", label: "账户概览" },
+  { key: "chat", label: "AI 对话（冻结）" },
+  { key: "account", label: "账户概览（只读）" },
   { key: "diagnostics", label: "诊断" }
 ];
 
@@ -173,10 +170,12 @@ export default function App() {
 
       <main className="main-panel">
         {activeView === "dashboard" && (
-          <DashboardView
+          <DashboardHomepage
             dashboard={dashboard}
             evidence={evidence}
+            providerHealth={providerHealth}
             isLoading={isLoading}
+            onOpenEvidence={() => setActiveView("evidence")}
           />
         )}
         {activeView === "evidence" && (
@@ -196,13 +195,13 @@ export default function App() {
         {activeView === "chat" && (
           <PlaceholderView
             title="AI 对话"
-            text="DeepSeek chat will be added in a later phase. This page does not send data yet."
+            text="该产品表面尚未批准并保持冻结。当前页面不发送数据、不调用 DeepSeek 或 Tavily，也不保存对话。"
           />
         )}
         {activeView === "account" && (
           <PlaceholderView
             title="账户概览"
-            text="Account editing will be added in a later phase. Current phase remains read-only for holdings."
+            text="当前仅保留本地只读占位，不提供账户、持仓或目标权重编辑。"
           />
         )}
         {activeView === "diagnostics" && (
@@ -219,215 +218,6 @@ export default function App() {
         )}
       </main>
     </div>
-  );
-}
-
-function DashboardView({
-  dashboard,
-  evidence,
-  isLoading
-}: {
-  dashboard: ApiResult<DashboardSummaryResponse>;
-  evidence: ApiResult<DashboardEvidenceTableResponse>;
-  isLoading: boolean;
-}) {
-  const [selectedModuleKey, setSelectedModuleKey] = useState<string | null>(null);
-  const data = dashboard.data;
-  const modules = useMemo(() => {
-    if (!data) return [];
-    return Object.entries(data.modules);
-  }, [data]);
-  const selectedModule = selectedModuleKey && data
-    ? data.modules[selectedModuleKey]
-    : null;
-  const selectedRows = evidence.data?.rows.filter(
-    (row) => row.module === selectedModuleKey
-  ) || [];
-
-  if (isLoading) return <LoadingState title="市场仪表盘" />;
-  if (dashboard.error || !data) {
-    return <ErrorState title="市场仪表盘" message={dashboard.error} />;
-  }
-
-  return (
-    <section className="page-stack">
-      <header className="page-header">
-        <div>
-          <p className="eyebrow">Risk monitoring and evidence panel</p>
-          <h2>今日市场状态</h2>
-        </div>
-        <StatusPill status={data.overall_status} />
-      </header>
-
-      <section className="status-strip">
-        <Metric label="整体状态" value={getStatusLabel(data.overall_status)} />
-        <Metric label="风险等级" value={data.overall_risk_level || "unknown"} />
-        <Metric label="更新时间" value={data.generated_at || "not available"} />
-        <Metric
-          label="Provider Health"
-          value={providerHealthText(data.provider_health.overall_status)}
-        />
-      </section>
-
-      <section className="module-grid">
-        {modules.map(([key, module]) => (
-          <ModuleCard
-            key={key}
-            moduleKey={key}
-            module={module}
-            onShowAll={() => setSelectedModuleKey(key)}
-          />
-        ))}
-      </section>
-
-      <section className="content-grid">
-        <InfoPanel title="缺失数据">
-          {data.missing_data.length === 0 ? (
-            <p className="muted">暂无缺失数据提示。</p>
-          ) : (
-            <ul className="compact-list">
-              {data.missing_data.map((item, index) => (
-                <li key={`${String(item.key)}-${index}`}>
-                  <span>{String(item.key || "unknown")}</span>
-                  <small>{String(item.summary || item.status || "missing")}</small>
-                </li>
-              ))}
-            </ul>
-          )}
-        </InfoPanel>
-
-        <InfoPanel title="数据新鲜度">
-          <FreshnessList data={data.data_freshness} />
-        </InfoPanel>
-      </section>
-
-      {selectedModuleKey && selectedModule && (
-        <ModuleDetailDrawer
-          moduleKey={selectedModuleKey}
-          moduleLabel={getModuleLabel(selectedModuleKey)}
-          moduleSummary={selectedModule}
-          evidenceRows={selectedRows}
-          evidenceError={evidence.error}
-          onClose={() => setSelectedModuleKey(null)}
-        />
-      )}
-    </section>
-  );
-}
-
-function ModuleCard({
-  moduleKey,
-  module,
-  onShowAll
-}: {
-  moduleKey: string;
-  module: DashboardModule;
-  onShowAll: () => void;
-}) {
-  return (
-    <article className="module-card">
-      <div className="module-card-head">
-        <h3>
-          {getModuleLabel(moduleKey)}
-          <small className="module-key">{moduleKey}</small>
-        </h3>
-        <StatusPill status={module.status} />
-      </div>
-      <p className="module-label">{module.label || "未标注"}</p>
-      <p>{module.summary || "暂无摘要。"}</p>
-      <div className="metric-list">
-        {module.key_metrics.slice(0, 5).map((metric) => (
-          <MetricRow key={metric.metric_key} metric={metric} />
-        ))}
-      </div>
-      <dl>
-        <div>
-          <dt>来源</dt>
-          <dd>
-            <SourceChip sourceBadge={module.source_badge || "missing"} />
-          </dd>
-        </div>
-        <div>
-          <dt>更新</dt>
-          <dd>{module.updated_at || "not available"}</dd>
-        </div>
-      </dl>
-      {module.error_summary && (
-        <p className="error-text">{module.error_summary}</p>
-      )}
-      {module.next_action && <p className="next-action">{module.next_action}</p>}
-      <button className="secondary-button detail-button" type="button" onClick={onShowAll}>
-        查看详情
-      </button>
-    </article>
-  );
-}
-
-function MetricRow({ metric }: { metric: DashboardMetric }) {
-  const needsExplanation = [
-    "missing",
-    "research_needed",
-    "insufficient_history",
-    "stale",
-    "not_available"
-  ].includes(metric.status);
-  const metadataIncomplete =
-    metric.value !== null &&
-    metric.value !== undefined &&
-    !metric.ai_context_allowed &&
-    !needsExplanation;
-  return (
-    <div className="metric-row">
-      <div>
-        <strong>{metric.display_name}</strong>
-        <span className="chip-row">
-          <SourceChip sourceBadge={metric.source_badge} />
-          <FreshnessChip freshnessStatus={metric.freshness_status} />
-        </span>
-      </div>
-      <div className="metric-value">
-        <span>{metric.value_text}</span>
-        <StatusPill status={metric.status} />
-      </div>
-      {needsExplanation && (
-        <p className="metric-reason">
-          {getMissingReasonLabel(metric.missing_reason) ||
-            formatCompactHint(metric.interpretation_hint) ||
-            getStatusLabel(metric.status)}
-        </p>
-      )}
-      {!needsExplanation && metric.interpretation_hint && (
-        <p className="metric-hint" title={metric.interpretation_hint}>
-          {formatCompactHint(metric.interpretation_hint)}
-        </p>
-      )}
-      {metadataIncomplete && (
-        <p className="metric-reason">有值但元数据不足，不进入 AI 事实层。</p>
-      )}
-    </div>
-  );
-}
-
-function FreshnessList({ data }: { data: Record<string, unknown> }) {
-  const files = data.files;
-  if (!files || typeof files !== "object") {
-    return <p className="muted">freshness unavailable</p>;
-  }
-  return (
-    <ul className="compact-list">
-      {Object.entries(files as Record<string, Record<string, unknown>>).map(
-        ([key, value]) => (
-          <li key={key}>
-            <span>{key}</span>
-            <small>
-              {getStatusLabel(String(value.status || "unknown"))} /{" "}
-              {String(value.generated_at || "not available")}
-              {value.next_action ? ` / ${String(value.next_action)}` : ""}
-            </small>
-          </li>
-        )
-      )}
-    </ul>
   );
 }
 

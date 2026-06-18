@@ -4,7 +4,10 @@ export const sourceBadgeLabels: Record<string, string> = {
   unofficial_fallback: "非官方备用",
   proxy: "代理指标",
   derived: "派生",
+  historical: "历史窗口",
+  model_output: "模型输出",
   local: "本地",
+  cached_report: "缓存报告",
   "search-derived": "搜索派生",
   missing: "来源缺失",
   research_needed: "待研究"
