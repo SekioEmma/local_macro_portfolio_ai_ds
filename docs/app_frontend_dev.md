@@ -2,6 +2,31 @@
 
 This local web shell calls the FastAPI backend and does not run market pipelines, provider refreshes, DeepSeek, Tavily, or account writes. Phase 2 adds SQLite app state for settings and placeholder metadata only.
 
+## One-command Startup
+
+From the project root, run:
+
+```powershell
+python scripts/run_local_app.py
+```
+
+On Windows, you can also double-click:
+
+```text
+start_local_app.cmd
+```
+
+The launcher starts the backend and frontend, waits until both are ready, and
+opens `http://127.0.0.1:5173` in the default browser. Press `Ctrl+C` in the
+launcher window to stop only the processes started by the launcher.
+
+If either expected service is already running, the launcher reuses it. If a
+required port is occupied by a different service, startup stops without
+terminating that process.
+
+Use `python scripts/run_local_app.py --no-browser` to start both services
+without opening a browser.
+
 ## Backend
 
 Start the local API backend from the project root:
