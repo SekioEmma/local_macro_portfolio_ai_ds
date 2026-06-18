@@ -55,6 +55,9 @@ requested later.
 Data Foundation Gap Fill v1 is completed after the Phase F/G dashboard service
 refactor as an offline source-registry, audit, tests, and governance-doc task
 before frontend work.
+Data Foundation G1 Controlled Local Refresh and Coverage Audit is completed
+using only existing source-gated ingest scripts. Local market-history coverage
+was refreshed without committing generated data or changing production code.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage 9 Chat / Memo / Report productization remains
@@ -98,6 +101,12 @@ Validation baseline captured during Stage 8.5 preflight:
 - Estimated rebuilds avoided: 2.
 - D13 query strategy: batch.
 - D14 query strategy: batch.
+- Data Foundation G1 post-refresh market history: 45243 observations / 45
+  metrics.
+- Data Foundation G1 post-refresh included facts: 125.
+- Data Foundation G1 post-refresh included model outputs: 63.
+- Data Foundation G1 post-refresh dashboard `insufficient_history` rows: 0.
+- Data Foundation G1 post-refresh D13 history sufficiency: true.
 - `python scripts/audit_data_pipeline_coverage.py`: passed, `overall_status=degraded`.
 - Audit degraded reason: `portfolio_deviation: module_status=pressure`.
 - Stage 8 audit status: `portfolio_exposure_overlay_available=true`,
@@ -573,7 +582,14 @@ before frontend work. It updates the PPI Final Demand source tier, adds the
 read-only `audit_data_foundation_gaps.py` CLI, locks D14 source mappings,
 keeps `ofr_fsi`, valuation, FedWatch, and BAA reference-only boundaries gated,
 and records the validation plan in `docs/data_foundation_gap_fill_v1.md`.
-Next recommended task: manual local data refresh only with explicit user
-approval, or UI-0/UI-1 frontend data-display work using existing backend APIs
-and source gates.
+Data Foundation G1 Controlled Local Refresh and Coverage Audit is complete. It
+used existing ingest scripts only, refreshed the ignored local
+`market_history.sqlite3`, increased coverage from 33,803 to 45,243
+observations, resolved six `insufficient_history` rows, and preserved PPI,
+D14, OFR FSI, valuation/FedWatch, BAA, and proxy source gates. No generated
+data, production code, API schema, model semantic, frontend, or AI-context
+change was committed. See `docs/data_foundation_local_refresh_g1.md`.
+Next recommended task: UI-0/UI-1 frontend data-display work using existing
+backend APIs and source gates. A G2 official-source refresh-command task is
+optional and requires separate explicit approval.
 Real AI Chat / Memo / Report integrations remain not implemented.

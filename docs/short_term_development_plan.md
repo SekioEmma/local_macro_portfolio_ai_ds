@@ -13,6 +13,9 @@ completed after S1. HF-2 Project Namespace Index / Governance Light Cleanup
 hotfix.
 Data Foundation Gap Fill v1 is completed as an offline source-registry,
 audit, tests, and docs task before frontend work.
+Data Foundation G1 Controlled Local Refresh and Coverage Audit is completed
+using existing source-gated ingest scripts. Generated market-history data
+remains local and uncommitted.
 
 ## Priority Route
 
@@ -42,8 +45,11 @@ audit, tests, and docs task before frontend work.
 16. Phase F/G complete remaining dashboard_service refactor: completed.
 17. Data Foundation Gap Fill v1 source-gated cleanup before frontend:
     completed.
-18. Manual local data refresh approval or UI-0/UI-1 frontend data-display
-    route: next.
+18. Data Foundation G1 controlled local refresh and coverage audit: completed.
+19. UI-0/UI-1 frontend data-display route using existing backend APIs and
+    source gates: next.
+20. G2 official-source refresh-command implementation: only if remaining
+    history gaps block UI work and the user explicitly approves it.
 
 ### P1
 
@@ -76,6 +82,7 @@ audit, tests, and docs task before frontend work.
 - Phase F2 Dashboard Metric Builder Extraction.
 - Phase F/G Dashboard Service Refactor Completion.
 - Data Foundation Gap Fill v1.
+- Data Foundation G1 Controlled Local Refresh and Coverage Audit.
 
 ### Deferred
 
@@ -177,10 +184,11 @@ Stress Matrix semantics, support/severity/uncertainty logic, public keys, AI
 Context Manifest semantics, AI memo schema, endpoints, frontend UI, external
 AI, Tavily/search, live fetches, or live writes.
 
-S3 was followed by dashboard-service refactor completion and Data Foundation
-Gap Fill v1. The current next route is manual local data refresh only with
-explicit user approval, or UI-0/UI-1 frontend data-display work using existing
-backend APIs and source gates. Do not automatically proceed to AI Chat, Tavily,
+S3 was followed by dashboard-service refactor completion, Data Foundation Gap
+Fill v1, and Data Foundation G1 controlled local refresh. The current next
+route is UI-0/UI-1 frontend data-display work using existing backend APIs and
+source gates. A G2 refresh-command implementation is optional and requires
+separate explicit approval. Do not automatically proceed to AI Chat, Tavily,
 frontend AI UI, or external AI productization.
 
 HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
@@ -302,9 +310,17 @@ providers, live fetches, live writes, external AI, prediction/probability
 outputs, or trading/allocation language. See
 `docs/data_foundation_gap_fill_v1.md`.
 
-The next recommended task after Data Foundation Gap Fill v1 is manual local
-data refresh only with explicit user approval, or UI-0/UI-1 frontend
-data-display work using existing backend APIs and source gates.
+Data Foundation G1 Controlled Local Refresh and Coverage Audit is completed.
+It used only existing official/public-source and proxy-badged ingest scripts,
+improved local history coverage from 33,803 to 45,243 observations, resolved
+the six dashboard `insufficient_history` rows, and preserved all source gates.
+The generated market-history SQLite database remains local and uncommitted.
+See `docs/data_foundation_local_refresh_g1.md`.
+
+The next recommended task is UI-0/UI-1 frontend data-display work using
+existing backend APIs and source gates. If missing dedicated history refresh
+surfaces for DGS2/DGS10/T10Y2Y/T10YIE or core CPI/PCE must be implemented
+first, create a separate G2 task only with explicit user approval.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

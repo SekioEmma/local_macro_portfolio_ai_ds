@@ -313,9 +313,19 @@ behavior, providers, live fetches, live writes, external AI,
 prediction/probability, return, allocation, or trading behavior changed. See
 `docs/data_foundation_gap_fill_v1.md`.
 
-Next recommended task after Data Foundation Gap Fill v1: manual local data
-refresh only with explicit user approval, or UI-0/UI-1 frontend data-display
-work using existing backend APIs and source gates.
+Data Foundation G1 Controlled Local Refresh and Coverage Audit: completed.
+Existing repository ingest scripts refreshed configured official/public-source
+history and preserved proxy/unofficial source badges. Local market-history
+coverage increased from 33,803 to 45,243 observations, the six dashboard
+`insufficient_history` rows were resolved, and Historical Risk Normalization
+history sufficiency became true. The task did not add providers, change model
+semantics or public contracts, or commit generated data. See
+`docs/data_foundation_local_refresh_g1.md`.
+
+Next recommended task after Data Foundation G1: UI-0/UI-1 frontend
+data-display work using existing backend APIs and source gates. A G2
+official-source refresh-command implementation remains optional and requires
+separate explicit approval.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
