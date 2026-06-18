@@ -322,10 +322,18 @@ history sufficiency became true. The task did not add providers, change model
 semantics or public contracts, or commit generated data. See
 `docs/data_foundation_local_refresh_g1.md`.
 
-Next recommended task after Data Foundation G1: UI-0/UI-1 frontend
-data-display work using existing backend APIs and source gates. A G2
-official-source refresh-command implementation remains optional and requires
-separate explicit approval.
+UI-0 Frontend Information Architecture Audit: completed as docs/audit only.
+The audit confirmed an existing React/Vite/TypeScript shell and documented
+current Dashboard, Evidence Table, module-detail, diagnostics, model-output
+display, AI Context Preview, and frozen-placeholder gaps. It did not change
+frontend/backend code, APIs, model semantics, AI Context Manifest semantics,
+providers, or generated data. See
+`docs/frontend_information_architecture_audit.md`.
+
+Next recommended task: UI-1 Dashboard homepage data-display polish using
+existing backend APIs and source gates only. A G2 official-source
+refresh-command implementation remains optional and requires separate explicit
+approval.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or

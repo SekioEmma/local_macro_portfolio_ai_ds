@@ -8,15 +8,14 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: Data Foundation G1 Controlled Local Refresh and Coverage
-  Audit
+- Last completed task: UI-0 Frontend Information Architecture Audit
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: UI-0/UI-1 frontend data-display using existing
-  backend APIs and source gates
-- Next engineering task: UI-0/UI-1 frontend data-display; use a separate G2
-  task only if missing official-source history refresh commands are required
-  and explicitly approved
+- Current immediate route: UI-1 Dashboard homepage data-display polish using
+  existing backend APIs and source gates only
+- Next engineering task: UI-1 Dashboard homepage data-display polish; use a
+  separate G2 task only if missing official-source history refresh commands
+  are required and explicitly approved
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -148,6 +147,7 @@ Stage DF is concluded. No default DF-5.
 | `docs/modeling_roadmap.md` | modeling-history narrative and module boundaries |
 | `docs/data_foundation_gap_fill_v1.md` | G0 source-gated registry cleanup and validation |
 | `docs/data_foundation_local_refresh_g1.md` | G1 controlled local refresh evidence and remaining coverage gaps |
+| `docs/frontend_information_architecture_audit.md` | UI-0 frontend shell, page, API-contract, placeholder, and display-gap audit |
 | `docs/foundation_stabilization_backlog.md` | M-line backlog (M7-M12) |
 | stage-specific closeout docs | per-stage evidence and contract |
 
@@ -191,11 +191,13 @@ validation requirements. The short version:
 14. ~~Data Foundation Gap Fill v1 source-gated cleanup~~ (completed)
 15. ~~Data Foundation G1 controlled local refresh and coverage audit~~
     (completed)
-16. UI-0/UI-1 frontend data-display route using existing backend APIs and
-    source gates
-17. G2 official-source refresh-command implementation only with explicit
+16. ~~UI-0 Frontend Information Architecture Audit~~ (completed; docs/audit
+    only)
+17. UI-1 Dashboard homepage data-display polish using existing backend APIs
+    and source gates only
+18. G2 official-source refresh-command implementation only with explicit
     approval if the remaining history gaps block UI work
-18. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+19. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,

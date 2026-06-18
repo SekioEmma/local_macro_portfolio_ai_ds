@@ -46,9 +46,11 @@ remains local and uncommitted.
 17. Data Foundation Gap Fill v1 source-gated cleanup before frontend:
     completed.
 18. Data Foundation G1 controlled local refresh and coverage audit: completed.
-19. UI-0/UI-1 frontend data-display route using existing backend APIs and
-    source gates: next.
-20. G2 official-source refresh-command implementation: only if remaining
+19. UI-0 Frontend Information Architecture Audit: completed as docs/audit
+    only.
+20. UI-1 Dashboard homepage data-display polish using existing backend APIs
+    and source gates only: next.
+21. G2 official-source refresh-command implementation: only if remaining
     history gaps block UI work and the user explicitly approves it.
 
 ### P1
@@ -83,6 +85,7 @@ remains local and uncommitted.
 - Phase F/G Dashboard Service Refactor Completion.
 - Data Foundation Gap Fill v1.
 - Data Foundation G1 Controlled Local Refresh and Coverage Audit.
+- UI-0 Frontend Information Architecture Audit.
 
 ### Deferred
 
@@ -185,11 +188,17 @@ Context Manifest semantics, AI memo schema, endpoints, frontend UI, external
 AI, Tavily/search, live fetches, or live writes.
 
 S3 was followed by dashboard-service refactor completion, Data Foundation Gap
-Fill v1, and Data Foundation G1 controlled local refresh. The current next
-route is UI-0/UI-1 frontend data-display work using existing backend APIs and
-source gates. A G2 refresh-command implementation is optional and requires
-separate explicit approval. Do not automatically proceed to AI Chat, Tavily,
-frontend AI UI, or external AI productization.
+Fill v1, Data Foundation G1 controlled local refresh, and UI-0 Frontend
+Information Architecture Audit. UI-0 confirmed an existing React/Vite/
+TypeScript shell with real Dashboard, Evidence Table, module-detail,
+provider-health, missing/freshness, and diagnostics surfaces. Scenario Stress
+Matrix and Historical Validation currently have generic evidence/detail
+coverage but no dedicated pages; AI Context Preview has a dormant client
+contract but no active page. The current next route is UI-1 Dashboard homepage
+data-display polish using existing backend APIs and source gates only. A G2
+refresh-command implementation is optional and requires separate explicit
+approval. Do not automatically proceed to AI Chat, Tavily, frontend AI UI, or
+external AI productization.
 
 HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
 test fixtures and benchmark result reuse only; it did not change model
@@ -317,10 +326,13 @@ the six dashboard `insufficient_history` rows, and preserved all source gates.
 The generated market-history SQLite database remains local and uncommitted.
 See `docs/data_foundation_local_refresh_g1.md`.
 
-The next recommended task is UI-0/UI-1 frontend data-display work using
-existing backend APIs and source gates. If missing dedicated history refresh
-surfaces for DGS2/DGS10/T10Y2Y/T10YIE or core CPI/PCE must be implemented
-first, create a separate G2 task only with explicit user approval.
+UI-0 Frontend Information Architecture Audit is completed. See
+`docs/frontend_information_architecture_audit.md`.
+
+The next recommended task is UI-1 Dashboard homepage data-display polish using
+existing backend APIs and source gates only. If missing dedicated history
+refresh surfaces for DGS2/DGS10/T10Y2Y/T10YIE or core CPI/PCE must be
+implemented first, create a separate G2 task only with explicit user approval.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

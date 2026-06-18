@@ -418,6 +418,20 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
+UI-0 Frontend Information Architecture Audit is completed as an L2 docs/audit
+task. It confirmed an existing React/Vite/TypeScript frontend shell with a
+real API-backed Dashboard, Evidence Table, module detail drawer,
+provider-health diagnostics, and missing/freshness display. Scenario Stress
+Matrix and Historical Validation are available only through generic evidence
+rows and the module drawer; they do not yet have dedicated review pages. AI
+Context Preview has a typed client function but no active page. Chat and
+account surfaces remain placeholders, and unused local app-state mutation
+helpers remain unconnected. See
+`docs/frontend_information_architecture_audit.md`.
+
+Next recommended task: UI-1 Dashboard homepage data-display polish using
+existing backend APIs and source gates only.
+
 Stage 9.3-B-2d internal one-shot manual invocation review completed.
 External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
 Tavily/search was added. Stage R1 Course Paper Research Recovery Note
@@ -589,7 +603,8 @@ observations, resolved six `insufficient_history` rows, and preserved PPI,
 D14, OFR FSI, valuation/FedWatch, BAA, and proxy source gates. No generated
 data, production code, API schema, model semantic, frontend, or AI-context
 change was committed. See `docs/data_foundation_local_refresh_g1.md`.
-Next recommended task: UI-0/UI-1 frontend data-display work using existing
-backend APIs and source gates. A G2 official-source refresh-command task is
-optional and requires separate explicit approval.
+UI-0 Frontend Information Architecture Audit is complete.
+Next recommended task: UI-1 Dashboard homepage data-display polish using
+existing backend APIs and source gates only. A G2 official-source
+refresh-command task is optional and requires separate explicit approval.
 Real AI Chat / Memo / Report integrations remain not implemented.
