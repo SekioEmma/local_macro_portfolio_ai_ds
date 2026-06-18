@@ -1014,11 +1014,21 @@ def calculate_labor_deterioration_status(
     )
 
 
+_CANDIDATES_CACHE: dict[str, dict[str, list[HistoricalDerivedMetric]]] = {}
+
+
+def invalidate_historical_candidates_cache() -> None:
+    _CANDIDATES_CACHE.clear()
+
+
 def build_historical_dashboard_candidates(
     *,
     db_path: Path | str | None = None,
     fallback_observations: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, list[HistoricalDerivedMetric]]:
+    cache_key = str(db_path or "") if fallback_observations is None else ""
+    if cache_key and cache_key in _CANDIDATES_CACHE:
+        return _CANDIDATES_CACHE[cache_key]
     candidates: dict[str, list[HistoricalDerivedMetric]] = {}
     for output_key, spec in DERIVED_METRIC_SPECS.items():
         module = spec["module"]
@@ -1029,6 +1039,8 @@ def build_historical_dashboard_candidates(
             fallback_observations=fallback_observations,
         )
         candidates.setdefault(module, []).append(item)
+    if cache_key:
+        _CANDIDATES_CACHE[cache_key] = candidates
     return candidates
 
 

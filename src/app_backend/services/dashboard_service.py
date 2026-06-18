@@ -193,6 +193,7 @@ from app_backend.services.dashboard_portfolio_compact import (
     weight_fraction as _weight_fraction,
 )
 from data_quality import last_good_cache
+from data_quality.historical_derived_metrics import invalidate_historical_candidates_cache
 from data_providers import market_history_store
 
 
@@ -209,6 +210,7 @@ def build_dashboard_summary(
 ) -> DashboardSummaryResponse:
     if context is not None and context.summary is not None:
         return context.summary
+    invalidate_historical_candidates_cache()
     base_dir = Path(reports_dir) if reports_dir is not None else DEFAULT_REPORTS_DIR
     dashboard_market_history_db_path = _dashboard_market_history_db_path(
         base_dir,
@@ -249,9 +251,62 @@ def build_dashboard_summary(
         data_freshness=data_freshness,
         next_actions=next_actions,
     )
+    if _shared_cache_bypass_reason(
+        reports_dir=reports_dir,
+        base_dir=base_dir,
+        market_history_db_path=market_history_db_path,
+        dashboard_market_history_db_path=dashboard_market_history_db_path,
+        write_last_good=False,
+    ) is None:
+        existing = _SHARED_DASHBOARD_CONTEXT_CACHE.get(cache_key.digest)
+        if existing is None:
+            _SHARED_DASHBOARD_CONTEXT_CACHE.set(
+                CachedDashboardContext(
+                    key_digest=cache_key.digest,
+                    summary=summary,
+                )
+            )
     if context is not None:
         context.summary = summary
     return summary
+
+
+def _try_evidence_cache_hit(
+    key_digest: str,
+    module: str | None,
+    status: str | None,
+    source_badge: str | None,
+    ai_context_allowed: bool | None,
+    write_last_good: bool,
+    reports_dir: Path | str | None,
+    context: DashboardPipelineContext | None,
+) -> DashboardEvidenceTableResponse | None:
+    cached = _SHARED_DASHBOARD_CONTEXT_CACHE.get(key_digest)
+    if cached is None:
+        return None
+    if cached.unfiltered_evidence_table is not None:
+        if write_last_good and _last_good_write_allowed(reports_dir):
+            _save_last_good_candidates(list(cached.unfiltered_evidence_table.rows))
+        evidence_table = _evidence_table_from_unfiltered(
+            cached.unfiltered_evidence_table,
+            module=module,
+            status=status,
+            source_badge=source_badge,
+            ai_context_allowed=ai_context_allowed,
+        )
+        if context is not None:
+            context.summary = cached.summary
+            if _evidence_request_is_unfiltered(
+                module=module,
+                status=status,
+                source_badge=source_badge,
+                ai_context_allowed=ai_context_allowed,
+            ):
+                context.evidence_table = evidence_table
+        return evidence_table
+    if cached.summary is not None and context is not None:
+        context.summary = cached.summary
+    return None
 
 
 def build_dashboard_evidence_table(
@@ -286,72 +341,67 @@ def build_dashboard_evidence_table(
         reports_dir=base_dir,
         market_history_db_path=dashboard_market_history_db_path,
     )
-    cache_bypass = _shared_cache_bypass_reason(
+    path_bypass = _shared_cache_bypass_reason(
         reports_dir=reports_dir,
         base_dir=base_dir,
         market_history_db_path=market_history_db_path,
         dashboard_market_history_db_path=dashboard_market_history_db_path,
-        write_last_good=write_last_good,
+        write_last_good=False,
     )
-    cache_allowed = cache_bypass is None and not context_summary_preloaded
+    cache_allowed = path_bypass is None and not context_summary_preloaded
     if cache_allowed:
-        cached = _SHARED_DASHBOARD_CONTEXT_CACHE.get(cache_key.digest)
-        if cached is not None:
-            evidence_table = _evidence_table_from_unfiltered(
-                cached.unfiltered_evidence_table,
-                module=module,
-                status=status,
-                source_badge=source_badge,
-                ai_context_allowed=ai_context_allowed,
-            )
-            if context is not None:
-                context.summary = cached.summary
-                if _evidence_request_is_unfiltered(
-                    module=module,
-                    status=status,
-                    source_badge=source_badge,
-                    ai_context_allowed=ai_context_allowed,
-                ):
-                    context.evidence_table = evidence_table
-            return evidence_table
-    if context is not None and context.summary is not None:
-        summary = context.summary
-    else:
-        summary = build_dashboard_summary(
-            reports_dir=reports_dir,
-            market_history_db_path=market_history_db_path,
-            context=context,
+        hit = _try_evidence_cache_hit(
+            cache_key.digest, module, status, source_badge,
+            ai_context_allowed, write_last_good, reports_dir, context,
         )
-    reports = _load_dashboard_reports(base_dir)
-    base_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(
-        reports,
-        db_path=dashboard_market_history_db_path,
-    )
-    _pipeline = build_dashboard_model_rows(
-        base_rows=base_rows,
-        db_path=dashboard_market_history_db_path,
-        build_evidence_row=_evidence_row,
-    )
-    all_rows = base_rows + _pipeline.rows
-    if write_last_good and _last_good_write_allowed(reports_dir):
-        _save_last_good_candidates(all_rows)
-    unfiltered_evidence_table = _build_evidence_table_response(
-        summary=summary,
-        all_rows=all_rows,
-        filtered_rows=all_rows,
-        module=None,
-        status=None,
-        source_badge=None,
-        ai_context_allowed=None,
-    )
-    if cache_allowed:
-        _SHARED_DASHBOARD_CONTEXT_CACHE.set(
-            CachedDashboardContext(
-                key_digest=cache_key.digest,
-                summary=summary,
-                unfiltered_evidence_table=unfiltered_evidence_table,
+        if hit is not None:
+            return hit
+    with _SHARED_DASHBOARD_CONTEXT_CACHE.build_lock:
+        if cache_allowed:
+            hit = _try_evidence_cache_hit(
+                cache_key.digest, module, status, source_badge,
+                ai_context_allowed, write_last_good, reports_dir, context,
             )
+            if hit is not None:
+                return hit
+        if context is not None and context.summary is not None:
+            summary = context.summary
+        else:
+            summary = build_dashboard_summary(
+                reports_dir=reports_dir,
+                market_history_db_path=market_history_db_path,
+                context=context,
+            )
+        reports = _load_dashboard_reports(base_dir)
+        base_rows = _evidence_rows_from_summary(summary) + _labor_macro_evidence_rows(
+            reports,
+            db_path=dashboard_market_history_db_path,
         )
+        _pipeline = build_dashboard_model_rows(
+            base_rows=base_rows,
+            db_path=dashboard_market_history_db_path,
+            build_evidence_row=_evidence_row,
+        )
+        all_rows = base_rows + _pipeline.rows
+        if write_last_good and _last_good_write_allowed(reports_dir):
+            _save_last_good_candidates(all_rows)
+        unfiltered_evidence_table = _build_evidence_table_response(
+            summary=summary,
+            all_rows=all_rows,
+            filtered_rows=all_rows,
+            module=None,
+            status=None,
+            source_badge=None,
+            ai_context_allowed=None,
+        )
+        if cache_allowed:
+            _SHARED_DASHBOARD_CONTEXT_CACHE.set(
+                CachedDashboardContext(
+                    key_digest=cache_key.digest,
+                    summary=summary,
+                    unfiltered_evidence_table=unfiltered_evidence_table,
+                )
+            )
     evidence_table = _evidence_table_from_unfiltered(
         unfiltered_evidence_table,
         module=module,

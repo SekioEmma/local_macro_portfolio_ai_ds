@@ -153,11 +153,33 @@ def apply_labor_history_fallback(
     default_market_history_db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
     target_db_path = db_path if db_path is not None else default_market_history_db_path
-    latest_by_key = {
-        metric.metric_key: latest_official_labor_observation(metric.metric_key, target_db_path)
-        for metric in metrics
-        if is_labor_official_metric(metric.metric_key)
-    }
+    labor_keys = [m.metric_key for m in metrics if is_labor_official_metric(m.metric_key)]
+    if not labor_keys:
+        return metrics
+    batch = market_history_store.list_market_observations_batch(
+        labor_keys, limit_per_key=100, db_path=target_db_path,
+    )
+    latest_by_key: dict[str, dict[str, Any] | None] = {}
+    for key in labor_keys:
+        official_macro = official_macro_pack.get_official_macro_metric(key)
+        if official_macro is None or official_macro.module != "labor_macro":
+            latest_by_key[key] = None
+            continue
+        best = None
+        for row in batch.get(key, []):
+            if row.get("status") != "ok":
+                continue
+            if row.get("source_badge") != "official":
+                continue
+            if row.get("provider") != "FRED":
+                continue
+            if row.get("source_series") != official_macro.source_series:
+                continue
+            if row.get("value_numeric") is None:
+                continue
+            best = row
+            break
+        latest_by_key[key] = best
     return [
         labor_history_metric(metric, latest_by_key.get(metric.metric_key))
         if labor_history_fallback_needed(metric, latest_by_key.get(metric.metric_key))
