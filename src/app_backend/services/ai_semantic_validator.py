@@ -344,6 +344,33 @@ SEMANTIC_RULES: tuple[SemanticRule, ...] = (
             ),
         ),
     ),
+    SemanticRule(
+        name="on_rrp_alone_cannot_imply_reserve_scarcity",
+        description_zh=(
+            "若提到 ON RRP / 隔夜逆回购导致准备金稀缺或流动性紧张，"
+            "必须同时引用 SOFR-EFFR 利差、EFFR-IORB 利差、repo 利率或银行准备金证据；"
+            "ON RRP 单独变化不能推断准备金稀缺。"
+        ),
+        anchors=(
+            "on rrp",
+            "on-rrp",
+            "overnight reverse repo",
+            "隔夜逆回购",
+        ),
+        required_groups=(
+            (
+                "sofr",
+                "effr",
+                "iorb",
+                "repo",
+                "bank reserves",
+                "reserve balance",
+                "准备金",
+                "回购利率",
+                "联邦基金",
+            ),
+        ),
+    ),
 )
 
 

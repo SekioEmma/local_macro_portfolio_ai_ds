@@ -43,7 +43,10 @@ from app_backend.services.ai_research_renderer import (
     PREFLIGHT_CHECKLIST_ZH,
     SYSTEM_BOUNDARY_ZH,
 )
-from app_backend.services.ai_research_validator import validate_research_domains
+from app_backend.services.ai_research_validator import (
+    validate_deepseek_output_constraints,
+    validate_research_domains,
+)
 from app_backend.services.deepseek_adapter import (
     BlockedAdapterError,
     DeepSeekNetworkAdapter,
@@ -73,28 +76,33 @@ _FORBIDDEN_INPUT_TERMS = {
     "api_key", "api key", "deepseek_api_key",
 }
 
-_SECTION_FORMAT_INSTRUCTION = """请严格按以下 7 段结构回答，每段以标题行开头：
+_SECTION_FORMAT_INSTRUCTION = """请严格按以下 7 段结构回答，每段以标题行开头。
+每段核心判断必须在行首标注 [claim_type=xxx]，可选值：
+  direct_evidence — 直接由单一证据卡片支持的事实陈述
+  cross_evidence_inference — 多张卡片交叉推断的结论
+  interpretive — 宏观经验判断或历史类比，需明确标注证据不足
+  watchlist — 观察性启发条件，不构成结论
 
 ## 当前结论
-（基于当前证据，市场宏观状态的核心判断。必须注明证据支持程度。）
+（基于当前证据，市场宏观状态的核心判断。每条判断标注 [claim_type=...]，必须注明证据支持程度。）
 
 ## 支持证据
-（列出支持当前结论的具体证据，引用对应的 evidence/model context id。）
+（列出支持当前结论的具体证据，引用对应的 evidence/model context id。每条标注 [claim_type=direct_evidence] 或 [claim_type=cross_evidence_inference]。）
 
 ## 反向证据
-（列出与结论矛盾或削弱结论的证据，同样引用 context id。）
+（列出与结论矛盾或削弱结论的证据，同样引用 context id。反向证据只约束其对应叙事，不扩展为其他叙事的反证。）
 
 ## 数据约束
-（列出缺失、代理、陈旧或来源门禁约束，明确哪些结论因此不够可靠。）
+（列出缺失、代理、陈旧或来源门禁约束，明确哪些结论因此不够可靠。必须包含引用证据的 source_badge 分布（official/official_fallback/proxy/derived/reference_only）和 freshness 分布（fresh/stale/historical）。不能引用 excluded 项作为强结论支撑。）
 
 ## 宏观解释
-（对上述证据做宏观金融逻辑串联，解释传导路径。）
+（对上述证据做宏观金融逻辑串联，解释传导路径。每条判断标注 [claim_type=...]。宏观经验判断和历史类比必须标注 [claim_type=interpretive]，并明确证据边界。"市场可能认为"类推断必须标注 [claim_type=interpretive] 且加注证据不足。）
 
 ## 组合通道
 （仅限本地清洗后的紧凑风险通道解释；不输出持仓、配置或交易建议。）
 
 ## 观察清单与边界
-（列出后续需要观察的指标和边界条件。明确本回答不是预测、不是概率、不是交易建议。）"""
+（列出后续需要观察的指标和边界条件。任何数值阈值后必须标注 [threshold_source=project_band|historical_percentile|heuristic_watchlist]。模型自行生成的阈值为 heuristic_watchlist，不得描述为项目触发线。明确本回答不是预测、不是概率、不是交易建议。）"""
 
 
 def validate_user_question(question: str) -> tuple[bool, list[str]]:
@@ -132,6 +140,7 @@ def build_deepseek_prompt(
 
     output_contract = "\n".join(f"- {item}" for item in OUTPUT_CONTRACT_ZH)
     preflight = "\n".join(f"- {item}" for item in PREFLIGHT_CHECKLIST_ZH)
+    source_quality = _build_source_quality_summary(selected_context.selected_cards)
 
     parts = [
         f"[系统边界]\n{SYSTEM_BOUNDARY_ZH}",
@@ -142,10 +151,37 @@ def build_deepseek_prompt(
         f"[选中的证据上下文]\n{selected_context.selected_context_text}",
         f"[上下文选择说明]\n" + "\n".join(selected_context.selection_notes),
         f"[约束摘要]\n{selected_context.constraint_summary.summary_zh}",
+        f"[来源与新鲜度摘要]\n{source_quality}",
         _SECTION_FORMAT_INSTRUCTION,
         f"[用户问题]\n{user_question}",
     ]
     return "\n\n".join(parts)
+
+
+def _build_source_quality_summary(selected_cards: list[Any]) -> str:
+    """Pre-aggregate source_badge and freshness distributions for the prompt."""
+    from collections import Counter
+
+    badge_counter: Counter[str] = Counter()
+    freshness_counter: Counter[str] = Counter()
+    for card in selected_cards:
+        badge = getattr(card, "source_badge", None) or "unknown"
+        freshness = getattr(card, "freshness_status", None) or "unknown"
+        badge_counter[str(badge)] += 1
+        freshness_counter[str(freshness)] += 1
+
+    total = len(selected_cards)
+    if total == 0:
+        return "无选中证据卡片。"
+
+    badge_parts = [f"{k}={v}" for k, v in sorted(badge_counter.items())]
+    freshness_parts = [f"{k}={v}" for k, v in sorted(freshness_counter.items())]
+    return (
+        f"本次引用 {total} 张证据卡片。\n"
+        f"source_badge 分布: {', '.join(badge_parts)}\n"
+        f"freshness 分布: {', '.join(freshness_parts)}\n"
+        f"请在「数据约束」段复述此分布，不能引用 excluded 项作为强结论支撑。"
+    )
 
 
 def _build_runtime_policy() -> ExternalAIRuntimePolicy:
@@ -293,6 +329,24 @@ def run_deepseek_research(
         selected_cards=selected_context.selected_cards,
         prompt_ready=budget.ready,
     )
+
+    ds_constraint_findings = validate_deepseek_output_constraints(deepseek_text)
+    if ds_constraint_findings:
+        all_findings = list(semantic_result.findings) + ds_constraint_findings
+        max_sev = max(
+            (f.severity for f in all_findings),
+            key=lambda s: {"info": 0, "warning": 1, "error": 2, "blocker": 3}[s],
+        )
+        semantic_result = semantic_result.model_copy(
+            update={
+                "findings": all_findings,
+                "max_severity": max_sev,
+                "domain_checks": {
+                    **semantic_result.domain_checks,
+                    "deepseek_output_constraints": "claim_type_threshold_source_badge_checked",
+                },
+            }
+        )
 
     elapsed = time.monotonic() - t0
 

@@ -45,6 +45,11 @@ OUTPUT_CONTRACT_ZH = [
     "情景不是预测，历史验证不是回测，金融压力评分不是概率。",
     "组合内容仅限本地清洗后的紧凑风险通道解释。",
     "不得输出交易动作、目标配置、概率或收益预测。",
+    "反向证据只能约束对应叙事（如信用利差未走阔约束'系统性危机'叙事），不能扩展为对所有相关叙事的反证。",
+    "任何数值阈值后必须标注来源类型：[threshold_source=project_band|historical_percentile|heuristic_watchlist]。",
+    "每段核心判断必须标注 [claim_type=direct_evidence|cross_evidence_inference|interpretive|watchlist]。",
+    "数据约束段必须包含引用证据的 source_badge 分布和 freshness 分布摘要。",
+    "ON RRP / 隔夜逆回购单独变化不能推断准备金稀缺，必须同时引用 SOFR-EFFR 利差、EFFR-IORB 利差或银行准备金证据。",
 ]
 PREFLIGHT_CHECKLIST_ZH = [
     "上下文仅来自 AI Context Manifest。",

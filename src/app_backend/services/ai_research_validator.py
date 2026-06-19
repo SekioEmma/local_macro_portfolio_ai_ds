@@ -154,6 +154,71 @@ def _privacy_findings(
     return sorted(term for term in PRIVACY_FORBIDDEN_TERMS if term in text)
 
 
+_CLAIM_TYPE_PATTERN = re.compile(
+    r"\[claim_type\s*=\s*"
+    r"(direct_evidence|cross_evidence_inference|interpretive|watchlist)\s*\]"
+)
+_THRESHOLD_SOURCE_PATTERN = re.compile(
+    r"\[threshold_source\s*=\s*"
+    r"(project_band|historical_percentile|heuristic_watchlist)\s*\]"
+)
+_NUMERIC_THRESHOLD_PATTERN = re.compile(
+    r"\d+\.?\d*\s*(%|pp|个百分点|bp|bps|基点)"
+)
+_SOURCE_BADGE_KEYWORDS = (
+    "source_badge", "official", "official_fallback", "proxy", "derived",
+    "reference_only", "freshness",
+)
+
+
+def validate_deepseek_output_constraints(
+    model_answer: str,
+) -> list[AISemanticFinding]:
+    """Check DeepSeek output for claim_type, threshold_source, and source_badge."""
+    findings: list[AISemanticFinding] = []
+
+    claim_type_matches = _CLAIM_TYPE_PATTERN.findall(model_answer)
+    if not claim_type_matches:
+        findings.append(
+            AISemanticFinding(
+                code="missing_claim_type_annotations",
+                category="evidence_layer",
+                severity="warning",
+                message_zh="DeepSeek 输出未包含任何 [claim_type=...] 标注，无法区分证据直接支持和经验解释。",
+            )
+        )
+
+    numeric_thresholds = _NUMERIC_THRESHOLD_PATTERN.findall(model_answer)
+    threshold_sources = _THRESHOLD_SOURCE_PATTERN.findall(model_answer)
+    if len(numeric_thresholds) > 0 and len(threshold_sources) == 0:
+        findings.append(
+            AISemanticFinding(
+                code="missing_threshold_source_annotations",
+                category="evidence_layer",
+                severity="warning",
+                message_zh="DeepSeek 输出包含数值阈值但未标注 [threshold_source=...]，无法区分项目触发线和模型自生阈值。",
+            )
+        )
+
+    data_constraint_match = re.search(
+        r"##\s*数据约束(.*?)(?=##|\Z)", model_answer, re.DOTALL
+    )
+    if data_constraint_match:
+        section_text = data_constraint_match.group(1)
+        has_badge_info = any(kw in section_text.lower() for kw in _SOURCE_BADGE_KEYWORDS)
+        if not has_badge_info:
+            findings.append(
+                AISemanticFinding(
+                    code="missing_source_badge_summary",
+                    category="source_quality",
+                    severity="warning",
+                    message_zh="「数据约束」段未包含 source_badge / freshness 分布摘要。",
+                )
+            )
+
+    return findings
+
+
 def _semantic_model(finding: ResearchSemanticFinding) -> AISemanticFinding:
     return AISemanticFinding(
         code=finding.code,
@@ -166,4 +231,4 @@ def _semantic_model(finding: ResearchSemanticFinding) -> AISemanticFinding:
     )
 
 
-__all__ = ["validate_research_domains"]
+__all__ = ["validate_deepseek_output_constraints", "validate_research_domains"]

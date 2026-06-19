@@ -182,7 +182,7 @@ def test_validator_accepts_dict_payload():
     assert "systemic_risk_requires_credit_funding_transmission" not in rules
 
 
-def test_rule_catalog_has_all_seven_rules():
+def test_rule_catalog_has_all_eight_rules():
     rule_names = {rule.name for rule in SEMANTIC_RULES}
     assert rule_names == {
         "systemic_risk_requires_credit_funding_transmission",
@@ -192,4 +192,5 @@ def test_rule_catalog_has_all_seven_rules():
         "historical_validation_requires_not_a_backtest_notice",
         "portfolio_requires_local_sanitized_no_allocation",
         "financial_stress_score_must_clarify_pressure_temperature",
+        "on_rrp_alone_cannot_imply_reserve_scarcity",
     }
