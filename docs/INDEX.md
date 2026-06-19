@@ -7,17 +7,14 @@ route is in `docs/short_term_development_plan.md`.
 ## Current Truth
 
 - Current branch: `app-mvp`
-- Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: Frontend redesign pre-flight (loosened
-  `test_frontend_registry_contracts.py` to semantic form, added
-  `test_api_response_shape.py` API field-set lock, wrote
-  `docs/frontend_baseline_pre_redesign.md` snapshot)
-- Last completed governance task: HF-2 Project Namespace Index / Governance
-  Light Cleanup
-- Current immediate route: open a `frontend-redesign` branch and begin
-  Era 1 frontend beautification with `ui-ux-pro-max-skill`
-- Next engineering task: Era 1.1 design-system bootstrap — install the
-  skill, generate baseline tokens, decide Tailwind / shadcn adoption
+- Current phase: G2/G3 data-source supplementation complete
+- Last completed task: official, fallback, reference-only,
+  controlled-dataset, and research-context provider supplementation
+- Last completed governance task: G2/G3 source registry and boundary closeout
+- Current immediate route: review source dry-runs, then return to UI-1 using
+  the new source-gated history
+- Next engineering task: wire selected observations into existing dashboard
+  contracts without changing model trigger semantics
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -149,6 +146,7 @@ Stage DF is concluded. No default DF-5.
 | `docs/modeling_roadmap.md` | modeling-history narrative and module boundaries |
 | `docs/data_foundation_gap_fill_v1.md` | G0 source-gated registry cleanup and validation |
 | `docs/data_foundation_local_refresh_g1.md` | G1 controlled local refresh evidence and remaining coverage gaps |
+| `docs/data_foundation_g2_source_supplementation.md` | G2/G3 provider registry, ingest commands, source hierarchy, boundaries, and closeout |
 | `docs/frontend_information_architecture_audit.md` | UI-0 frontend shell, page, API-contract, placeholder, and display-gap audit |
 | `docs/ai_1a_card_priority_semantic_foundation.md` | AI-1a backend primitives: evidence cards, priority ranking, financial semantic validator (not yet wired into preview service) |
 | `docs/foundation_stabilization_backlog.md` | M-line backlog (M7-M12) |
@@ -206,8 +204,7 @@ validation requirements. The short version:
     Chinese-ify memo templates, contract test updates
 20. AI-1c Frontend Evidence Cards / Semantic Validator panels and Prompt
     Preview page
-21. G2 official-source refresh-command implementation only with explicit
-    approval if the remaining history gaps block UI work
+21. ~~G2/G3 source supplementation~~ (completed)
 22. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 

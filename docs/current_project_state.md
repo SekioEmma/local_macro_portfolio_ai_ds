@@ -58,6 +58,14 @@ before frontend work.
 Data Foundation G1 Controlled Local Refresh and Coverage Audit is completed
 using only existing source-gated ingest scripts. Local market-history coverage
 was refreshed without committing generated data or changing production code.
+Data Foundation G2/G3 Source Supplementation is completed on `app-mvp`.
+It adds a centralized source registry plus FRED rate/breakeven history, BLS
+CPI v1, BEA NIPA PCE/GDP, Alpha Vantage proxy gates, controlled EIA datasets,
+OFR FSI reference history, and GDELT aggregate research-context support.
+GDELT remains outside financial facts and core model triggers. Generated
+SQLite files, downloaded datasets, discovery outputs, and credentials remain
+local and uncommitted. See
+`docs/data_foundation_g2_source_supplementation.md`.
 
 Stage 9.3-B-2d internal one-shot manual invocation review is complete.
 External AI line is frozen. Stage 9 Chat / Memo / Report productization remains

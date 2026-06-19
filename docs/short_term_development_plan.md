@@ -16,6 +16,10 @@ audit, tests, and docs task before frontend work.
 Data Foundation G1 Controlled Local Refresh and Coverage Audit is completed
 using existing source-gated ingest scripts. Generated market-history data
 remains local and uncommitted.
+Data Foundation G2/G3 Source Supplementation is completed. The project now has
+explicit provider contracts and source-gated ingest paths for FRED, BLS, BEA,
+Alpha Vantage, EIA, OFR, and GDELT aggregate research context. Generated data
+remains local and uncommitted.
 
 ## Priority Route
 
@@ -48,8 +52,8 @@ remains local and uncommitted.
 18. Data Foundation G1 controlled local refresh and coverage audit: completed.
 19. UI-0 Frontend Information Architecture Audit: completed as docs/audit
     only.
-20. UI-1 Dashboard homepage data-display polish using existing backend APIs
-    and source gates only: next.
+20. UI-1 Dashboard homepage data-display polish using existing backend APIs,
+    the G2/G3 source hierarchy, and existing model contracts only: next.
 21. AI-1a backend foundation for AI Context Manifest consumption (evidence
     cards, priority ranking, financial semantic validator): completed as
     additive local primitives; not yet wired into preview service.
@@ -57,8 +61,7 @@ remains local and uncommitted.
     section content: deferred to CODEX as a separate L3 task.
 23. AI-1c frontend Evidence Cards / Semantic Validator panels and Prompt
     Preview page: deferred to CODEX, follows AI-1b.
-24. G2 official-source refresh-command implementation: only if remaining
-    history gaps block UI work and the user explicitly approves it.
+24. G2/G3 source supplementation: completed with explicit user approval.
 
 ### P1
 
@@ -92,6 +95,7 @@ remains local and uncommitted.
 - Phase F/G Dashboard Service Refactor Completion.
 - Data Foundation Gap Fill v1.
 - Data Foundation G1 Controlled Local Refresh and Coverage Audit.
+- Data Foundation G2/G3 Source Supplementation.
 - UI-0 Frontend Information Architecture Audit.
 
 ### Deferred
