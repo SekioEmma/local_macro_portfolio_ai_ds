@@ -24,6 +24,7 @@ AI_BLOCKED_SOURCE_BADGES = {
     "missing",
     "research_needed",
     "search-derived",
+    "commercial_api_fallback",
 }
 
 

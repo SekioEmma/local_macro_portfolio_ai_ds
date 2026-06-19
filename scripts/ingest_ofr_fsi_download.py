@@ -85,14 +85,13 @@ def build_ingest_summary(
         "updated_count": 0,
         "dry_run": dry_run,
     }
-    for row in rows:
-        if dry_run:
-            continue
-        result = market_history_store.upsert_market_observation(
-            build_market_observation(row, metadata=metadata),
+    if not dry_run:
+        write_result = market_history_store.upsert_market_observations(
+            [build_market_observation(row, metadata=metadata) for row in rows],
             db_path=db_path,
         )
-        summary[f"{result['status']}_count"] += 1
+        summary["inserted_count"] = write_result["inserted_count"]
+        summary["updated_count"] = write_result["updated_count"]
     return summary
 
 

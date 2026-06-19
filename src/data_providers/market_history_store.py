@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .source_registry import SOURCE_PRIORITY
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MARKET_HISTORY_DB_PATH = PROJECT_ROOT / "data" / "market_history" / "market_history.sqlite3"
@@ -36,6 +38,47 @@ HOLDINGS_TOKENS = {
     "market_value",
     "cost_basis",
 }
+SOURCE_PRIORITY_SQL = (
+    "CASE source_badge "
+    + " ".join(
+        f"WHEN '{badge}' THEN {priority}"
+        for badge, priority in sorted(SOURCE_PRIORITY.items())
+    )
+    + " ELSE -1 END"
+)
+UPSERT_SQL = """
+    INSERT INTO market_observations (
+        metric_key, observation_date, value_numeric, value_text,
+        value_type, unit, status, source, source_badge, provider,
+        source_series, generated_at, fetched_at, freshness_status,
+        ai_context_allowed, metric_kind, lineage_json, raw_hash,
+        created_at, updated_at
+    )
+    VALUES (
+        :metric_key, :observation_date, :value_numeric, :value_text,
+        :value_type, :unit, :status, :source, :source_badge, :provider,
+        :source_series, :generated_at, :fetched_at, :freshness_status,
+        :ai_context_allowed, :metric_kind, :lineage_json, :raw_hash,
+        :created_at, :updated_at
+    )
+    ON CONFLICT(metric_key, observation_date, source_badge, source_series)
+    DO UPDATE SET
+        value_numeric = excluded.value_numeric,
+        value_text = excluded.value_text,
+        value_type = excluded.value_type,
+        unit = excluded.unit,
+        status = excluded.status,
+        source = excluded.source,
+        provider = excluded.provider,
+        generated_at = excluded.generated_at,
+        fetched_at = excluded.fetched_at,
+        freshness_status = excluded.freshness_status,
+        ai_context_allowed = excluded.ai_context_allowed,
+        metric_kind = excluded.metric_kind,
+        lineage_json = excluded.lineage_json,
+        raw_hash = excluded.raw_hash,
+        updated_at = excluded.updated_at
+"""
 
 
 class MarketHistoryValidationError(ValueError):
@@ -109,65 +152,48 @@ def upsert_market_observation(
         active = connect_market_history_db(path)
         close_connection = True
     try:
-        existing = active.execute(
-            """
-            SELECT id FROM market_observations
-            WHERE metric_key = ?
-              AND observation_date = ?
-              AND source_badge = ?
-              AND IFNULL(source_series, '') = IFNULL(?, '')
-            """,
-            (
-                payload["metric_key"],
-                payload["observation_date"],
-                payload["source_badge"],
-                payload["source_series"],
-            ),
-        ).fetchone()
-        active.execute(
-            """
-            INSERT INTO market_observations (
-                metric_key, observation_date, value_numeric, value_text,
-                value_type, unit, status, source, source_badge, provider,
-                source_series, generated_at, fetched_at, freshness_status,
-                ai_context_allowed, metric_kind, lineage_json, raw_hash,
-                created_at, updated_at
-            )
-            VALUES (
-                :metric_key, :observation_date, :value_numeric, :value_text,
-                :value_type, :unit, :status, :source, :source_badge, :provider,
-                :source_series, :generated_at, :fetched_at, :freshness_status,
-                :ai_context_allowed, :metric_kind, :lineage_json, :raw_hash,
-                :created_at, :updated_at
-            )
-            ON CONFLICT(metric_key, observation_date, source_badge, source_series)
-            DO UPDATE SET
-                value_numeric = excluded.value_numeric,
-                value_text = excluded.value_text,
-                value_type = excluded.value_type,
-                unit = excluded.unit,
-                status = excluded.status,
-                source = excluded.source,
-                provider = excluded.provider,
-                generated_at = excluded.generated_at,
-                fetched_at = excluded.fetched_at,
-                freshness_status = excluded.freshness_status,
-                ai_context_allowed = excluded.ai_context_allowed,
-                metric_kind = excluded.metric_kind,
-                lineage_json = excluded.lineage_json,
-                raw_hash = excluded.raw_hash,
-                updated_at = excluded.updated_at
-            """,
-            payload,
-        )
+        status = _upsert_payload(active, payload)
         active.commit()
         return {
-            "status": "updated" if existing else "inserted",
+            "status": status,
             "metric_key": payload["metric_key"],
         }
     finally:
         if close_connection and active is not None:
             active.close()
+
+
+def upsert_market_observations(
+    observations: list[MarketObservation | dict[str, Any]]
+    | tuple[MarketObservation | dict[str, Any], ...],
+    *,
+    db_path: Path | str | None = None,
+) -> dict[str, int]:
+    """Validate all rows first, then write them in one SQLite transaction."""
+    payloads = [_validated_observation_payload(item) for item in observations]
+    if not payloads:
+        return {"observation_count": 0, "inserted_count": 0, "updated_count": 0}
+    path = initialize_market_history_db(db_path)
+    inserted_count = 0
+    updated_count = 0
+    with connect_market_history_db(path) as connection:
+        try:
+            connection.execute("BEGIN")
+            for payload in payloads:
+                status = _upsert_payload(connection, payload)
+                if status == "inserted":
+                    inserted_count += 1
+                else:
+                    updated_count += 1
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+    return {
+        "observation_count": len(payloads),
+        "inserted_count": inserted_count,
+        "updated_count": updated_count,
+    }
 
 
 def list_market_observations(
@@ -186,18 +212,18 @@ def list_market_observations(
                 """
                 SELECT * FROM market_observations
                 WHERE metric_key = ?
-                ORDER BY observation_date DESC, id DESC
+                ORDER BY observation_date DESC, {SOURCE_PRIORITY_SQL} DESC, id DESC
                 LIMIT ?
-                """,
+                """.format(SOURCE_PRIORITY_SQL=SOURCE_PRIORITY_SQL),
                 (metric_key, bounded_limit),
             ).fetchall()
         else:
             rows = connection.execute(
                 """
                 SELECT * FROM market_observations
-                ORDER BY observation_date DESC, id DESC
+                ORDER BY observation_date DESC, {SOURCE_PRIORITY_SQL} DESC, id DESC
                 LIMIT ?
-                """,
+                """.format(SOURCE_PRIORITY_SQL=SOURCE_PRIORITY_SQL),
                 (bounded_limit,),
             ).fetchall()
     return [_row_to_observation(row) for row in rows]
@@ -246,13 +272,13 @@ def _batch_query(
                     *,
                     ROW_NUMBER() OVER (
                         PARTITION BY metric_key
-                        ORDER BY observation_date DESC, id DESC
+                        ORDER BY observation_date DESC, {SOURCE_PRIORITY_SQL} DESC, id DESC
                     ) AS _rn
                 FROM market_observations
                 WHERE metric_key IN ({placeholders})
             )
             WHERE _rn <= ?
-            ORDER BY metric_key ASC, observation_date DESC, id DESC
+            ORDER BY metric_key ASC, observation_date DESC, {SOURCE_PRIORITY_SQL} DESC, id DESC
             """,
             (*keys, per_key_limit),
         ).fetchall()
@@ -264,7 +290,7 @@ def _batch_query(
             f"""
             SELECT * FROM market_observations
             WHERE metric_key IN ({placeholders})
-            ORDER BY metric_key ASC, observation_date DESC, id DESC
+            ORDER BY metric_key ASC, observation_date DESC, {SOURCE_PRIORITY_SQL} DESC, id DESC
             """,
             tuple(keys),
         ).fetchall()
@@ -403,6 +429,26 @@ def _schema_version(connection: sqlite3.Connection) -> int:
     if row is None or row["version"] is None:
         return 0
     return int(row["version"])
+
+
+def _upsert_payload(connection: sqlite3.Connection, payload: dict[str, Any]) -> str:
+    existing = connection.execute(
+        """
+        SELECT id FROM market_observations
+        WHERE metric_key = ?
+          AND observation_date = ?
+          AND source_badge = ?
+          AND IFNULL(source_series, '') = IFNULL(?, '')
+        """,
+        (
+            payload["metric_key"],
+            payload["observation_date"],
+            payload["source_badge"],
+            payload["source_series"],
+        ),
+    ).fetchone()
+    connection.execute(UPSERT_SQL, payload)
+    return "updated" if existing else "inserted"
 
 
 def _validated_observation_payload(observation: MarketObservation | dict[str, Any]) -> dict[str, Any]:

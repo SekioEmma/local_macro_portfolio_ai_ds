@@ -77,6 +77,14 @@ SOURCE_BADGE_DISPLAY_ZH: dict[str, str] = {
     "research_needed": "需要研究",
 }
 
+SOURCE_BADGE_DISPLAY_ZH.update(
+    {
+        "official_reference": "官方参考",
+        "scraped_official_reference": "官方抓取参考",
+        "commercial_api_fallback": "商业 API 备用",
+    }
+)
+
 FRESHNESS_DISPLAY_ZH: dict[str, str] = {
     "fresh": "新鲜",
     "stale": "陈旧",

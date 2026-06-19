@@ -18,8 +18,10 @@ using existing source-gated ingest scripts. Generated market-history data
 remains local and uncommitted.
 Data Foundation G2/G3 Source Supplementation is completed. The project now has
 explicit provider contracts and source-gated ingest paths for FRED, BLS, BEA,
-Alpha Vantage, EIA, OFR, and GDELT aggregate research context. Generated data
-remains local and uncommitted.
+Alpha Vantage, and OFR. The proposed GDELT and controlled EIA dataset paths
+were removed after review. Market-history writes are batched and same-date
+reads now enforce source priority. Generated data remains local and
+uncommitted.
 
 ## Priority Route
 

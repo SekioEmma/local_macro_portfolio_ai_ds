@@ -117,6 +117,7 @@ def build_ingest_summary(
         return summary
     active_fetcher = fetcher or fred_provider.get_fred_series
     ingested_at = _utc_now()
+    pending_observations: list[dict[str, Any]] = []
     for series_id in RATE_SERIES:
         payload = active_fetcher(series_id, limit)
         if payload.get("status") != "ok":
@@ -131,13 +132,13 @@ def build_ingest_summary(
             ingested_at=ingested_at,
         )
         summary["normalized_observations"] += len(observations)
-        for observation in observations:
-            if dry_run:
-                continue
-            result = market_history_store.upsert_market_observation(
-                observation, db_path=db_path
-            )
-            summary[f"{result['status']}_count"] += 1
+        pending_observations.extend(observations)
+    if not dry_run:
+        write_result = market_history_store.upsert_market_observations(
+            pending_observations, db_path=db_path
+        )
+        summary["inserted_count"] = write_result["inserted_count"]
+        summary["updated_count"] = write_result["updated_count"]
     return summary
 
 

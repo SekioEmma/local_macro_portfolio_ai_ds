@@ -82,6 +82,7 @@ def build_ingest_summary(
         summary["errors"].append("BEA_API_KEY not configured")
         return summary
     active_requester = requester or bea_history_provider.request_bea
+    pending_observations: list[dict[str, Any]] = []
     grouped: dict[tuple[str, str], list[str]] = {}
     for metric_key, mapping in bea_history_provider.BEA_NIPA_MAPPINGS.items():
         grouped.setdefault((mapping["table"], mapping["frequency"]), []).append(metric_key)
@@ -109,13 +110,13 @@ def build_ingest_summary(
                 summary["errors"].append(str(exc))
                 continue
             summary["normalized_observations"] += len(rows)
-            for row in rows:
-                if dry_run:
-                    continue
-                write_result = market_history_store.upsert_market_observation(
-                    build_market_observation(row), db_path=db_path
-                )
-                summary[f"{write_result['status']}_count"] += 1
+            pending_observations.extend(build_market_observation(row) for row in rows)
+    if not dry_run:
+        write_result = market_history_store.upsert_market_observations(
+            pending_observations, db_path=db_path
+        )
+        summary["inserted_count"] = write_result["inserted_count"]
+        summary["updated_count"] = write_result["updated_count"]
     return summary
 
 

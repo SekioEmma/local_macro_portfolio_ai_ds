@@ -8,24 +8,25 @@ SOURCE_CLASSES = {
     "official",
     "official_fallback",
     "official_reference",
-    "dataset_official",
     "commercial_api_fallback",
     "proxy",
     "scraped_official_reference",
-    "research_context",
     "commercial_licensed_required",
     "not_available",
 }
 
 SOURCE_PRIORITY = {
     "official": 500,
-    "dataset_official": 500,
     "official_reference": 450,
     "scraped_official_reference": 425,
     "official_fallback": 400,
+    "derived": 350,
+    "local": 350,
     "commercial_api_fallback": 300,
+    "unofficial_fallback": 275,
     "proxy": 250,
-    "research_context": 100,
+    "historical": 200,
+    "model_output": 200,
     "commercial_licensed_required": 0,
     "not_available": 0,
 }
@@ -34,7 +35,6 @@ TRIGGER_ELIGIBILITY = {
     "eligible",
     "support_only",
     "reference_only",
-    "research_context_only",
     "ineligible",
 }
 
@@ -47,6 +47,7 @@ class ProviderSpec:
     supports_history: bool
     supports_latest: bool
     allowed_source_badges: frozenset[str]
+    default_source_badge: str
     default_ai_context_allowed: bool
     default_trigger_eligibility: str
     license_usage_notes: str
@@ -62,6 +63,7 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
         supports_history=True,
         supports_latest=True,
         allowed_source_badges=frozenset({"official_fallback"}),
+        default_source_badge="official_fallback",
         default_ai_context_allowed=True,
         default_trigger_eligibility="eligible",
         license_usage_notes="Public Federal Reserve Bank of St. Louis API; retain series identifiers.",
@@ -74,6 +76,7 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
         supports_history=True,
         supports_latest=True,
         allowed_source_badges=frozenset({"official"}),
+        default_source_badge="official",
         default_ai_context_allowed=True,
         default_trigger_eligibility="eligible",
         license_usage_notes="First-party public BLS API data.",
@@ -85,6 +88,7 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
         supports_history=True,
         supports_latest=True,
         allowed_source_badges=frozenset({"official"}),
+        default_source_badge="official",
         default_ai_context_allowed=True,
         default_trigger_eligibility="eligible",
         license_usage_notes="First-party BEA API data; table and line metadata must be validated.",
@@ -96,24 +100,13 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
         supports_history=True,
         supports_latest=True,
         allowed_source_badges=frozenset({"commercial_api_fallback", "proxy"}),
+        default_source_badge="commercial_api_fallback",
         default_ai_context_allowed=True,
         default_trigger_eligibility="support_only",
         license_usage_notes="Commercial API terms and rate limits apply; use only for fallback/proxy observations.",
         interpretation_boundary=(
             "Market proxies cannot replace true breadth, official macro series, HY OAS, or IG OAS."
         ),
-    ),
-    "eia": ProviderSpec(
-        provider_key="eia",
-        display_name="U.S. Energy Information Administration",
-        requires_api_key=False,
-        supports_history=True,
-        supports_latest=True,
-        allowed_source_badges=frozenset({"dataset_official"}),
-        default_ai_context_allowed=True,
-        default_trigger_eligibility="eligible",
-        license_usage_notes="First-party controlled dataset files; preserve file hash and dataset identifier.",
-        interpretation_boundary="Energy observations provide current/historical context, not price forecasts or trading signals.",
     ),
     "ofr": ProviderSpec(
         provider_key="ofr",
@@ -124,25 +117,12 @@ PROVIDER_REGISTRY: dict[str, ProviderSpec] = {
         allowed_source_badges=frozenset(
             {"official_reference", "scraped_official_reference"}
         ),
+        default_source_badge="official_reference",
         default_ai_context_allowed=True,
         default_trigger_eligibility="reference_only",
         license_usage_notes="Official OFR reference indicator downloaded from the OFR website.",
         interpretation_boundary=(
             "OFR FSI is reference evidence only and does not replace internal D10 or D11 models."
-        ),
-    ),
-    "gdelt_cloud": ProviderSpec(
-        provider_key="gdelt_cloud",
-        display_name="GDELT Cloud",
-        requires_api_key=True,
-        supports_history=True,
-        supports_latest=True,
-        allowed_source_badges=frozenset({"research_context"}),
-        default_ai_context_allowed=False,
-        default_trigger_eligibility="research_context_only",
-        license_usage_notes="Aggregate research context only; never persist full article bodies.",
-        interpretation_boundary=(
-            "News and event intensity is research context, not probability, financial fact, or market forecast."
         ),
     ),
 }
@@ -195,8 +175,6 @@ def validate_source_assignment(
     eligibility = trigger_eligibility or spec.default_trigger_eligibility
     if eligibility not in TRIGGER_ELIGIBILITY:
         errors.append(f"unknown_trigger_eligibility:{eligibility}")
-    if provider_key == "gdelt_cloud" and eligibility != "research_context_only":
-        errors.append("gdelt_trigger_must_be_research_context_only")
     if provider_key == "ofr" and eligibility != "reference_only":
         errors.append("ofr_trigger_must_be_reference_only")
     if provider_key == "alpha_vantage" and eligibility != "support_only":
@@ -206,7 +184,7 @@ def validate_source_assignment(
 
 def audit_source_registry() -> list[str]:
     errors: list[str] = []
-    required = {"fred", "bls", "bea", "alpha_vantage", "eia", "ofr", "gdelt_cloud"}
+    required = {"fred", "bls", "bea", "alpha_vantage", "ofr"}
     missing = sorted(required - set(PROVIDER_REGISTRY))
     errors.extend(f"missing_provider:{key}" for key in missing)
     for key, spec in sorted(PROVIDER_REGISTRY.items()):
@@ -214,14 +192,12 @@ def audit_source_registry() -> list[str]:
             errors.append(f"provider_key_mismatch:{key}")
         if spec.raw_payload_persistence_allowed:
             errors.append(f"raw_payload_persistence_must_default_false:{key}")
+        if spec.default_source_badge not in spec.allowed_source_badges:
+            errors.append(f"default_source_badge_not_allowed:{key}")
         for badge in spec.allowed_source_badges:
             errors.extend(validate_source_assignment(key, badge))
     if "official" in PROVIDER_REGISTRY["alpha_vantage"].allowed_source_badges:
         errors.append("alpha_vantage_cannot_be_official")
-    if "official" in PROVIDER_REGISTRY["gdelt_cloud"].allowed_source_badges:
-        errors.append("gdelt_cannot_be_official")
-    if PROVIDER_REGISTRY["eia"].allowed_source_badges != frozenset({"dataset_official"}):
-        errors.append("eia_must_be_dataset_official")
     return sorted(set(errors))
 
 
@@ -239,7 +215,7 @@ def source_audit_metadata(
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     spec = get_provider_spec(provider_key)
-    badge = source_badge or next(iter(spec.allowed_source_badges))
+    badge = source_badge or spec.default_source_badge
     eligibility = trigger_eligibility or spec.default_trigger_eligibility
     errors = validate_source_assignment(provider_key, badge, eligibility)
     if errors:

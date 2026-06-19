@@ -259,15 +259,18 @@ def build_ingest_summary(
     yoy_rows = calculate_yoy(index_rows)
     summary["index_observations"] = len(index_rows)
     summary["derived_observations"] = len(yoy_rows)
-    for row, derived in [(row, False) for row in index_rows] + [
+    observations = [
+        build_market_observation(row, derived=derived)
+        for row, derived in [(row, False) for row in index_rows] + [
         (row, True) for row in yoy_rows
-    ]:
-        if dry_run:
-            continue
-        result = market_history_store.upsert_market_observation(
-            build_market_observation(row, derived=derived), db_path=db_path
+        ]
+    ]
+    if not dry_run:
+        write_result = market_history_store.upsert_market_observations(
+            observations, db_path=db_path
         )
-        summary[f"{result['status']}_count"] += 1
+        summary["inserted_count"] = write_result["inserted_count"]
+        summary["updated_count"] = write_result["updated_count"]
     return summary
 
 

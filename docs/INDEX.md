@@ -8,8 +8,8 @@ route is in `docs/short_term_development_plan.md`.
 
 - Current branch: `app-mvp`
 - Current phase: G2/G3 data-source supplementation complete
-- Last completed task: official, fallback, reference-only,
-  controlled-dataset, and research-context provider supplementation
+- Last completed task: official, fallback, and reference-only provider
+  supplementation plus market-history stabilization
 - Last completed governance task: G2/G3 source registry and boundary closeout
 - Current immediate route: review source dry-runs, then return to UI-1 using
   the new source-gated history

@@ -78,6 +78,14 @@ def test_ai_context_blocked_reason_precedence():
     assert _blocked(source_badge="official", freshness_status="stale") == "freshness_stale"
     assert _blocked(source_badge="proxy", freshness_status="fresh") == "source_badge_proxy"
     assert (
+        _blocked(source_badge="commercial_api_fallback", freshness_status="fresh")
+        == "source_badge_commercial_api_fallback"
+    )
+    assert (
+        _blocked(source_badge="official_reference", freshness_status="fresh")
+        is None
+    )
+    assert (
         _blocked(source_badge="derived", interpretation_hint="plain note")
         == "dependency_metadata_incomplete"
     )

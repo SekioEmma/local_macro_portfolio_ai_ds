@@ -107,6 +107,7 @@ def build_ingest_summary(
         summary["errors"].append("live_disabled")
         return summary
     active_fetcher = fetcher or alpha_vantage_history_provider.get_daily_time_series
+    pending_observations: list[dict[str, Any]] = []
     for symbol in selected:
         payload = active_fetcher(symbol, outputsize)
         if payload.get("status") != "ok":
@@ -118,13 +119,13 @@ def build_ingest_summary(
             continue
         observations = normalize_proxy_history(payload, symbol=symbol)
         summary["normalized_observations"] += len(observations)
-        for observation in observations:
-            if dry_run:
-                continue
-            result = market_history_store.upsert_market_observation(
-                observation, db_path=db_path
-            )
-            summary[f"{result['status']}_count"] += 1
+        pending_observations.extend(observations)
+    if not dry_run:
+        write_result = market_history_store.upsert_market_observations(
+            pending_observations, db_path=db_path
+        )
+        summary["inserted_count"] = write_result["inserted_count"]
+        summary["updated_count"] = write_result["updated_count"]
     return summary
 
 

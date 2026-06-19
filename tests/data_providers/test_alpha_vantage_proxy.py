@@ -48,7 +48,6 @@ def test_proxy_rows_use_commercial_fallback_policy():
 def test_fallback_priority_below_official_sources():
     assert prefer_source("official", "commercial_api_fallback") is True
     assert prefer_source("official_fallback", "commercial_api_fallback") is True
-    assert prefer_source("dataset_official", "commercial_api_fallback") is True
     assert prefer_source("commercial_api_fallback", "official_fallback") is False
 
 
