@@ -29,18 +29,26 @@ It is not:
 
 ## Current Phase
 
+AI-1 Local Controlled Research Preview is completed. The project is entering
+AI-1.5 Local Preview Evaluation & Governance Closeout to add local golden
+fixtures, structure and adversarial coverage, a reproducible quality audit,
+and an evidence-backed AI-2 readiness checklist. This phase remains local-only
+and does not authorize an external model, search, persistence, account detail,
+prediction, probability, return, allocation, or trading output.
+
 Stage 8.5 Foundation Stabilization Sprint is completed. Stage 8 Portfolio
 Exposure Overlay v0 is complete. Stage 9.1 Memo Template / Context Contract is
 completed. Stage 9.2 Mock Chat / Mock Memo is completed as local preview API
 surfaces only. Stage 9.3-A DeepSeek adapter skeleton is complete as a
 disabled-by-default, fake-client-only internal adapter contract.
 
-Current branch: `app-mvp`. `main` remains the stable baseline and should not be
-touched for current `app-mvp` work.
+Current branch: `ai-1-local-research-preview`. `main` remains the stable
+baseline and should not be touched for this work.
 
-Current phase: Stage S - Scenario Stress / Explanation Refinement. S1 Scenario
-Stress Matrix Refinement v1 (legacy: D16) is complete. HF-1 Test Runtime
-Hotfix is complete after S1.
+Current phase: AI-1 Local Controlled Research Preview is complete; AI-1.5
+Local Preview Evaluation & Governance Closeout is active. Scenario Stress
+Matrix Refinement v1 (legacy: D16) and the subsequent historical foundation,
+runtime, governance, data, and frontend-audit work remain completed baselines.
 DF-0 Roadmap Arbitration and Legacy Document Cleanup is complete. DF-1 D19 v1
 Historical Evidence-row Integration is complete. DF-2 D15/D16 Compliance Audit
 is complete. DF-3 D17/D18 Data Gap and Source-gate Review is complete. DF-4
@@ -418,19 +426,15 @@ in this file, including `372 passed`, 131 evidence rows, 95 included facts, and
 
 ## Current Next Step
 
-UI-0 Frontend Information Architecture Audit is completed as an L2 docs/audit
-task. It confirmed an existing React/Vite/TypeScript frontend shell with a
-real API-backed Dashboard, Evidence Table, module detail drawer,
-provider-health diagnostics, and missing/freshness display. Scenario Stress
-Matrix and Historical Validation are available only through generic evidence
-rows and the module drawer; they do not yet have dedicated review pages. AI
-Context Preview has a typed client function but no active page. Chat and
-account surfaces remain placeholders, and unused local app-state mutation
-helpers remain unconnected. See
-`docs/frontend_information_architecture_audit.md`.
+AI-1 Local Controlled Research Preview is completed with local research and
+prompt preview APIs, six answer modes, three detail levels, seven-section
+Chinese output, full-context catalogue and selected-prompt separation,
+semantic validation, and a read-only frontend workbench.
 
-Next recommended task: UI-1 Dashboard homepage data-display polish using
-existing backend APIs and source gates only.
+Next recommended task: AI-1.5 Local Preview Evaluation & Governance Closeout.
+It must remain local-only and should finish golden fixtures, structure and
+adversarial tests, a quality audit baseline, and the AI-2 readiness checklist
+before any request to start AI-2 is considered.
 
 Stage 9.3-B-2d internal one-shot manual invocation review completed.
 External AI line frozen. No AI Chat/product endpoint/frontend UI/persistence/
@@ -604,7 +608,8 @@ D14, OFR FSI, valuation/FedWatch, BAA, and proxy source gates. No generated
 data, production code, API schema, model semantic, frontend, or AI-context
 change was committed. See `docs/data_foundation_local_refresh_g1.md`.
 UI-0 Frontend Information Architecture Audit is complete.
-Next recommended task: UI-1 Dashboard homepage data-display polish using
-existing backend APIs and source gates only. A G2 official-source
-refresh-command task is optional and requires separate explicit approval.
+AI-1 Local Controlled Research Preview is complete.
+Next recommended task: AI-1.5 Local Preview Evaluation & Governance Closeout.
+UI-1 remains in backlog. A G2 official-source refresh-command task is optional
+and requires separate explicit approval.
 Real AI Chat / Memo / Report integrations remain not implemented.

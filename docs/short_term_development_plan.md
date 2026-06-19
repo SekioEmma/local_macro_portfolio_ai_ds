@@ -6,16 +6,13 @@ route and the next engineering task. For a one-page orientation, see
 
 ## Current Phase
 
-Stage S - Scenario Stress / Explanation Refinement. S1 Scenario Stress Matrix
-Refinement v1 (legacy: D16) is completed. HF-1 Test Runtime Hotfix is
-completed after S1. HF-2 Project Namespace Index / Governance Light Cleanup
-(including D-line naming cleanup) is completed as a docs-only governance
-hotfix.
-Data Foundation Gap Fill v1 is completed as an offline source-registry,
-audit, tests, and docs task before frontend work.
-Data Foundation G1 Controlled Local Refresh and Coverage Audit is completed
-using existing source-gated ingest scripts. Generated market-history data
-remains local and uncommitted.
+AI-1 Local Controlled Research Preview is completed. The codebase now provides
+six answer modes, three detail levels, seven-section Chinese research output,
+mode-aware prompt context selection, local semantic validation, research and
+prompt preview APIs, and a read-only frontend workbench. The current phase is
+AI-1.5 Local Preview Evaluation & Governance Closeout. External models, search,
+persistence, account detail, prediction, probability, return, allocation, and
+trading outputs remain outside this route.
 
 ## Priority Route
 
@@ -48,21 +45,32 @@ remains local and uncommitted.
 18. Data Foundation G1 controlled local refresh and coverage audit: completed.
 19. UI-0 Frontend Information Architecture Audit: completed as docs/audit
     only.
-20. UI-1 Dashboard homepage data-display polish using existing backend APIs
-    and source gates only: next.
-21. AI-1a backend foundation for AI Context Manifest consumption (evidence
-    cards, priority ranking, financial semantic validator): completed as
-    additive local primitives; not yet wired into preview service.
-22. AI-1b wire AI-1a primitives into preview service and Chinese-ify memo
-    section content: deferred to CODEX as a separate L3 task.
-23. AI-1c frontend Evidence Cards / Semantic Validator panels and Prompt
-    Preview page: deferred to CODEX, follows AI-1b.
-24. G2 official-source refresh-command implementation: only if remaining
+20. AI-1 Local Controlled Research Preview: completed, including the backend
+    primitives, service wiring, Chinese research templates, contract updates,
+    local APIs, and read-only frontend preview surface.
+21. AI-1.5 Local Preview Evaluation & Governance Closeout: current next task.
+22. UI-1 Dashboard homepage data-display polish using existing backend APIs
+    and source gates only: retained in backlog after AI-1.5.
+23. G2 official-source refresh-command implementation: only if remaining
     history gaps block UI work and the user explicitly approves it.
 
 ### P1
 
-1. Manual review / route decision before any Stage 9 product surface.
+1. AI-2 Single-Turn External Model Pilot: requires explicit user approval
+   before it may start.
+2. AI-2.5 pilot evaluation and security closeout: requires explicit user
+   approval before it may start.
+3. AI-3 controlled product-surface design: requires explicit user approval
+   before it may start.
+4. AI-3.5 controlled product-surface evaluation: requires explicit user
+   approval before it may start.
+5. Manual review / route decision before any external AI product surface.
+
+### Long-Term Backlog
+
+- AI-4 explicit-approval external model productization is recorded only as a
+  long-term backlog item. It is not part of the near-term route and requires
+  separate explicit user approval.
 
 ### Completed
 
@@ -93,6 +101,7 @@ remains local and uncommitted.
 - Data Foundation Gap Fill v1.
 - Data Foundation G1 Controlled Local Refresh and Coverage Audit.
 - UI-0 Frontend Information Architecture Audit.
+- AI-1 Local Controlled Research Preview.
 
 ### Deferred
 
@@ -201,11 +210,12 @@ TypeScript shell with real Dashboard, Evidence Table, module-detail,
 provider-health, missing/freshness, and diagnostics surfaces. Scenario Stress
 Matrix and Historical Validation currently have generic evidence/detail
 coverage but no dedicated pages; AI Context Preview has a dormant client
-contract but no active page. The current next route is UI-1 Dashboard homepage
-data-display polish using existing backend APIs and source gates only. A G2
-refresh-command implementation is optional and requires separate explicit
-approval. Do not automatically proceed to AI Chat, Tavily, frontend AI UI, or
-external AI productization.
+contract but no active page. AI-1 subsequently completed the local controlled
+research preview and read-only frontend workbench. The current next route is
+AI-1.5 Local Preview Evaluation & Governance Closeout. UI-1 remains in backlog,
+and a G2 refresh-command implementation remains optional and requires separate
+explicit approval. Do not automatically proceed to external AI, search, or
+productization work.
 
 HF-1 Test Runtime Hotfix is completed after S1. HF-1 optimized DB-backed D13
 test fixtures and benchmark result reuse only; it did not change model
@@ -336,10 +346,10 @@ See `docs/data_foundation_local_refresh_g1.md`.
 UI-0 Frontend Information Architecture Audit is completed. See
 `docs/frontend_information_architecture_audit.md`.
 
-The next recommended task is UI-1 Dashboard homepage data-display polish using
-existing backend APIs and source gates only. If missing dedicated history
-refresh surfaces for DGS2/DGS10/T10Y2Y/T10YIE or core CPI/PCE must be
-implemented first, create a separate G2 task only with explicit user approval.
+The next recommended task is AI-1.5 Local Preview Evaluation & Governance
+Closeout. UI-1 remains in backlog. If dedicated history refresh surfaces must
+be implemented later, create a separate G2 task only with explicit user
+approval.
 
 Legacy Stage 9 productization remains frozen and is not the current short-term
 route. Historical Stage 9 notes should not be used to authorize Chat UI,

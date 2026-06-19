@@ -6,18 +6,19 @@ route is in `docs/short_term_development_plan.md`.
 
 ## Current Truth
 
-- Current branch: `app-mvp`
-- Current phase: Stage S - Scenario Stress / Explanation Refinement (S1 complete)
-- Last completed task: Frontend redesign pre-flight (loosened
-  `test_frontend_registry_contracts.py` to semantic form, added
-  `test_api_response_shape.py` API field-set lock, wrote
-  `docs/frontend_baseline_pre_redesign.md` snapshot)
+- Current branch: `ai-1-local-research-preview`
+- Current phase: AI-1 Local Controlled Research Preview is completed; AI-1.5
+  Local Preview Evaluation & Governance Closeout is active.
+- Last completed task: AI-1 Local Controlled Research Preview, including the
+  local research and prompt preview APIs, six answer modes, three detail
+  levels, seven-section Chinese research output, evidence-card context
+  selection, semantic validation, and the read-only frontend workbench.
 - Last completed governance task: HF-2 Project Namespace Index / Governance
   Light Cleanup
-- Current immediate route: open a `frontend-redesign` branch and begin
-  Era 1 frontend beautification with `ui-ux-pro-max-skill`
-- Next engineering task: Era 1.1 design-system bootstrap — install the
-  skill, generate baseline tokens, decide Tailwind / shadcn adoption
+- Current immediate route: AI-1.5 Local Preview Evaluation & Governance
+  Closeout.
+- Next engineering task: AI-1.5 golden fixtures, structure/adversarial
+  coverage, local quality audit, and AI-2 readiness evidence.
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -150,7 +151,8 @@ Stage DF is concluded. No default DF-5.
 | `docs/data_foundation_gap_fill_v1.md` | G0 source-gated registry cleanup and validation |
 | `docs/data_foundation_local_refresh_g1.md` | G1 controlled local refresh evidence and remaining coverage gaps |
 | `docs/frontend_information_architecture_audit.md` | UI-0 frontend shell, page, API-contract, placeholder, and display-gap audit |
-| `docs/ai_1a_card_priority_semantic_foundation.md` | AI-1a backend primitives: evidence cards, priority ranking, financial semantic validator (not yet wired into preview service) |
+| `docs/ai_1a_card_priority_semantic_foundation.md` | historical AI-1 primitive foundation: evidence cards, priority ranking, and financial semantic validator |
+| `docs/ai_1_local_research_preview_closeout.md` | AI-1 Local Controlled Research Preview contract, privacy boundary, validator rules, and closeout evidence |
 | `docs/foundation_stabilization_backlog.md` | M-line backlog (M7-M12) |
 | `docs/frontend_baseline_pre_redesign.md` | Frontend stack / route / API / token snapshot before Era 1 redesign |
 | stage-specific closeout docs | per-stage evidence and contract |
@@ -197,18 +199,15 @@ validation requirements. The short version:
     (completed)
 16. ~~UI-0 Frontend Information Architecture Audit~~ (completed; docs/audit
     only)
-17. ~~AI-1a backend foundation for AI Context Manifest consumption -
-    evidence cards, priority ranking, financial semantic validator~~
-    (completed; new local primitives, not yet wired into preview service)
-18. UI-1 Dashboard homepage data-display polish using existing backend APIs
+17. ~~AI-1 Local Controlled Research Preview - evidence cards, priority
+    selection, semantic validation, local research/prompt APIs, Chinese
+    seven-section rendering, and read-only frontend workbench~~ (completed)
+18. AI-1.5 Local Preview Evaluation & Governance Closeout
+19. UI-1 Dashboard homepage data-display polish using existing backend APIs
     and source gates only
-19. AI-1b Wire AI-1a primitives into preview service: schema extension,
-    Chinese-ify memo templates, contract test updates
-20. AI-1c Frontend Evidence Cards / Semantic Validator panels and Prompt
-    Preview page
-21. G2 official-source refresh-command implementation only with explicit
+20. G2 official-source refresh-command implementation only with explicit
     approval if the remaining history gaps block UI work
-22. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+21. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,

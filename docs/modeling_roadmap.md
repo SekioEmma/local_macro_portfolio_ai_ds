@@ -330,10 +330,13 @@ frontend/backend code, APIs, model semantics, AI Context Manifest semantics,
 providers, or generated data. See
 `docs/frontend_information_architecture_audit.md`.
 
-Next recommended task: UI-1 Dashboard homepage data-display polish using
-existing backend APIs and source gates only. A G2 official-source
-refresh-command implementation remains optional and requires separate explicit
-approval.
+AI-1 Local Controlled Research Preview is completed as a local application
+surface over the existing evidence and model layers. It does not change the
+financial model narrative or module semantics in this roadmap.
+
+Next recommended task: AI-1.5 Local Preview Evaluation & Governance Closeout.
+UI-1 remains in backlog. A G2 official-source refresh-command implementation
+remains optional and requires separate explicit approval.
 
 External AI remains frozen. Stage S does not reopen DeepSeek Chat,
 Tavily/search, frontend AI UI, persistence, full-account external context, or
