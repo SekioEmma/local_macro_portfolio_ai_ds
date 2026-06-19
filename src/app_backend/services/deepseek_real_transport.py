@@ -28,8 +28,8 @@ from app_backend.services.deepseek_transport_contract import DeepSeekTransportEr
 
 _DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 _DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
-_DEEPSEEK_MODEL_NAME = "deepseek-chat"
-_DEFAULT_TIMEOUT_SECONDS = 30.0
+_DEEPSEEK_MODEL_NAME = "deepseek-v4-pro"
+_DEFAULT_TIMEOUT_SECONDS = 120.0
 _MAX_PROVIDER_RESPONSE_BYTES = 2_000_000
 
 
