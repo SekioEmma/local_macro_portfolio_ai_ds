@@ -324,12 +324,8 @@ class DeepSeekNetworkAdapter(ExternalAIAdapter):
             raise BlockedAdapterError(request_guard.findings)
 
         if self.config.mode == "disabled":
-            raise BlockedAdapterError(["adapter_disabled_in_stage_9_3_a"])
-        if self.config.mode == "network":
-            raise BlockedAdapterError(
-                ["network_mode_not_implemented_in_stage_9_3_b_2c"]
-            )
-        if self.config.mode != "fake":
+            raise BlockedAdapterError(["adapter_disabled"])
+        if self.config.mode not in ("fake", "network"):
             raise BlockedAdapterError([f"unsupported_mode_{self.config.mode}"])
 
         if self._runtime_policy is None:
@@ -353,14 +349,15 @@ class DeepSeekNetworkAdapter(ExternalAIAdapter):
         if not isinstance(transport_response, DeepSeekTransportResponse):
             raise BlockedAdapterError(["transport_malformed_response"])
 
+        is_real = self.config.mode == "network"
         validator_result = validate_external_ai_response_content(
             transport_response.content_text
         )
         response = ExternalAIResponse(
             provider=self.config.provider,
-            mode="network",
-            external_model_called=True,
-            fake_response=False,
+            mode="network" if is_real else "fake",
+            external_model_called=is_real,
+            fake_response=not is_real,
             content=transport_response.content_text,
             validator_result=validator_result,
             privacy_summary=ExternalAIPrivacySummary(
@@ -368,7 +365,7 @@ class DeepSeekNetworkAdapter(ExternalAIAdapter):
                 uses_holdings_line_items=False,
                 uses_raw_provider_payloads=False,
                 uses_raw_prompts=False,
-                external_model_called=True,
+                external_model_called=is_real,
                 search_called=False,
                 saved_by_default=False,
             ),
@@ -376,11 +373,29 @@ class DeepSeekNetworkAdapter(ExternalAIAdapter):
             human_review_required=True,
         )
 
-        response_guard = guard_external_model_response(response)
+        if is_real:
+            response_guard = guard_external_model_response(response)
+        else:
+            response_guard = guard_response(response)
         if not response_guard.passed:
             raise BlockedAdapterError(response_guard.findings)
 
         return response
+
+
+def network_config() -> ExternalAIAdapterConfig:
+    """AI-2 single-turn network config: real transport, no persistence."""
+    return ExternalAIAdapterConfig(
+        provider="deepseek",
+        enabled=True,
+        mode="network",
+        allow_network=True,
+        requires_user_switch=True,
+        requires_context_preview=True,
+        requires_validator=True,
+        save_raw_prompt=False,
+        save_raw_response=False,
+    )
 
 
 __all__ = [
@@ -391,4 +406,5 @@ __all__ = [
     "default_disabled_config",
     "fake_only_config",
     "mocked_transport_only_config",
+    "network_config",
 ]

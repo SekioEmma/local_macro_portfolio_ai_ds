@@ -129,12 +129,21 @@ def test_fake_mode_content_includes_boundary_phrase():
 # ---------------------------------------------------------------------------
 
 
-def test_network_mode_config_fails_closed():
-    """Constructing a config with network mode must be blocked at adapter init."""
+def test_network_mode_config_now_accepted():
+    """Network config with all guards satisfied passes config guard."""
+    from app_backend.services.deepseek_adapter import network_config
+
+    cfg = network_config()
+    adapter = DeepSeekAdapter(cfg)
+    assert adapter.config.mode == "network"
+    assert adapter.config.allow_network is True
+
+
+def test_allow_network_without_enabled_fails_closed():
     cfg = ExternalAIAdapterConfig(
         provider="deepseek",
-        enabled=True,
-        mode="network",
+        enabled=False,
+        mode="disabled",
         allow_network=True,
         requires_user_switch=True,
         requires_context_preview=True,
@@ -144,26 +153,7 @@ def test_network_mode_config_fails_closed():
     )
     with pytest.raises(BlockedAdapterError) as exc:
         DeepSeekAdapter(cfg)
-    findings = exc.value.findings
-    assert any("network" in f for f in findings)
-    assert any("allow_network" in f for f in findings)
-
-
-def test_enabled_with_allow_network_true_fails_closed():
-    cfg = ExternalAIAdapterConfig(
-        provider="deepseek",
-        enabled=True,
-        mode="fake",
-        allow_network=True,
-        requires_user_switch=True,
-        requires_context_preview=True,
-        requires_validator=True,
-        save_raw_prompt=False,
-        save_raw_response=False,
-    )
-    with pytest.raises(BlockedAdapterError) as exc:
-        DeepSeekAdapter(cfg)
-    assert any("allow_network" in f for f in exc.value.findings)
+    assert any("allow_network_without_enabled" in f for f in exc.value.findings)
 
 
 def test_save_raw_prompt_true_fails_closed():

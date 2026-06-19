@@ -96,18 +96,26 @@ def test_default_config_passes_guard():
     assert guard_config(_valid_config()).passed is True
 
 
-def test_guard_blocks_allow_network_true():
+def test_guard_blocks_allow_network_without_enabled():
     cfg = _valid_config().model_copy(update={"allow_network": True})
     result = guard_config(cfg)
     assert result.passed is False
-    assert any("allow_network" in f for f in result.findings)
+    assert any("allow_network_without_enabled" in f for f in result.findings)
 
 
-def test_guard_blocks_mode_network():
+def test_guard_blocks_mode_network_without_allow_network():
     cfg = _valid_config().model_copy(update={"mode": "network"})
     result = guard_config(cfg)
     assert result.passed is False
-    assert any("mode_network" in f for f in result.findings)
+    assert any("mode_network_requires_allow_network" in f for f in result.findings)
+
+
+def test_guard_passes_network_config():
+    from app_backend.services.deepseek_adapter import network_config
+
+    cfg = network_config()
+    result = guard_config(cfg)
+    assert result.passed is True
 
 
 def test_guard_blocks_enabled_without_user_switch():
@@ -184,11 +192,10 @@ def test_guard_blocks_validator_required_false():
     assert "validator_required_must_be_true" in result.findings
 
 
-def test_guard_blocks_mode_network_on_request():
+def test_guard_allows_mode_network_on_request():
     request = _valid_request(mode="network")
     result = guard_request(request)
-    assert result.passed is False
-    assert any("mode_network" in f for f in result.findings)
+    assert result.passed is True
 
 
 @pytest.mark.parametrize(
@@ -365,7 +372,9 @@ def test_guard_blocks_fake_mode_with_fake_response_false():
 
 
 def test_base_adapter_init_runs_config_guard():
-    cfg = _valid_config().model_copy(update={"allow_network": True})
+    cfg = _valid_config().model_copy(
+        update={"enabled": True, "mode": "fake", "requires_user_switch": False}
+    )
     with pytest.raises(BlockedAdapterError):
         ExternalAIAdapter(cfg)
 

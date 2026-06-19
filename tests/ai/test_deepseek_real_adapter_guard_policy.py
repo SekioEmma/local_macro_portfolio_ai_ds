@@ -22,6 +22,7 @@ from app_backend.services.ai_external_adapter import (
 from app_backend.services.deepseek_adapter import (
     DeepSeekNetworkAdapter,
     fake_only_config,
+    network_config,
 )
 
 
@@ -121,6 +122,14 @@ class _Transport:
 def _adapter(content: str) -> DeepSeekNetworkAdapter:
     return DeepSeekNetworkAdapter(
         config=fake_only_config(),
+        transport=_Transport(content),
+        runtime_policy=_policy(),
+    )
+
+
+def _network_adapter(content: str) -> DeepSeekNetworkAdapter:
+    return DeepSeekNetworkAdapter(
+        config=network_config(),
         transport=_Transport(content),
         runtime_policy=_policy(),
     )
@@ -255,7 +264,7 @@ def test_adapter_real_response_path_calls_validator_before_returning(monkeypatch
         "app_backend.services.deepseek_adapter.validate_external_ai_response_content",
         _validator,
     )
-    response = _adapter(
+    response = _network_adapter(
         "Reference evidence only. Human review is required."
     ).generate_external_response(_request())
 

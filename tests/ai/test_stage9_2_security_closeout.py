@@ -68,11 +68,17 @@ def test_no_forbidden_routes_present():
     assert not present, f"Forbidden routes present: {present}"
 
 
+AI_2_ALLOWED_ROUTES = {
+    "/api/ai/research-deepseek",
+}
+
+
 def test_no_endpoint_name_implies_real_external_ai():
     route_paths = {route.path for route in app.routes}
     for path in route_paths:
+        if path in AI_2_ALLOWED_ROUTES:
+            continue
         lowered = path.lower()
-        assert "deepseek" not in lowered, f"deepseek in route: {path}"
         assert "tavily" not in lowered, f"tavily in route: {path}"
         assert "external" not in lowered, f"external in route: {path}"
 

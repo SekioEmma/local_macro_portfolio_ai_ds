@@ -165,22 +165,19 @@ def test_guard_request_failure_does_not_touch_transport():
     assert transport.calls == []
 
 
-def test_network_mode_request_is_blocked_by_guard_request():
+def test_network_mode_request_accepted_by_guard_request():
     transport = SpyTransport()
     adapter = DeepSeekNetworkAdapter(
         config=fake_only_config(),
         transport=transport,
         runtime_policy=_happy_path_policy(),
     )
-
-    with pytest.raises(BlockedAdapterError) as exc:
-        adapter.generate(_valid_request(mode="network"))
-
-    assert "mode_network_blocked_in_stage_9_3_a" in exc.value.findings
-    assert transport.calls == []
+    response = adapter.generate(_valid_request(mode="network"))
+    assert response.mode == "fake"
+    assert len(transport.calls) == 1
 
 
-def test_network_mode_config_remains_blocked_at_adapter_init():
+def test_network_mode_without_allow_network_blocked():
     cfg = ExternalAIAdapterConfig(
         provider="deepseek",
         enabled=True,

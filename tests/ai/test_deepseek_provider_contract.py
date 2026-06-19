@@ -141,10 +141,10 @@ def test_builder_blocks_request_with_validator_required_false():
     assert "validator_required_must_be_true" in exc.value.findings
 
 
-def test_builder_blocks_request_with_network_mode():
+def test_builder_accepts_request_with_network_mode():
     request = _valid_request(mode="network")
-    with pytest.raises(BlockedAdapterError):
-        build_deepseek_provider_payload(request)
+    payload = build_deepseek_provider_payload(request)
+    assert payload.mode == "network"
 
 
 @pytest.mark.parametrize(

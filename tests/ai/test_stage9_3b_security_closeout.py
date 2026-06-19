@@ -32,7 +32,7 @@ from app_backend.services.ai_external_adapter import (
 from app_backend.services.ai_external_runtime_policy import (
     guard_external_ai_runtime_policy,
 )
-from app_backend.services.deepseek_adapter import DeepSeekNetworkAdapter, fake_only_config
+from app_backend.services.deepseek_adapter import DeepSeekNetworkAdapter, fake_only_config, network_config
 from app_backend.services.deepseek_provider_contract import build_deepseek_provider_payload
 from app_backend.services.deepseek_transport_contract import (
     DeepSeekTransportError,
@@ -171,6 +171,14 @@ class _SpyTransport:
 def _adapter(transport: _SpyTransport, *, policy: ExternalAIRuntimePolicy | None = None):
     return DeepSeekNetworkAdapter(
         config=fake_only_config(),
+        transport=transport,
+        runtime_policy=policy or _happy_policy(),
+    )
+
+
+def _network_adapter(transport: _SpyTransport, *, policy: ExternalAIRuntimePolicy | None = None):
+    return DeepSeekNetworkAdapter(
+        config=network_config(),
         transport=transport,
         runtime_policy=policy or _happy_policy(),
     )
@@ -393,7 +401,7 @@ def test_adapter_external_path_closeout(monkeypatch):
         _validator,
     )
     transport = _SpyTransport()
-    response = _adapter(transport).generate_external_response(_safe_request())
+    response = _network_adapter(transport).generate_external_response(_safe_request())
 
     assert validator_calls == ["Reference evidence only. Human review is required."]
     assert len(transport.calls) == 1

@@ -249,3 +249,38 @@ class AIPreviewMemoResponse(AIMemoPreview):
     selected_prompt_context: AISelectedPromptContext | None = None
     prompt_budget: AIPromptBudgetSummary | None = None
     semantic_validator_result: AIResearchValidationResult | None = None
+
+
+class AIDeepSeekResearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answer_mode: AnswerMode = "risk_review"
+    detail_level: DetailLevel = "standard"
+    user_question: str = Field(
+        ..., min_length=2, max_length=500,
+        description="用户的宏观研究问题（中文或英文）",
+    )
+
+
+class AIDeepSeekResearchResponse(BaseModel):
+    mode: Literal["deepseek_single_turn"]
+    answer_mode: AnswerMode
+    detail_level: DetailLevel
+    user_question: str
+    deepseek_raw_output: str
+    finish_reason: str
+    selected_prompt_context: AISelectedPromptContext
+    prompt_budget: AIPromptBudgetSummary
+    prompt_text: str
+    context_used_summary: AIMemoContextUsedSummary
+    privacy_summary: AIMemoPrivacySummary
+    validator_result: AIMemoValidatorResult
+    semantic_validator_result: AIResearchValidationResult
+    input_validation_passed: bool
+    input_validation_findings: list[str]
+    output_blocked: bool
+    human_review_required: bool = True
+    interpretation_boundary: str
+    elapsed_seconds: float | None = None
+    model_provider: str = "deepseek"
+    not_saved_by_default: bool = True

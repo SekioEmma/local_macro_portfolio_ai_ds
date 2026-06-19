@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app_backend.schemas.ai_preview import (
     AIContextPreviewResponse,
+    AIDeepSeekResearchRequest,
+    AIDeepSeekResearchResponse,
     AIPromptPreviewRequest,
     AIPromptPreviewResponse,
     AIPreviewChatRequest,
@@ -31,6 +33,7 @@ from app_backend.schemas.responses import (
 )
 from app_backend.services import (
     ai_context_service,
+    ai_deepseek_research_service,
     ai_preview_service,
     dashboard_service,
     provider_service,
@@ -116,6 +119,19 @@ def post_ai_prompt_preview(
     request: AIPromptPreviewRequest,
 ) -> AIPromptPreviewResponse:
     return ai_preview_service.render_prompt_preview(request)
+
+
+@app.post(
+    "/api/ai/research-deepseek",
+    response_model=AIDeepSeekResearchResponse,
+)
+def post_ai_research_deepseek(
+    request: AIDeepSeekResearchRequest,
+) -> AIDeepSeekResearchResponse:
+    try:
+        return ai_deepseek_research_service.run_deepseek_research(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.get("/api/context/manifest", response_model=AIContextManifestResponse)

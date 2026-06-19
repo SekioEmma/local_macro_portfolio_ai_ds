@@ -160,10 +160,10 @@ def guard_config(config: ExternalAIAdapterConfig) -> ExternalAIGuardResult:
 
     if config.enabled and not config.requires_user_switch:
         findings.append("enabled_without_user_switch")
-    if config.allow_network:
-        findings.append("allow_network_true_blocked_in_stage_9_3_a")
-    if config.mode == "network":
-        findings.append("mode_network_not_implemented_in_stage_9_3_a")
+    if config.allow_network and not config.enabled:
+        findings.append("allow_network_without_enabled")
+    if config.mode == "network" and not config.allow_network:
+        findings.append("mode_network_requires_allow_network")
     if config.enabled and config.mode == "disabled":
         findings.append("enabled_but_mode_disabled_inconsistent")
     if not config.requires_context_preview:
@@ -190,8 +190,6 @@ def guard_request(
         findings.append("missing_boundary_notices")
     if request.validator_required is not True:
         findings.append("validator_required_must_be_true")
-    if request.mode == "network":
-        findings.append("mode_network_blocked_in_stage_9_3_a")
 
     # Field-name guard against the raw request dict, if supplied. Recursive
     # so nested attempts like {"meta": {"holdings_line_items": ...}} are caught.

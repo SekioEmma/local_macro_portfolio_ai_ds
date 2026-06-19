@@ -237,16 +237,7 @@ def test_d15_d16_enter_ai_context_only_as_model_outputs(monkeypatch):
 
 
 def test_d15_d16_no_forbidden_surfaces_in_key_files():
-    production_text = "\n".join(
-        Path(path).read_text(encoding="utf-8")
-        for path in (
-            "src/data_quality/macro_regime_review.py",
-            "src/data_quality/scenario_stress.py",
-            "src/app_backend/main.py",
-        )
-    )
-
-    for token in (
+    _FORBIDDEN_TOKENS = (
         "/api/chat",
         "/api/search",
         "/api/ai/deepseek",
@@ -261,8 +252,27 @@ def test_d15_d16_no_forbidden_surfaces_in_key_files():
         "expected_return",
         "trade_signal",
         "target_allocation",
-    ):
-        assert token not in production_text
+    )
+    _AI_2_ALLOWED_IN_MAIN = {
+        "DeepSeek",
+        "/api/ai/deepseek",
+    }
+
+    data_quality_text = "\n".join(
+        Path(path).read_text(encoding="utf-8")
+        for path in (
+            "src/data_quality/macro_regime_review.py",
+            "src/data_quality/scenario_stress.py",
+        )
+    )
+    for token in _FORBIDDEN_TOKENS:
+        assert token not in data_quality_text
+
+    main_text = Path("src/app_backend/main.py").read_text(encoding="utf-8")
+    for token in _FORBIDDEN_TOKENS:
+        if token in _AI_2_ALLOWED_IN_MAIN:
+            continue
+        assert token not in main_text
 
 
 def _benign_core_rows(*, include_credit: bool = True):

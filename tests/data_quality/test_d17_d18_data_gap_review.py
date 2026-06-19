@@ -499,14 +499,7 @@ def test_d17_d18_public_keys_match_registry_and_exclude_forbidden_keys():
 
 
 def test_d17_d18_production_files_have_no_forbidden_surfaces():
-    paths = (
-        "src/data_quality/growth_inflation_macro_pack.py",
-        "src/data_quality/valuation_equity_structure.py",
-        "src/app_backend/main.py",
-    )
-    text = "\n".join(Path(path).read_text(encoding="utf-8") for path in paths)
-
-    for token in (
+    _FORBIDDEN_TOKENS = (
         "/api/chat",
         "/api/search",
         "/api/ai/deepseek",
@@ -527,8 +520,27 @@ def test_d17_d18_production_files_have_no_forbidden_surfaces():
         "forward_pe_provider",
         "cape_scraper",
         "earnings_revision_scraper",
-    ):
-        assert token not in text
+    )
+    _AI_2_ALLOWED_IN_MAIN = {
+        "DeepSeek",
+        "/api/ai/deepseek",
+    }
+
+    data_quality_text = "\n".join(
+        Path(path).read_text(encoding="utf-8")
+        for path in (
+            "src/data_quality/growth_inflation_macro_pack.py",
+            "src/data_quality/valuation_equity_structure.py",
+        )
+    )
+    for token in _FORBIDDEN_TOKENS:
+        assert token not in data_quality_text
+
+    main_text = Path("src/app_backend/main.py").read_text(encoding="utf-8")
+    for token in _FORBIDDEN_TOKENS:
+        if token in _AI_2_ALLOWED_IN_MAIN:
+            continue
+        assert token not in main_text
 
 
 # ---------------------------------------------------------------------------
