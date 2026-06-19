@@ -12,6 +12,8 @@ data/market_history/*.sqlite3
 data/market_history/*.sqlite3-*
 data/eia/*
 !data/eia/.gitkeep
+data/research_context/*.sqlite3
+data/research_context/*.sqlite3-*
 data/manual/market_data_manual.csv
 
 outputs/reports/*
