@@ -257,4 +257,3 @@ AI-1 completion does not change or authorize any of those flags.
   tests, and a reproducible quality audit.
 - AI-2 must not start unless the readiness checklist is fully green and the
   user explicitly approves the next phase.
-
