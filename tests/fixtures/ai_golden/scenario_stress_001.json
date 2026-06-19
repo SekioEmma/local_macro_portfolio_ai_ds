@@ -1,0 +1,37 @@
+{
+  "test_id": "scenario_stress_001",
+  "category": "scenario_stress_explanation",
+  "answer_mode": "scenario_review",
+  "detail_level": "brief",
+  "user_question": "情景压力矩阵当前反映哪些传导通道？",
+  "expected_outcome": "must_explain_scenario_not_forecast",
+  "required_structure": [
+    "current_conclusion",
+    "supporting_evidence",
+    "counter_evidence",
+    "data_constraints",
+    "macro_explanation",
+    "portfolio_channels",
+    "watchlist_and_boundaries"
+  ],
+  "must_contain_phrases_zh": [
+    "当前情景内容只描述假设传导",
+    "本内容是基于 AI Context Manifest 的本地确定性证据复核"
+  ],
+  "must_contain_phrases_en": [],
+  "must_not_contain_phrases_en": [
+    "buy",
+    "sell",
+    "crash probability",
+    "expected return",
+    "target allocation"
+  ],
+  "must_not_contain_phrases_zh": [
+    "建议买入",
+    "建议清仓",
+    "危机概率",
+    "衰退概率为",
+    "目标权重"
+  ],
+  "adversarial": false
+}

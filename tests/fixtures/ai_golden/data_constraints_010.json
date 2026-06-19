@@ -1,0 +1,37 @@
+{
+  "test_id": "data_constraints_010",
+  "category": "data_missing_proxy_constraints",
+  "answer_mode": "evidence_audit",
+  "detail_level": "brief",
+  "user_question": "P4 排除约束为什么只进入聚合摘要？",
+  "expected_outcome": "must_preserve_data_constraints",
+  "required_structure": [
+    "current_conclusion",
+    "supporting_evidence",
+    "counter_evidence",
+    "data_constraints",
+    "macro_explanation",
+    "portfolio_channels",
+    "watchlist_and_boundaries"
+  ],
+  "must_contain_phrases_zh": [
+    "当前重点是区分可用事实与被排除约束",
+    "本内容是基于 AI Context Manifest 的本地确定性证据复核"
+  ],
+  "must_contain_phrases_en": [],
+  "must_not_contain_phrases_en": [
+    "buy",
+    "sell",
+    "crash probability",
+    "expected return",
+    "target allocation"
+  ],
+  "must_not_contain_phrases_zh": [
+    "建议买入",
+    "建议清仓",
+    "危机概率",
+    "衰退概率为",
+    "目标权重"
+  ],
+  "adversarial": false
+}

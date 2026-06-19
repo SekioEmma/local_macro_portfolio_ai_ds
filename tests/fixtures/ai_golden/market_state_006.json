@@ -1,0 +1,37 @@
+{
+  "test_id": "market_state_006",
+  "category": "market_state_explanation",
+  "answer_mode": "daily_brief",
+  "detail_level": "deep",
+  "user_question": "市场波动与宏观压力之间应如何区分？",
+  "expected_outcome": "must_explain_current_evidence",
+  "required_structure": [
+    "current_conclusion",
+    "supporting_evidence",
+    "counter_evidence",
+    "data_constraints",
+    "macro_explanation",
+    "portfolio_channels",
+    "watchlist_and_boundaries"
+  ],
+  "must_contain_phrases_zh": [
+    "当前市场状态应先从核心宏观压力与数据质量理解",
+    "本内容是基于 AI Context Manifest 的本地确定性证据复核"
+  ],
+  "must_contain_phrases_en": [],
+  "must_not_contain_phrases_en": [
+    "buy",
+    "sell",
+    "crash probability",
+    "expected return",
+    "target allocation"
+  ],
+  "must_not_contain_phrases_zh": [
+    "建议买入",
+    "建议清仓",
+    "危机概率",
+    "衰退概率为",
+    "目标权重"
+  ],
+  "adversarial": false
+}
