@@ -284,7 +284,7 @@ def test_generated_at_and_observation_date_characterization():
 def test_format_value_characterization():
     assert dashboard_service._format_value(1.234, "percent", "ok") == "1.23%"
     assert dashboard_service._format_value(1.234, "signed_percent", "ok") == "+1.23%"
-    assert dashboard_service._format_value(1.23, "pp", "ok") == "+1.2pp"
+    assert dashboard_service._format_value(1.23, "pp", "ok") == "+1.23pp"
     assert dashboard_service._format_value(1234, "number", "ok") == "1,234"
     assert dashboard_service._format_value(1234.5, "number", "ok") == "1,234.5"
     assert dashboard_service._format_value(True, "bool", "ok") == "true"
@@ -495,7 +495,7 @@ def test_portfolio_compact_metric_snapshot_characterization():
         "metric_key": "max_deviation_pp",
         "display_name": "Max deviation",
         "value": 4.0,
-        "value_text": "+4.0pp",
+        "value_text": "+4.00pp",
         "unit": "pp",
         "status": "watch",
         "source": "local_portfolio_compact",

@@ -262,12 +262,23 @@ class AIDeepSeekResearchRequest(BaseModel):
     )
 
 
+class AIDeepSeekClaimMetadata(BaseModel):
+    """Structured claim_type and threshold_source metadata extracted from DS output."""
+    claim_type_counts: dict[str, int] = Field(default_factory=dict)
+    threshold_source_counts: dict[str, int] = Field(default_factory=dict)
+    total_claims: int = 0
+
+
 class AIDeepSeekResearchResponse(BaseModel):
     mode: Literal["deepseek_single_turn"]
     answer_mode: AnswerMode
     detail_level: DetailLevel
     user_question: str
     deepseek_raw_output: str
+    deepseek_memo_output: str = ""
+    claim_metadata: AIDeepSeekClaimMetadata = Field(
+        default_factory=AIDeepSeekClaimMetadata
+    )
     finish_reason: str
     selected_prompt_context: AISelectedPromptContext
     prompt_budget: AIPromptBudgetSummary

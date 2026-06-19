@@ -533,7 +533,7 @@ def format_value(value: Any, format_kind: str, status: str) -> str:
         return f"{number:+.2f}%" if isinstance(number, float) else str(value)
     if format_kind == "pp":
         number = to_float(value)
-        return f"{number:+.1f}pp" if isinstance(number, float) else str(value)
+        return f"{number:+.2f}pp" if isinstance(number, float) else str(value)
     if format_kind == "number":
         number = to_float(value)
         if isinstance(number, float):

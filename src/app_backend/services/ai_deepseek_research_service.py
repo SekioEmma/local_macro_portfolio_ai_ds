@@ -25,6 +25,7 @@ from app_backend.schemas.ai_memo import (
 )
 from app_backend.schemas.ai_preview import (
     AIDeepSeekResearchRequest,
+    AIDeepSeekClaimMetadata,
     AIDeepSeekResearchResponse,
     AISelectedPromptContext,
     AnswerMode,
@@ -77,6 +78,7 @@ _FORBIDDEN_INPUT_TERMS = {
 }
 
 _SECTION_FORMAT_INSTRUCTION = """请严格按以下 7 段结构回答，每段以标题行开头。
+
 每段核心判断必须在行首标注 [claim_type=xxx]，可选值：
   direct_evidence — 直接由单一证据卡片支持的事实陈述
   cross_evidence_inference — 多张卡片交叉推断的结论
@@ -103,6 +105,16 @@ _SECTION_FORMAT_INSTRUCTION = """请严格按以下 7 段结构回答，每段�
 
 ## 观察清单与边界
 （列出后续需要观察的指标和边界条件。任何数值阈值后必须标注 [threshold_source=project_band|historical_percentile|heuristic_watchlist]。模型自行生成的阈值为 heuristic_watchlist，不得描述为项目触发线。明确本回答不是预测、不是概率、不是交易建议。）"""
+
+_EXPRESSION_RULES = """[金融表达约束（必须遵守）]
+1. direct_evidence 段只能陈述字段事实和数值，不得包含"反映""意味着""通常对应""可能由……驱动"等解释性语言。解释性内容必须移入 interpretive 段。
+2. interpretive 段可以解释传导机制，但必须避免把外部市场叙事写成项目已验证事实。
+3. 曲线斜率为正只能说明"不支持当前倒挂强化叙事"，不能单独排除衰退或增长放缓风险。须补充"仍需结合就业、信用、盈利与融资压力共同判断"。
+4. historical freshness 不等于 stale。标注为 historical 的证据应解释为"历史分位/历史统计上下文"，而不是简单说"新鲜度不足"。
+5. 所有 pp 距离保留两位小数。不得把 0.03pp 四舍五入写成 0.0pp。
+6. "软着陆""金发姑娘""AI 生产率叙事"等宏观标签，除非选中证据卡片中有对应字段，否则只能作为待验证解释框架，并明确标注"当前 Manifest 未提供对应证据"。
+7. "可能触发""将导致""未来会"等预测倾向表述统一改为"作为观察条件""需要后续证据确认""构成风险传导路径的条件之一"。
+8. ON RRP / 隔夜逆回购单独变化不能推断准备金稀缺，必须同时引用 SOFR-EFFR 利差、EFFR-IORB 利差或银行准备金证据。"""
 
 
 def validate_user_question(question: str) -> tuple[bool, list[str]]:
@@ -153,6 +165,7 @@ def build_deepseek_prompt(
         f"[约束摘要]\n{selected_context.constraint_summary.summary_zh}",
         f"[来源与新鲜度摘要]\n{source_quality}",
         _SECTION_FORMAT_INSTRUCTION,
+        _EXPRESSION_RULES,
         f"[用户问题]\n{user_question}",
     ]
     return "\n\n".join(parts)
@@ -182,6 +195,43 @@ def _build_source_quality_summary(selected_cards: list[Any]) -> str:
         f"freshness 分布: {', '.join(freshness_parts)}\n"
         f"请在「数据约束」段复述此分布，不能引用 excluded 项作为强结论支撑。"
     )
+
+
+_CLAIM_TYPE_RE = re.compile(
+    r"\[claim_type\s*=\s*"
+    r"(direct_evidence|cross_evidence_inference|interpretive|watchlist)\s*\]"
+)
+_THRESHOLD_SOURCE_RE = re.compile(
+    r"\[threshold_source\s*=\s*"
+    r"(project_band|historical_percentile|heuristic_watchlist)\s*\]"
+)
+
+
+def _postprocess_deepseek_output(
+    raw_output: str,
+) -> tuple[str, AIDeepSeekClaimMetadata]:
+    """Strip claim_type/threshold_source tags from display output; extract metadata."""
+    from collections import Counter
+
+    claim_counts: Counter[str] = Counter()
+    threshold_counts: Counter[str] = Counter()
+
+    for match in _CLAIM_TYPE_RE.finditer(raw_output):
+        claim_counts[match.group(1)] += 1
+    for match in _THRESHOLD_SOURCE_RE.finditer(raw_output):
+        threshold_counts[match.group(1)] += 1
+
+    memo_output = _CLAIM_TYPE_RE.sub("", raw_output)
+    memo_output = _THRESHOLD_SOURCE_RE.sub("", memo_output)
+    memo_output = re.sub(r"\n\s*\n\s*\n+", "\n\n", memo_output)
+    memo_output = re.sub(r"^[ \t]+", "", memo_output, flags=re.MULTILINE)
+
+    metadata = AIDeepSeekClaimMetadata(
+        claim_type_counts=dict(claim_counts),
+        threshold_source_counts=dict(threshold_counts),
+        total_claims=sum(claim_counts.values()),
+    )
+    return memo_output.strip(), metadata
 
 
 def _build_runtime_policy() -> ExternalAIRuntimePolicy:
@@ -317,6 +367,8 @@ def run_deepseek_research(
     deepseek_text = external_response.content
     finish_reason = "stop"
 
+    memo_output, claim_metadata = _postprocess_deepseek_output(deepseek_text)
+
     legacy_validator, semantic_result = validate_research_domains(
         system_boundary=SYSTEM_BOUNDARY_ZH,
         task_instruction=ANSWER_MODE_TASKS_ZH.get(
@@ -356,6 +408,8 @@ def run_deepseek_research(
         detail_level=request.detail_level,
         user_question=request.user_question,
         deepseek_raw_output=deepseek_text,
+        deepseek_memo_output=memo_output,
+        claim_metadata=claim_metadata,
         finish_reason=finish_reason,
         selected_prompt_context=selected_context,
         prompt_budget=budget,

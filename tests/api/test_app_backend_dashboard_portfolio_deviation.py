@@ -17,8 +17,8 @@ def test_dashboard_exposes_portfolio_deviation_compact_fields(monkeypatch, tmp_p
 
     assert module["status"] == "watch"
     assert _metric(module, "max_deviation_asset")["value"] == "sp500"
-    assert _metric(module, "max_deviation_pp")["value_text"] == "+4.0pp"
-    assert _metric(module, "equity_total_deviation_pp")["value_text"] == "+1.0pp"
+    assert _metric(module, "max_deviation_pp")["value_text"] == "+4.00pp"
+    assert _metric(module, "equity_total_deviation_pp")["value_text"] == "+1.00pp"
     assert (
         _metric(module, "cash_reserve_status")["value"]
         == "cash_excluded_from_target_allocation"
