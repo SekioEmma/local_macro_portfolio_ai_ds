@@ -17,6 +17,19 @@ SOURCE_CLASSES = {
     "not_available",
 }
 
+SOURCE_PRIORITY = {
+    "official": 500,
+    "dataset_official": 500,
+    "official_reference": 450,
+    "scraped_official_reference": 425,
+    "official_fallback": 400,
+    "commercial_api_fallback": 300,
+    "proxy": 250,
+    "research_context": 100,
+    "commercial_licensed_required": 0,
+    "not_available": 0,
+}
+
 TRIGGER_ELIGIBILITY = {
     "eligible",
     "support_only",
@@ -155,6 +168,14 @@ def get_provider_spec(provider_key: str) -> ProviderSpec:
         return PROVIDER_REGISTRY[provider_key]
     except KeyError as exc:
         raise ValueError(f"unknown_provider:{provider_key}") from exc
+
+
+def source_priority(source_badge: str) -> int:
+    return SOURCE_PRIORITY.get(source_badge, -1)
+
+
+def prefer_source(candidate_badge: str, current_badge: str | None) -> bool:
+    return source_priority(candidate_badge) > source_priority(current_badge or "")
 
 
 def validate_source_assignment(
