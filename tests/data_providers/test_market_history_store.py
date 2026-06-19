@@ -37,6 +37,83 @@ def test_upsert_market_observation_inserts_and_updates(tmp_path):
     assert store.count_observations_by_metric(db_path=db_path) == {"dgs10": 1}
 
 
+def test_batch_upsert_uses_one_atomic_operation_and_reports_counts(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    first = store.upsert_market_observations(
+        [
+            _observation("dgs2", 4.1),
+            _observation("dgs10", 4.5),
+        ],
+        db_path=db_path,
+    )
+    second = store.upsert_market_observations(
+        [
+            _observation("dgs2", 4.2),
+            _observation("dgs30", 4.8),
+        ],
+        db_path=db_path,
+    )
+
+    assert first == {
+        "observation_count": 2,
+        "inserted_count": 2,
+        "updated_count": 0,
+    }
+    assert second == {
+        "observation_count": 2,
+        "inserted_count": 1,
+        "updated_count": 1,
+    }
+    assert store.count_observations_by_metric(db_path=db_path) == {
+        "dgs10": 1,
+        "dgs2": 1,
+        "dgs30": 1,
+    }
+
+
+def test_batch_upsert_validates_all_rows_before_writing(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    with pytest.raises(store.MarketHistoryValidationError):
+        store.upsert_market_observations(
+            [
+                _observation("dgs10", 4.5),
+                _observation("bad", None),
+            ],
+            db_path=db_path,
+        )
+
+    assert not db_path.exists()
+
+
+def test_same_date_prefers_official_source_over_later_fallback_write(tmp_path):
+    db_path = tmp_path / "market_history.sqlite3"
+    store.upsert_market_observation(
+        _observation("headline_cpi_yoy", 3.0, source="BLS"),
+        db_path=db_path,
+    )
+    store.upsert_market_observation(
+        _observation(
+            "headline_cpi_yoy",
+            2.9,
+            source="FRED",
+            source_badge="official_fallback",
+        ),
+        db_path=db_path,
+    )
+
+    latest = store.get_latest_observation("headline_cpi_yoy", db_path=db_path)
+    rows = store.list_market_observations(
+        metric_key="headline_cpi_yoy", db_path=db_path
+    )
+
+    assert latest["provider"] == "BLS"
+    assert latest["source_badge"] == "official"
+    assert [row["source_badge"] for row in rows] == [
+        "official",
+        "official_fallback",
+    ]
+
+
 def test_list_latest_and_counts_by_metric(tmp_path):
     db_path = tmp_path / "market_history.sqlite3"
     store.upsert_market_observation(

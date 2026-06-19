@@ -145,6 +145,9 @@ def test_stale_data_escalation_characterization():
     [
         ("official", "official"),
         ("official_fallback", "official_fallback"),
+        ("official_reference", "official_reference"),
+        ("scraped_official_reference", "scraped_official_reference"),
+        ("commercial_api_fallback", "commercial_api_fallback"),
         ("unofficial_fallback", "unofficial_fallback"),
         ("proxy", "proxy"),
         ("search-derived", "search-derived"),

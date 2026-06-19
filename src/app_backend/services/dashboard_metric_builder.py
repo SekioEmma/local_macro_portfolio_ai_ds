@@ -35,6 +35,9 @@ ALLOWED_METRIC_STATUSES = {
 ALLOWED_SOURCE_BADGES = {
     "official",
     "official_fallback",
+    "official_reference",
+    "scraped_official_reference",
+    "commercial_api_fallback",
     "unofficial_fallback",
     "proxy",
     "search-derived",
@@ -446,7 +449,16 @@ def metric_source_badge(
         badge = report.data.get("source_badge") or report.data.get("source_tier")
     badge_text = str(badge or "missing").lower()
     badge_text = (source_badge_aliases or SOURCE_BADGE_ALIASES).get(badge_text, badge_text)
-    if badge_text in {"official", "official_fallback", "unofficial_fallback", "proxy", "search-derived"}:
+    if badge_text in {
+        "official",
+        "official_fallback",
+        "official_reference",
+        "scraped_official_reference",
+        "commercial_api_fallback",
+        "unofficial_fallback",
+        "proxy",
+        "search-derived",
+    }:
         return badge_text
     return badge_text if badge_text in ALLOWED_SOURCE_BADGES else "missing"
 

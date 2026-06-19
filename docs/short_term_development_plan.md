@@ -6,13 +6,15 @@ route and the next engineering task. For a one-page orientation, see
 
 ## Current Phase
 
-AI-1 Local Controlled Research Preview is completed. The codebase now provides
-six answer modes, three detail levels, seven-section Chinese research output,
-mode-aware prompt context selection, local semantic validation, research and
-prompt preview APIs, and a read-only frontend workbench. The current phase is
-AI-1.5 Local Preview Evaluation & Governance Closeout. External models, search,
-persistence, account detail, prediction, probability, return, allocation, and
-trading outputs remain outside this route.
+AI-1 Local Controlled Research Preview is completed. AI-2 single-turn
+DeepSeek research endpoint is live (DeepSeek V4 Pro, 7-section Chinese
+output, full guard chain, input/output validation). Data Foundation G2/G3
+Source Supplementation is completed with explicit provider contracts and
+source-gated ingest paths for FRED, BLS, BEA, Alpha Vantage, and OFR.
+Market-history writes are batched and same-date reads enforce source priority.
+Generated data remains local and uncommitted. Search, persistence, account
+detail, prediction, probability, return, allocation, and trading outputs
+remain outside this route.
 
 ## Priority Route
 
@@ -45,14 +47,13 @@ trading outputs remain outside this route.
 18. Data Foundation G1 controlled local refresh and coverage audit: completed.
 19. UI-0 Frontend Information Architecture Audit: completed as docs/audit
     only.
-20. AI-1 Local Controlled Research Preview: completed, including the backend
-    primitives, service wiring, Chinese research templates, contract updates,
-    local APIs, and read-only frontend preview surface.
-21. AI-1.5 Local Preview Evaluation & Governance Closeout: current next task.
-22. UI-1 Dashboard homepage data-display polish using existing backend APIs
-    and source gates only: retained in backlog after AI-1.5.
-23. G2 official-source refresh-command implementation: only if remaining
-    history gaps block UI work and the user explicitly approves it.
+20. AI-1 Local Controlled Research Preview: completed.
+21. AI-1.5 Local Preview Evaluation & Governance Closeout: completed.
+22. AI-2 Single-Turn DeepSeek Research Endpoint: completed and live-tested
+    with DeepSeek V4 Pro.
+23. G2/G3 source supplementation: completed with explicit user approval.
+24. UI-1 Dashboard homepage data-display polish using existing backend APIs,
+    the G2/G3 source hierarchy, and existing model contracts only: backlog.
 
 ### P1
 
@@ -100,6 +101,7 @@ trading outputs remain outside this route.
 - Phase F/G Dashboard Service Refactor Completion.
 - Data Foundation Gap Fill v1.
 - Data Foundation G1 Controlled Local Refresh and Coverage Audit.
+- Data Foundation G2/G3 Source Supplementation.
 - UI-0 Frontend Information Architecture Audit.
 - AI-1 Local Controlled Research Preview.
 

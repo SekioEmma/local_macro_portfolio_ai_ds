@@ -6,19 +6,17 @@ route is in `docs/short_term_development_plan.md`.
 
 ## Current Truth
 
-- Current branch: `ai-1-local-research-preview`
-- Current phase: AI-1 Local Controlled Research Preview is completed; AI-1.5
-  Local Preview Evaluation & Governance Closeout is active.
-- Last completed task: AI-1 Local Controlled Research Preview, including the
-  local research and prompt preview APIs, six answer modes, three detail
-  levels, seven-section Chinese research output, evidence-card context
-  selection, semantic validation, and the read-only frontend workbench.
-- Last completed governance task: HF-2 Project Namespace Index / Governance
-  Light Cleanup
-- Current immediate route: AI-1.5 Local Preview Evaluation & Governance
-  Closeout.
-- Next engineering task: AI-1.5 golden fixtures, structure/adversarial
-  coverage, local quality audit, and AI-2 readiness evidence.
+- Current branch: `ai-1-local-research-preview` (merged with `app-mvp`)
+- Current phase: AI-2 single-turn DeepSeek research endpoint is live;
+  G2/G3 data-source supplementation is complete.
+- Last completed task: AI-2 single-turn DeepSeek V4 Pro research endpoint
+  with full guard chain, input/output validation, and 7-section Chinese
+  research output. G2/G3 official provider supplementation (FRED, BLS, BEA,
+  Alpha Vantage, OFR) and market-history stabilization.
+- Current immediate route: evaluate DeepSeek output quality, then decide
+  next step (frontend integration or further model tuning).
+- Next engineering task: frontend DeepSeek research tab or further data
+  source wiring into dashboard contracts.
 - Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
   full-account DeepSeek context, live provider fetch/write,
   prediction/probability/trading outputs
@@ -150,6 +148,7 @@ Stage DF is concluded. No default DF-5.
 | `docs/modeling_roadmap.md` | modeling-history narrative and module boundaries |
 | `docs/data_foundation_gap_fill_v1.md` | G0 source-gated registry cleanup and validation |
 | `docs/data_foundation_local_refresh_g1.md` | G1 controlled local refresh evidence and remaining coverage gaps |
+| `docs/data_foundation_g2_source_supplementation.md` | G2/G3 provider registry, ingest commands, source hierarchy, boundaries, and closeout |
 | `docs/frontend_information_architecture_audit.md` | UI-0 frontend shell, page, API-contract, placeholder, and display-gap audit |
 | `docs/ai_1a_card_priority_semantic_foundation.md` | historical AI-1 primitive foundation: evidence cards, priority ranking, and financial semantic validator |
 | `docs/ai_1_local_research_preview_closeout.md` | AI-1 Local Controlled Research Preview contract, privacy boundary, validator rules, and closeout evidence |
@@ -205,9 +204,10 @@ validation requirements. The short version:
 18. AI-1.5 Local Preview Evaluation & Governance Closeout
 19. UI-1 Dashboard homepage data-display polish using existing backend APIs
     and source gates only
-20. G2 official-source refresh-command implementation only with explicit
-    approval if the remaining history gaps block UI work
-21. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
+20. ~~G2/G3 source supplementation~~ (completed)
+21. AI-2 Single-Turn DeepSeek Research Endpoint (completed; live-tested
+    with DeepSeek V4 Pro)
+22. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
    documentation (only if explicitly requested)
 
 Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,

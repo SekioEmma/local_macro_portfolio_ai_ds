@@ -1,6 +1,9 @@
 export const sourceBadgeLabels: Record<string, string> = {
   official: "官方",
   official_fallback: "官方备用",
+  official_reference: "官方参考",
+  scraped_official_reference: "官方抓取参考",
+  commercial_api_fallback: "商业 API 备用",
   unofficial_fallback: "非官方备用",
   proxy: "代理指标",
   derived: "派生",
@@ -10,6 +13,5 @@ export const sourceBadgeLabels: Record<string, string> = {
   cached_report: "缓存报告",
   "search-derived": "搜索派生",
   missing: "来源缺失",
-  research_needed: "待研究"
+  research_needed: "待研究",
 };
-
