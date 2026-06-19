@@ -10,6 +10,8 @@ data/cache/last_good/*.json
 data/history/**/*.raw.json
 data/market_history/*.sqlite3
 data/market_history/*.sqlite3-*
+data/eia/*
+!data/eia/.gitkeep
 data/manual/market_data_manual.csv
 
 outputs/reports/*
