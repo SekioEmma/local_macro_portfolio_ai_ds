@@ -1,6 +1,10 @@
 import type {
   ApiResult,
   AIContextManifestResponse,
+  AIAnswerMode,
+  AIDetailLevel,
+  AIPromptPreviewResponse,
+  AIResearchPreviewResponse,
   AppSettings,
   AppSettingsResponse,
   DashboardEvidenceFilters,
@@ -50,7 +54,33 @@ export function fetchDashboardEvidenceTable(
 export function fetchAIContextManifest(): Promise<
   ApiResult<AIContextManifestResponse>
 > {
-  return requestJson<AIContextManifestResponse>("/api/context/manifest");
+  return requestJson<AIContextManifestResponse>("/api/ai/context-preview");
+}
+
+export function fetchAIResearchPreview(
+  answerMode: AIAnswerMode,
+  detailLevel: AIDetailLevel
+): Promise<ApiResult<AIResearchPreviewResponse>> {
+  return requestJson<AIResearchPreviewResponse>("/api/ai/research-preview", {
+    method: "POST",
+    body: {
+      answer_mode: answerMode,
+      detail_level: detailLevel
+    }
+  });
+}
+
+export function fetchAIPromptPreview(
+  answerMode: AIAnswerMode,
+  detailLevel: AIDetailLevel
+): Promise<ApiResult<AIPromptPreviewResponse>> {
+  return requestJson<AIPromptPreviewResponse>("/api/ai/prompt-preview", {
+    method: "POST",
+    body: {
+      answer_mode: answerMode,
+      detail_level: detailLevel
+    }
+  });
 }
 
 export function fetchStorageStatus(): Promise<ApiResult<StorageStatusResponse>> {

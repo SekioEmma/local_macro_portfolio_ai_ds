@@ -12,11 +12,15 @@ from app_backend.schemas.ai_memo import (
 )
 from app_backend.schemas.ai_preview import (
     AIContextPreviewResponse,
+    AIPromptPreviewRequest,
+    AIPromptPreviewResponse,
     AIPreviewChatRequest,
     AIPreviewChatResponse,
     AIPreviewMemoResponse,
     AIPreviewReportRequest,
     AIPreviewMemoRequest,
+    AIResearchPreviewRequest,
+    AIResearchPreviewResponse,
 )
 from app_backend.schemas.responses import AIContextManifestResponse
 from app_backend.services import ai_context_service
@@ -26,6 +30,13 @@ from app_backend.services.ai_memo_renderer import (
     NO_ELIGIBLE_CONTEXT,
     PRIVACY_FORBIDDEN_TERMS,
     render_ai_memo_preview,
+)
+from app_backend.services.ai_prompt_context import build_full_context_catalogue
+from app_backend.services.ai_research_modes import answer_mode_for_memo_type
+from app_backend.services.ai_research_renderer import (
+    constraint_reason_counts,
+    render_prompt_preview as render_controlled_prompt_preview,
+    render_research_preview as render_controlled_research_preview,
 )
 
 
@@ -45,6 +56,7 @@ def build_context_preview() -> AIContextPreviewResponse:
     manifest = ai_context_service.build_ai_context_manifest()
     data = _manifest_to_dict(manifest)
     summary = _context_summary(data)
+    catalogue = build_full_context_catalogue(data)
     return AIContextPreviewResponse(
         **data,
         mode=MODE,
@@ -64,53 +76,110 @@ def build_context_preview() -> AIContextPreviewResponse:
             "source_summary": data.get("source_summary") or {},
         },
         last_generated_at=data.get("generated_at"),
+        full_context_catalogue=catalogue,
+        priority_counts=catalogue.priority_counts,
+        excluded_reason_distribution=constraint_reason_counts(data),
+    )
+
+
+def render_research_preview(
+    request: AIResearchPreviewRequest,
+) -> AIResearchPreviewResponse:
+    manifest = ai_context_service.build_ai_context_manifest()
+    return render_controlled_research_preview(
+        _manifest_to_dict(manifest),
+        answer_mode=request.answer_mode,
+        detail_level=request.detail_level,
+    )
+
+
+def render_prompt_preview(
+    request: AIPromptPreviewRequest,
+) -> AIPromptPreviewResponse:
+    manifest = ai_context_service.build_ai_context_manifest()
+    return render_controlled_prompt_preview(
+        _manifest_to_dict(manifest),
+        answer_mode=request.answer_mode,
+        detail_level=request.detail_level,
     )
 
 
 def render_chat_preview(request: AIPreviewChatRequest) -> AIPreviewChatResponse:
     manifest = ai_context_service.build_ai_context_manifest()
     manifest_data = _manifest_to_dict(manifest)
+    research = render_controlled_research_preview(
+        manifest_data,
+        answer_mode="risk_review",
+        detail_level="standard" if request.style == "structured" else "brief",
+    )
     sections = [
         _chat_section(section_key, request, manifest_data)
         for section_key in CHAT_SECTION_KEYS
     ]
-    answer_preview = _answer_preview(request, manifest_data)
     response = AIPreviewChatResponse(
         mode=MODE,
-        answer_preview=answer_preview,
+        answer_preview=research.answer_preview,
         sections=sections,
         context_used_summary=_context_summary(manifest_data),
         privacy_summary=_privacy_summary(),
-        validator_result=AIMemoValidatorResult(
-            passed=True,
-            blocked_terms=[],
-            privacy_findings=[],
-        ),
+        validator_result=research.validator_result,
         not_sent_to_external_model=True,
         human_review_required=True,
         interpretation_boundary=BOUNDARY_NOTICE,
+        answer_mode=research.answer_mode,
+        research_sections=research.research_sections,
+        selected_prompt_context=research.selected_prompt_context,
+        prompt_budget=research.prompt_budget,
+        semantic_validator_result=research.semantic_validator_result,
     )
-    response.validator_result = validate_ai_preview_payload(response)
     return response
 
 
 def render_memo_preview(request: AIPreviewMemoRequest) -> AIPreviewMemoResponse:
     manifest = ai_context_service.build_ai_context_manifest()
-    preview = render_ai_memo_preview(request.memo_type, manifest).as_dict()
+    manifest_data = _manifest_to_dict(manifest)
+    preview = render_ai_memo_preview(request.memo_type, manifest_data).as_dict()
+    research = render_controlled_research_preview(
+        manifest_data,
+        answer_mode=answer_mode_for_memo_type(request.memo_type),
+        detail_level="deep" if request.style == "detailed" else "standard",
+    )
     preview["mode"] = MODE
     preview["not_sent_to_external_model"] = True
+    preview["answer_mode"] = research.answer_mode
+    preview["research_sections"] = [
+        section.model_dump() for section in research.research_sections
+    ]
+    preview["selected_prompt_context"] = research.selected_prompt_context.model_dump()
+    preview["prompt_budget"] = research.prompt_budget.model_dump()
+    preview["semantic_validator_result"] = (
+        research.semantic_validator_result.model_dump()
+    )
     response = AIPreviewMemoResponse(**preview)
-    response.validator_result = validate_ai_preview_payload(response)
     return response
 
 
 def render_report_preview(request: AIPreviewReportRequest) -> AIPreviewMemoResponse:
     manifest = ai_context_service.build_ai_context_manifest()
-    preview = render_ai_memo_preview(request.report_type, manifest).as_dict()
+    manifest_data = _manifest_to_dict(manifest)
+    preview = render_ai_memo_preview(request.report_type, manifest_data).as_dict()
+    research = render_controlled_research_preview(
+        manifest_data,
+        answer_mode=answer_mode_for_memo_type(request.report_type),
+        detail_level="deep",
+    )
     preview["mode"] = MODE
     preview["not_sent_to_external_model"] = True
+    preview["answer_mode"] = research.answer_mode
+    preview["research_sections"] = [
+        section.model_dump() for section in research.research_sections
+    ]
+    preview["selected_prompt_context"] = research.selected_prompt_context.model_dump()
+    preview["prompt_budget"] = research.prompt_budget.model_dump()
+    preview["semantic_validator_result"] = (
+        research.semantic_validator_result.model_dump()
+    )
     response = AIPreviewMemoResponse(**preview)
-    response.validator_result = validate_ai_preview_payload(response)
     return response
 
 

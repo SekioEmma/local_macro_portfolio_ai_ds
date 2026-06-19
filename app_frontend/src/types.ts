@@ -189,6 +189,182 @@ export type AIContextManifestResponse = {
   persistence_policy: Record<string, unknown>;
   risk_boundaries: string[];
   source_summary: Record<string, unknown>;
+  mode?: "local_preview";
+  search_enabled?: boolean;
+  external_model_called?: boolean;
+  search_called?: boolean;
+  saved_by_default?: boolean;
+  included_fact_count?: number;
+  excluded_fact_count?: number;
+  included_model_output_count?: number;
+  excluded_model_output_count?: number;
+  context_stats?: Record<string, unknown>;
+  last_generated_at?: string | null;
+  full_context_catalogue?: AIFullContextCatalogue;
+  priority_counts?: Record<string, number>;
+  excluded_reason_distribution?: Record<string, number>;
+};
+
+export type AIAnswerMode =
+  | "daily_brief"
+  | "risk_review"
+  | "scenario_review"
+  | "portfolio_overlay"
+  | "evidence_audit"
+  | "research_memo";
+
+export type AIDetailLevel = "brief" | "standard" | "deep";
+export type AIValidationSeverity = "info" | "warning" | "error" | "blocker";
+
+export type AIContextCard = {
+  card_type: string;
+  module: string;
+  module_display_zh: string;
+  metric_key: string;
+  display_name: string;
+  priority: number;
+  priority_label_zh: string;
+  value_text?: string | null;
+  status?: string | null;
+  status_display_zh?: string | null;
+  source_badge?: string | null;
+  source_badge_display_zh?: string | null;
+  freshness_status?: string | null;
+  freshness_display_zh?: string | null;
+  observation_date?: string | null;
+  interpretation_hint?: string | null;
+  interpretation_boundary?: string | null;
+  trigger_eligibility?: string | null;
+  trigger_eligibility_display_zh?: string | null;
+  support_band?: string | null;
+  severity_band?: string | null;
+  uncertainty_band?: string | null;
+  evidence_quality_band?: string | null;
+  conflict_band?: string | null;
+  missing_input_count?: number | null;
+  excluded_reason?: string | null;
+  excluded_reason_display_zh?: string | null;
+  effect_zh?: string | null;
+  boundary_notice_zh: string;
+};
+
+export type AIFullContextCatalogue = {
+  evidence_cards: AIContextCard[];
+  model_output_cards: AIContextCard[];
+  excluded_constraint_cards: AIContextCard[];
+  total_card_count: number;
+  priority_counts: Record<string, number>;
+  source_badge_distribution: Record<string, number>;
+  excluded_reason_distribution: Record<string, number>;
+};
+
+export type AIConstraintSummary = {
+  total_count: number;
+  excluded_reason_distribution: Record<string, number>;
+  module_distribution: Record<string, number>;
+  freshness_distribution: Record<string, number>;
+  summary_zh: string;
+};
+
+export type AIPromptBudgetSummary = {
+  card_limit: number;
+  char_limit: number;
+  estimated_token_limit: number;
+  selected_card_count: number;
+  selected_char_count: number;
+  estimated_token_count: number;
+  omitted_card_count: number;
+  omitted_by_priority: Record<string, number>;
+  omitted_by_reason: Record<string, number>;
+  ready: boolean;
+  status_reason: string;
+};
+
+export type AISelectedPromptContext = {
+  selected_cards: AIContextCard[];
+  constraint_summary: AIConstraintSummary;
+  selected_context_text: string;
+  selection_notes: string[];
+};
+
+export type AISemanticFinding = {
+  code: string;
+  category: string;
+  severity: AIValidationSeverity;
+  message_zh: string;
+  matched_claims: string[];
+  cited_context_ids: string[];
+  required_context: string[];
+};
+
+export type AIResearchValidationResult = {
+  passed: boolean;
+  blocked: boolean;
+  max_severity: AIValidationSeverity | null;
+  findings: AISemanticFinding[];
+  domain_checks: Record<string, string>;
+};
+
+export type AIResearchSection = {
+  key:
+    | "current_conclusion"
+    | "supporting_evidence"
+    | "counter_evidence"
+    | "data_constraints"
+    | "macro_explanation"
+    | "portfolio_channels"
+    | "watchlist_and_boundaries";
+  title: string;
+  content: string;
+  source_context: string[];
+  claim_tags: string[];
+};
+
+export type AIResearchPreviewResponse = {
+  mode: "local_controlled_research_preview";
+  answer_mode: AIAnswerMode;
+  legacy_memo_type: string;
+  detail_level: AIDetailLevel;
+  title: string;
+  answer_preview: string;
+  research_sections: AIResearchSection[];
+  selected_prompt_context: AISelectedPromptContext;
+  prompt_budget: AIPromptBudgetSummary;
+  context_used_summary: {
+    included_fact_count: number;
+    excluded_fact_count: number;
+    included_model_output_count: number;
+    excluded_model_output_count: number;
+  };
+  privacy_summary: Record<string, boolean>;
+  validator_result: {
+    passed: boolean;
+    blocked_terms: string[];
+    privacy_findings: string[];
+  };
+  semantic_validator_result: AIResearchValidationResult;
+  not_sent_to_external_model: boolean;
+  human_review_required: boolean;
+  interpretation_boundary: string;
+};
+
+export type AIPromptPreviewResponse = {
+  mode: "local_prompt_preview";
+  status: "ready" | "not_ready";
+  answer_mode: AIAnswerMode;
+  legacy_memo_type: string;
+  detail_level: AIDetailLevel;
+  system_boundary: string;
+  task_instruction: string;
+  selected_prompt_context: AISelectedPromptContext;
+  output_contract: string[];
+  preflight_checklist: string[];
+  prompt_budget: AIPromptBudgetSummary;
+  prompt_text: string;
+  semantic_validator_result: AIResearchValidationResult;
+  not_sent_to_external_model: boolean;
+  search_called: boolean;
+  saved_by_default: boolean;
 };
 
 // Local app-state API responses.

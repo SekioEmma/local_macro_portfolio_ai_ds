@@ -83,6 +83,17 @@ class SemanticValidatorResult:
         }
 
 
+@dataclass
+class ResearchSemanticFinding:
+    code: str
+    category: str
+    severity: str
+    message_zh: str
+    matched_claims: list[str] = field(default_factory=list)
+    cited_context_ids: list[str] = field(default_factory=list)
+    required_context: list[str] = field(default_factory=list)
+
+
 # ----------------------------------------------------------------------
 # Rule catalog
 # ----------------------------------------------------------------------
@@ -407,6 +418,174 @@ def explain_findings(result: SemanticValidatorResult, *, language: str = "zh") -
     return lines
 
 
+def validate_structured_research_semantics(
+    sections: list[Any],
+    *,
+    selected_cards: list[Any] | None = None,
+) -> list[ResearchSemanticFinding]:
+    """Validate claim tags against cited context and financial boundaries.
+
+    This structured layer complements the bilingual text rules above. It uses
+    renderer-provided ``claim_tags`` and ``source_context`` rather than trying
+    to infer every financial claim from substrings.
+    """
+
+    normalized = [_section_dict(section) for section in sections]
+    _ = selected_cards
+    findings: list[ResearchSemanticFinding] = []
+
+    _require_claim_context(
+        findings,
+        sections=normalized,
+        trigger_claim="systemic_risk_review",
+        required_groups=[
+            {"credit_stress"},
+            {"liquidity_funding_stress"},
+            {
+                "pullback_systemic_risk_checklist",
+                "scenario_stress",
+                "equity_trend",
+                "market_stress_derived",
+            },
+        ],
+        code="systemic_risk_requires_credit_funding_transmission",
+        severity="error",
+        message_zh=(
+            "系统性风险复核必须同时引用信用、流动性/融资和传导证据；"
+            "VIX 或权益回撤不能单独触发该结论。"
+        ),
+    )
+    _require_claim_context(
+        findings,
+        sections=normalized,
+        trigger_claim="credit_warning",
+        required_groups=[{"credit_stress"}],
+        code="credit_warning_requires_credit_evidence",
+        severity="error",
+        message_zh="信用预警必须引用信用利差事实，不能只依赖 VIX 或 ETF 代理。",
+    )
+    _require_claim_context(
+        findings,
+        sections=normalized,
+        trigger_claim="valuation_pressure",
+        required_groups=[{"valuation_equity_structure"}],
+        code="valuation_pressure_requires_valuation_context",
+        severity="warning",
+        message_zh="估值压力必须引用估值/盈利/真实广度可用性或缺失约束。",
+    )
+    _require_claim_context(
+        findings,
+        sections=normalized,
+        trigger_claim="scenario_context",
+        required_groups=[{"scenario_stress"}],
+        required_claims={"scenario_not_forecast"},
+        code="scenario_requires_not_forecast_boundary",
+        severity="error",
+        message_zh="情景解释必须引用 D16 情景上下文并声明其不是预测、概率或行动指令。",
+    )
+    _require_claim_context(
+        findings,
+        sections=normalized,
+        trigger_claim="historical_context",
+        required_groups=[{"historical_validation"}],
+        required_claims={"historical_not_backtest"},
+        code="historical_requires_not_backtest_boundary",
+        severity="error",
+        message_zh="历史验证必须引用 D19，并声明其是事件窗口复盘而不是回测或预测准确率。",
+    )
+    _require_claim_context(
+        findings,
+        sections=normalized,
+        trigger_claim="portfolio_context",
+        required_groups=[
+            {"portfolio_exposure_overlay", "portfolio_deviation", "manifest"}
+        ],
+        required_claims={"portfolio_local_only"},
+        code="portfolio_requires_local_sanitized_boundary",
+        severity="error",
+        message_zh="组合暴露解释必须引用本地清洗后的紧凑上下文，并明确不构成配置或仓位指令。",
+    )
+    _require_claim_context(
+        findings,
+        sections=normalized,
+        trigger_claim="financial_stress_score",
+        required_groups=[{"financial_stress_composite"}],
+        required_claims={"stress_pressure_temperature"},
+        code="financial_stress_score_requires_temperature_boundary",
+        severity="error",
+        message_zh="金融压力评分必须被描述为压力温度，而不是概率、预测或事件赔率。",
+    )
+
+    for section in normalized:
+        section_claims = {str(claim) for claim in section.get("claim_tags") or []}
+        section_ids = {
+            str(context_id)
+            for context_id in section.get("source_context") or []
+        }
+        section_modules = {
+            _context_module(context_id) for context_id in section_ids
+        }
+        if "systemic_risk_confirmed" in section_claims and not {
+            "credit_stress",
+            "liquidity_funding_stress",
+        }.issubset(section_modules):
+            findings.append(
+                ResearchSemanticFinding(
+                    code="systemic_risk_prohibited_upgrade",
+                    category="prohibited_upgrade",
+                    severity="error",
+                    message_zh="缺少信用与融资共振时，不能把 VIX 或权益回撤升级为系统性风险确认。",
+                    matched_claims=["systemic_risk_confirmed"],
+                    cited_context_ids=sorted(section_ids),
+                    required_context=["credit_stress", "liquidity_funding_stress"],
+                )
+            )
+        if "true_breadth_deterioration" in section_claims and (
+            "breadth_concentration_proxy" in section_modules
+            and "valuation_equity_structure" not in section_modules
+        ):
+            findings.append(
+                ResearchSemanticFinding(
+                    code="proxy_breadth_cannot_confirm_true_breadth",
+                    category="prohibited_upgrade",
+                    severity="error",
+                    message_zh="仅有广度代理时，不能确认真实市场广度恶化。",
+                    matched_claims=["true_breadth_deterioration"],
+                    cited_context_ids=sorted(section_ids),
+                    required_context=["true_breadth_or_valuation_structure"],
+                )
+            )
+        if "macro_regime_from_portfolio" in section_claims:
+            findings.append(
+                ResearchSemanticFinding(
+                    code="portfolio_deviation_cannot_trigger_macro_regime",
+                    category="prohibited_upgrade",
+                    severity="error",
+                    message_zh="组合偏离不能触发宏观状态判断或归因。",
+                    matched_claims=["macro_regime_from_portfolio"],
+                    cited_context_ids=sorted(section_ids),
+                    required_context=["independent_macro_evidence"],
+                )
+            )
+
+    counter_section = next(
+        (section for section in normalized if section.get("key") == "counter_evidence"),
+        None,
+    )
+    if counter_section is not None and not counter_section.get("source_context"):
+        findings.append(
+            ResearchSemanticFinding(
+                code="counter_evidence_has_no_cited_context",
+                category="evidence_support",
+                severity="info",
+                message_zh="反向证据段暂未引用可用事实；请保持其与缺失约束分离。",
+                matched_claims=["counter_evidence"],
+                required_context=["available_non_escalating_evidence"],
+            )
+        )
+    return findings
+
+
 # ----------------------------------------------------------------------
 # Internal helpers
 # ----------------------------------------------------------------------
@@ -452,3 +631,65 @@ def _first_match(text_lower: str, phrases: tuple[str, ...]) -> str | None:
 
 def _any_match(text_lower: str, phrases: tuple[str, ...]) -> bool:
     return _first_match(text_lower, phrases) is not None
+
+
+def _section_dict(section: Any) -> dict[str, Any]:
+    if hasattr(section, "model_dump"):
+        return section.model_dump()
+    if hasattr(section, "dict"):
+        return section.dict()
+    if isinstance(section, Mapping):
+        return dict(section)
+    return {}
+
+
+def _context_module(context_id: str) -> str:
+    if context_id.startswith("manifest."):
+        return "manifest"
+    return context_id.split(".", 1)[0]
+
+
+def _require_claim_context(
+    findings: list[ResearchSemanticFinding],
+    *,
+    sections: list[dict[str, Any]],
+    trigger_claim: str,
+    required_groups: list[set[str]],
+    code: str,
+    severity: str,
+    message_zh: str,
+    required_claims: set[str] | None = None,
+) -> None:
+    for section in sections:
+        section_claims = {
+            str(claim) for claim in section.get("claim_tags") or []
+        }
+        if trigger_claim not in section_claims:
+            continue
+        cited_ids = {
+            str(context_id)
+            for context_id in section.get("source_context") or []
+        }
+        cited_modules = {
+            _context_module(context_id) for context_id in cited_ids
+        }
+        missing: list[str] = []
+        for group in required_groups:
+            if not group.intersection(cited_modules):
+                missing.append("/".join(sorted(group)))
+        for claim in sorted(required_claims or set()):
+            if claim not in section_claims:
+                missing.append(f"claim:{claim}")
+        if not missing:
+            continue
+        findings.append(
+            ResearchSemanticFinding(
+                code=code,
+                category="evidence_support",
+                severity=severity,
+                message_zh=message_zh,
+                matched_claims=[trigger_claim],
+                cited_context_ids=sorted(cited_ids),
+                required_context=missing,
+            )
+        )

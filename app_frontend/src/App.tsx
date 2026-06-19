@@ -8,12 +8,12 @@ import {
   fetchStatus,
   fetchStorageStatus
 } from "./api/client";
-import { AIContextPreviewPage } from "./components/AIContextPreviewPage";
 import { AppShell, type AppViewKey } from "./components/AppShell";
 import { DashboardHomepage } from "./components/DashboardHomepage";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { EvidenceAuditPage } from "./components/EvidenceAuditPage";
 import { HistoricalValidationPage } from "./components/HistoricalValidationPage";
+import { LocalResearchPreviewPage } from "./components/LocalResearchPreviewPage";
 import { PortfolioOverlayPage } from "./components/PortfolioOverlayPage";
 import { ScenarioStressPage } from "./components/ScenarioStressPage";
 import type {
@@ -109,9 +109,7 @@ export default function App() {
         <HistoricalValidationPage evidence={evidence} isLoading={isLoading} />
       )}
       {activeView === "ai-context" && (
-        <AIContextPreviewPage
-          dashboard={dashboard}
-          evidence={evidence}
+        <LocalResearchPreviewPage
           isLoading={isLoading}
           manifest={manifest}
         />

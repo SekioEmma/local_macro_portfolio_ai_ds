@@ -5,11 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app_backend.schemas.ai_preview import (
     AIContextPreviewResponse,
+    AIPromptPreviewRequest,
+    AIPromptPreviewResponse,
     AIPreviewChatRequest,
     AIPreviewChatResponse,
     AIPreviewMemoRequest,
     AIPreviewMemoResponse,
     AIPreviewReportRequest,
+    AIResearchPreviewRequest,
+    AIResearchPreviewResponse,
 )
 from app_backend.schemas.responses import (
     AIContextManifestResponse,
@@ -98,6 +102,20 @@ def post_ai_preview_memo(request: AIPreviewMemoRequest) -> AIPreviewMemoResponse
 @app.post("/api/ai/preview-report", response_model=AIPreviewMemoResponse)
 def post_ai_preview_report(request: AIPreviewReportRequest) -> AIPreviewMemoResponse:
     return ai_preview_service.render_report_preview(request)
+
+
+@app.post("/api/ai/research-preview", response_model=AIResearchPreviewResponse)
+def post_ai_research_preview(
+    request: AIResearchPreviewRequest,
+) -> AIResearchPreviewResponse:
+    return ai_preview_service.render_research_preview(request)
+
+
+@app.post("/api/ai/prompt-preview", response_model=AIPromptPreviewResponse)
+def post_ai_prompt_preview(
+    request: AIPromptPreviewRequest,
+) -> AIPromptPreviewResponse:
+    return ai_preview_service.render_prompt_preview(request)
 
 
 @app.get("/api/context/manifest", response_model=AIContextManifestResponse)
