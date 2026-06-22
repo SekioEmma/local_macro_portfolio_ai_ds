@@ -1,0 +1,22 @@
+# Example config — copy to external_search.yaml and fill in real values
+# external_search.yaml is in .gitignore and must never be committed
+tavily_endpoint: "https://api.tavily.com/search"
+timeout_seconds: 30
+max_results_per_call: 5
+daily_call_budget: 100
+domain_allowlist:
+  - "reuters.com"
+  - "bloomberg.com"
+  - "wsj.com"
+  - "ft.com"
+  - "federalreserve.gov"
+  - "bls.gov"
+  - "bea.gov"
+  - "imf.org"
+  - "worldbank.org"
+  - "bis.org"
+domain_blocklist:
+  - "reddit.com"
+  - "twitter.com"
+  - "x.com"
+  - "youtube.com"

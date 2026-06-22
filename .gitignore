@@ -34,3 +34,4 @@ app_frontend/vite.config.d.ts
 app_frontend/vite.config.js
 
 configs/external_llm.yaml
+configs/external_search.yaml
