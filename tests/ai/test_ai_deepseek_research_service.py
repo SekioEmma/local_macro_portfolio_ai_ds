@@ -8,6 +8,9 @@ from app_backend.schemas.ai_preview import (
     AISelectedPromptContext,
 )
 from app_backend.services import ai_deepseek_research_service as service
+from app_backend.services.ai_external_runtime_policy import (
+    guard_external_ai_runtime_policy,
+)
 
 
 @pytest.mark.parametrize(
@@ -53,6 +56,55 @@ def test_prompt_prioritizes_user_question_before_research_template():
     assert prompt.index("[最高优先级：回答用户问题]") < prompt.index("[任务:")
     assert prompt.index(question) < prompt.index("仅当用户提出有效的宏观研究问题时")
     assert "不要改答成通用市场综述" in prompt
+
+
+def test_runtime_policy_passes_when_external_ai_enabled_and_context_ready():
+    policy = service._build_runtime_policy(
+        external_ai_enabled=True,
+        context_preview_ready=True,
+    )
+    result = guard_external_ai_runtime_policy(policy)
+    assert result.passed is True
+    assert result.findings == []
+
+
+def test_runtime_policy_fails_closed_without_external_ai_enabled():
+    """No provider key / switch off must make the guard fail closed, not pass."""
+    policy = service._build_runtime_policy(
+        external_ai_enabled=False,
+        context_preview_ready=True,
+    )
+    result = guard_external_ai_runtime_policy(policy)
+    assert result.passed is False
+    assert "external_ai_disabled" in result.findings
+    # Gates must reflect real state, not be hardcoded True.
+    assert policy.external_ai_enabled is False
+    assert policy.provider_network_enabled is False
+    assert policy.user_controlled_switch_enabled is False
+
+
+def test_runtime_policy_fails_closed_when_context_not_ready():
+    policy = service._build_runtime_policy(
+        external_ai_enabled=True,
+        context_preview_ready=False,
+    )
+    result = guard_external_ai_runtime_policy(policy)
+    assert result.passed is False
+    assert "request_not_built_from_manifest" in result.findings
+
+
+def test_external_ai_capability_unavailable_when_key_missing(monkeypatch):
+    from app_backend.services.deepseek_transport_contract import (
+        DeepSeekTransportError,
+    )
+
+    def _no_key():
+        raise DeepSeekTransportError(kind="missing_key", detail="deepseek_api_key_missing")
+
+    monkeypatch.setattr(service, "load_deepseek_api_key_from_env", _no_key)
+    available, api_key = service._external_ai_capability()
+    assert available is False
+    assert api_key == ""
 
 
 def test_guidance_short_circuits_manifest_and_external_model(monkeypatch):

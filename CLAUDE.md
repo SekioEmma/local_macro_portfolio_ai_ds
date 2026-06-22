@@ -63,7 +63,7 @@ scripts/                  # Ingest, audit, benchmark scripts
 - **Backend**: FastAPI + Uvicorn, Pydantic v2 schemas, SQLite market_history store
 - **Frontend**: React 18 + Vite 5 + TypeScript 5.5, paper-style research UI
 - **Data flow**: JSON reports → dashboard_service → model pipeline (D10-D19) → evidence table → API → frontend
-- **AI**: Local deterministic preview only. External LLM calls disabled by default via 22-flag runtime policy guard.
+- **AI**: Preview endpoints are local/deterministic. One approved external LLM path exists — the AI-2 single-turn DeepSeek research endpoint (`/api/ai/research-deepseek`) — gated by the 22-flag runtime policy guard, which fails closed when external AI is not enabled (no provider key). All other external/network/search paths remain disabled by default.
 
 ## Era Roadmap
 
@@ -80,15 +80,16 @@ scripts/                  # Ingest, audit, benchmark scripts
 - Raw provider payloads, raw prompts, API keys, local logs, `dist/`, `node_modules/`
 
 **Do NOT:**
-- Read `os.environ` / `os.getenv`
+- Read `os.environ` / `os.getenv`, **except** the approved DeepSeek key load isolated to `deepseek_real_transport.load_deepseek_api_key_from_env()`. Do not scatter new env reads elsewhere.
 - Import `httpx` / `requests` / `aiohttp` outside an explicitly approved transport boundary
-- Make real network calls
-- Add `/api/chat`, `/api/ai/deepseek`, `/api/ai/external`, or `/api/ai/tavily`
+- Make real network calls, **except** the approved AI-2 single-turn DeepSeek call (user-initiated, synchronous, manifest-only, never background/app-start/page-load) through `deepseek_real_transport.py`
+- Add `/api/chat`, `/api/ai/deepseek`, `/api/ai/external`, or `/api/ai/tavily` (the bare `/api/ai/deepseek` stays forbidden; the sanctioned model endpoint is `/api/ai/research-deepseek`)
 - Add `/api/search/tavily` before the separately approved TASK-B7
 - Send raw questions/prompts/holdings/account/position/transaction data or local paths
 - Change D10-D19 or Stage 8 financial semantics
 - Broaden AI Context Manifest eligibility
 - Weaken `guard_response` blocking when `external_model_called=True`
+- Re-hardcode the AI-2 runtime policy gates to constants (they must reflect real state and stay able to fail closed)
 
 ### Era 2 search exception
 
@@ -102,8 +103,9 @@ scripts/                  # Ingest, audit, benchmark scripts
 ## Key Design Invariants
 
 - `ExternalAIRuntimePolicy` has 10 required-true gates + 12 required-false dangerous permissions. Default: fail-closed.
-- `ExternalAIAdapterConfig` defaults: `enabled=False`, `mode="disabled"`, `allow_network=False`
-- All AI preview endpoints are local/deterministic only — no LLM calls
+- AI-2 single-turn runtime policy gates are **derived from real state, never hardcoded**: operational gates (`external_ai_enabled` / `provider_network_enabled` / `user_controlled_switch_enabled`) follow the user-controlled switch (provider key presence); provenance gates follow manifest budget readiness. Missing key → guard fails closed → structured blocked response (no raw 500). See `ai_deepseek_research_service._build_runtime_policy`.
+- `ExternalAIAdapterConfig` defaults stay `enabled=False`, `mode="disabled"`, `allow_network=False`. The AI-2 path opts in explicitly via `deepseek_adapter.network_config()`.
+- AI **preview** endpoints (`/api/ai/preview-*`, `/api/ai/context-preview`, `/api/ai/research-preview`, `/api/ai/prompt-preview`) are local/deterministic only — no LLM calls. The only model-calling endpoint is `/api/ai/research-deepseek` (AI-2 single-turn).
 - Dashboard pipeline order is fixed: D13→D14→D10→D11→D17→D18→D15→D19→D16→Stage8
 - Evidence table cache uses file-stat-based cache keys (mtime+size)
 
@@ -125,5 +127,6 @@ cd src && python -m pytest ../tests/dashboard/test_dashboard_context_cache.py -x
 
 - Performance: `dashboard_service.py`, `dashboard_context_cache.py`, `historical_validation.py`, `historical_derived_metrics.py`
 - AI development: `ai_preview_service.py`, `ai_context_service.py`, `ai_external_runtime_policy.py`, `ai_research_*.py`
+- AI-2 external path: `ai_deepseek_research_service.py`, `deepseek_adapter.py`, `deepseek_real_transport.py` (real `urllib` transport; key-gated, manifest-only)
 - Frontend: `app_frontend/src/App.tsx`, `app_frontend/src/api/client.ts`, `app_frontend/src/components/`
 - Docs entry point: `docs/INDEX.md`, `docs/ROADMAP.md`, `docs/GOVERNANCE.md`, `docs/era2_plan.md`, `docs/era2_codex_brief.md`

@@ -44,6 +44,9 @@ from app_backend.services.ai_research_renderer import (
     PREFLIGHT_CHECKLIST_ZH,
     SYSTEM_BOUNDARY_ZH,
 )
+from app_backend.services.ai_external_runtime_policy import (
+    guard_external_ai_runtime_policy,
+)
 from app_backend.services.ai_research_validator import (
     validate_deepseek_output_constraints,
     validate_research_domains,
@@ -56,6 +59,9 @@ from app_backend.services.deepseek_adapter import (
 from app_backend.services.deepseek_real_transport import (
     DeepSeekRealTransport,
     load_deepseek_api_key_from_env,
+)
+from app_backend.services.deepseek_transport_contract import (
+    DeepSeekTransportError,
 )
 
 _CHINESE_ACTION_PATTERNS = (
@@ -315,20 +321,53 @@ def _postprocess_deepseek_output(
     return memo_output.strip(), metadata
 
 
-def _build_runtime_policy() -> ExternalAIRuntimePolicy:
-    """Build a fully-approved runtime policy for AI-2 single-turn."""
+def _external_ai_capability() -> tuple[bool, str]:
+    """Resolve whether the external DeepSeek path is operationally enabled.
+
+    The user-controlled switch for AI-2 is the presence of the provider API
+    key in the environment: absent key -> capability unavailable, and the
+    runtime policy gates fail closed instead of raising. The key value is
+    never logged, embedded in schemas, or returned to the client.
+    """
+    try:
+        return True, load_deepseek_api_key_from_env()
+    except DeepSeekTransportError:
+        return False, ""
+
+
+def _build_runtime_policy(
+    *,
+    external_ai_enabled: bool,
+    context_preview_ready: bool,
+) -> ExternalAIRuntimePolicy:
+    """Build the AI-2 single-turn runtime policy from real preconditions.
+
+    The operational/consent gates reflect actual runtime state so the 22-flag
+    guard genuinely fails closed when external AI is not enabled (no provider
+    key / switch off) or when the manifest context is not ready. They are not
+    hardcoded constants. The structural commitments (validator + human review
+    required) and the dangerous-permission denials are fixed by the AI-2
+    single-turn contract: no persistence, no search, no holdings/account/
+    position/transaction data, and no background/app-start/page-load call.
+    """
     return ExternalAIRuntimePolicy(
         provider="deepseek",
-        external_ai_enabled=True,
-        provider_network_enabled=True,
-        user_controlled_switch_enabled=True,
+        # Operational gates — derived from the user-controlled switch (key).
+        external_ai_enabled=external_ai_enabled,
+        provider_network_enabled=external_ai_enabled,
+        user_controlled_switch_enabled=external_ai_enabled,
+        # Single-turn, synchronous, user-initiated POST; background / app-start
+        # / page-load calls are separately denied below.
         single_request_user_approved=True,
-        context_preview_confirmed=True,
-        request_built_from_manifest=True,
+        # Context provenance — derived from the manifest budget readiness.
+        context_preview_confirmed=context_preview_ready,
+        request_built_from_manifest=context_preview_ready,
         request_guard_passed=True,
+        # Structural commitments honored by this code path.
         response_guard_required=True,
         stage9_validator_required=True,
         human_review_required=True,
+        # Dangerous permissions — denied by the AI-2 single-turn contract.
         save_raw_prompt=False,
         save_raw_response=False,
         persist_chat_by_default=False,
@@ -410,13 +449,28 @@ def run_deepseek_research(
         selected_context=selected_context,
     )
 
-    api_key = load_deepseek_api_key_from_env()
+    external_ai_available, api_key = _external_ai_capability()
+    policy = _build_runtime_policy(
+        external_ai_enabled=external_ai_available,
+        context_preview_ready=budget.ready,
+    )
+    policy_guard = guard_external_ai_runtime_policy(policy)
+    if not policy_guard.passed:
+        return _blocked_response(
+            request=request,
+            reason=f"runtime_policy_blocked: {'; '.join(policy_guard.findings)}",
+            input_findings=[],
+            selected_context=selected_context,
+            budget=budget,
+            manifest_data=manifest_data,
+            prompt_text=prompt_text,
+        )
+
     transport = DeepSeekRealTransport(
         api_key=api_key,
         timeout_seconds=150.0,
         max_tokens=_DETAIL_OUTPUT_TOKEN_LIMITS[request.detail_level],
     )
-    policy = _build_runtime_policy()
     config = network_config()
     adapter = DeepSeekNetworkAdapter(
         config, transport=transport, runtime_policy=policy,
