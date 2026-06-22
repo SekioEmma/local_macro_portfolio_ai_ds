@@ -1,8 +1,8 @@
 from pathlib import Path
 
 
-DESIGN_DOC = Path("docs/p_m4a_m11_shared_context_cache_design.md")
-RISK_REGISTER = Path("docs/m11_cache_risk_register.md")
+DESIGN_DOC = Path("docs/archive/p_m4a_m11_shared_context_cache_design.md")
+RISK_REGISTER = Path("docs/infra/m11_cache_risk_register.md")
 
 
 def test_m11_cache_design_docs_exist():

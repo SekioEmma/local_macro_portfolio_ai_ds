@@ -1064,7 +1064,7 @@ def _credit_percentile_status(
     }
 
 def _valuation_research_audit(rows: list[DashboardEvidenceRow]) -> dict[str, Any]:
-    doc_path = PROJECT_ROOT / "docs" / "valuation_source_research.md"
+    doc_path = PROJECT_ROOT / "docs" / "data" / "valuation_source_research.md"
     row_by_key = {row.metric_key: row for row in rows}
     ppi_row = row_by_key.get("ppi_final_demand")
     price_only_proxy_keys = sorted(
