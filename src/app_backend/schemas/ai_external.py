@@ -90,6 +90,7 @@ class ExternalAIResponse(BaseModel):
     external_model_called: bool
     fake_response: bool
     content: str
+    finish_reason: Literal["stop", "length", "content_filter"] = "stop"
     validator_result: AIMemoValidatorResult
     privacy_summary: ExternalAIPrivacySummary
     not_saved_by_default: bool

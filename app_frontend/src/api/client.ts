@@ -1,6 +1,7 @@
 import type {
   ApiResult,
   AIContextManifestResponse,
+  AIDeepSeekResearchResponse,
   AIAnswerMode,
   AIDetailLevel,
   AIPromptPreviewResponse,
@@ -83,6 +84,24 @@ export function fetchAIPromptPreview(
   });
 }
 
+export function fetchDeepSeekResearch(
+  answerMode: AIAnswerMode,
+  detailLevel: AIDetailLevel,
+  userQuestion: string,
+  signal?: AbortSignal
+): Promise<ApiResult<AIDeepSeekResearchResponse>> {
+  return requestJson<AIDeepSeekResearchResponse>("/api/ai/research-deepseek", {
+    method: "POST",
+    body: {
+      answer_mode: answerMode,
+      detail_level: detailLevel,
+      user_question: userQuestion
+    },
+    timeoutMs: 180_000,
+    signal
+  });
+}
+
 export function fetchStorageStatus(): Promise<ApiResult<StorageStatusResponse>> {
   return requestJson<StorageStatusResponse>("/api/app/storage");
 }
@@ -135,10 +154,28 @@ export function createFavorite(): Promise<ApiResult<FavoriteAnswer>> {
   });
 }
 
+type RequestOptions = {
+  method?: "GET" | "PUT" | "POST";
+  body?: unknown;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+};
+
 async function requestJson<T>(
   path: string,
-  options: { method?: "GET" | "PUT" | "POST"; body?: unknown } = {}
+  options: RequestOptions = {}
 ): Promise<ApiResult<T>> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromCaller = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeoutId = options.timeoutMs
+    ? window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, options.timeoutMs)
+    : null;
   try {
     const response = await fetch(`${API_BASE_URL}${path}`, {
       method: options.method || "GET",
@@ -146,16 +183,41 @@ async function requestJson<T>(
         Accept: "application/json",
         ...(options.body ? { "Content-Type": "application/json" } : {})
       },
-      body: options.body ? JSON.stringify(options.body) : undefined
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal
     });
     if (!response.ok) {
-      return { data: null, error: `请求失败：HTTP ${response.status}` };
+      const detail = await readErrorDetail(response);
+      return {
+        data: null,
+        error: detail || `请求失败：HTTP ${response.status}`
+      };
     }
     return { data: (await response.json()) as T, error: null };
   } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        data: null,
+        error: timedOut
+          ? `请求超过 ${Math.round((options.timeoutMs || 0) / 1000)} 秒未完成，请稍后重试或降低分析深度。`
+          : "请求已取消。"
+      };
+    }
     return {
       data: null,
       error: error instanceof Error ? error.message : "请求失败，请确认本地后端已启动。"
     };
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+    options.signal?.removeEventListener("abort", abortFromCaller);
+  }
+}
+
+async function readErrorDetail(response: Response) {
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+    return typeof payload.detail === "string" ? payload.detail : null;
+  } catch {
+    return null;
   }
 }

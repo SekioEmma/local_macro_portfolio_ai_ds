@@ -115,6 +115,16 @@ def test_payload_messages_carry_only_request_summaries():
     assert "not an action directive" in contents.lower()
 
 
+def test_user_intent_is_the_final_non_system_message():
+    payload = build_deepseek_provider_payload(_valid_request())
+    non_system_messages = [
+        message for message in payload.messages if message.role != "system"
+    ]
+
+    assert non_system_messages[-1].role == "summary"
+    assert non_system_messages[-1].content == "Sanitized intent summary."
+
+
 # ---------------------------------------------------------------------------
 # 8.2 Unsafe request blocked by guard_request, no payload returned
 # ---------------------------------------------------------------------------

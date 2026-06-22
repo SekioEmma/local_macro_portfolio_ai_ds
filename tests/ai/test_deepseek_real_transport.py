@@ -222,6 +222,7 @@ def test_mocked_http_success_maps_to_transport_response():
     assert "human review is required" in response.content_text.lower()
     assert seen_body is not None
     assert seen_body["stream"] is False
+    assert seen_body["max_tokens"] == 2_400
     assert all(item["role"] in {"system", "user"} for item in seen_body["messages"])
     assert "Authorization" in seen_headers
     assert "test-key" not in response.model_dump_json()

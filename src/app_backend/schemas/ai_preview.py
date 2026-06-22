@@ -271,6 +271,7 @@ class AIDeepSeekClaimMetadata(BaseModel):
 
 class AIDeepSeekResearchResponse(BaseModel):
     mode: Literal["deepseek_single_turn"]
+    response_kind: Literal["research", "guidance"] = "research"
     answer_mode: AnswerMode
     detail_level: DetailLevel
     user_question: str

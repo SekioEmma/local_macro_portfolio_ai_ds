@@ -67,16 +67,18 @@ def build_deepseek_provider_payload(
     messages = [
         DeepSeekProviderMessage(role="system", content=_SYSTEM_BOUNDARY_PREFIX),
         DeepSeekProviderMessage(
-            role="summary",
-            content=request.user_intent_summary,
-        ),
-        DeepSeekProviderMessage(
             role="context",
             content=request.context_preview_summary,
         ),
         DeepSeekProviderMessage(
             role="context",
             content=request.excluded_context_summary,
+        ),
+        # Keep the user's intent as the final non-system message so a large
+        # context package cannot push the actual question out of attention.
+        DeepSeekProviderMessage(
+            role="summary",
+            content=request.user_intent_summary,
         ),
         DeepSeekProviderMessage(
             role="system",

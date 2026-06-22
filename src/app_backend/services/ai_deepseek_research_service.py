@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 import time
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from app_backend.schemas.ai_external import (
     ExternalAIRequest,
@@ -77,7 +77,68 @@ _FORBIDDEN_INPUT_TERMS = {
     "api_key", "api key", "deepseek_api_key",
 }
 
-_SECTION_FORMAT_INSTRUCTION = """请严格按以下 7 段结构回答，每段以标题行开头。
+_GUIDANCE_INPUTS = frozenset(
+    {
+        "你好",
+        "您好",
+        "哈喽",
+        "嗨",
+        "在吗",
+        "早上好",
+        "下午好",
+        "晚上好",
+        "谢谢",
+        "多谢",
+        "再见",
+        "你是谁",
+        "你能做什么",
+        "介绍一下你自己",
+        "hello",
+        "hi",
+        "hey",
+        "thanks",
+        "thankyou",
+        "goodmorning",
+        "goodafternoon",
+        "goodevening",
+        "whatareyou",
+        "whatcanyoudo",
+        "help",
+    }
+)
+
+_DETAIL_CONTEXT_LIMITS: dict[DetailLevel, dict[str, int]] = {
+    "brief": {
+        "card_limit": 64,
+        "char_limit": 20_000,
+        "estimated_token_limit": 7_000,
+    },
+    "standard": {
+        "card_limit": 72,
+        "char_limit": 24_000,
+        "estimated_token_limit": 8_000,
+    },
+    "deep": {
+        "card_limit": 96,
+        "char_limit": 32_000,
+        "estimated_token_limit": 12_000,
+    },
+}
+
+_DETAIL_OUTPUT_TOKEN_LIMITS: dict[DetailLevel, int] = {
+    "brief": 1_200,
+    "standard": 2_400,
+    "deep": 4_000,
+}
+
+_USER_FOCUS_INSTRUCTION = """[最高优先级：回答用户问题]
+1. 用户问题是唯一主任务；证据上下文只是回答材料，不是要求你逐项复述的提纲。
+2. 先判断问题是否属于宏观、市场风险、证据审计、情景或组合风险研究。
+3. 若问题只是问候、致谢、身份询问或能力询问，只用 1-2 句自然回应，并邀请用户提出具体宏观研究问题；不要输出七段研究模板，不要复述市场证据。
+4. 若问题属于研究范围，只使用与问题直接相关的证据。没有相关证据时明确说“当前本地证据不足”，不要用无关指标拼成长篇市场综述。
+5. 回答必须在开头直接回应问题，不能先输出通用宏观背景。"""
+
+_SECTION_FORMAT_INSTRUCTION = """仅当用户提出有效的宏观研究问题时，按以下 7 段结构回答，每段以标题行开头。
 
 每段核心判断必须在行首标注 [claim_type=xxx]，可选值：
   direct_evidence — 直接由单一证据卡片支持的事实陈述
@@ -134,6 +195,20 @@ def validate_user_question(question: str) -> tuple[bool, list[str]]:
     return len(findings) == 0, findings
 
 
+def classify_user_question(
+    question: str,
+) -> Literal["research", "guidance"]:
+    """Route trivial conversation away from the expensive research pipeline."""
+    normalized = re.sub(
+        r"[\s，。！？!?、,.；;：:~～'\"“”‘’\-—_]+",
+        "",
+        question,
+    ).casefold()
+    if normalized in _GUIDANCE_INPUTS:
+        return "guidance"
+    return "research"
+
+
 def build_deepseek_prompt(
     *,
     answer_mode: AnswerMode,
@@ -156,6 +231,8 @@ def build_deepseek_prompt(
 
     parts = [
         f"[系统边界]\n{SYSTEM_BOUNDARY_ZH}",
+        _USER_FOCUS_INSTRUCTION,
+        f"[用户问题]\n{user_question}",
         f"[任务: {title_zh}]\n{task_zh}",
         f"[详细程度]\n{detail_instruction}",
         f"[输出合同]\n{output_contract}",
@@ -166,7 +243,11 @@ def build_deepseek_prompt(
         f"[来源与新鲜度摘要]\n{source_quality}",
         _SECTION_FORMAT_INSTRUCTION,
         _EXPRESSION_RULES,
-        f"[用户问题]\n{user_question}",
+        (
+            "[回答前再次核对]\n"
+            f"请只回答这个问题：{user_question}\n"
+            "若上下文与问题无关，明确说明证据不足，不要改答成通用市场综述。"
+        ),
     ]
     return "\n\n".join(parts)
 
@@ -299,12 +380,17 @@ def run_deepseek_research(
             input_findings=input_findings,
         )
 
+    if classify_user_question(request.user_question) == "guidance":
+        return _guidance_response(request=request, started_at=t0)
+
     manifest = ai_context_service.build_ai_context_manifest()
     manifest_data = _manifest_to_dict(manifest)
+    context_limits = _DETAIL_CONTEXT_LIMITS[request.detail_level]
 
     selected_context, budget = select_prompt_context(
         manifest_data,
         answer_mode=request.answer_mode,
+        **context_limits,
     )
 
     if not budget.ready:
@@ -325,7 +411,11 @@ def run_deepseek_research(
     )
 
     api_key = load_deepseek_api_key_from_env()
-    transport = DeepSeekRealTransport(api_key=api_key, timeout_seconds=60.0)
+    transport = DeepSeekRealTransport(
+        api_key=api_key,
+        timeout_seconds=150.0,
+        max_tokens=_DETAIL_OUTPUT_TOKEN_LIMITS[request.detail_level],
+    )
     policy = _build_runtime_policy()
     config = network_config()
     adapter = DeepSeekNetworkAdapter(
@@ -365,7 +455,7 @@ def run_deepseek_research(
         )
 
     deepseek_text = external_response.content
-    finish_reason = "stop"
+    finish_reason = external_response.finish_reason
 
     memo_output, claim_metadata = _postprocess_deepseek_output(deepseek_text)
 
@@ -404,6 +494,7 @@ def run_deepseek_research(
 
     return AIDeepSeekResearchResponse(
         mode="deepseek_single_turn",
+        response_kind="research",
         answer_mode=request.answer_mode,
         detail_level=request.detail_level,
         user_question=request.user_question,
@@ -432,6 +523,99 @@ def run_deepseek_research(
         human_review_required=True,
         interpretation_boundary=INTERPRETATION_BOUNDARY_ZH,
         elapsed_seconds=round(elapsed, 2),
+    )
+
+
+def _guidance_response(
+    *,
+    request: AIDeepSeekResearchRequest,
+    started_at: float,
+) -> AIDeepSeekResearchResponse:
+    """Return a small local response for greetings without calling DeepSeek."""
+    from app_backend.schemas.ai_preview import (
+        AIConstraintSummary,
+        AIPromptBudgetSummary,
+        AIResearchValidationResult,
+    )
+
+    selected_context = AISelectedPromptContext(
+        selected_cards=[],
+        constraint_summary=AIConstraintSummary(
+            total_count=0,
+            excluded_reason_distribution={},
+            module_distribution={},
+            freshness_distribution={},
+            summary_zh="这是简短会话引导，未读取或发送研究上下文。",
+        ),
+        selected_context_text="",
+        selection_notes=["本地意图路由识别为问候或能力询问。"],
+    )
+    budget = AIPromptBudgetSummary(
+        card_limit=0,
+        char_limit=0,
+        estimated_token_limit=0,
+        selected_card_count=0,
+        selected_char_count=0,
+        estimated_token_count=0,
+        omitted_card_count=0,
+        omitted_by_priority={},
+        omitted_by_reason={},
+        ready=True,
+        status_reason="local_guidance_no_prompt_required",
+    )
+    semantic_result = AIResearchValidationResult(
+        passed=True,
+        blocked=False,
+        max_severity=None,
+        findings=[],
+        domain_checks={"intent": "local_guidance"},
+    )
+    memo = (
+        "你好！这里是 AI 宏观研究入口。请给我一个具体的宏观或市场风险问题，"
+        "例如“当前高实际利率对信用风险意味着什么？”或"
+        "“哪些本地证据支持通胀压力正在缓和？”"
+    )
+    return AIDeepSeekResearchResponse(
+        mode="deepseek_single_turn",
+        response_kind="guidance",
+        answer_mode=request.answer_mode,
+        detail_level=request.detail_level,
+        user_question=request.user_question,
+        deepseek_raw_output="",
+        deepseek_memo_output=memo,
+        finish_reason="local_guidance",
+        selected_prompt_context=selected_context,
+        prompt_budget=budget,
+        prompt_text="",
+        context_used_summary=AIMemoContextUsedSummary(
+            included_fact_count=0,
+            excluded_fact_count=0,
+            included_model_output_count=0,
+            excluded_model_output_count=0,
+        ),
+        privacy_summary=AIMemoPrivacySummary(
+            uses_ai_context_manifest_only=True,
+            uses_holdings_line_items=False,
+            uses_raw_provider_payloads=False,
+            uses_raw_prompts=False,
+            external_model_called=False,
+            search_called=False,
+            saved_by_default=False,
+        ),
+        validator_result=AIMemoValidatorResult(
+            passed=True,
+            blocked_terms=[],
+            privacy_findings=[],
+        ),
+        semantic_validator_result=semantic_result,
+        input_validation_passed=True,
+        input_validation_findings=[],
+        output_blocked=False,
+        human_review_required=True,
+        interpretation_boundary=INTERPRETATION_BOUNDARY_ZH,
+        elapsed_seconds=round(time.monotonic() - started_at, 4),
+        model_provider="local_intent_router",
+        not_saved_by_default=True,
     )
 
 
@@ -529,6 +713,7 @@ def _blocked_response(
 
 __all__ = [
     "build_deepseek_prompt",
+    "classify_user_question",
     "run_deepseek_research",
     "validate_user_question",
 ]

@@ -30,6 +30,7 @@ _DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 _DEEPSEEK_CHAT_COMPLETIONS_URL = "https://api.deepseek.com/chat/completions"
 _DEEPSEEK_MODEL_NAME = "deepseek-v4-pro"
 _DEFAULT_TIMEOUT_SECONDS = 120.0
+_DEFAULT_MAX_TOKENS = 2_400
 _MAX_PROVIDER_RESPONSE_BYTES = 2_000_000
 
 
@@ -65,10 +66,12 @@ class DeepSeekRealTransport:
         *,
         api_key: str | None = None,
         timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+        max_tokens: int = _DEFAULT_MAX_TOKENS,
         opener: UrlOpen | None = None,
     ) -> None:
         self._api_key = api_key.strip() if api_key is not None else None
         self._timeout_seconds = timeout_seconds
+        self._max_tokens = max(256, min(max_tokens, 8_192))
         self._opener = opener
 
     def send(self, request: DeepSeekTransportRequest) -> DeepSeekTransportResponse:
@@ -140,6 +143,7 @@ class DeepSeekRealTransport:
             "model": _DEEPSEEK_MODEL_NAME,
             "messages": [_to_provider_message(message) for message in request.messages],
             "temperature": 0.2,
+            "max_tokens": self._max_tokens,
             "stream": False,
         }
         data = json.dumps(body, ensure_ascii=True).encode("utf-8")

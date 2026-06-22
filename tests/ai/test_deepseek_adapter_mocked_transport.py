@@ -214,6 +214,7 @@ def test_happy_path_returns_guarded_external_ai_response():
     assert response.privacy_summary.uses_raw_prompts is False
     assert response.not_saved_by_default is True
     assert response.human_review_required is True
+    assert response.finish_reason == "stop"
     assert response.validator_result.passed is True
     assert "human review is required" in response.content.lower()
     assert len(transport.calls) == 1

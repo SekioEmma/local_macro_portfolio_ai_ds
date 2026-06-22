@@ -367,6 +367,48 @@ export type AIPromptPreviewResponse = {
   saved_by_default: boolean;
 };
 
+export type AIDeepSeekClaimMetadata = {
+  claim_type_counts: Record<string, number>;
+  threshold_source_counts: Record<string, number>;
+  total_claims: number;
+};
+
+export type AIDeepSeekResearchResponse = {
+  mode: "deepseek_single_turn";
+  response_kind: "research" | "guidance";
+  answer_mode: AIAnswerMode;
+  detail_level: AIDetailLevel;
+  user_question: string;
+  deepseek_raw_output: string;
+  deepseek_memo_output: string;
+  claim_metadata: AIDeepSeekClaimMetadata;
+  finish_reason: string;
+  selected_prompt_context: AISelectedPromptContext;
+  prompt_budget: AIPromptBudgetSummary;
+  prompt_text: string;
+  context_used_summary: {
+    included_fact_count: number;
+    excluded_fact_count: number;
+    included_model_output_count: number;
+    excluded_model_output_count: number;
+  };
+  privacy_summary: Record<string, boolean>;
+  validator_result: {
+    passed: boolean;
+    blocked_terms: string[];
+    privacy_findings: string[];
+  };
+  semantic_validator_result: AIResearchValidationResult;
+  input_validation_passed: boolean;
+  input_validation_findings: string[];
+  output_blocked: boolean;
+  human_review_required: boolean;
+  interpretation_boundary: string;
+  elapsed_seconds: number | null;
+  model_provider: string;
+  not_saved_by_default: boolean;
+};
+
 // Local app-state API responses.
 export type StorageStatusResponse = {
   storage_mode: string;

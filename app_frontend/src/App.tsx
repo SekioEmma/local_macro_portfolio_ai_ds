@@ -9,6 +9,7 @@ import {
   fetchStorageStatus
 } from "./api/client";
 import { AppShell, type AppViewKey } from "./components/AppShell";
+import { AIChatPage } from "./components/AIChatPage";
 import { DashboardHomepage } from "./components/DashboardHomepage";
 import { DiagnosticsPage } from "./components/DiagnosticsPage";
 import { EvidenceAuditPage } from "./components/EvidenceAuditPage";
@@ -114,6 +115,7 @@ export default function App() {
           manifest={manifest}
         />
       )}
+      {activeView === "ai-chat" && <AIChatPage />}
       {activeView === "portfolio" && (
         <PortfolioOverlayPage
           dashboard={dashboard}

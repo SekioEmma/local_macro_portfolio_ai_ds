@@ -284,6 +284,7 @@ class DeepSeekNetworkAdapter(ExternalAIAdapter):
             external_model_called=False,
             fake_response=True,
             content=transport_response.content_text,
+            finish_reason=transport_response.finish_reason,
             validator_result=AIMemoValidatorResult(
                 passed=True,
                 blocked_terms=[],
@@ -359,6 +360,7 @@ class DeepSeekNetworkAdapter(ExternalAIAdapter):
             external_model_called=is_real,
             fake_response=not is_real,
             content=transport_response.content_text,
+            finish_reason=transport_response.finish_reason,
             validator_result=validator_result,
             privacy_summary=ExternalAIPrivacySummary(
                 uses_ai_context_manifest_only=True,

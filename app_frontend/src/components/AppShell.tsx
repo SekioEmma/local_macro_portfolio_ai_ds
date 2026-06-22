@@ -7,6 +7,7 @@ export type AppViewKey =
   | "scenario"
   | "historical"
   | "ai-context"
+  | "ai-chat"
   | "portfolio"
   | "diagnostics";
 
@@ -44,6 +45,12 @@ const navItems: Array<{
     key: "ai-context",
     label: "AI 记忆（只读）",
     shortLabel: "AI 上下文",
+    icon: "ai"
+  },
+  {
+    key: "ai-chat",
+    label: "AI 研究聊天",
+    shortLabel: "AI 聊天",
     icon: "ai"
   },
   {
@@ -104,7 +111,7 @@ export function AppShell({
             <span className="system-dot" />
             <strong>本地只读</strong>
           </div>
-          <small>不发送、不搜索、不写入</small>
+          <small>默认本地 · AI 调用需主动发起</small>
         </footer>
       </aside>
 
