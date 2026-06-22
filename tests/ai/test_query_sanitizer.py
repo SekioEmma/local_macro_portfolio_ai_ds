@@ -18,6 +18,10 @@ from app_backend.services.query_sanitizer import sanitize_query
         "How did markets react on 2025-12-17?",
         "联系人指标是否影响劳动力市场分析",
         "王冠债券指数近期表现如何",
+        "RMB exchange-rate outlook",
+        "美元指数与人民币汇率关系",
+        "USD index trend",
+        "USDCNH 与 10Y yield 的关系",
     ],
 )
 def test_safe_macro_queries_pass_unchanged(query: str):
@@ -38,6 +42,11 @@ def test_safe_macro_queries_pass_unchanged(query: str):
         "我的人民币资产约 20 万",
         "账户中有 3000 美元",
         "总金额是 25万元",
+        "RMB 100000",
+        "USD 5000",
+        "人民币资产 20 万",
+        "$12,000",
+        "¥8000",
     ],
 )
 def test_amount_patterns_are_blocked(query: str):
@@ -91,6 +100,13 @@ def test_account_number_patterns_are_blocked(query: str):
         "read /Users/alice/portfolio.csv",
         "read /home/alice/notes.txt",
         "read /mnt/data/holdings.csv",
+        "/home/a",
+        "path=/home/a",
+        "file:///Users/a",
+        "file=/mnt/data/a",
+        r"C:\a",
+        "C:/a",
+        r"G:\private\a",
     ],
 )
 def test_local_paths_are_blocked(query: str):
@@ -114,6 +130,22 @@ def test_30_character_token_is_blocked():
     assert result.blocked is True
     assert result.text == ""
     assert result.findings == ["long_token"]
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        "header.payload.signature-with-long_segment",
+        "abc_def-ghi.jkl_mno-pqr.stu_vwx-yz123456",
+        "eyJhbGciOiJIUzI1NiJ9.payload.signature",
+    ],
+)
+def test_long_ascii_tokens_with_separators_are_blocked(token: str):
+    result = sanitize_query(f"lookup {token}")
+
+    assert result.blocked is True
+    assert result.text == ""
+    assert "long_token" in result.findings
 
 
 @pytest.mark.parametrize(

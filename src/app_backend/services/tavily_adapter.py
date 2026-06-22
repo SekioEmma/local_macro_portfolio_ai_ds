@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from app_backend.schemas.search_external import (
     SearchRequest,
@@ -28,8 +28,10 @@ from app_backend.services.tavily_transport_contract import (
 
 _FORBIDDEN_RESPONSE_PATTERN = re.compile(
     r"(?i)(api[_ -]?key|authorization|bearer|tvly-|"
-    r"[a-z]:\\|/users/|/home/|/mnt/data|"
-    r"holdings?|account(?:\s+number)?|position\s+weight|"
+    r"[a-z]:[\\/]|/users/|/home/|/mnt/data|"
+    r"holdings?\s+line\s+items?|"
+    r"account\s+(?:number|no\.?)\s*[:#-]?\s*\d|"
+    r"账户(?:号|号码)?\s*[:：#-]?\s*\d|position\s+weight|"
     r"transaction\s+history)"
 )
 
@@ -97,7 +99,6 @@ class TavilyAdapter:
             transport_response,
             effective_domains=effective_domains,
             blocklist=self._config.domain_blocklist,
-            original_query=request.query,
         )
         return SearchResponse(
             results=results,
@@ -140,13 +141,13 @@ def _guard_results(
     *,
     effective_domains: list[str],
     blocklist: list[str],
-    original_query: str,
 ) -> list[SearchResult]:
     guarded: list[SearchResult] = []
     for result in response.results:
-        hostname = _hostname(result.url)
-        if hostname is None:
+        safe_url = _safe_url(result.url)
+        if safe_url is None:
             continue
+        sanitized_url, hostname = safe_url
         if _matches_any(hostname, _unique_domains(blocklist)):
             continue
         if not _matches_any(hostname, effective_domains):
@@ -154,11 +155,9 @@ def _guard_results(
         combined_text = f"{result.title}\n{result.snippet}"
         if _FORBIDDEN_RESPONSE_PATTERN.search(combined_text):
             continue
-        if original_query.casefold() in combined_text.casefold():
-            continue
         guarded.append(
             SearchResult(
-                url=result.url,
+                url=sanitized_url,
                 title=result.title,
                 snippet=result.snippet,
                 domain=hostname,
@@ -191,11 +190,24 @@ def _matches_any(domain: str, candidates: list[str]) -> bool:
     return any(_domain_matches(domain, candidate) for candidate in candidates)
 
 
-def _hostname(url: str) -> str | None:
+def _safe_url(url: str) -> tuple[str, str] | None:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
         return None
-    return _normalize_domain(parsed.hostname)
+    if parsed.username is not None or parsed.password is not None:
+        return None
+    hostname = _normalize_domain(parsed.hostname)
+    sanitized = urlunparse(
+        (
+            parsed.scheme,
+            hostname,
+            parsed.path,
+            "",
+            "",
+            "",
+        )
+    )
+    return sanitized, hostname
 
 
 __all__ = [

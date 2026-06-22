@@ -347,7 +347,7 @@ def test_response_privacy_markers_are_filtered():
     assert "authorization" not in serialized
 
 
-def test_response_does_not_echo_original_query():
+def test_response_may_include_sanitizer_approved_query():
     query = "unique raw query phrase"
     transport = SpyTransport(
         TavilyTransportResponse(
@@ -357,8 +357,85 @@ def test_response_does_not_echo_original_query():
 
     response = _adapter(transport).search(SearchRequest(query=query))
 
+    assert len(response.results) == 1
+    assert query in response.results[0].title
+
+
+def test_treasury_general_account_is_not_filtered():
+    transport = SpyTransport(
+        TavilyTransportResponse(
+            results=[
+                _result(
+                    snippet="Treasury General Account balance changed."
+                )
+            ]
+        )
+    )
+
+    response = _adapter(transport).search(
+        SearchRequest(query="Treasury liquidity outlook")
+    )
+
+    assert len(response.results) == 1
+
+
+@pytest.mark.parametrize(
+    "snippet",
+    [
+        "account number 123456789",
+        "账户号：123456789",
+        "holdings line item details",
+        "position weight 15 percent",
+        "transaction history attached",
+    ],
+)
+def test_specific_sensitive_response_content_is_filtered(snippet: str):
+    transport = SpyTransport(
+        TavilyTransportResponse(results=[_result(snippet=snippet)])
+    )
+
+    response = _adapter(transport).search(
+        SearchRequest(query="rates outlook")
+    )
+
     assert response.results == []
-    assert query not in response.model_dump_json()
+
+
+def test_output_url_strips_query_and_fragment():
+    transport = SpyTransport(
+        TavilyTransportResponse(
+            results=[
+                _result(
+                    "https://www.reuters.com/markets/rates"
+                    "?q=rates%20outlook&token=secret#fragment"
+                )
+            ]
+        )
+    )
+
+    response = _adapter(transport).search(
+        SearchRequest(query="rates outlook")
+    )
+
+    assert response.results[0].url == "https://reuters.com/markets/rates"
+    assert "token" not in response.model_dump_json()
+    assert "fragment" not in response.model_dump_json()
+
+
+def test_url_with_userinfo_is_filtered():
+    transport = SpyTransport(
+        TavilyTransportResponse(
+            results=[
+                _result("https://user:password@reuters.com/markets/rates")
+            ]
+        )
+    )
+
+    response = _adapter(transport).search(
+        SearchRequest(query="rates outlook")
+    )
+
+    assert response.results == []
 
 
 def test_max_results_is_tightened_to_config_limit():

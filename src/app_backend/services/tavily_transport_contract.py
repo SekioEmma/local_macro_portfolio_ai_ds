@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -42,10 +41,8 @@ class TavilyTransportResponse(BaseModel):
 class TavilyTransportError(RuntimeError):
     def __init__(self, kind: TransportErrorKind, detail: str = "") -> None:
         self.kind = kind
-        self.detail = _sanitize_detail(detail)
-        super().__init__(
-            f"{kind}: {self.detail}" if self.detail else kind
-        )
+        self.detail = ""
+        super().__init__(kind)
 
 
 @runtime_checkable
@@ -65,18 +62,6 @@ def build_transport_request_from_provider_payload(
         max_results=payload.max_results,
         include_domains=list(payload.include_domains),
     )
-
-
-def _sanitize_detail(detail: str) -> str:
-    normalized = " ".join(str(detail).split())[:160]
-    if re.search(
-        r"(?i)(api[_ -]?key|authorization|bearer|tvly-|"
-        r"[a-z]:\\|/users/|/home/|/mnt/|holdings?|account|position|"
-        r"transaction)",
-        normalized,
-    ):
-        return "redacted"
-    return normalized
 
 
 __all__ = [

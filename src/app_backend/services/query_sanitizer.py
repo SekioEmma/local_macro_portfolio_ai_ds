@@ -36,11 +36,14 @@ _FINDING_PATTERNS = (
         "amount",
         (
             re.compile(r"[$¥￥]"),
-            re.compile(r"(?i)\b(?:USD|RMB)\b"),
-            re.compile(r"人民币"),
             re.compile(
-                r"(?i)(?:USD|RMB|美元|人民币|[$¥￥])\s*"
+                r"(?i)(?:USD|RMB)\s*"
                 r"\d[\d,]*(?:\.\d+)?"
+            ),
+            re.compile(
+                r"(?:美元|人民币)(?:资产|金额|余额|现金|预算|规模)?"
+                r"\s*(?:约|为|是|有)?\s*"
+                r"\d[\d,]*(?:\.\d+)?\s*(?:万|亿)?"
             ),
             re.compile(
                 r"\d[\d,]*(?:\.\d+)?\s*"
@@ -72,14 +75,18 @@ _FINDING_PATTERNS = (
         "local_path",
         (
             re.compile(r"(?i)\b[A-Z]:[\\/]"),
-            re.compile(r"(?i)(?:^|\s)/(?:Users|home)(?:/|$)"),
-            re.compile(r"(?i)(?:^|\s)/mnt/data(?:/|$)"),
+            re.compile(r"(?i)/(?:Users|home)(?:/|$)"),
+            re.compile(r"(?i)/mnt/data(?:/|$)"),
         ),
     ),
     (
         "long_token",
         (
-            re.compile(r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])"),
+            re.compile(
+                r"(?<![A-Za-z0-9._-])"
+                r"[A-Za-z0-9._-]{30,}"
+                r"(?![A-Za-z0-9._-])"
+            ),
         ),
     ),
     (

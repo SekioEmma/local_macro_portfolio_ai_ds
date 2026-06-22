@@ -144,17 +144,29 @@ def test_transport_error_preserves_only_kind_and_sanitized_detail(kind: str):
     error = TavilyTransportError(kind=kind, detail=" safe   detail ")
 
     assert error.kind == kind
-    assert error.detail == "safe detail"
+    assert error.detail == ""
+    assert str(error) == kind
 
 
-def test_transport_error_redacts_sensitive_detail():
-    error = TavilyTransportError(
-        kind="http_error",
-        detail="Authorization Bearer tvly-secret",
-    )
+@pytest.mark.parametrize(
+    "detail",
+    [
+        '{"error":"provider failed","body":"raw response"}',
+        "Federal Reserve rates raw query",
+        "https://example.test/search?q=private&token=secret",
+        "Authorization: Bearer secret",
+        "Cookie: session=secret",
+        r"C:\Users\Alice\holdings.csv",
+        "account number 123456789 position weight transaction history",
+        "x" * 500,
+    ],
+)
+def test_transport_error_discards_all_free_text_detail(detail: str):
+    error = TavilyTransportError(kind="http_error", detail=detail)
 
-    assert error.detail == "redacted"
-    assert "tvly-secret" not in str(error)
+    assert error.detail == ""
+    assert str(error) == "http_error"
+    assert detail not in str(error)
 
 
 def test_import_has_no_file_or_network_side_effects(monkeypatch):
