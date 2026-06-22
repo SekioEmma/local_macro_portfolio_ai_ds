@@ -116,4 +116,4 @@ cd src && python -m pytest ../tests/dashboard/test_dashboard_context_cache.py -x
 - Performance: `dashboard_service.py`, `dashboard_context_cache.py`, `historical_validation.py`, `historical_derived_metrics.py`
 - AI development: `ai_preview_service.py`, `ai_context_service.py`, `ai_external_runtime_policy.py`, `ai_research_*.py`
 - Frontend: `app_frontend/src/App.tsx`, `app_frontend/src/api/client.ts`, `app_frontend/src/components/`
-- Docs entry point: `docs/INDEX.md`, `docs/short_term_development_plan.md`
+- Docs entry point: `docs/INDEX.md`, `docs/ROADMAP.md`, `docs/GOVERNANCE.md`, `docs/era2_plan.md`, `docs/era2_codex_brief.md`

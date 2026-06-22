@@ -1,0 +1,90 @@
+# Roadmap
+
+> 项目当前路线唯一权威源。
+> 历史 `short_term_development_plan.md`、`ROADMAP_CURRENT.md`、`PROJECT_STATUS.md`、`current_project_state.md`、`modeling_roadmap.md` 已归档到 `docs/archive/`。
+> 详细 Era 2 计划见 [`era2_plan.md`](era2_plan.md)，任务书见 [`era2_codex_brief.md`](era2_codex_brief.md)。
+
+## 当前阶段
+
+**Era 2：AI Agent 宏观研究工作台**（进行中）
+
+目标：在现有 D10–D19 + Stage 8 数据底座之上，叠加联网搜索（Tavily）、知识库（RAG）、情景化收益区间引擎、单 Agent + 工具调用运行时，输出 10 节固定结构 `MacroBrief` 强类型研报。
+
+## Era 0：数据基座（完成）
+
+- D7–D9：drawdowns / curves / cross-asset / labor mini-pack
+- D10–D19：金融压力、回撤分类、历史风险归一、流动性、宏观体制、情景压力矩阵、增长通胀、估值、历史回放
+- Stage 8：Portfolio Exposure Overlay（sanitized）
+- DF-1 至 DF-4c：数据源补全 + 元数据
+- G1/G2/G3：本地刷新 + 官方源补全（FRED / BLS / BEA / Alpha Vantage / OFR）
+
+## Era 1：前端美化（完成）
+
+Tag：`era1-frontend-redesign-complete`。
+
+## Era 2：AI Agent（当前）
+
+### 已完成
+
+- AI-1 / AI-1.5：本地确定性研究预览
+- AI-2：单轮 DeepSeek V4 Pro 研究端点（7 节中文输出 + 全守门链）
+- UI-0：前端信息架构审计
+
+### 进行中
+
+按 [`era2_plan.md`](era2_plan.md) 9 个 Phase（A→I）执行：
+
+| Phase | 主题 | 预计周 | L4 人审 |
+|---|---|---|---|
+| A | 治理与边界（解冻 Tavily + 收益区间） | 1 | ✅ A1 |
+| B | Tavily + 实时报价 + 商品价 | 2 | — |
+| C | 搜索分类持久化 + 经济日历 | 1.5 | — |
+| D | RAG 知识库 | 2 | — |
+| E | 情景化收益区间引擎 | 2 | ✅ E1 |
+| F | Agent + 9 节前端 | 2.5 | — |
+| G | 报告归档 + 历史对比 | 1 | — |
+| H | 质量评估闭环 | 1 | — |
+| I | 多 Agent 拆分 | 2 | 条件触发 |
+
+总计约 12 周（不含 I）。
+
+### Era 2 决策快照
+
+- 联网搜索 = Tavily
+- 组合 = SPY/QQQ/SHY/GLD 固定 4 ETF（5:2:2:1，RMB 计价）
+- 收益区间 = 3 个月 / 人民币 / 不含股息
+- 个股层 = 可点名 + 描述风险敷口；禁止操作动词
+- Agent 起点 = 单 Agent + function calling
+- MCP = 不做
+- 移动端 = Era 3
+- 自动化 / 推送 = Era 3
+
+## Era 3：扩展（未来）
+
+- 中国数据底座（A 股、港股、人民币宏观）
+- 移动端 + 远程访问
+- 自动化推送 / 定时 brief
+- 多 Agent 协作（若 Era 2 Phase I 触发条件满足，提前到 Era 2 末）
+
+## 持续保留的冻结边界
+
+跨 Era 永久冻结，不会因任何阶段解锁：
+
+- 自动交易
+- 真实下单 / 真实资金移动
+- Portfolio optimizer（黑盒最大化）
+- 个股操作建议（买卖 / 加仓 / 减仓动词）
+- 概率胜率措辞（"70% 概率上涨"）
+- Event odds 概率模型
+- Full-account DeepSeek context（账户余额 / 持仓行项 / 交易历史外送）
+- 新闻情绪量化交易
+
+## 已完成 Stage 历史索引
+
+详见 `docs/archive/`：DF-0 至 DF-4c、HF-1/HF-2、P-M1 至 P-M4-D、S0 至 S3、Stage 9.0 至 9.3-B-2d、R1、Dashboard Service Refactor Phase E/F1/F2/F-G、UI-0、Data Foundation Gap Fill v1、G1、G2/G3。
+
+## 命名约定
+
+- 阶段编号（Era 2 / Phase A / TASK-A1）用于路线层。
+- 模型模块用人话名（Financial Stress Composite / Macro Regime Review），D 编号保留为 traceability alias。
+- 详细命名规范见 [`GOVERNANCE.md`](GOVERNANCE.md) §6。

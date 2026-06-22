@@ -1,258 +1,149 @@
-# Local Macro Portfolio AI DS - Project Index
+# Local Macro Portfolio AI DS
 
-One-page orientation. Read this first when returning to the project after a
-break. Detailed history stays in `docs/current_project_state.md`. The immediate
-route is in `docs/short_term_development_plan.md`.
+本地优先宏观风险研究工作台。CS 学习 > 宏观研究 > 投资工具。
 
-## Current Truth
+## 入口
 
-- Current branch: `ai-1-local-research-preview` (merged with `app-mvp`)
-- Current phase: AI-2 single-turn DeepSeek research endpoint is live;
-  G2/G3 data-source supplementation is complete.
-- Last completed task: AI-2 single-turn DeepSeek V4 Pro research endpoint
-  with full guard chain, input/output validation, and 7-section Chinese
-  research output. G2/G3 official provider supplementation (FRED, BLS, BEA,
-  Alpha Vantage, OFR) and market-history stabilization.
-- Current immediate route: evaluate DeepSeek output quality, then decide
-  next step (frontend integration or further model tuning).
-- Next engineering task: frontend DeepSeek research tab or further data
-  source wiring into dashboard contracts.
-- Frozen lines: external AI productization, Chat UI, Tavily/search, Tauri,
-  full-account DeepSeek context, live provider fetch/write,
-  prediction/probability/trading outputs
-
-## What This Project Is
-
-A local-first macro risk research workbench:
-
-- macro risk evidence system
-- explainable financial and math model layer
-- personal portfolio risk explanation layer
-- AI research context foundation
-- Chinese professional research report system
-
-## What This Project Is Not
-
-- no auto-trading
-- no short-term prediction engine
-- no AI stock picker
-- no news sentiment trading
-- no portfolio optimizer
-- no brokerage sync
-- no real-time market terminal
-
-## Namespace Map
-
-The project uses several parallel namespaces. Each namespace has its own
-discipline. Always check `short_term_development_plan.md` for the active item.
-
-### D-line: Financial / Macro Model Modules
-
-New docs prefer plain-English module names; D IDs are legacy aliases. See
-[Legacy ID Translation](#legacy-id-translation) below.
-
-- D7-D9: data foundation, drawdowns, curves, cross-asset, labor mini-pack
-- D12: AI Context Manifest / context preview (privacy and eligibility gate)
-- Financial Stress Composite (legacy: D10): `financial_stress_composite`
-  (pressure temperature, not probability)
-- Pullback vs Systemic Risk Review (legacy: D11):
-  `pullback_systemic_risk_checklist` (current evidence review)
-- Historical Risk Normalization (legacy: D13): `historical_risk_percentile`
-  (percentile / z-score / robust z-score, 5Y/3Y windows, DF-4
-  reliability/divergence metadata, DF-4c OAS coverage)
-- Liquidity & Funding Stress (legacy: D14): `liquidity_funding_stress`
-- Macro Regime Review (legacy: D15): current evidence review, not classifier
-- Scenario Stress Matrix (legacy: D16): S1 refinement; not a probability or
-  forecast model
-- Growth & Inflation Context (legacy: D17): Growth / Inflation Macro Pack
-  (not a recession call)
-- Valuation & Equity Structure Context (legacy: D18): not a timing model;
-  proxy/research only
-- Historical Validation Replay (legacy: D19): event-window replay, not backtest
-
-### M-line: Maintainability / Performance Work
-
-- M1: dashboard pipeline benchmark (completed)
-- M2: batch market history reads (completed)
-- M3: shared dashboard pipeline context (completed)
-- M4a: dashboard service helper split (completed)
-- M5: audit pipeline modularized (completed)
-- M6: frontend display registries organized (completed)
-- M7/M8-A: dashboard model pipeline extraction (completed; remaining work in
-  `docs/foundation_stabilization_backlog.md`)
-- P-M1 completed: dashboard_model_pipeline row conversion accumulator
-  (Historical Risk Normalization through Scenario Stress Matrix)
-- P-M2 completed: dashboard_service helper split (M7/M8-B follow-up)
-- P-M3 completed: Historical Risk Normalization (legacy: D13) metadata helper
-  split (reliability/divergence and OAS coverage helpers extracted)
-- P-M4-A completed: M11 cross-request shared context cache design review
-- P-M4-B completed: cache key / file signature helpers
-- P-M4-C completed: in-process summary/evidence cache
-
-### DF-line: Data Foundation / Historical Evidence (concluded)
-
-- DF-0: roadmap arbitration and legacy doc cleanup (completed)
-- DF-1: D19 v1 historical evidence-row integration (completed)
-- DF-2: D15/D16 compliance audit (completed)
-- DF-3: D17/D18 data gap and source-gate review (completed)
-- DF-4: D13 reliability / divergence metadata (completed)
-- DF-4a: Credit OAS history availability audit (completed)
-- DF-4c: Credit OAS coverage / provider-rebuild metadata (completed)
-- DF-4d: BAA10Y D19 proxy/reference documentation (deferred unless explicitly
-  requested)
-- Data Foundation Gap Fill v1: source-gated registry cleanup before frontend
-  work (completed; offline audit/tests/docs only)
-- Data Foundation G1: controlled local refresh and coverage audit (completed;
-  existing ingest scripts only, generated SQLite not committed)
-
-Stage DF is concluded. No default DF-5.
-
-### S-line: Scenario Stress / Explanation Refinement
-
-- S0: Post-DF roadmap reconciliation (completed)
-- S1: D16 Scenario Stress Refinement v1 (completed)
-- HF-1: Test Runtime Hotfix / DB-backed Fixture Batching (completed)
-- HF-2: Project Namespace Index / Governance Light Cleanup (current; docs-only)
-- S2: D16 scenario explanation tests / golden contract integration (completed;
-  38 contract tests, 11 categories)
-- S3: AI memo boundary template update (completed)
-
-### R-line: Research Recovery
-
-- R1: Course Paper Research Recovery Note (completed as docs-only research
-  recovery). K-means, GMM, cluster probability, and cluster-to-action mapping
-  remain outside production.
-
-### Stage 8 / 8.5
-
-- Portfolio Exposure Overlay (legacy: Stage 8): v0 completed; downstream-only,
-  privacy-preserving
-- Stage 8.5: Foundation Stabilization Sprint (completed)
-
-### Stage 9 / External AI (frozen)
-
-- Stage 9.0–9.3-B: preparation, adapter design, security closeout (completed
-  where documented)
-- Stage 9.3-B-2d: internal one-shot manual invocation review (completed)
-- External AI productization: frozen
-- No Chat endpoint, no frontend chat, no Tavily/search, no persistence, no
-  automatic external calls
-
-## Source of Truth Policy
-
-| Document | What it owns |
+| 文件 | 干什么 |
 |---|---|
-| `docs/INDEX.md` | navigation map and current orientation (this file) |
-| `docs/short_term_development_plan.md` | immediate route and next task |
-| `docs/current_project_state.md` | detailed project state and completed baseline |
-| `docs/modeling_roadmap.md` | modeling-history narrative and module boundaries |
-| `docs/data_foundation_gap_fill_v1.md` | G0 source-gated registry cleanup and validation |
-| `docs/data_foundation_local_refresh_g1.md` | G1 controlled local refresh evidence and remaining coverage gaps |
-| `docs/data_foundation_g2_source_supplementation.md` | G2/G3 provider registry, ingest commands, source hierarchy, boundaries, and closeout |
-| `docs/frontend_information_architecture_audit.md` | UI-0 frontend shell, page, API-contract, placeholder, and display-gap audit |
-| `docs/ai_1a_card_priority_semantic_foundation.md` | historical AI-1 primitive foundation: evidence cards, priority ranking, and financial semantic validator |
-| `docs/ai_1_local_research_preview_closeout.md` | AI-1 Local Controlled Research Preview contract, privacy boundary, validator rules, and closeout evidence |
-| `docs/foundation_stabilization_backlog.md` | M-line backlog (M7-M12) |
-| `docs/frontend_baseline_pre_redesign.md` | Frontend stack / route / API / token snapshot before Era 1 redesign |
-| stage-specific closeout docs | per-stage evidence and contract |
+| [ROADMAP.md](ROADMAP.md) | 当前路线（Era 2 进行中） |
+| [GOVERNANCE.md](GOVERNANCE.md) | 治理、隐私红线、L1–L4 task 体系、coding agent 协议 |
+| [era2_plan.md](era2_plan.md) | Era 2 完整开发计划 |
+| [era2_codex_brief.md](era2_codex_brief.md) | Era 2 codex 任务书 |
+| [../CLAUDE.md](../CLAUDE.md) | 项目级硬安全约束 |
 
-When these disagree, `docs/short_term_development_plan.md` is the immediate
-route source of truth. `docs/current_project_state.md` and
-`docs/modeling_roadmap.md` carry the longer narrative and module boundaries but
-should not be read as "what to do next".
+## 项目是什么
 
-## Task Level Policy
+- 宏观风险证据系统
+- 可解释金融 / 数学模型层
+- 个人组合风险解释层
+- AI 研究上下文基础
+- 中文专业研报系统
 
-See `docs/task_governance_policy.md` for L1 / L2 / L3 / L4 task-level rules and
-validation requirements. The short version:
+## 项目不是什么
 
-- L1 micro-fixes do not require full governance doc updates.
-- L2 docs/audit/metadata-only tasks update governance docs and a closeout doc.
-- L3 boundary-touching production changes run the full validation set.
-- L4 product surface / external AI / privacy changes require explicit user
-  approval before implementation.
+- 自动交易
+- 短期预测引擎
+- AI 选股
+- 新闻情绪交易
+- Portfolio optimizer
+- 券商同步
+- 实时行情终端
 
-## Current Backlog (ordered)
+## 快速开始
 
-1. ~~P-M1 dashboard_model_pipeline row conversion accumulator~~ (completed)
-2. ~~P-M2 dashboard_service helper split~~ (completed)
-3. ~~P-M3 Historical Risk Normalization (legacy: D13) metadata helper split~~
-   (completed)
-4. ~~P-M4-A M11 cross-request shared context cache design review~~
-   (completed; design-only)
-5. ~~P-M4-B M11 cache key / file signature helpers~~ (completed)
-6. ~~P-M4-C In-process Summary / Evidence Cache~~ (completed)
-7. ~~P-M4-D AI Context Manifest cache review~~ (completed as review-only;
-   implementation deferred)
-8. ~~S2 Scenario Stress Matrix (legacy: D16) explanation tests / golden contract
-   integration~~ (completed)
-9. ~~S3 AI memo boundary template update~~ (completed)
-10. ~~Dashboard Service Refactor Phase E - Module Builder Extraction~~
-    (completed)
-11. ~~Phase F1 dashboard metric characterization tests before metric builder
-    extraction~~ (completed)
-12. ~~Phase F2 extract dashboard metric builder~~ (completed)
-13. ~~Phase F/G complete remaining dashboard_service refactor~~ (completed)
-14. ~~Data Foundation Gap Fill v1 source-gated cleanup~~ (completed)
-15. ~~Data Foundation G1 controlled local refresh and coverage audit~~
-    (completed)
-16. ~~UI-0 Frontend Information Architecture Audit~~ (completed; docs/audit
-    only)
-17. ~~AI-1 Local Controlled Research Preview - evidence cards, priority
-    selection, semantic validation, local research/prompt APIs, Chinese
-    seven-section rendering, and read-only frontend workbench~~ (completed)
-18. AI-1.5 Local Preview Evaluation & Governance Closeout
-19. UI-1 Dashboard homepage data-display polish using existing backend APIs
-    and source gates only
-20. ~~G2/G3 source supplementation~~ (completed)
-21. AI-2 Single-Turn DeepSeek Research Endpoint (completed; live-tested
-    with DeepSeek V4 Pro)
-22. DF-4d BAA10Y Historical Validation Replay (legacy: D19) proxy/reference
-   documentation (only if explicitly requested)
+```bash
+# 后端
+cd src && python -m uvicorn app_backend.main:app --reload --host 127.0.0.1 --port 8000
 
-Not on this list: external AI productization, Chat UI, Tavily/search, Tauri,
-full-account DeepSeek context, account editing, live provider fetch/write,
-prediction/probability/trading outputs. These remain frozen.
+# 前端
+cd app_frontend && npm run dev
 
-## Naming Policy
+# 测试
+cd src && python -m pytest ../tests/ -x -q
 
-Future task names and commit messages prefer human-readable names over deep
-stage codes. Stage IDs may remain in docs for historical mapping, but a commit
-message like `Speed up DB-backed test fixtures` is preferred over `Add HF-1
-test runtime hotfix`. See `docs/task_governance_policy.md`.
-
-## Legacy ID Translation
-
-The project historically used D10-D19 IDs for model modules. New docs should
-prefer plain-English names and keep D IDs only as legacy aliases.
-
-| Plain-English name | Legacy ID | Role |
-|---|---|---|
-| Financial Stress Composite | D10 | combines core financial stress evidence across rates, credit, equity, liquidity, and volatility |
-| Pullback vs Systemic Risk Review | D11 | distinguishes ordinary equity pullback from broader systemic-risk evidence |
-| Historical Risk Normalization | D13 | historical percentile, z-score, robust z-score, reliability/divergence metadata, and credit OAS coverage metadata |
-| Liquidity & Funding Stress | D14 | liquidity plumbing, short-term funding pressure, official stress references, and funding confirmation |
-| Macro Regime Review | D15 | current-evidence macro pressure review, not classifier/probability/forecast/trading model |
-| Scenario Stress Matrix | D16 | hypothetical scenario matrix and current evidence transmission review, not forecast/event-odds/return/action model |
-| Growth & Inflation Context | D17 | conservative growth, inflation, policy-constraint, and stagflation-watch context |
-| Valuation & Equity Structure Context | D18 | valuation, earnings, true-breadth gaps, equity structure, breadth/concentration proxy context |
-| Historical Validation Replay | D19 | historical event-window replay, coverage review, boundary validation, and reference-only historical context |
-| Portfolio Exposure Overlay | Stage 8 | downstream-only sanitized portfolio exposure explanation layer, not allocation advice or optimizer |
-
-**Pipeline order (human-readable):**
-
-```
-Historical Risk Normalization (legacy: D13)
-→ Liquidity & Funding Stress (legacy: D14)
-→ Financial Stress Composite (legacy: D10)
-→ Pullback vs Systemic Risk Review (legacy: D11)
-→ Growth & Inflation Context (legacy: D17)
-→ Valuation & Equity Structure Context (legacy: D18)
-→ Macro Regime Review (legacy: D15)
-→ Historical Validation Replay (legacy: D19)
-→ Scenario Stress Matrix (legacy: D16)
-→ Portfolio Exposure Overlay (legacy: Stage 8)
+# 前端 typecheck
+cd app_frontend && npx tsc --noEmit
 ```
 
-Production identifiers (`module_key`, `model_key`, `metric_key`, registry keys,
-and public output keys) are unchanged.
+## 命名空间
+
+### D-line 金融 / 宏观模型模块
+
+新文档优先人话名，D ID 为 legacy alias。完整映射见 [GOVERNANCE.md §6](GOVERNANCE.md#6-命名规范)。
+
+- Financial Stress Composite（D10）
+- Pullback vs Systemic Risk Review（D11）
+- Historical Risk Normalization（D13）
+- Liquidity & Funding Stress（D14）
+- Macro Regime Review（D15）
+- Scenario Stress Matrix（D16）
+- Growth & Inflation Context（D17）
+- Valuation & Equity Structure Context（D18）
+- Historical Validation Replay（D19）
+- Portfolio Exposure Overlay（Stage 8）
+
+### Era 路线
+
+- Era 0：数据基座（完成）
+- Era 1：前端美化（完成，tag `era1-frontend-redesign-complete`）
+- **Era 2：AI Agent**（当前）
+- Era 3：中国数据 + 移动端 + 自动化（未来）
+
+详见 [ROADMAP.md](ROADMAP.md)。
+
+## 模块技术文档
+
+### dashboard/ — 服务架构与 pipeline
+
+- [dashboard/dashboard_service_architecture.md](dashboard/dashboard_service_architecture.md)
+- [dashboard/dashboard_evidence_table.md](dashboard/dashboard_evidence_table.md)
+- [dashboard/dashboard_financial_spec_v1.md](dashboard/dashboard_financial_spec_v1.md)
+- [dashboard/dashboard_historical_derived_integration.md](dashboard/dashboard_historical_derived_integration.md)
+- [dashboard/dashboard_orchestration_audit.md](dashboard/dashboard_orchestration_audit.md)
+- [dashboard/dashboard_show_all_detail.md](dashboard/dashboard_show_all_detail.md)
+- [dashboard/audit_pipeline_architecture.md](dashboard/audit_pipeline_architecture.md)
+
+### models/ — D10–D19 模型模块、指标、语义
+
+- [models/financial_stress_composite.md](models/financial_stress_composite.md)
+- [models/liquidity_funding_stress.md](models/liquidity_funding_stress.md)
+- [models/pullback_systemic_checklist.md](models/pullback_systemic_checklist.md)
+- [models/historical_derived_metrics.md](models/historical_derived_metrics.md)
+- [models/historical_percentile_method_note.md](models/historical_percentile_method_note.md)
+- [models/historical_percentile_metrics.md](models/historical_percentile_metrics.md)
+- [models/historical_validation_event_notes.md](models/historical_validation_event_notes.md)
+- [models/macro_display_semantics_and_labels.md](models/macro_display_semantics_and_labels.md)
+- [models/metric_interpretation_boundaries.md](models/metric_interpretation_boundaries.md)
+- [models/portfolio_deviation_compact.md](models/portfolio_deviation_compact.md)
+- [models/proxy_breadth_metrics.md](models/proxy_breadth_metrics.md)
+- [models/valuation_breadth_research_plan.md](models/valuation_breadth_research_plan.md)
+
+### data/ — 数据源、provider、基础设施
+
+- [data/app_state_sqlite.md](data/app_state_sqlite.md)
+- [data/core_risk_history_backfill.md](data/core_risk_history_backfill.md)
+- [data/data_foundation_g2_source_supplementation.md](data/data_foundation_g2_source_supplementation.md)
+- [data/data_foundation_gap_fill_v1.md](data/data_foundation_gap_fill_v1.md)
+- [data/data_foundation_local_refresh_g1.md](data/data_foundation_local_refresh_g1.md)
+- [data/data_pipeline_coverage_audit.md](data/data_pipeline_coverage_audit.md)
+- [data/last_good_cache.md](data/last_good_cache.md)
+- [data/market_history_store.md](data/market_history_store.md)
+- [data/official_macro_pack.md](data/official_macro_pack.md)
+- [data/valuation_source_research.md](data/valuation_source_research.md)
+- [data/yfinance_batch_history_provider.md](data/yfinance_batch_history_provider.md)
+
+### ai/ — AI context、manifest、研究预览
+
+- [ai/ai_context_manifest.md](ai/ai_context_manifest.md)
+- [ai/ai_context_manifest_contract.md](ai/ai_context_manifest_contract.md)
+- [ai/ai_memo_context_contract.md](ai/ai_memo_context_contract.md)
+- [ai/ai_readiness_design.md](ai/ai_readiness_design.md)
+- [ai/ai_research_quality_audit_2026-06-19.md](ai/ai_research_quality_audit_2026-06-19.md)
+- [ai/ai_1_local_research_preview_closeout.md](ai/ai_1_local_research_preview_closeout.md)
+- [ai/ai_1a_card_priority_semantic_foundation.md](ai/ai_1a_card_priority_semantic_foundation.md)
+
+### frontend/ — UI 开发与架构
+
+- [frontend/app_frontend_dev.md](frontend/app_frontend_dev.md)
+- [frontend/frontend_information_architecture_audit.md](frontend/frontend_information_architecture_audit.md)
+- [frontend/frontend_registry_architecture.md](frontend/frontend_registry_architecture.md)
+
+### infra/ — 运维、缓存、性能、runbook
+
+- [infra/local_runbook.md](infra/local_runbook.md)
+- [infra/performance_baseline.md](infra/performance_baseline.md)
+- [infra/m11_cache_risk_register.md](infra/m11_cache_risk_register.md)
+- [infra/foundation_stabilization_backlog.md](infra/foundation_stabilization_backlog.md)
+
+## 历史归档
+
+`docs/archive/` 含已完成 stage 的收尾文档、旧路线图版本、旧 Era 2 计划补丁。一般不需要再读，仅作历史 traceability。
+
+## 当前真相
+
+- 分支：`app-mvp`
+- 阶段：Era 2 进行中
+- 上一里程碑：AI-2 单轮 DeepSeek V4 Pro 研究端点完成
+- 下一里程碑：Era 2 Phase A（治理与边界）
+- 详见 [ROADMAP.md](ROADMAP.md)
