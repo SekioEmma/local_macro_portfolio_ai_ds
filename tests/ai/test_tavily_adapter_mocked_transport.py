@@ -25,20 +25,20 @@ from app_backend.services.tavily_transport_contract import (
 
 def _policy(**overrides: bool) -> SearchRuntimePolicy:
     values = {
-        "policy_acknowledged": True,
         "search_enabled": True,
-        "query_sanitized": True,
-        "domain_allowlist_configured": True,
-        "daily_budget_available": True,
-        "response_guard_enabled": True,
-        "result_classifier_enabled": True,
-        "transport_timeout_set": True,
-        "allow_raw_portfolio_in_query": False,
-        "allow_account_data_in_query": False,
-        "allow_pii_in_query": False,
-        "allow_unlimited_calls": False,
-        "allow_external_domain_bypass": False,
-        "allow_query_without_sanitize": False,
+        "provider_network_enabled": True,
+        "user_controlled_switch_enabled": True,
+        "single_request_user_approved": True,
+        "query_sanitizer_passed": True,
+        "domain_allowlist_enforced": True,
+        "response_guard_required": True,
+        "budget_within_limit": True,
+        "save_raw_query": False,
+        "save_raw_html": False,
+        "allow_holdings_in_query": False,
+        "allow_position_in_query": False,
+        "allow_account_in_query": False,
+        "allow_local_path_in_query": False,
         **overrides,
     }
     return SearchRuntimePolicy(**values)
@@ -192,10 +192,10 @@ def test_runtime_policy_failure_prevents_transport():
     with pytest.raises(BlockedAdapterError) as exc:
         _adapter(
             transport,
-            policy=_policy(daily_budget_available=False),
+            policy=_policy(budget_within_limit=False),
         ).search(SearchRequest(query="rates outlook"))
 
-    assert "daily_budget_available" in exc.value.blocking_flags
+    assert "budget_within_limit" in exc.value.blocking_flags
     assert transport.calls == []
 
 

@@ -4,32 +4,36 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SearchRuntimePolicy(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
-    policy_acknowledged: bool = False
     search_enabled: bool = False
-    query_sanitized: bool = False
-    domain_allowlist_configured: bool = False
-    daily_budget_available: bool = False
-    response_guard_enabled: bool = False
-    result_classifier_enabled: bool = False
-    transport_timeout_set: bool = False
+    provider_network_enabled: bool = False
+    user_controlled_switch_enabled: bool = False
+    single_request_user_approved: bool = False
+    query_sanitizer_passed: bool = False
+    domain_allowlist_enforced: bool = False
+    response_guard_required: bool = False
+    budget_within_limit: bool = False
 
-    allow_raw_portfolio_in_query: bool = True
-    allow_account_data_in_query: bool = True
-    allow_pii_in_query: bool = True
-    allow_unlimited_calls: bool = True
-    allow_external_domain_bypass: bool = True
-    allow_query_without_sanitize: bool = True
+    save_raw_query: bool = False
+    save_raw_html: bool = False
+    allow_holdings_in_query: bool = False
+    allow_position_in_query: bool = False
+    allow_account_in_query: bool = False
+    allow_local_path_in_query: bool = False
 
 
 class SearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     query: str
     max_results: int = 5
     domain_filter: list[str] = Field(default_factory=list)
 
 
 class SearchResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     url: str
     title: str
     snippet: str
@@ -37,12 +41,16 @@ class SearchResult(BaseModel):
 
 
 class SearchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     results: list[SearchResult] = Field(default_factory=list)
     search_available: bool
     guard_passed: bool
 
 
 class SearchGuardResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     allowed: bool
     blocking_flags: list[str] = Field(default_factory=list)
 

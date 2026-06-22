@@ -7,23 +7,23 @@ from app_backend.schemas.search_external import (
 
 
 REQUIRED_TRUE_FIELDS = (
-    "policy_acknowledged",
     "search_enabled",
-    "query_sanitized",
-    "domain_allowlist_configured",
-    "daily_budget_available",
-    "response_guard_enabled",
-    "result_classifier_enabled",
-    "transport_timeout_set",
+    "provider_network_enabled",
+    "user_controlled_switch_enabled",
+    "single_request_user_approved",
+    "query_sanitizer_passed",
+    "domain_allowlist_enforced",
+    "response_guard_required",
+    "budget_within_limit",
 )
 
 REQUIRED_FALSE_FIELDS = (
-    "allow_raw_portfolio_in_query",
-    "allow_account_data_in_query",
-    "allow_pii_in_query",
-    "allow_unlimited_calls",
-    "allow_external_domain_bypass",
-    "allow_query_without_sanitize",
+    "save_raw_query",
+    "save_raw_html",
+    "allow_holdings_in_query",
+    "allow_position_in_query",
+    "allow_account_in_query",
+    "allow_local_path_in_query",
 )
 
 

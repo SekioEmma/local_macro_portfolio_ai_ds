@@ -81,13 +81,23 @@ scripts/                  # Ingest, audit, benchmark scripts
 
 **Do NOT:**
 - Read `os.environ` / `os.getenv`
-- Import `httpx` / `requests` / `aiohttp`
+- Import `httpx` / `requests` / `aiohttp` outside an explicitly approved transport boundary
 - Make real network calls
-- Add endpoints: `/api/chat`, `/api/search`, `/api/ai/deepseek`, `/api/ai/external`, `/api/ai/tavily`
+- Add `/api/chat`, `/api/ai/deepseek`, `/api/ai/external`, or `/api/ai/tavily`
+- Add `/api/search/tavily` before the separately approved TASK-B7
 - Send raw questions/prompts/holdings/account/position/transaction data or local paths
 - Change D10-D19 or Stage 8 financial semantics
 - Broaden AI Context Manifest eligibility
 - Weaken `guard_response` blocking when `external_model_called=True`
+
+### Era 2 search exception
+
+- The only future search HTTP boundary is `src/app_backend/services/tavily_real_transport.py`.
+- That file may only be created in a separately approved TASK-B4; it must not exist before B4.
+- Future real Tavily requests must be explicitly triggered by the user and pass `SearchRuntimePolicy`, query sanitizer, domain allowlist, budget, and response guard checks.
+- Automatic, background, app-start, and page-load search calls remain forbidden.
+- Tavily may receive only a sanitizer-approved query. Raw prompts, full account context, holdings, positions, transactions, local paths, and raw provider payloads remain forbidden.
+- Any future `.env` or secret access must be isolated to a separately approved single secrets/transport boundary. No current search contract, sanitizer, policy, or adapter may read it.
 
 ## Key Design Invariants
 

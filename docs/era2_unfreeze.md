@@ -1,12 +1,12 @@
 # Era 2 解冻清单
 
-> A1 治理文档草稿，等待用户审核。解冻不代表默认启用；所有外部能力仍须经过对应 runtime policy 守门并由用户显式触发。
+> A1 已获用户批准并正式生效。解冻不代表默认启用；搜索默认关闭，且所有外部能力仍须由用户显式触发并经过对应 runtime policy 守门。
 
 ## 已解冻
 
 | 能力 | 允许边界 |
 |---|---|
-| Tavily 联网搜索 | 仅允许经 `SearchRuntimePolicy` fail-closed 守门、query 清洗、域名 allowlist、预算限制和响应守门后调用 |
+| Tavily 联网搜索 | 已获用户批准但默认关闭；仅允许单次用户显式触发，并经 `SearchRuntimePolicy` fail-closed 守门、query sanitizer、域名 allowlist、预算限制和 response guard 后调用 |
 | 情景化 3 个月收益区间 | 人民币计价、不含股息；仅作情景压力区间，不是概率、操作建议、个股推荐、择时或胜率 |
 | 实时 ETF / 外汇 / 国债报价 | 只读查询；失败时按降级策略返回 stale 标记，不触发交易或资金操作 |
 | 商品价格 | 仅允许通过 Tavily 查询限定域名；提取失败时返回 unavailable，不生成价格 |
@@ -23,3 +23,10 @@
 | Event odds | 不开发事件概率或赔率模型 |
 | Full-account context 外送 | 不向外部模型或搜索发送账户余额、持仓行项、仓位权重或交易历史 |
 | 新闻情绪交易 | 不把新闻情绪转化为量化交易信号 |
+
+## 搜索调用边界
+
+- 不允许自动、后台、应用启动时或页面加载时调用。
+- 不允许发送 holdings、account、position、transaction、local path 或 raw provider payload。
+- Tavily 可接收的唯一用户文本是 sanitizer-approved query。
+- 当前仅完成无网络 contract、sanitizer 和 fake adapter；尚无真实联网能力。

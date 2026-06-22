@@ -29,6 +29,8 @@ Tag：`era1-frontend-redesign-complete`。
 - AI-1 / AI-1.5：本地确定性研究预览
 - AI-2：单轮 DeepSeek V4 Pro 研究端点（7 节中文输出 + 全守门链）
 - UI-0：前端信息架构审计
+- Phase A：搜索与收益区间治理边界已获用户批准并正式生效
+- Phase B1–B3：无网络 Tavily contract、query sanitizer、guarded fake adapter
 
 ### 进行中
 
@@ -36,8 +38,8 @@ Tag：`era1-frontend-redesign-complete`。
 
 | Phase | 主题 | 预计周 | L4 人审 |
 |---|---|---|---|
-| A | 治理与边界（解冻 Tavily + 收益区间） | 1 | ✅ A1 |
-| B | Tavily + 实时报价 + 商品价 | 2 | — |
+| A | 治理与边界（解冻 Tavily + 收益区间） | 已完成 | ✅ A1 |
+| B | Tavily + 实时报价 + 商品价 | 进行中（B1–B3 完成） | — |
 | C | 搜索分类持久化 + 经济日历 | 1.5 | — |
 | D | RAG 知识库 | 2 | — |
 | E | 情景化收益区间引擎 | 2 | ✅ E1 |
