@@ -15,6 +15,7 @@ DEFAULT_SEARCH_CONFIG_PATH = (
 class SearchAdapterConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    enabled: bool = False
     tavily_endpoint: str = "https://api.tavily.com/search"
     timeout_seconds: float = Field(default=30, gt=0)
     max_results_per_call: int = Field(default=5, ge=1)

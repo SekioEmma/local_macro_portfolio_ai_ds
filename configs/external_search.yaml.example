@@ -1,9 +1,23 @@
-# Example config — copy to external_search.yaml and fill in real values
-# external_search.yaml is in .gitignore and must never be committed
+# Example config — copy to external_search.yaml and fill in real values.
+# external_search.yaml is in .gitignore and must NEVER be committed.
+#
+# Defaults are fail-closed: when the real file is absent, or `enabled` is
+# false, or daily_call_budget is 0, external search is disabled and every
+# request returns a safe, empty, guard-blocked response. No API key lives in
+# this file or in any committed config; the Tavily key is read only from the
+# TAVILY_API_KEY environment variable inside tavily_real_transport.py.
+
+# Master switch. Must be true (and a budget set) for any real search to run.
+enabled: false
+
 tavily_endpoint: "https://api.tavily.com/search"
 timeout_seconds: 30
 max_results_per_call: 5
+
+# Per-process, per-UTC-day budget. 0 is equivalent to disabled.
 daily_call_budget: 100
+
+# Example domains only. The allowlist must be non-empty for search to run.
 domain_allowlist:
   - "reuters.com"
   - "bloomberg.com"

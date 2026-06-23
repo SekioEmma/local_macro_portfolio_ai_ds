@@ -55,10 +55,28 @@ class SearchGuardResult(BaseModel):
     blocking_flags: list[str] = Field(default_factory=list)
 
 
+class TavilySearchApiRequest(BaseModel):
+    """Client-facing request for the guarded search route.
+
+    The client may only supply the query, a result cap, an optional domain
+    narrowing list, and an explicit per-request external-search confirmation.
+    It must not supply runtime policy, budget, provider keys, transport
+    endpoints, allowlist/blocklist, or any dangerous-permission fields.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=500)
+    max_results: int = Field(default=5, ge=1, le=20)
+    domain_filter: list[str] = Field(default_factory=list)
+    confirm_external_search: bool = False
+
+
 __all__ = [
     "SearchGuardResult",
     "SearchRequest",
     "SearchResponse",
     "SearchResult",
     "SearchRuntimePolicy",
+    "TavilySearchApiRequest",
 ]
