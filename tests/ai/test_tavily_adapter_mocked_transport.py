@@ -243,7 +243,16 @@ def test_blocklist_has_priority_over_allowlist():
     assert transport.calls == []
 
 
-@pytest.mark.parametrize("kind", ["timeout", "http_error"])
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "timeout",
+        "http_error",
+        "malformed",
+        "missing_key",
+        "provider_refusal",
+    ],
+)
 def test_transport_errors_degrade_without_leaking_detail(kind: str):
     transport = SpyTransport(error_kind=kind)
 

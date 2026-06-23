@@ -9,6 +9,7 @@ import pytest
 
 from app_backend.services.tavily_real_transport import (
     DEFAULT_TAVILY_SEARCH_ENDPOINT,
+    MAX_TAVILY_RESPONSE_BYTES,
     TavilyRealTransport,
     load_tavily_api_key_from_env,
 )
@@ -176,6 +177,22 @@ def test_provider_extra_fields_do_not_enter_response():
         "score",
     ):
         assert forbidden not in serialized
+
+
+def test_oversized_response_fails_closed_without_body_leakage():
+    oversized = b"x" * (MAX_TAVILY_RESPONSE_BYTES + 1)
+    transport, client = _transport(
+        lambda request: httpx.Response(200, content=oversized)
+    )
+    try:
+        with pytest.raises(TavilyTransportError) as exc:
+            transport.send(_request())
+    finally:
+        client.close()
+
+    assert exc.value.kind == "malformed"
+    assert exc.value.detail == ""
+    assert "xxx" not in str(exc.value)
 
 
 @pytest.mark.parametrize("status", [400, 404, 429, 500, 503])
@@ -410,8 +427,72 @@ def test_real_transport_satisfies_protocol():
     assert isinstance(TavilyRealTransport(api_key=_TEST_KEY), TavilyTransport)
 
 
+def test_import_has_no_env_file_or_network_side_effects(monkeypatch):
+    import importlib
+    import os
+    import sys
+
+    class BlockedEnvironment(dict):
+        def get(self, *args, **kwargs):
+            raise AssertionError("import must not read the environment")
+
+    def blocked_open(*args, **kwargs):
+        raise AssertionError("import must not read files")
+
+    def blocked_socket(*args, **kwargs):
+        raise AssertionError("import must not open sockets")
+
+    monkeypatch.setattr(os, "environ", BlockedEnvironment())
+    monkeypatch.setattr("builtins.open", blocked_open)
+    monkeypatch.setattr(socket, "socket", blocked_socket)
+    sys.modules.pop("app_backend.services.tavily_real_transport", None)
+
+    module = importlib.import_module(
+        "app_backend.services.tavily_real_transport"
+    )
+
+    assert module.DEFAULT_TAVILY_SEARCH_ENDPOINT == DEFAULT_TAVILY_SEARCH_ENDPOINT
+
+
 def test_main_has_no_tavily_search_route():
     source = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8")
 
     assert "/api/search/tavily" not in source
+    assert "/api/chat" not in source
     assert "/api/ai/tavily" not in source
+
+
+def test_httpx_import_is_isolated_to_real_transport():
+    backend_root = _REPO_ROOT / "src/app_backend"
+    importers = []
+    for path in backend_root.rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        if "import httpx" in source or "from httpx" in source:
+            importers.append(path.relative_to(_REPO_ROOT).as_posix())
+
+    assert importers == [
+        "src/app_backend/services/tavily_real_transport.py"
+    ]
+
+
+def test_real_transport_source_preserves_security_boundary():
+    source = (
+        _REPO_ROOT / "src/app_backend/services/tavily_real_transport.py"
+    ).read_text(encoding="utf-8")
+
+    for forbidden in (
+        "dotenv",
+        "load_dotenv",
+        '".env"',
+        "'.env'",
+        "open(",
+        "write_text(",
+        "write_bytes(",
+        "FastAPI",
+        "app_backend.main",
+        "data.holdings",
+        "data.private",
+        "outputs",
+        "cache",
+    ):
+        assert forbidden not in source

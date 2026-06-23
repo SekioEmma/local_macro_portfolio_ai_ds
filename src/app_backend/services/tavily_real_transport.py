@@ -15,6 +15,7 @@ from app_backend.services.tavily_transport_contract import (
 
 
 DEFAULT_TAVILY_SEARCH_ENDPOINT = "https://api.tavily.com/search"
+MAX_TAVILY_RESPONSE_BYTES = 1_048_576
 _TAVILY_API_KEY_ENV = "TAVILY_API_KEY"
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -93,6 +94,8 @@ class TavilyRealTransport:
             raise TavilyTransportError(kind="provider_refusal")
         if not 200 <= response.status_code < 300:
             raise TavilyTransportError(kind="http_error")
+        if len(response.content) > MAX_TAVILY_RESPONSE_BYTES:
+            raise TavilyTransportError(kind="malformed")
 
         return _parse_response(
             response,
@@ -234,6 +237,7 @@ def _domain_matches(hostname: str, allowed: str) -> bool:
 
 __all__ = [
     "DEFAULT_TAVILY_SEARCH_ENDPOINT",
+    "MAX_TAVILY_RESPONSE_BYTES",
     "TavilyRealTransport",
     "load_tavily_api_key_from_env",
 ]
