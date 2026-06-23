@@ -9,6 +9,8 @@ from app_backend.main import app
 from app_backend.services import dashboard_service
 from modeling.model_registry import FORBIDDEN_PUBLIC_OUTPUT_KEYS, ModelRegistry
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 REQUIRED_EVIDENCE_ROW_FIELDS = {
     "metric_key",
@@ -330,10 +332,10 @@ def test_golden_model_registry_contract():
 
 
 def test_golden_frontend_registry_contract():
-    module_registry = Path("app_frontend/src/utils/moduleRegistry.ts").read_text(
+    module_registry = (_REPO_ROOT / "app_frontend/src/utils/moduleRegistry.ts").read_text(
         encoding="utf-8"
     )
-    metric_registry = Path("app_frontend/src/utils/metricRegistry.ts").read_text(
+    metric_registry = (_REPO_ROOT / "app_frontend/src/utils/metricRegistry.ts").read_text(
         encoding="utf-8"
     )
     registry_text = f"{module_registry}\n{metric_registry}"

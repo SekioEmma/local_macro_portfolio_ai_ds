@@ -7,6 +7,9 @@ from app_backend.schemas.responses import DashboardEvidenceRow, DashboardMetric,
 import audit_data_pipeline_coverage as audit
 from data_providers import market_history_store
 from modeling.model_registry import ModelRegistry
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 EXPECTED_AUDIT_TOP_LEVEL_KEYS = {
@@ -362,7 +365,7 @@ EXPECTED_HISTORICAL_STORE_KEYS = {
 
 def test_audit_cli_structural_contract_and_privacy_flags():
     completed = subprocess.run(
-        [sys.executable, "scripts/audit_data_pipeline_coverage.py"],
+        [sys.executable, str(_REPO_ROOT / "scripts/audit_data_pipeline_coverage.py")],
         check=True,
         capture_output=True,
         cwd=".",

@@ -22,6 +22,8 @@ from app_backend.services.ai_semantic_validator import (
     validate_structured_research_semantics,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 ANSWER_MODES = (
     "daily_brief",
@@ -364,9 +366,9 @@ def test_context_preview_exposes_full_catalogue_without_truncation(monkeypatch):
 
 def test_preview_modules_do_not_import_external_ai_or_storage():
     for path in (
-        Path("src/app_backend/services/ai_prompt_context.py"),
-        Path("src/app_backend/services/ai_research_renderer.py"),
-        Path("src/app_backend/services/ai_research_validator.py"),
+        _REPO_ROOT / "src/app_backend/services/ai_prompt_context.py",
+        _REPO_ROOT / "src/app_backend/services/ai_research_renderer.py",
+        _REPO_ROOT / "src/app_backend/services/ai_research_validator.py",
     ):
         source = path.read_text(encoding="utf-8").lower()
         assert "ai_external_request_builder" not in source

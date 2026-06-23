@@ -11,6 +11,8 @@ from app_backend.services.dashboard_cache_key import (
     file_signature,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 REQUIRED_REPORT_FILES = {
     "market_snapshot": "market_snapshot.json",
@@ -204,13 +206,13 @@ def test_private_payload_content_is_excluded_from_key_material(tmp_path):
 
 def test_no_runtime_cache_diagnostics_added_outside_cache_modules():
     allowed_paths = {
-        Path("src/app_backend/services/dashboard_cache_key.py").resolve(),
-        Path("src/app_backend/services/dashboard_context_cache.py").resolve(),
-        Path("src/app_backend/services/dashboard_service.py").resolve(),
+        (_REPO_ROOT / "src/app_backend/services/dashboard_cache_key.py").resolve(),
+        (_REPO_ROOT / "src/app_backend/services/dashboard_context_cache.py").resolve(),
+        (_REPO_ROOT / "src/app_backend/services/dashboard_service.py").resolve(),
     }
     production_files = [
         path
-        for path in Path("src/app_backend").rglob("*.py")
+        for path in (_REPO_ROOT / "src/app_backend").rglob("*.py")
         if path.resolve() not in allowed_paths
     ]
 
@@ -227,7 +229,7 @@ def test_no_runtime_cache_diagnostics_added_outside_cache_modules():
 
 
 def test_dashboard_cache_key_helper_has_no_forbidden_product_surfaces():
-    text = Path("src/app_backend/services/dashboard_cache_key.py").read_text(
+    text = (_REPO_ROOT / "src/app_backend/services/dashboard_cache_key.py").read_text(
         encoding="utf-8"
     )
 

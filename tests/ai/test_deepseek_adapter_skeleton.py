@@ -26,6 +26,8 @@ from app_backend.services.deepseek_adapter import (
     fake_only_config,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _valid_request(mode: str = "fake") -> ExternalAIRequest:
     return ExternalAIRequest(
@@ -194,7 +196,7 @@ def test_disabled_requires_user_switch_check():
 
 def test_deepseek_adapter_module_does_not_import_network_clients():
     """Reading the source should show no network-client imports."""
-    source = Path("src/app_backend/services/deepseek_adapter.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/deepseek_adapter.py").read_text(
         encoding="utf-8"
     )
     lowered = source.lower()
@@ -209,7 +211,7 @@ def test_deepseek_adapter_module_does_not_import_network_clients():
 
 
 def test_ai_external_adapter_module_does_not_import_network_clients():
-    source = Path("src/app_backend/services/ai_external_adapter.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_external_adapter.py").read_text(
         encoding="utf-8"
     )
     lowered = source.lower()
@@ -231,7 +233,7 @@ def test_no_network_modules_loaded_when_adapter_used(monkeypatch):
 
 
 def test_deepseek_module_does_not_read_env_or_external_llm_yaml():
-    source = Path("src/app_backend/services/deepseek_adapter.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/deepseek_adapter.py").read_text(
         encoding="utf-8"
     )
     assert "os.environ" not in source
@@ -241,7 +243,7 @@ def test_deepseek_module_does_not_read_env_or_external_llm_yaml():
 
 
 def test_ai_external_module_does_not_read_env_or_external_llm_yaml():
-    source = Path("src/app_backend/services/ai_external_adapter.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_external_adapter.py").read_text(
         encoding="utf-8"
     )
     assert "os.environ" not in source
@@ -257,7 +259,7 @@ def test_ai_external_module_does_not_read_env_or_external_llm_yaml():
 
 
 def test_ai_preview_service_does_not_import_deepseek_adapter():
-    source = Path("src/app_backend/services/ai_preview_service.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_preview_service.py").read_text(
         encoding="utf-8"
     )
     assert "deepseek_adapter" not in source
@@ -267,7 +269,7 @@ def test_ai_preview_service_does_not_import_deepseek_adapter():
 
 
 def test_ai_memo_renderer_does_not_import_deepseek_adapter():
-    source = Path("src/app_backend/services/ai_memo_renderer.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py").read_text(
         encoding="utf-8"
     )
     assert "deepseek_adapter" not in source
@@ -276,7 +278,7 @@ def test_ai_memo_renderer_does_not_import_deepseek_adapter():
 
 
 def test_ai_context_service_does_not_import_deepseek_adapter():
-    source = Path("src/app_backend/services/ai_context_service.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_context_service.py").read_text(
         encoding="utf-8"
     )
     assert "deepseek_adapter" not in source
@@ -285,7 +287,7 @@ def test_ai_context_service_does_not_import_deepseek_adapter():
 
 
 def test_main_app_does_not_import_deepseek_adapter():
-    source = Path("src/app_backend/main.py").read_text(encoding="utf-8")
+    source = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8")
     assert "deepseek_adapter" not in source
     assert "DeepSeekAdapter" not in source
     assert "ai_external_adapter" not in source
@@ -298,7 +300,6 @@ def test_main_app_does_not_import_deepseek_adapter():
 
 def test_no_deepseek_chat_search_routes_exist():
     from app_backend.main import app
-
     route_paths = {route.path for route in app.routes}
     assert "/api/chat" not in route_paths
     assert "/api/search" not in route_paths

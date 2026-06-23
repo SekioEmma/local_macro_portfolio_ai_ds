@@ -12,6 +12,8 @@ from data_quality.historical_validation_replay import (
     get_historical_validation_replay_rows,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 FORBIDDEN_OUTPUT_TERMS = (
     "crash probability",
@@ -217,8 +219,8 @@ def test_d19_v0_replay_code_has_no_production_clustering_or_forbidden_surfaces()
     service_sources = "\n".join(
         Path(path).read_text(encoding="utf-8")
         for path in (
-            "src/data_quality/historical_validation_event_registry.py",
-            "src/data_quality/historical_validation_replay.py",
+            str(_REPO_ROOT / "src/data_quality/historical_validation_event_registry.py"),
+            str(_REPO_ROOT / "src/data_quality/historical_validation_replay.py"),
         )
     )
 
@@ -247,7 +249,7 @@ def test_run_historical_validation_show_events_is_read_only_and_import_safe():
     completed = subprocess.run(
         [
             sys.executable,
-            "scripts/run_historical_validation.py",
+            str(_REPO_ROOT / "scripts/run_historical_validation.py"),
             "--show-events",
             "--format",
             "text",

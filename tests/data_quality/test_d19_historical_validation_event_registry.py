@@ -10,6 +10,8 @@ from data_quality.historical_validation_event_registry import (
     validate_historical_validation_event_registry,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 FORBIDDEN_OUTPUT_TERMS = (
     "crash probability",
@@ -86,7 +88,7 @@ def test_d19_v0_registry_boundary_language_is_output_safe():
 
 def test_d19_v0_registry_code_has_no_production_clustering():
     source = Path(
-        "src/data_quality/historical_validation_event_registry.py"
+        str(_REPO_ROOT / "src/data_quality/historical_validation_event_registry.py")
     ).read_text(encoding="utf-8")
 
     for token in (

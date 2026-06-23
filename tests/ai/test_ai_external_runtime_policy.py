@@ -14,6 +14,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 from pydantic import ValidationError
 
 from app_backend.schemas.ai_external import (
@@ -249,8 +251,8 @@ def test_runtime_policy_rejects_extra_field(extra_field, extra_value):
     ],
 )
 def test_runtime_policy_module_does_not_contain_forbidden_surface(forbidden):
-    source = Path(
-        "src/app_backend/services/ai_external_runtime_policy.py"
+    source = (
+        _REPO_ROOT / "src/app_backend/services/ai_external_runtime_policy.py"
     ).read_text(encoding="utf-8")
     assert forbidden not in source, (
         f"forbidden surface marker {forbidden!r} found in runtime policy module"
@@ -263,10 +265,10 @@ def test_runtime_policy_module_does_not_contain_forbidden_surface(forbidden):
 
 
 STAGE_9_2_SURFACE_FILES = (
-    "src/app_backend/main.py",
-    "src/app_backend/services/ai_preview_service.py",
-    "src/app_backend/services/ai_memo_renderer.py",
-    "src/app_backend/services/ai_context_service.py",
+    str(_REPO_ROOT / "src/app_backend/main.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
 )
 
 FORBIDDEN_IMPORTS_IN_STAGE_9_2 = (

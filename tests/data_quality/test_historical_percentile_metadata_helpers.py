@@ -6,6 +6,8 @@ from data_quality import historical_percentile_metadata as metadata
 from data_quality import historical_percentile_metrics as percentile
 from tests.helpers.market_history_fixtures import seed_market_history_series_for_tests
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_reliability_metadata_exact_output_for_representative_cases():
     assert metadata.build_reliability_metadata(
@@ -400,7 +402,7 @@ def test_build_metric_payload_representative_outputs_remain_stable(tmp_path):
 
 
 def test_new_metadata_module_has_no_forbidden_surfaces():
-    text = Path("src/data_quality/historical_percentile_metadata.py").read_text(
+    text = (_REPO_ROOT / "src/data_quality/historical_percentile_metadata.py").read_text(
         encoding="utf-8"
     )
 

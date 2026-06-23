@@ -27,6 +27,8 @@ from app_backend.services.deepseek_transport_contract import (
     MockDeepSeekTransport,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _valid_request(**overrides) -> ExternalAIRequest:
     base = dict(
@@ -350,10 +352,10 @@ def test_no_new_routes_after_mocked_transport_adapter():
 @pytest.mark.parametrize(
     "file_path",
     [
-        "src/app_backend/main.py",
-        "src/app_backend/services/ai_preview_service.py",
-        "src/app_backend/services/ai_memo_renderer.py",
-        "src/app_backend/services/ai_context_service.py",
+        str(_REPO_ROOT / "src/app_backend/main.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
     ],
 )
 @pytest.mark.parametrize(
@@ -377,8 +379,8 @@ def test_stage9_2_files_still_do_not_import_adapter_transport_policy_or_builder(
 @pytest.mark.parametrize(
     "file_path",
     [
-        "src/app_backend/services/deepseek_adapter.py",
-        "src/app_backend/services/deepseek_transport_contract.py",
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_adapter.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_transport_contract.py"),
     ],
 )
 @pytest.mark.parametrize(

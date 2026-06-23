@@ -5,6 +5,8 @@ from pathlib import Path
 from data_quality import historical_percentile_metrics as percentile
 from tests.helpers.market_history_fixtures import seed_market_history_series_for_tests
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 COVERAGE_METADATA_KEYS = (
     "history_coverage_status",
@@ -182,7 +184,7 @@ def test_coverage_metadata_does_not_inject_forbidden_language(tmp_path):
 
 
 def test_d13_production_file_has_no_forbidden_surfaces_after_coverage_metadata():
-    text = Path("src/data_quality/historical_percentile_metrics.py").read_text(
+    text = (_REPO_ROOT / "src/data_quality/historical_percentile_metrics.py").read_text(
         encoding="utf-8"
     )
 

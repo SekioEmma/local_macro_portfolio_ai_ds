@@ -9,6 +9,8 @@ from tests.helpers.market_history_fixtures import (
     seed_market_history_series_for_tests,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 METADATA_KEYS = (
     "reliability_band",
@@ -468,7 +470,7 @@ def test_reliability_metadata_does_not_inject_forbidden_language(tmp_path):
 
 
 def test_d13_production_file_has_no_forbidden_surfaces():
-    text = Path("src/data_quality/historical_percentile_metrics.py").read_text(
+    text = (_REPO_ROOT / "src/data_quality/historical_percentile_metrics.py").read_text(
         encoding="utf-8"
     )
 

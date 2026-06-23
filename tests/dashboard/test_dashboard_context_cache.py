@@ -21,6 +21,8 @@ from app_backend.services.dashboard_context_cache import (
     SharedDashboardContextCache,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def setup_function() -> None:
     dashboard_service._SHARED_DASHBOARD_CONTEXT_CACHE.clear()
@@ -250,7 +252,7 @@ def test_no_private_payload_or_cache_diagnostics_in_route_responses(monkeypatch,
 
 
 def test_dashboard_context_cache_helper_has_no_forbidden_product_surfaces():
-    text = Path("src/app_backend/services/dashboard_context_cache.py").read_text(
+    text = (_REPO_ROOT / "src/app_backend/services/dashboard_context_cache.py").read_text(
         encoding="utf-8"
     )
 

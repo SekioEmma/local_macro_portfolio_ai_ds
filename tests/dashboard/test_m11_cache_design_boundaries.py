@@ -1,8 +1,9 @@
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-DESIGN_DOC = Path("docs/archive/p_m4a_m11_shared_context_cache_design.md")
-RISK_REGISTER = Path("docs/infra/m11_cache_risk_register.md")
+DESIGN_DOC = _REPO_ROOT / "docs/archive/p_m4a_m11_shared_context_cache_design.md"
+RISK_REGISTER = _REPO_ROOT / "docs/infra/m11_cache_risk_register.md"
 
 
 def test_m11_cache_design_docs_exist():

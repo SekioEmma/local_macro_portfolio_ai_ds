@@ -4,6 +4,9 @@ import sys
 
 from data_quality import historical_validation as d19
 from data_providers import market_history_store
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_d19_event_window_registry_shape():
@@ -222,7 +225,7 @@ def test_run_historical_validation_defaults_to_stdout_only_and_output_is_explici
     completed = subprocess.run(
         [
             sys.executable,
-            "scripts/run_historical_validation.py",
+            str(_REPO_ROOT / "scripts/run_historical_validation.py"),
             "--market-history-db",
             str(db_path),
             "--event-id",
@@ -239,7 +242,7 @@ def test_run_historical_validation_defaults_to_stdout_only_and_output_is_explici
     subprocess.run(
         [
             sys.executable,
-            "scripts/run_historical_validation.py",
+            str(_REPO_ROOT / "scripts/run_historical_validation.py"),
             "--market-history-db",
             str(db_path),
             "--output",

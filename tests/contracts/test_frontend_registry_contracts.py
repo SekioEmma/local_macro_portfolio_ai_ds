@@ -33,8 +33,10 @@ from pathlib import Path
 
 from modeling.model_registry import ModelRegistry
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-FRONTEND_SRC = Path("app_frontend/src")
+
+FRONTEND_SRC = _REPO_ROOT / "app_frontend/src"
 MODULE_REGISTRY_PATH = FRONTEND_SRC / "utils/moduleRegistry.ts"
 METRIC_REGISTRY_PATH = FRONTEND_SRC / "utils/metricRegistry.ts"
 DISPLAY_LABELS_PATH = FRONTEND_SRC / "utils/displayLabels.ts"

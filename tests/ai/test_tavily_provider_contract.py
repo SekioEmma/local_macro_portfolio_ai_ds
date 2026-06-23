@@ -21,6 +21,8 @@ from app_backend.services.tavily_transport_contract import (
     build_transport_request_from_provider_payload,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_provider_payload_maps_search_request_exactly():
     request = SearchRequest(
@@ -198,8 +200,8 @@ def test_contract_sources_do_not_import_network_or_environment_access():
     source = "\n".join(
         (root / relative).read_text(encoding="utf-8")
         for relative in (
-            "src/app_backend/services/tavily_provider_contract.py",
-            "src/app_backend/services/tavily_transport_contract.py",
+            str(_REPO_ROOT / "src/app_backend/services/tavily_provider_contract.py"),
+            str(_REPO_ROOT / "src/app_backend/services/tavily_transport_contract.py"),
         )
     )
 

@@ -27,6 +27,8 @@ from app_backend.schemas.ai_preview import (
 )
 from app_backend.services import ai_context_service, ai_preview_service
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 # ---------------------------------------------------------------------------
 # 1. Endpoint surface audit (positive + negative)
@@ -88,7 +90,7 @@ def test_no_endpoint_name_implies_real_external_ai():
 
 def test_ai_preview_service_does_not_import_dashboard_model_pipeline():
     """Preview must consume AI Context Manifest, not call the pipeline directly."""
-    source = Path("src/app_backend/services/ai_preview_service.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_preview_service.py").read_text(
         encoding="utf-8"
     )
     assert "dashboard_model_pipeline" not in source
@@ -96,7 +98,7 @@ def test_ai_preview_service_does_not_import_dashboard_model_pipeline():
 
 
 def test_ai_memo_renderer_does_not_import_dashboard_model_pipeline():
-    source = Path("src/app_backend/services/ai_memo_renderer.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py").read_text(
         encoding="utf-8"
     )
     assert "dashboard_model_pipeline" not in source
@@ -104,7 +106,7 @@ def test_ai_memo_renderer_does_not_import_dashboard_model_pipeline():
 
 
 def test_ai_preview_service_does_not_open_private_files():
-    source = Path("src/app_backend/services/ai_preview_service.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_preview_service.py").read_text(
         encoding="utf-8"
     )
     # No raw file I/O or private path references in preview service.

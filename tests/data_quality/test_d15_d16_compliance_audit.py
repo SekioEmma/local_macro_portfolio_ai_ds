@@ -10,6 +10,8 @@ from data_quality import scenario_stress as d16
 from modeling.metric_lookup import D15_PUBLIC_OUTPUT_KEYS, D16_PUBLIC_OUTPUT_KEYS
 from modeling.model_registry import FORBIDDEN_PUBLIC_OUTPUT_KEYS
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 FORBIDDEN_OUTPUT_PHRASES = (
     "crash probability",
@@ -261,14 +263,14 @@ def test_d15_d16_no_forbidden_surfaces_in_key_files():
     data_quality_text = "\n".join(
         Path(path).read_text(encoding="utf-8")
         for path in (
-            "src/data_quality/macro_regime_review.py",
-            "src/data_quality/scenario_stress.py",
+            str(_REPO_ROOT / "src/data_quality/macro_regime_review.py"),
+            str(_REPO_ROOT / "src/data_quality/scenario_stress.py"),
         )
     )
     for token in _FORBIDDEN_TOKENS:
         assert token not in data_quality_text
 
-    main_text = Path("src/app_backend/main.py").read_text(encoding="utf-8")
+    main_text = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8")
     for token in _FORBIDDEN_TOKENS:
         if token in _AI_2_ALLOWED_IN_MAIN:
             continue

@@ -4,17 +4,19 @@ from pathlib import Path
 
 import pytest
 
-import scripts.dev_deepseek_one_shot_review as review
+import dev_deepseek_one_shot_review as review
 from app_backend.main import app
 from app_backend.schemas.ai_external import DeepSeekTransportResponse
 from app_backend.services.deepseek_transport_contract import DeepSeekTransportError
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 STAGE_9_2_SURFACE_FILES = (
-    "src/app_backend/main.py",
-    "src/app_backend/services/ai_preview_service.py",
-    "src/app_backend/services/ai_memo_renderer.py",
-    "src/app_backend/services/ai_context_service.py",
+    str(_REPO_ROOT / "src/app_backend/main.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
 )
 
 FORBIDDEN_ROUTES = {
@@ -361,7 +363,7 @@ def test_route_and_stage92_import_isolation():
         ):
             assert forbidden not in source
 
-    main_source = Path("src/app_backend/main.py").read_text(encoding="utf-8")
+    main_source = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8")
     assert "dev_deepseek_one_shot_review" not in main_source
 
 
@@ -385,7 +387,7 @@ def test_default_run_does_not_write_files(tmp_path, monkeypatch):
     assert result["status"] == "blocked"
     assert writes == []
     assert "--save-sanitized-summary" not in Path(
-        "scripts/dev_deepseek_one_shot_review.py"
+        str(_REPO_ROOT / "scripts/dev_deepseek_one_shot_review.py")
     ).read_text(encoding="utf-8")
 
 

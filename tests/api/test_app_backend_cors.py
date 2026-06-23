@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from app_backend.main import ALLOWED_CORS_ORIGINS, app
 from run_app_backend import HOST
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_cors_allows_only_local_vite_origins():
     assert "*" not in ALLOWED_CORS_ORIGINS
@@ -32,5 +34,5 @@ def test_status_cors_preflight_uses_strict_local_origin():
 
 def test_backend_runner_binds_localhost_only():
     assert HOST == "127.0.0.1"
-    runner = Path("scripts/run_app_backend.py").read_text(encoding="utf-8")
+    runner = (_REPO_ROOT / str(_REPO_ROOT / "scripts/run_app_backend.py")).read_text(encoding="utf-8")
     assert "0.0.0.0" not in runner

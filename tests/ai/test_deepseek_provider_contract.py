@@ -32,6 +32,8 @@ from app_backend.services.deepseek_provider_contract import (
     build_deepseek_provider_payload,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -270,7 +272,7 @@ def test_provider_message_rejects_user_role():
 )
 def test_provider_contract_module_has_no_forbidden_surface(forbidden):
     source = Path(
-        "src/app_backend/services/deepseek_provider_contract.py"
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_provider_contract.py")
     ).read_text(encoding="utf-8")
     assert forbidden not in source, (
         f"forbidden surface marker {forbidden!r} found in provider contract module"
@@ -283,10 +285,10 @@ def test_provider_contract_module_has_no_forbidden_surface(forbidden):
 
 
 STAGE_9_2_SURFACE_FILES = (
-    "src/app_backend/main.py",
-    "src/app_backend/services/ai_preview_service.py",
-    "src/app_backend/services/ai_memo_renderer.py",
-    "src/app_backend/services/ai_context_service.py",
+    str(_REPO_ROOT / "src/app_backend/main.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
 )
 
 FORBIDDEN_IMPORTS_IN_STAGE_9_2 = (

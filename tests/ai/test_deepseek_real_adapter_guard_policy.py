@@ -25,6 +25,8 @@ from app_backend.services.deepseek_adapter import (
     network_config,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _validator_result(**overrides) -> AIMemoValidatorResult:
     base = dict(passed=True, blocked_terms=[], privacy_findings=[])
@@ -297,10 +299,10 @@ def test_adapter_validator_failure_prevents_response_return(monkeypatch):
 @pytest.mark.parametrize(
     "file_path",
     [
-        "src/app_backend/main.py",
-        "src/app_backend/services/ai_preview_service.py",
-        "src/app_backend/services/ai_memo_renderer.py",
-        "src/app_backend/services/ai_context_service.py",
+        str(_REPO_ROOT / "src/app_backend/main.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
     ],
 )
 @pytest.mark.parametrize(
@@ -324,7 +326,6 @@ def test_stage9_2_files_still_do_not_import_real_transport_adapter_or_policy(
 
 def test_no_forbidden_routes_added():
     from app_backend.main import app
-
     route_paths = {route.path for route in app.routes}
     forbidden = {
         "/api/chat",
@@ -338,9 +339,9 @@ def test_no_forbidden_routes_added():
 
 def test_no_local_config_reads_or_raw_persistence_fields_added():
     production_files = [
-        "src/app_backend/services/ai_external_adapter.py",
-        "src/app_backend/services/deepseek_adapter.py",
-        "src/app_backend/services/deepseek_real_transport.py",
+        str(_REPO_ROOT / "src/app_backend/services/ai_external_adapter.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_adapter.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py"),
     ]
     for file_path in production_files:
         source = Path(file_path).read_text(encoding="utf-8")
@@ -354,7 +355,7 @@ def test_no_local_config_reads_or_raw_persistence_fields_added():
 
 
 def test_api_key_still_only_read_in_real_transport_loader():
-    source = Path("src/app_backend/services/deepseek_real_transport.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py").read_text(
         encoding="utf-8"
     )
     assert source.count("os.environ") == 1

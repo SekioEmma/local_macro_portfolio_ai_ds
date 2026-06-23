@@ -11,6 +11,8 @@ from app_backend.services.ai_memo_renderer import (
     validate_ai_memo_preview,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 FORBIDDEN_SCENARIO_TOKENS = (
     "scenario_probability",
@@ -125,8 +127,8 @@ def test_forbidden_terms_and_privacy_flags_remain_blocked():
 
 
 def test_no_endpoint_or_external_ai_surface_added():
-    main_text = Path("src/app_backend/main.py").read_text(encoding="utf-8")
-    renderer_text = Path("src/app_backend/services/ai_memo_renderer.py").read_text(
+    main_text = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8")
+    renderer_text = (_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py").read_text(
         encoding="utf-8"
     )
 

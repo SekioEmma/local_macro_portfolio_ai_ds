@@ -30,6 +30,8 @@ from app_backend.services.deepseek_transport_contract import (
     DeepSeekTransportError,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _transport_request() -> DeepSeekTransportRequest:
     return DeepSeekTransportRequest(
@@ -333,10 +335,10 @@ def test_forbidden_routes_remain_absent_after_real_transport_added():
 @pytest.mark.parametrize(
     "file_path",
     [
-        "src/app_backend/main.py",
-        "src/app_backend/services/ai_preview_service.py",
-        "src/app_backend/services/ai_memo_renderer.py",
-        "src/app_backend/services/ai_context_service.py",
+        str(_REPO_ROOT / "src/app_backend/main.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
     ],
 )
 @pytest.mark.parametrize(
@@ -363,11 +365,11 @@ def test_stage9_2_files_do_not_import_real_transport_adapter_policy_or_builder(
 @pytest.mark.parametrize(
     "file_path",
     [
-        "src/app_backend/services/deepseek_adapter.py",
-        "src/app_backend/services/deepseek_transport_contract.py",
-        "src/app_backend/services/deepseek_provider_contract.py",
-        "src/app_backend/services/ai_external_runtime_policy.py",
-        "src/app_backend/services/ai_external_request_builder.py",
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_adapter.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_transport_contract.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_provider_contract.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_external_runtime_policy.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_external_request_builder.py"),
     ],
 )
 @pytest.mark.parametrize(
@@ -391,7 +393,7 @@ def test_only_real_transport_module_has_env_or_real_http_surface(file_path, forb
 def test_real_transport_env_read_occurs_only_in_loader_function():
     import app_backend.services.deepseek_real_transport as module
 
-    source = Path("src/app_backend/services/deepseek_real_transport.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py").read_text(
         encoding="utf-8"
     )
     assert source.count("os.environ") == 1
@@ -401,11 +403,11 @@ def test_real_transport_env_read_occurs_only_in_loader_function():
 
 def test_no_production_file_loads_local_env_or_yaml():
     production_files = [
-        "src/app_backend/services/deepseek_real_transport.py",
-        "src/app_backend/services/deepseek_adapter.py",
-        "src/app_backend/services/deepseek_transport_contract.py",
-        "src/app_backend/services/deepseek_provider_contract.py",
-        "src/app_backend/services/ai_external_runtime_policy.py",
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_adapter.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_transport_contract.py"),
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_provider_contract.py"),
+        str(_REPO_ROOT / "src/app_backend/services/ai_external_runtime_policy.py"),
     ]
     forbidden = ("open('.env'", 'open(".env"', "dotenv", "external_llm.yaml")
     for file_path in production_files:

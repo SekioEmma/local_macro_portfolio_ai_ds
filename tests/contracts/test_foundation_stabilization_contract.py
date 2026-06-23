@@ -2,6 +2,8 @@ from pathlib import Path
 
 import benchmark_dashboard_pipeline as bench
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_pipeline_benchmark_exposes_reuse_flags(monkeypatch, tmp_path):
     _block_network(monkeypatch)
@@ -27,8 +29,8 @@ def test_pipeline_benchmark_exposes_reuse_flags(monkeypatch, tmp_path):
 
 
 def test_stage8_public_key_constant_uses_semantic_name():
-    metric_lookup = Path("src/modeling/metric_lookup.py").read_text(encoding="utf-8")
-    model_registry = Path("src/modeling/model_registry.py").read_text(encoding="utf-8")
+    metric_lookup = (_REPO_ROOT / "src/modeling/metric_lookup.py").read_text(encoding="utf-8")
+    model_registry = (_REPO_ROOT / "src/modeling/model_registry.py").read_text(encoding="utf-8")
 
     assert "PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS" in metric_lookup
     assert "PORTFOLIO_EXPOSURE_OVERLAY_PUBLIC_KEYS" in model_registry

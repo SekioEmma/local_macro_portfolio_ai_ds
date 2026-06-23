@@ -11,6 +11,7 @@ calculation, production code, frontend, endpoints, or external AI.
 
 import json
 import socket
+from pathlib import Path
 from types import SimpleNamespace
 
 
@@ -24,6 +25,8 @@ from app_backend.services.ai_memo_renderer import (
 from data_quality import scenario_stress as d16
 from modeling.metric_lookup import D16_PUBLIC_OUTPUT_KEYS
 from modeling.model_registry import ModelRegistry
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 MODEL_REGISTRY = ModelRegistry()
@@ -680,7 +683,7 @@ class TestComplianceAuditReinforcement:
     def test_d16_production_files_contain_no_forbidden_surfaces(self):
         from pathlib import Path
 
-        text = Path("src/data_quality/scenario_stress.py").read_text(encoding="utf-8")
+        text = (_REPO_ROOT / "src/data_quality/scenario_stress.py").read_text(encoding="utf-8")
         for token in (
             "/api/chat",
             "/api/search",

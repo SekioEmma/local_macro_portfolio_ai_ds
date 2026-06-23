@@ -5,15 +5,17 @@ from data_quality import portfolio_exposure_overlay as overlay
 from modeling.metric_lookup import MetricLookup
 from modeling.model_registry import ModelRegistry
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_stage8_public_keys_match_model_registry_metric_lookup_and_frontend_registry():
     registry = ModelRegistry()
     lookup = MetricLookup()
     public_keys = set(registry.public_output_keys("portfolio_exposure_overlay"))
-    frontend_metric_registry = Path("app_frontend/src/utils/metricRegistry.ts").read_text(
+    frontend_metric_registry = (_REPO_ROOT / "app_frontend/src/utils/metricRegistry.ts").read_text(
         encoding="utf-8"
     )
-    frontend_module_registry = Path("app_frontend/src/utils/moduleRegistry.ts").read_text(
+    frontend_module_registry = (_REPO_ROOT / "app_frontend/src/utils/moduleRegistry.ts").read_text(
         encoding="utf-8"
     )
 

@@ -10,6 +10,8 @@ from app_backend.schemas.ai_preview import (
 )
 from app_backend.services import ai_context_service, ai_preview_service
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_context_preview_returns_local_flags_and_counts(monkeypatch):
     monkeypatch.setattr(ai_context_service, "build_ai_context_manifest", _manifest_fixture)
@@ -195,7 +197,7 @@ def test_preview_validator_blocks_privacy_leakage_fixtures(privacy_term):
 
 
 def test_preview_service_does_not_import_external_adapters():
-    source = Path("src/app_backend/services/ai_preview_service.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_preview_service.py").read_text(
         encoding="utf-8"
     )
 

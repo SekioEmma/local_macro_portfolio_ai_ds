@@ -11,6 +11,8 @@ from app_backend.services.ai_memo_renderer import (
     validate_ai_memo_preview,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 @pytest.mark.parametrize(
     "blocked_term",
@@ -119,7 +121,7 @@ def test_renderer_privacy_summary_is_fail_closed():
 
 
 def test_stage_9_1_does_not_add_http_chat_or_memo_endpoints():
-    main_text = Path("src/app_backend/main.py").read_text(encoding="utf-8").lower()
+    main_text = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8").lower()
 
     assert "/api/chat" not in main_text
     assert "/api/ai/memo" not in main_text
@@ -131,10 +133,10 @@ def test_stage_9_1_does_not_modify_model_output_modules():
     stage_9_1_surface_changed = any(
         path.startswith(
             (
-                "src/app_backend/services/ai_memo_renderer.py",
-                "src/app_backend/services/ai_context_service.py",
-                "src/app_backend/services/ai_preview_service.py",
-                "src/app_backend/main.py",
+                str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+                str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
+                str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+                str(_REPO_ROOT / "src/app_backend/main.py"),
             )
         )
         or path.startswith("docs/stage9")
@@ -210,7 +212,6 @@ def _minimal_manifest():
 
 def _git_changed_files():
     import subprocess
-
     result = subprocess.run(
         ["git", "diff", "--name-only"],
         check=True,

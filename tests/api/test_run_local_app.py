@@ -5,6 +5,8 @@ from pathlib import Path
 
 import run_local_app
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_launcher_uses_fixed_local_service_urls():
     assert run_local_app.HOST == "127.0.0.1"
@@ -59,7 +61,7 @@ def test_launcher_dependency_check_accepts_current_checkout(monkeypatch):
 
 
 def test_double_click_entrypoint_calls_python_launcher():
-    entrypoint = Path("start_local_app.cmd").read_text(encoding="utf-8")
+    entrypoint = (_REPO_ROOT / "start_local_app.cmd").read_text(encoding="utf-8")
 
     assert "python scripts\\run_local_app.py" in entrypoint
     assert "cd /d" in entrypoint

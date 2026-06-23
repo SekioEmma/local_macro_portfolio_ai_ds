@@ -22,6 +22,8 @@ from app_backend.services.ai_external_request_builder import (
     build_external_ai_request_from_manifest,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 # ---------------------------------------------------------------------------
 # Manifest fixtures
@@ -142,7 +144,7 @@ def test_builder_accepts_pydantic_model_or_dict_manifest():
 
 
 def test_builder_module_does_not_import_network_clients():
-    source = Path("src/app_backend/services/ai_external_request_builder.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_external_request_builder.py").read_text(
         encoding="utf-8"
     )
     lowered = source.lower()
@@ -157,7 +159,7 @@ def test_builder_module_does_not_import_network_clients():
 
 
 def test_builder_module_does_not_read_env_or_external_llm_yaml():
-    source = Path("src/app_backend/services/ai_external_request_builder.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_external_request_builder.py").read_text(
         encoding="utf-8"
     )
     assert "os.environ" not in source
@@ -168,7 +170,7 @@ def test_builder_module_does_not_read_env_or_external_llm_yaml():
 
 
 def test_builder_not_imported_by_stage_9_2_preview_service():
-    source = Path("src/app_backend/services/ai_preview_service.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_preview_service.py").read_text(
         encoding="utf-8"
     )
     assert "ai_external_request_builder" not in source
@@ -176,21 +178,21 @@ def test_builder_not_imported_by_stage_9_2_preview_service():
 
 
 def test_builder_not_imported_by_ai_memo_renderer():
-    source = Path("src/app_backend/services/ai_memo_renderer.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py").read_text(
         encoding="utf-8"
     )
     assert "ai_external_request_builder" not in source
 
 
 def test_builder_not_imported_by_ai_context_service():
-    source = Path("src/app_backend/services/ai_context_service.py").read_text(
+    source = (_REPO_ROOT / "src/app_backend/services/ai_context_service.py").read_text(
         encoding="utf-8"
     )
     assert "ai_external_request_builder" not in source
 
 
 def test_builder_not_imported_by_main_app():
-    source = Path("src/app_backend/main.py").read_text(encoding="utf-8")
+    source = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8")
     assert "ai_external_request_builder" not in source
 
 
@@ -207,7 +209,6 @@ def test_no_new_http_routes_added_by_builder_import():
     from app_backend.main import app
     # Force builder import path
     from app_backend.services import ai_external_request_builder  # noqa: F401
-
     route_paths = {route.path for route in app.routes}
     for forbidden in (
         "/api/chat",

@@ -3,6 +3,8 @@ from pathlib import Path
 from app_backend.schemas.responses import DashboardMetric
 from app_backend.services import dashboard_evidence_policy as policy
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def test_build_evidence_row_preserves_optional_fields():
     metric = _metric(
@@ -156,7 +158,7 @@ def test_missing_value_text_mapping():
 
 
 def test_new_policy_module_has_no_forbidden_surfaces():
-    text = Path("src/app_backend/services/dashboard_evidence_policy.py").read_text(
+    text = (_REPO_ROOT / "src/app_backend/services/dashboard_evidence_policy.py").read_text(
         encoding="utf-8"
     )
     for token in (

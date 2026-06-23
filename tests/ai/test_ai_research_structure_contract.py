@@ -16,8 +16,10 @@ from app_backend.services.ai_research_renderer import (
 )
 from app_backend.services.ai_research_validator import validate_research_domains
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-FIXTURE_DIR = Path("tests/fixtures/ai_golden")
+
+FIXTURE_DIR = (_REPO_ROOT / "tests/fixtures/ai_golden")
 FIXTURE_PATHS = sorted(FIXTURE_DIR.glob("*.json"))
 FIXTURES = [
     json.loads(path.read_text(encoding="utf-8"))

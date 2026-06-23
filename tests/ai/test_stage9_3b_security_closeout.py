@@ -39,23 +39,25 @@ from app_backend.services.deepseek_transport_contract import (
     build_transport_request_from_provider_payload,
 )
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 STAGE_9_2_SURFACE_FILES = (
-    "src/app_backend/main.py",
-    "src/app_backend/services/ai_preview_service.py",
-    "src/app_backend/services/ai_memo_renderer.py",
-    "src/app_backend/services/ai_context_service.py",
+    str(_REPO_ROOT / "src/app_backend/main.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_preview_service.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_memo_renderer.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_context_service.py"),
 )
 
 STAGE_9_3_PRODUCTION_FILES = (
-    "src/app_backend/services/ai_external_adapter.py",
-    "src/app_backend/services/ai_external_request_builder.py",
-    "src/app_backend/services/ai_external_runtime_policy.py",
-    "src/app_backend/services/deepseek_adapter.py",
-    "src/app_backend/services/deepseek_provider_contract.py",
-    "src/app_backend/services/deepseek_real_transport.py",
-    "src/app_backend/services/deepseek_transport_contract.py",
-    "src/app_backend/schemas/ai_external.py",
+    str(_REPO_ROOT / "src/app_backend/services/ai_external_adapter.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_external_request_builder.py"),
+    str(_REPO_ROOT / "src/app_backend/services/ai_external_runtime_policy.py"),
+    str(_REPO_ROOT / "src/app_backend/services/deepseek_adapter.py"),
+    str(_REPO_ROOT / "src/app_backend/services/deepseek_provider_contract.py"),
+    str(_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py"),
+    str(_REPO_ROOT / "src/app_backend/services/deepseek_transport_contract.py"),
+    str(_REPO_ROOT / "src/app_backend/schemas/ai_external.py"),
 )
 
 
@@ -244,14 +246,14 @@ def test_env_api_key_closeout_limits_key_and_env_access_to_real_transport_loader
         assert 'open("external_llm.yaml"' not in source
 
     assert locations.get("DEEPSEEK_API_KEY") == [
-        "src/app_backend/services/deepseek_real_transport.py"
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py")
     ]
     assert locations.get("env_read") == [
-        "src/app_backend/services/deepseek_real_transport.py"
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py")
     ]
 
     real_transport_source = Path(
-        "src/app_backend/services/deepseek_real_transport.py"
+        str(_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py")
     ).read_text(encoding="utf-8")
     loader_start = real_transport_source.index("def load_deepseek_api_key_from_env")
     loader_end = real_transport_source.index("\n\nclass DeepSeekRealTransport")
@@ -263,7 +265,7 @@ def test_env_api_key_closeout_limits_key_and_env_access_to_real_transport_loader
 def test_network_surface_closeout_keeps_real_http_isolated_to_real_transport():
     for file_path in STAGE_9_3_PRODUCTION_FILES:
         source = Path(file_path).read_text(encoding="utf-8")
-        if file_path == "src/app_backend/services/deepseek_real_transport.py":
+        if file_path == str(_REPO_ROOT / "src/app_backend/services/deepseek_real_transport.py"):
             assert "urllib.request" in source
             continue
         for forbidden in (
