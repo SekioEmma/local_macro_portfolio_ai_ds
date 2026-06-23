@@ -25,6 +25,7 @@ from app_backend.services.dashboard_context_cache import (
     CachedDashboardContext,
     SharedDashboardContextCache,
 )
+from app_backend.services.dashboard_composition import compose_dashboard_builders
 from app_backend.services.dashboard_derived_metrics import (
     blocked_dependency_metric as _blocked_dependency_metric,
     credit_stress_status_metric as _derived_credit_stress_status_metric,
@@ -202,6 +203,7 @@ PROJECT_REPORTS_DIR = PROJECT_ROOT / "outputs" / "reports"
 DEFAULT_REPORTS_DIR = PROJECT_REPORTS_DIR
 DEFAULT_MARKET_HISTORY_DB_PATH = market_history_store.get_default_market_history_db_path()
 _SHARED_DASHBOARD_CONTEXT_CACHE = SharedDashboardContextCache()
+_DASHBOARD_BUILDERS = compose_dashboard_builders()
 
 def build_dashboard_summary(
     reports_dir: Path | str | None = None,
@@ -236,7 +238,10 @@ def build_dashboard_summary(
     provider_health = _provider_health_summary(
         base_dir / REPORT_FILES["provider_health"]
     )
-    modules = _build_modules(reports, market_history_db_path=dashboard_market_history_db_path)
+    modules = _DASHBOARD_BUILDERS.build_modules(
+        reports,
+        market_history_db_path=dashboard_market_history_db_path,
+    )
     missing_data = _missing_data(reports)
     data_freshness = _data_freshness(reports, provider_health)
     next_actions = _next_actions(modules, provider_health)
@@ -468,11 +473,14 @@ def _labor_macro_evidence_rows(
     llm_context = reports.get("llm_context_pack")
     metric_reports = (market, llm_context) if llm_context else (market,)
     metrics = [
-        _build_metric("labor_macro", metric_reports, spec)
+        _DASHBOARD_BUILDERS.build_metric("labor_macro", metric_reports, spec)
         for spec in LABOR_METRIC_SPECS
     ]
-    metrics = _apply_labor_history_fallback(metrics, db_path=db_path)
-    metrics = _apply_historical_derived_metrics(
+    metrics = _DASHBOARD_BUILDERS.apply_labor_history_fallback(
+        metrics,
+        db_path=db_path,
+    )
+    metrics = _DASHBOARD_BUILDERS.apply_historical_derived_metrics(
         metrics,
         module_key="labor_macro",
         metric_keys=LABOR_HISTORICAL_DERIVED_METRIC_KEYS,
