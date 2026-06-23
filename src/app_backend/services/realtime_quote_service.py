@@ -63,10 +63,10 @@ NowProvider = Callable[[], datetime]
 _SUPPORTED_ETFS = ("SPY", "QQQ", "SHY", "GLD")
 _SUPPORTED_SYMBOLS = frozenset((*_SUPPORTED_ETFS, "VIX"))
 _HISTORY_METRIC_KEYS = {
-    "SPY": "spy_close",
-    "QQQ": "qqq_close",
-    "SHY": "shy_close",
-    "GLD": "gld_close",
+    "SPY": "proxy_spy_close",
+    "QQQ": "proxy_qqq_close",
+    "SHY": "proxy_shy_close",
+    "GLD": "proxy_gld_close",
     "VIX": "vix",
 }
 _TREASURY_SERIES = (

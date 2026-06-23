@@ -160,6 +160,53 @@ def test_normal_day_remains_regular_at_1300():
 
 
 @pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("2026-07-02T12:59:59", "regular"),
+        ("2026-07-02T13:00:00", "after_hours"),
+        ("2026-07-02T19:59:59", "after_hours"),
+        ("2026-07-02T20:00:00", "closed"),
+    ],
+)
+def test_2026_07_02_early_close_session_boundaries(value, expected):
+    result = market_state_at(_at(value), load_nyse_trading_calendar())
+
+    assert result.market_state == expected
+    assert result.calendar_covered is True
+
+
+def test_2026_07_03_remains_full_holiday_closed():
+    result = market_state_at(
+        _at("2026-07-03T11:00:00"),
+        load_nyse_trading_calendar(),
+    )
+
+    assert result.market_state == "closed"
+    assert result.calendar_covered is True
+
+
+@pytest.mark.parametrize(
+    ("observation_date", "expected_status"),
+    [
+        ("2026-07-02", "ok"),
+        ("2026-07-01", "stale"),
+    ],
+)
+def test_2026_07_02_early_close_quote_freshness(observation_date, expected_status):
+    snapshot = _service(
+        now="2026-07-02T13:30:00",
+        alpha_reader=lambda symbol, outputsize: _alpha_payload(
+            symbol,
+            observation_date,
+        ),
+    ).quote_etf(["SPY"])[0]
+
+    assert snapshot.status == expected_status
+    assert snapshot.stale is (expected_status == "stale")
+    assert snapshot.calendar_covered is True
+
+
+@pytest.mark.parametrize(
     "value",
     [
         datetime(2025, 3, 7, 15, 0, tzinfo=timezone.utc),
@@ -199,6 +246,8 @@ def test_calendar_public_metadata_and_coverage():
     assert payload["coverage_start"] == "2025-01-01"
     assert payload["coverage_end"] == "2026-12-31"
     assert "2025-01-09" in payload["closed_dates"]
+    assert "2026-07-03" in payload["closed_dates"]
+    assert "2026-07-02" in payload["early_close_dates"]
     assert "2026-11-27" in payload["early_close_dates"]
 
 
@@ -433,32 +482,153 @@ def test_provider_failure_without_fallback_is_unavailable(alpha_reader):
     assert "Bearer" not in serialized
 
 
-def test_safe_local_history_fallback_is_always_stale():
-    snapshot = _service(
-        alpha_reader=lambda symbol, outputsize: {"status": "error"},
-        history_lookup=lambda metric_key: {
-            "metric_key": metric_key,
+def test_safe_local_history_fallback_uses_proxy_key_and_is_always_stale():
+    requested_keys = []
+
+    def history_lookup(metric_key):
+        requested_keys.append(metric_key)
+        if metric_key != "proxy_spy_close":
+            return None
+        return {
+            "metric_key": "proxy_spy_close",
             "observation_date": "2025-06-30",
             "value": 99.5,
             "status": "ok",
             "lineage": {"raw": "must not copy"},
-        },
+            "error": "raw provider error must not copy",
+        }
+
+    snapshot = _service(
+        alpha_reader=lambda symbol, outputsize: {"status": "error"},
+        history_lookup=history_lookup,
     ).quote_etf(["SPY"])[0]
 
+    assert requested_keys == ["proxy_spy_close"]
     assert snapshot.status == "stale"
     assert snapshot.stale is True
     assert snapshot.value == 99.5
     assert snapshot.source == "local_market_history"
-    assert "lineage" not in snapshot.model_dump_json()
+    assert snapshot.source_series == "proxy_spy_close"
+    assert snapshot.observation_date == "2025-06-30"
+    serialized = snapshot.model_dump_json()
+    assert "lineage" not in serialized
+    assert "raw provider error" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("symbol", "proxy_key"),
+    [
+        ("SPY", "proxy_spy_close"),
+        ("QQQ", "proxy_qqq_close"),
+        ("SHY", "proxy_shy_close"),
+        ("GLD", "proxy_gld_close"),
+    ],
+)
+def test_etf_fallback_uses_ingest_proxy_close_keys(symbol, proxy_key):
+    requested_keys = []
+
+    def history_lookup(metric_key):
+        requested_keys.append(metric_key)
+        if metric_key != proxy_key:
+            return None
+        return {
+            "metric_key": proxy_key,
+            "observation_date": "2025-06-30",
+            "value": 42.0,
+            "status": "ok",
+        }
+
+    snapshot = _service(
+        alpha_reader=lambda s, outputsize: {"status": "error"},
+        history_lookup=history_lookup,
+    ).quote_etf([symbol])[0]
+
+    assert requested_keys == [proxy_key]
+    assert snapshot.status == "stale"
+    assert snapshot.stale is True
+    assert snapshot.value == 42.0
+    assert snapshot.source == "local_market_history"
+    assert snapshot.source_series == proxy_key
+
+
+@pytest.mark.parametrize(
+    ("symbol", "legacy_key"),
+    [
+        ("SPY", "spy_close"),
+        ("QQQ", "qqq_close"),
+        ("SHY", "shy_close"),
+        ("GLD", "gld_close"),
+    ],
+)
+def test_etf_fallback_rejects_legacy_close_keys(symbol, legacy_key):
+    def history_lookup(metric_key):
+        # Simulate a store that only holds the legacy (wrong) key.
+        return {
+            "metric_key": legacy_key,
+            "observation_date": "2025-06-30",
+            "value": 42.0,
+            "status": "ok",
+        }
+
+    snapshot = _service(
+        alpha_reader=lambda s, outputsize: {"status": "error"},
+        history_lookup=history_lookup,
+    ).quote_etf([symbol])[0]
+
+    assert snapshot.status == "unavailable"
+    assert snapshot.value is None
+    assert snapshot.reason_code == "no_safe_history_fallback"
+
+
+def test_vix_fallback_still_uses_vix_key():
+    requested_keys = []
+
+    def history_lookup(metric_key):
+        requested_keys.append(metric_key)
+        if metric_key != "vix":
+            return None
+        return {
+            "metric_key": "vix",
+            "observation_date": "2025-06-30",
+            "value": 17.5,
+            "status": "ok",
+        }
+
+    snapshot = _service(
+        fred_reader=lambda series_id, limit: {"status": "error"},
+        history_lookup=history_lookup,
+    ).quote_etf(["VIX"])[0]
+
+    assert requested_keys == ["vix"]
+    assert snapshot.status == "stale"
+    assert snapshot.stale is True
+    assert snapshot.value == 17.5
+    assert snapshot.source == "local_market_history"
+    assert snapshot.source_series == "vix"
+
+
+def test_provider_success_never_calls_local_history():
+    history_calls = []
+
+    def history_lookup(metric_key):
+        history_calls.append(metric_key)
+        raise AssertionError("provider success must not consult local history")
+
+    snapshots = _service(
+        history_lookup=history_lookup,
+    ).quote_etf(["SPY", "QQQ", "SHY", "GLD", "VIX"])
+
+    assert all(item.status == "ok" for item in snapshots)
+    assert history_calls == []
 
 
 @pytest.mark.parametrize(
     "row",
     [
         {"metric_key": "wrong", "observation_date": "2025-06-30", "value": 1, "status": "ok"},
-        {"metric_key": "spy_close", "observation_date": "bad", "value": 1, "status": "ok"},
-        {"metric_key": "spy_close", "observation_date": "2025-06-30", "value": 1, "status": "stale"},
-        {"metric_key": "spy_close", "observation_date": "2025-06-30", "value": "bad", "status": "ok"},
+        {"metric_key": "proxy_spy_close", "observation_date": "bad", "value": 1, "status": "ok"},
+        {"metric_key": "proxy_spy_close", "observation_date": "2025-06-30", "value": 1, "status": "stale"},
+        {"metric_key": "proxy_spy_close", "observation_date": "2025-06-30", "value": "bad", "status": "ok"},
     ],
 )
 def test_unsafe_history_fallback_is_rejected(row):
