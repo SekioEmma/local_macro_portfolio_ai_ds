@@ -78,34 +78,104 @@ cd app_frontend && npx tsc --noEmit
 
 ## 任务 B(优先级:中,风险较高 — 谨慎)— 瘦身 `dashboard_service.py` 转发门面
 
-**现状**(`src/app_backend/services/dashboard_service.py`):
-- 文件约 870 行,其中前 ~199 行是带别名的转发 import(137 行 import),
-  随后是 33 个私有函数,**绝大多数是纯转发包装**,仅为把模块级常量
-  (如 `DEFAULT_MARKET_HISTORY_DB_PATH`、`METRIC_ALIASES`、`DERIVED_METRIC_KEYS`)绑进已抽出的子模块。
-- 真正的公开 API 只有 2 个:`build_dashboard_summary`、`build_dashboard_evidence_table`。
-- **约束焊死**:`tests/` 中约 79 处引用 `dashboard_service._私有名`,
-  且 `tests/dashboard/test_dashboard_metric_builder_characterization.py` 用
-  `assert dashboard_service._format_value is dashboard_metric_builder.format_value` 这类**身份相等**断言
-  把门面与子模块焊在一起。
+### B.0 现状量化(已实测)
+`src/app_backend/services/dashboard_service.py` 共 **870 行**:
+- **111 个** `import ... as _xxx` 别名再导出(占了前 ~199 行)
+- **33 个** `def _xxx` 私有转发函数
+- **仅 2 个**真正的公开 API:`build_dashboard_summary`、`build_dashboard_evidence_table`
 
-**这件事风险高,采用保守、分步、可回退的做法:**
+测试侧共约 77 处引用 `dashboard_service._`:其中 **15 处是身份断言**(`is` / `is not`),
+**56 处是行为调用**(`dashboard_service._xxx(...)`)。身份断言集中在
+`tests/dashboard/test_dashboard_metric_builder_characterization.py`。
 
-1. **先调研,后动手**:统计所有 `dashboard_service._x` 的引用点(测试+源码),
-   分类哪些是「纯别名转发」(身份相等)、哪些是「绑定常量的包装」(非身份相等)。
-2. **不要一次性删光门面**。建议路径:
-   - 对**纯别名**(身份相等的)转发:让测试与调用方直接 import 子模块,逐步移除门面里的别名再导出。
-   - 对**绑定常量的包装函数**:把默认参数下沉到子模块(子模块函数提供默认值),
-     或保留一层极薄包装但集中管理常量;优先减少重复样板。
-3. **characterization 测试**:它们的存在目的是「锁定抽取前后行为一致」。抽取早已完成,
-   这些身份断言现在主要是阻碍。可将其**改写为行为断言**(断言输出相等而非对象 `is` 相等),
-   或在确认安全后删除并由子模块自身的单测覆盖。每一步都要让 `tests/dashboard/` 全绿。
-4. **行为必须等价**:`build_dashboard_summary` / `build_dashboard_evidence_table` 的输出在重构前后
-   对相同输入必须完全一致。建议先跑一遍 `tests/dashboard/ tests/contracts/` 作为基线再开工。
+### B.1 根因(必须先理解再动手)
+抽取出的逻辑模块(`dashboard_metric_builder`、`dashboard_derived_metrics`、
+`dashboard_historical_derived`、`dashboard_key_metrics` 等)被**刻意设计成纯函数 +
+依赖全部靠关键字参数注入**。例如:
 
-**验收**:`dashboard_service.py` 的转发样板显著减少(import 行数与纯转发函数数量明显下降);
-公开 API 不变;`python -m pytest tests/dashboard/ tests/contracts/ -q` 全绿;
-characterization 测试改为行为断言或被等价覆盖。
-**若评估后认为收益不抵风险,可在 commit/PR 里写明理由,只做低风险的一部分(如仅删纯别名),不要勉强。**
+```python
+# dashboard_metric_builder.build_metric 的真实签名
+def build_metric(
+    module_key, reports, spec, *,
+    derived_metric,                    # 回调
+    portfolio_compact_metric,          # 回调
+    find_metric_callback=None,         # 回调
+    derived_metric_keys,               # 常量(来自 catalog)
+    metric_aliases,                    # 常量(来自 catalog)
+    source_badge_aliases,              # 常量(来自 catalog)
+    portfolio_compact_interpretation_hint,  # 常量
+    dgs30_breakout_missing_reason,     # 常量(来自 catalog)
+): ...
+```
+
+`dashboard_service` 的 33 个 `_xxx` 包装,**唯一职责就是把这些常量和回调接线进去**,
+让最终调用方不必每次手填。这就是"接线盒"。关键事实:
+- `dashboard_metric_catalog` 是**叶子模块**(不依赖任何 `dashboard_*`),所有常量都在它里面。
+- 但 `dashboard_metric_builder` 等**没有** import catalog —— 所以它们无法自给自足,必须靠门面注入。
+- `tests/dashboard/test_dashboard_metric_builder_characterization.py::test_dashboard_metric_builder_module_has_no_reverse_import`
+  只禁止子模块 import **`dashboard_service`**;import `dashboard_metric_catalog`(更低层)是**允许的**。
+
+### B.2 优化主线:让常量"下沉",删掉只为注入常量的包装
+分层是 `catalog(常量) ← 逻辑模块 ← service(2 个公开编排函数)`。把常量注入从"自上而下穿参"
+改为"逻辑模块直接从 catalog 取",接线盒就大幅消失。
+
+**Step 1 — 常量下沉(低风险,收益最大)**
+让逻辑模块直接 `from app_backend.services.dashboard_metric_catalog import METRIC_ALIASES, DERIVED_METRIC_KEYS, SOURCE_BADGE_ALIASES, DGS30_BREAKOUT_MISSING_REASON, ...`,
+并把这些常量参数改为**带默认值**(默认=catalog 常量),或直接在函数体内引用。
+`DEFAULT_MARKET_HISTORY_DB_PATH` 同理:子模块可自行调用
+`market_history_store.get_default_market_history_db_path()`(`data_providers` 是更低层,无环)作为默认。
+
+改造前(门面里):
+```python
+def _build_metric(module_key, reports, spec):
+    return _metric_builder_build_metric(
+        module_key, reports, spec,
+        derived_metric=_derived_metric,
+        portfolio_compact_metric=_portfolio_compact_metric,
+        find_metric_callback=_find_metric,
+        derived_metric_keys=DERIVED_METRIC_KEYS,
+        metric_aliases=METRIC_ALIASES,
+        source_badge_aliases=SOURCE_BADGE_ALIASES,
+        portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+        dgs30_breakout_missing_reason=DGS30_BREAKOUT_MISSING_REASON,
+    )
+```
+改造后:常量在 `build_metric` 里有默认值 → 门面包装可删,调用方直接
+`dashboard_metric_builder.build_metric(module_key, reports, spec, derived_metric=..., portfolio_compact_metric=...)`,
+只需传仍然是"运行时变化"的回调。**纯常量注入的包装(约一半)可直接删除。**
+
+**Step 2 — 回调依赖收敛(中风险)**
+剩下的 `derived_metric` / `portfolio_compact_metric` / `find_metric_callback` 是函数依赖,
+为避免兄弟逻辑模块互相 import 成环,**两种做法二选一**:
+- (a) 保留一层**极薄**的编排:在 `dashboard_service` 里只留一个小的组合根(composition root),
+  把回调一次性绑好(可用 `functools.partial` 或一个小 dataclass `MetricBuilders`),
+  替代散落的 33 个包装;
+- (b) 若某回调其实指向的子模块本就在更低层、无环,直接让逻辑模块 import 它。
+  优先 (a),改动面小、最稳。
+
+**Step 3 — 别名再导出收敛**
+111 个 `as _xxx` 中,大量只被门面自己的包装使用;包装删掉后这些别名即成死代码,一并删除。
+仍被测试以**身份**引用的(见 B.3)按需保留或迁移。
+
+### B.3 characterization 测试迁移
+`test_dashboard_metric_builder_reexport_surface_characterization` 用
+`assert dashboard_service._format_value is dashboard_metric_builder.format_value` 这类**身份断言**
+锁定门面表面。抽取早已完成,这些 `is` 断言现在主要是阻碍:
+- 把身份断言**改写为行为断言**(断言对相同输入输出相等),或
+- 删除该用例,改由各子模块自身单测覆盖(子模块单测多半已存在)。
+- 56 处**行为调用**(`dashboard_service._xxx(...)`)应改为直接调用对应子模块函数;
+  这是机械替换,逐文件做、每改一个文件就跑 `tests/dashboard/`。
+
+### B.4 纪律
+- `build_dashboard_summary` / `build_dashboard_evidence_table` 的输出对相同输入**必须逐字段不变**。
+  开工前先跑 `tests/dashboard/ tests/contracts/` 存基线,完成后比对。
+- 不要触碰 D10–D19 / Stage8 语义,不要改 pipeline 顺序。
+- **分步提交**:Step1(常量下沉)/ Step2(回调收敛)/ Step3+测试迁移 各自独立 commit,便于回退。
+
+**验收**:门面 import 行数与纯转发函数数量显著下降(目标:删掉约一半 `def _`,以及随之死掉的别名);
+2 个公开 API 不变;`python -m pytest tests/dashboard/ tests/contracts/ -q` 全绿;
+characterization 身份断言改为行为断言或被等价覆盖。
+**若评估后认为 Step2 收益不抵风险,可只交付 Step1+Step3 并在 commit 写明理由,不要勉强。**
 
 ---
 
