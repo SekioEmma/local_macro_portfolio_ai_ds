@@ -26,7 +26,8 @@ def test_snapshot_generator_failure_prints_script_and_captured_output(monkeypatc
         raise AssertionError("Expected snapshot generator failure")
 
     captured = capsys.readouterr()
-    assert "Snapshot generator failed: scripts\\broken_generator.py" in captured.err
+    relative_script = script_path.relative_to(run_daily_report.PROJECT_ROOT)
+    assert f"Snapshot generator failed: {relative_script}" in captured.err
     assert "stdout clue" in captured.err
     assert "stderr clue" in captured.err
 
@@ -51,4 +52,5 @@ def test_ensure_snapshot_files_reports_which_generator_failed(monkeypatch, capsy
     else:
         raise AssertionError("Expected snapshot generator failure")
 
-    assert "scripts\\failing_snapshot.py" in capsys.readouterr().err
+    relative_script = script_path.relative_to(run_daily_report.PROJECT_ROOT)
+    assert str(relative_script) in capsys.readouterr().err
