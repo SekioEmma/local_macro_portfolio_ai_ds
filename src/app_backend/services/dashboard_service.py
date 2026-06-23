@@ -77,26 +77,21 @@ def build_dashboard_summary(
         reports_dir=base_dir,
         market_history_db_path=dashboard_market_history_db_path,
     )
-    if _shared_cache_bypass_reason(
+    cache_allowed = _shared_cache_bypass_reason(
         reports_dir=reports_dir,
         base_dir=base_dir,
         market_history_db_path=market_history_db_path,
         dashboard_market_history_db_path=dashboard_market_history_db_path,
         write_last_good=False,
-    ) is None:
+    ) is None
+    if cache_allowed:
         cached = _SHARED_DASHBOARD_CONTEXT_CACHE.get(cache_key.digest)
         if cached is not None:
             if context is not None:
                 context.summary = cached.summary
             return cached.summary
     with _SHARED_DASHBOARD_CONTEXT_CACHE.build_lock:
-        if _shared_cache_bypass_reason(
-            reports_dir=reports_dir,
-            base_dir=base_dir,
-            market_history_db_path=market_history_db_path,
-            dashboard_market_history_db_path=dashboard_market_history_db_path,
-            write_last_good=False,
-        ) is None:
+        if cache_allowed:
             cached = _SHARED_DASHBOARD_CONTEXT_CACHE.get(cache_key.digest)
             if cached is not None:
                 if context is not None:
@@ -124,21 +119,13 @@ def build_dashboard_summary(
             data_freshness=data_freshness,
             next_actions=next_actions,
         )
-        if _shared_cache_bypass_reason(
-            reports_dir=reports_dir,
-            base_dir=base_dir,
-            market_history_db_path=market_history_db_path,
-            dashboard_market_history_db_path=dashboard_market_history_db_path,
-            write_last_good=False,
-        ) is None:
-            existing = _SHARED_DASHBOARD_CONTEXT_CACHE.get(cache_key.digest)
-            if existing is None:
-                _SHARED_DASHBOARD_CONTEXT_CACHE.set(
-                    CachedDashboardContext(
-                        key_digest=cache_key.digest,
-                        summary=summary,
-                    )
+        if cache_allowed:
+            _SHARED_DASHBOARD_CONTEXT_CACHE.set(
+                CachedDashboardContext(
+                    key_digest=cache_key.digest,
+                    summary=summary,
                 )
+            )
     if context is not None:
         context.summary = summary
     return summary
