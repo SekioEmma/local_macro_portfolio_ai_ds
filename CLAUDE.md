@@ -80,9 +80,9 @@ scripts/                  # Ingest, audit, benchmark scripts
 - Raw provider payloads, raw prompts, API keys, local logs, `dist/`, `node_modules/`
 
 **Do NOT:**
-- Read `os.environ` / `os.getenv`, **except** the approved DeepSeek key load isolated to `deepseek_real_transport.load_deepseek_api_key_from_env()`. Do not scatter new env reads elsewhere.
+- Read `os.environ` / `os.getenv`, **except** the approved key loads isolated to `deepseek_real_transport.load_deepseek_api_key_from_env()` and `tavily_real_transport.load_tavily_api_key_from_env()`. Do not scatter new env reads elsewhere.
 - Import `httpx` / `requests` / `aiohttp` outside an explicitly approved transport boundary
-- Make real network calls, **except** the approved AI-2 single-turn DeepSeek call (user-initiated, synchronous, manifest-only, never background/app-start/page-load) through `deepseek_real_transport.py`
+- Make real network calls, **except** the approved AI-2 single-turn DeepSeek call through `deepseek_real_transport.py` and the approved B4 transport boundary in `tavily_real_transport.py`; both remain synchronous and must never run in the background, at app start, or on page load
 - Add `/api/chat`, `/api/ai/deepseek`, `/api/ai/external`, or `/api/ai/tavily` (the bare `/api/ai/deepseek` stays forbidden; the sanctioned model endpoint is `/api/ai/research-deepseek`)
 - Add `/api/search/tavily` before the separately approved TASK-B7
 - Send raw questions/prompts/holdings/account/position/transaction data or local paths
@@ -93,12 +93,13 @@ scripts/                  # Ingest, audit, benchmark scripts
 
 ### Era 2 search exception
 
-- The only future search HTTP boundary is `src/app_backend/services/tavily_real_transport.py`.
-- That file may only be created in a separately approved TASK-B4; it must not exist before B4.
-- Future real Tavily requests must be explicitly triggered by the user and pass `SearchRuntimePolicy`, query sanitizer, domain allowlist, budget, and response guard checks.
+- The only approved search HTTP boundary is `src/app_backend/services/tavily_real_transport.py`.
+- TASK-B4 approves that transport implementation only; it does not approve an API route, UI control, automatic invocation, or any bypass around the existing guards.
+- Real Tavily requests must be explicitly triggered by the user and pass `SearchRuntimePolicy`, query sanitizer, domain allowlist, budget, and response guard checks.
 - Automatic, background, app-start, and page-load search calls remain forbidden.
 - Tavily may receive only a sanitizer-approved query. Raw prompts, full account context, holdings, positions, transactions, local paths, and raw provider payloads remain forbidden.
-- Any future `.env` or secret access must be isolated to a separately approved single secrets/transport boundary. No current search contract, sanitizer, policy, or adapter may read it.
+- `tavily_real_transport.load_tavily_api_key_from_env()` may read only `TAVILY_API_KEY` from the process environment. It must not read `.env`, dotenv, config files, or any other secret source.
+- `/api/search/tavily` remains forbidden until the separately approved TASK-B7.
 
 ## Key Design Invariants
 
