@@ -64,9 +64,29 @@ def _insert_series(
     source_series=None,
     step_days=1,
 ):
+    series_id = source_series or metric_key.upper()
+    observations = []
     for i in range(count):
         obs_date = (start_date + timedelta(days=i * step_days)).isoformat()
-        _insert(db_path, metric_key, obs_date, float(i + 1), source_badge=source_badge, source_series=source_series)
+        observations.append({
+            "metric_key": metric_key,
+            "observation_date": obs_date,
+            "value": float(i + 1),
+            "value_text": str(float(i + 1)),
+            "unit": "percent",
+            "status": "ok",
+            "source": "FRED",
+            "source_badge": source_badge,
+            "provider": "FRED",
+            "source_series": series_id,
+            "generated_at": f"{obs_date}T00:00:00+00:00",
+            "fetched_at": f"{obs_date}T00:00:00+00:00",
+            "freshness_status": "historical",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+            "lineage": {"source_series": series_id},
+        })
+    store.upsert_market_observations(observations, db_path=db_path)
 
 
 def _without_generated_at(value):
