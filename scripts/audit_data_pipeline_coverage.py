@@ -131,7 +131,7 @@ def build_coverage_audit(
     official_macro = _official_macro_pack_audit(rows, historical_store)
     valuation_research = _valuation_research_audit(rows)
     provider_health = _provider_health_audit(summary.provider_health)
-    ai_context_manifest = _ai_context_manifest_audit()
+    ai_context_manifest = _ai_context_manifest_audit(evidence)
     module_coverage = _module_coverage(summary.modules, rows, last_good)
 
     return {

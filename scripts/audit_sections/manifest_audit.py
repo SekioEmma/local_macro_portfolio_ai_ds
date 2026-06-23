@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app_backend.schemas.responses import DashboardEvidenceTableResponse
 from app_backend.services import ai_context_service
+from app_backend.services.dashboard_context import DashboardPipelineContext
 from modeling.model_registry import ModelRegistry
 
 
@@ -15,8 +17,11 @@ D10_D11_MODULES = {
 D15_MODULE = MODEL_REGISTRY.require("macro_regime_review").module_key
 D16_MODULE = MODEL_REGISTRY.require("scenario_stress").module_key
 
-def _ai_context_manifest_audit() -> dict[str, Any]:
-    manifest = ai_context_service.build_ai_context_manifest()
+def _ai_context_manifest_audit(
+    evidence: DashboardEvidenceTableResponse,
+) -> dict[str, Any]:
+    context = DashboardPipelineContext(evidence_table=evidence)
+    manifest = ai_context_service.build_ai_context_manifest(context=context)
     source_summary = manifest.source_summary
     return {
         "manifest_available": True,
