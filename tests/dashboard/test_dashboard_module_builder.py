@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from app_backend.schemas.responses import DashboardMetric
-from app_backend.services import dashboard_module_builder, dashboard_service
+from app_backend.services import dashboard_module_builder
+from app_backend.services.dashboard_composition import compose_dashboard_builders
+from app_backend.services.dashboard_evidence_policy import AI_BLOCKED_METRIC_STATUSES
+from app_backend.services.dashboard_metric_catalog import CORE_METRIC_KEYS
 from app_backend.services.dashboard_report_loader import ReportState
 
 
@@ -25,30 +28,9 @@ def test_build_modules_preserves_module_keys(tmp_path):
         "provider_health": _report("provider_health", tmp_path, exists=False),
     }
 
-    modules = dashboard_service._build_modules(reports)
+    modules = compose_dashboard_builders().build_modules(reports)
 
     assert set(modules) == MODULE_KEYS
-
-
-def test_dashboard_service_compatibility_aliases_exist():
-    for name in (
-        "_build_modules",
-        "_market_module",
-        "_portfolio_module",
-        "_module",
-        "_module_status_with_coverage",
-        "_summary_with_coverage_note",
-        "_equity_historical_derived_metrics_available",
-        "_proxy_historical_derived_metrics_available",
-        "_market_stress_historical_derived_metrics_available",
-        "_latest_metric_generated_at",
-    ):
-        assert callable(getattr(dashboard_service, name))
-
-    assert (
-        dashboard_service._summary_with_coverage_note
-        is dashboard_module_builder.summary_with_coverage_note
-    )
 
 
 def test_module_status_with_coverage_characterization():
@@ -126,8 +108,8 @@ def test_portfolio_module_missing_report_characterization(tmp_path):
         key_metrics_for_module=_empty_key_metrics,
         portfolio_deviation_compact=lambda report: None,
         portfolio_compact_module_status=lambda compact: "ok",
-        core_metric_keys=dashboard_service.CORE_METRIC_KEYS,
-        ai_blocked_metric_statuses=dashboard_service.AI_BLOCKED_METRIC_STATUSES,
+        core_metric_keys=CORE_METRIC_KEYS,
+        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
     )
 
     assert module.status == "missing"
@@ -148,8 +130,8 @@ def test_portfolio_module_error_report_characterization(tmp_path):
         key_metrics_for_module=_empty_key_metrics,
         portfolio_deviation_compact=lambda report: None,
         portfolio_compact_module_status=lambda compact: "ok",
-        core_metric_keys=dashboard_service.CORE_METRIC_KEYS,
-        ai_blocked_metric_statuses=dashboard_service.AI_BLOCKED_METRIC_STATUSES,
+        core_metric_keys=CORE_METRIC_KEYS,
+        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
     )
 
     assert module.status == "error"

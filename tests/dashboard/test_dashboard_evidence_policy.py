@@ -2,7 +2,6 @@ from pathlib import Path
 
 from app_backend.schemas.responses import DashboardMetric
 from app_backend.services import dashboard_evidence_policy as policy
-from app_backend.services import dashboard_service
 
 
 def test_build_evidence_row_preserves_optional_fields():
@@ -154,23 +153,6 @@ def test_missing_value_text_mapping():
     assert policy.missing_value_text("unknown") == "unknown"
     assert policy.missing_value_text("missing") == "missing"
     assert policy.missing_value_text("ok") == "missing"
-
-
-def test_dashboard_service_compatibility_aliases():
-    assert dashboard_service._evidence_row is policy.build_evidence_row
-    assert dashboard_service._evidence_value_text is policy.evidence_value_text
-    assert dashboard_service._evidence_ai_context_allowed is policy.evidence_ai_context_allowed
-    assert (
-        dashboard_service._ppi_observation_date_blocked_reason
-        is policy.ppi_observation_date_blocked_reason
-    )
-    assert dashboard_service._ai_context_allowed is policy.ai_context_allowed
-    assert dashboard_service._ai_context_blocked_reason is policy.ai_context_blocked_reason
-    assert dashboard_service._missing_value_text is policy.missing_value_text
-    assert (
-        dashboard_service._derived_dependency_hint_complete
-        is policy.derived_dependency_hint_complete
-    )
 
 
 def test_new_policy_module_has_no_forbidden_surfaces():

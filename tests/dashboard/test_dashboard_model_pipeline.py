@@ -14,11 +14,13 @@ from fastapi.testclient import TestClient
 from app_backend.main import app
 from app_backend.services import dashboard_model_pipeline
 from app_backend.services import dashboard_service
+from app_backend.services.dashboard_evidence_assembly import evidence_rows_from_summary
+from app_backend.services.dashboard_evidence_policy import build_evidence_row
 from app_backend.services.dashboard_model_pipeline import (
     DashboardModelPipelineResult,
     build_dashboard_model_rows,
 )
-from app_backend.services.dashboard_service import _evidence_row
+from app_backend.services.dashboard_report_loader import load_dashboard_reports
 from modeling.model_registry import ModelRegistry
 
 
@@ -74,16 +76,16 @@ def _build_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
     summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
     base_rows = (
-        dashboard_service._evidence_rows_from_summary(summary)
+        evidence_rows_from_summary(summary)
         + dashboard_service._labor_macro_evidence_rows(
-            dashboard_service._load_dashboard_reports(tmp_path),
+            load_dashboard_reports(tmp_path),
             db_path=None,
         )
     )
     return build_dashboard_model_rows(
         base_rows=base_rows,
         db_path=None,
-        build_evidence_row=_evidence_row,
+        build_evidence_row=build_evidence_row,
     )
 
 
@@ -249,15 +251,15 @@ def test_pipeline_output_matches_evidence_table_row_count(monkeypatch, tmp_path)
 
     # Build via pipeline directly
     summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
-    reports = dashboard_service._load_dashboard_reports(tmp_path)
+    reports = load_dashboard_reports(tmp_path)
     base_rows = (
-        dashboard_service._evidence_rows_from_summary(summary)
+        evidence_rows_from_summary(summary)
         + dashboard_service._labor_macro_evidence_rows(reports, db_path=None)
     )
     pipeline_result = build_dashboard_model_rows(
         base_rows=base_rows,
         db_path=None,
-        build_evidence_row=_evidence_row,
+        build_evidence_row=build_evidence_row,
     )
     direct_total = len(base_rows) + len(pipeline_result.rows)
 
@@ -328,9 +330,9 @@ def test_pm1_model_to_dict_called_once_per_row(monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
     summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
     base_rows = (
-        dashboard_service._evidence_rows_from_summary(summary)
+        evidence_rows_from_summary(summary)
         + dashboard_service._labor_macro_evidence_rows(
-            dashboard_service._load_dashboard_reports(tmp_path),
+            load_dashboard_reports(tmp_path),
             db_path=None,
         )
     )

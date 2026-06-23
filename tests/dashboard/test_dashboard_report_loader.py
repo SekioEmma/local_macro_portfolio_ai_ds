@@ -86,20 +86,3 @@ def test_report_state_is_frozen_dataclass():
         assert False, "ReportState should be frozen"
     except Exception:
         pass
-
-
-def test_dashboard_service_reexports_report_loader_symbols():
-    from app_backend.services import dashboard_service
-    from app_backend.services import dashboard_report_loader
-
-    assert dashboard_service.ReportState is dashboard_report_loader.ReportState
-    assert dashboard_service.REPORT_FILES is dashboard_report_loader.REPORT_FILES
-    assert (
-        dashboard_service.OPTIONAL_METADATA_REPORT_FILES
-        is dashboard_report_loader.OPTIONAL_METADATA_REPORT_FILES
-    )
-    assert dashboard_service._load_report is dashboard_report_loader.load_report
-    assert (
-        dashboard_service._load_dashboard_reports
-        is dashboard_report_loader.load_dashboard_reports
-    )

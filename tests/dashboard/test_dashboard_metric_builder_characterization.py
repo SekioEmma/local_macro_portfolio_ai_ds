@@ -10,10 +10,13 @@ from app_backend.services import (
     dashboard_metric_builder,
     dashboard_metric_catalog,
     dashboard_portfolio_compact,
-    dashboard_service,
 )
+from app_backend.services.dashboard_composition import compose_dashboard_builders
 from app_backend.services.dashboard_report_loader import ReportState
 from data_quality import historical_derived_metrics
+
+
+BUILDERS = compose_dashboard_builders()
 
 
 def test_dashboard_metric_builder_module_has_no_reverse_import():
@@ -29,29 +32,20 @@ def test_dashboard_metric_builder_module_has_no_reverse_import():
         assert "dashboard_service" not in source
 
 
-def test_dashboard_metric_builder_reexport_surface_characterization():
-    assert dashboard_service._format_value is dashboard_metric_builder.format_value
-    assert dashboard_service._metric_status is dashboard_metric_builder.metric_status
-    assert dashboard_service._metric_freshness is dashboard_metric_builder.metric_freshness
-    assert dashboard_service._build_metric is not dashboard_metric_builder.build_metric
+def test_dashboard_metric_constants_have_single_catalog_owner():
+    assert dashboard_metric_builder.SOURCE_BADGE_ALIASES == dashboard_metric_catalog.SOURCE_BADGE_ALIASES
     assert (
-        dashboard_service.INDEX_LEVEL_YOY_MISSING_REASON
-        == dashboard_metric_builder.INDEX_LEVEL_YOY_MISSING_REASON
+        dashboard_portfolio_compact.PORTFOLIO_COMPACT_INTERPRETATION_HINT
+        == dashboard_metric_catalog.PORTFOLIO_COMPACT_INTERPRETATION_HINT
     )
-    assert dashboard_service.SOURCE_BADGE_ALIASES == dashboard_metric_builder.SOURCE_BADGE_ALIASES
-    assert dashboard_service.INFLATION_YOY_METRIC_KEYS == dashboard_metric_builder.INFLATION_YOY_METRIC_KEYS
-    assert dashboard_service.METRIC_SPECS is dashboard_metric_catalog.METRIC_SPECS
-    assert dashboard_service.CORE_METRIC_KEYS is dashboard_metric_catalog.CORE_METRIC_KEYS
-    assert dashboard_service._historical_derived_metric is dashboard_historical_derived.historical_derived_metric
-    assert dashboard_service._portfolio_compact_metric is dashboard_portfolio_compact.portfolio_compact_metric
-    assert dashboard_service._credit_status_from_values is dashboard_derived_metrics.credit_status_from_values
-    assert dashboard_service._key_metrics_for_module is not dashboard_key_metrics.key_metrics_for_module
+    assert BUILDERS.build_metric.func is dashboard_metric_builder.build_metric
+    assert BUILDERS.key_metrics_for_module.func is dashboard_key_metrics.key_metrics_for_module
 
 
 def test_build_metric_missing_official_macro_metric_characterization():
     spec = _spec("ppi_final_demand_yoy", missing_status="insufficient_history")
 
-    metric = dashboard_service._build_metric(
+    metric = BUILDERS.build_metric(
         "inflation_energy_pressure",
         (report("market_snapshot", {"generated_at": "2026-01-01T00:00:00+00:00"}),),
         spec,
@@ -92,17 +86,17 @@ def test_ppi_final_demand_and_ppiaco_boundary_characterization():
         ),
     )
 
-    ppiaco = dashboard_service._build_metric(
+    ppiaco = BUILDERS.build_metric(
         "inflation_energy_pressure",
         reports,
         _spec("ppiaco_yoy", format_kind="signed_percent"),
     )
-    index = dashboard_service._build_metric(
+    index = BUILDERS.build_metric(
         "inflation_energy_pressure",
         reports,
         _spec("ppi_final_demand", unit="index", format_kind="number"),
     )
-    yoy = dashboard_service._build_metric(
+    yoy = BUILDERS.build_metric(
         "inflation_energy_pressure",
         reports,
         _spec("ppi_final_demand_yoy", format_kind="signed_percent", missing_status="insufficient_history"),
@@ -116,7 +110,7 @@ def test_ppi_final_demand_and_ppiaco_boundary_characterization():
     assert yoy.status == "insufficient_history"
     assert yoy.value is None
     assert yoy.value_text == "insufficient history"
-    assert yoy.missing_reason == dashboard_service.INDEX_LEVEL_YOY_MISSING_REASON
+    assert yoy.missing_reason == dashboard_metric_builder.INDEX_LEVEL_YOY_MISSING_REASON
     assert yoy.ai_context_allowed is False
 
 
@@ -131,7 +125,7 @@ def test_stale_data_escalation_characterization():
         ),
     )
 
-    metric = dashboard_service._build_metric("rate_pressure", reports, _spec("dgs10"))
+    metric = BUILDERS.build_metric("rate_pressure", reports, _spec("dgs10"))
 
     assert metric.status == "stale"
     assert metric.freshness_status == "stale"
@@ -157,7 +151,7 @@ def test_stale_data_escalation_characterization():
     ],
 )
 def test_source_badge_normalization_characterization(badge, expected):
-    metric = dashboard_service._build_metric(
+    metric = BUILDERS.build_metric(
         "rate_pressure",
         (report("market_snapshot", {"custom_metric": _payload(10, source_badge=badge)}),),
         _spec("custom_metric", unit=None, format_kind="number"),
@@ -167,12 +161,12 @@ def test_source_badge_normalization_characterization(badge, expected):
 
 
 def test_source_badge_portfolio_local_and_derived_characterization():
-    portfolio = dashboard_service._build_metric(
+    portfolio = BUILDERS.build_metric(
         "portfolio_deviation",
         (report("portfolio_snapshot", {"custom_metric": _payload(10, source_badge="official")}),),
         _spec("custom_metric", unit=None, format_kind="number"),
     )
-    derived = dashboard_service._build_metric(
+    derived = BUILDERS.build_metric(
         "rate_pressure",
         (
             report(
@@ -212,7 +206,7 @@ def test_quality_metadata_priority_characterization():
         ),
     )
 
-    metric = dashboard_service._build_metric("rate_pressure", reports, _spec("dgs10"))
+    metric = BUILDERS.build_metric("rate_pressure", reports, _spec("dgs10"))
 
     assert metric.source == "quality-source"
     assert metric.source_badge == "official"
@@ -222,7 +216,7 @@ def test_quality_metadata_priority_characterization():
 
 
 def test_portfolio_holdings_updated_at_quality_metadata_characterization():
-    metric = dashboard_service._build_metric(
+    metric = BUILDERS.build_metric(
         "portfolio_deviation",
         (
             report(
@@ -244,7 +238,7 @@ def test_portfolio_holdings_updated_at_quality_metadata_characterization():
 
 
 def test_generated_at_and_observation_date_characterization():
-    payload_metric = dashboard_service._build_metric(
+    payload_metric = BUILDERS.build_metric(
         "rate_pressure",
         (
             report(
@@ -264,12 +258,12 @@ def test_generated_at_and_observation_date_characterization():
         ),
         _spec("dgs10"),
     )
-    report_metric = dashboard_service._build_metric(
+    report_metric = BUILDERS.build_metric(
         "rate_pressure",
         (report("market_snapshot", {"updated_at": "report-updated", "dgs10": {"value": 4.2}}),),
         _spec("dgs10"),
     )
-    none_metric = dashboard_service._build_metric(
+    none_metric = BUILDERS.build_metric(
         "rate_pressure",
         (report("market_snapshot", {"dgs10": {"value": 4.2}}),),
         _spec("dgs10"),
@@ -282,22 +276,22 @@ def test_generated_at_and_observation_date_characterization():
 
 
 def test_format_value_characterization():
-    assert dashboard_service._format_value(1.234, "percent", "ok") == "1.23%"
-    assert dashboard_service._format_value(1.234, "signed_percent", "ok") == "+1.23%"
-    assert dashboard_service._format_value(1.23, "pp", "ok") == "+1.23pp"
-    assert dashboard_service._format_value(1234, "number", "ok") == "1,234"
-    assert dashboard_service._format_value(1234.5, "number", "ok") == "1,234.5"
-    assert dashboard_service._format_value(True, "bool", "ok") == "true"
-    assert dashboard_service._format_value(False, "bool", "ok") == "false"
-    assert dashboard_service._format_value(None, "number", "missing") == "missing"
-    assert dashboard_service._format_value(None, "number", "research_needed") == "research needed"
-    assert dashboard_service._format_value(None, "number", "insufficient_history") == "insufficient history"
-    assert dashboard_service._format_value(None, "number", "not_available") == "not available"
-    assert dashboard_service._format_value(None, "number", "stale") == "stale"
-    assert dashboard_service._format_value(None, "number", "ok") == "missing"
+    assert dashboard_metric_builder.format_value(1.234, "percent", "ok") == "1.23%"
+    assert dashboard_metric_builder.format_value(1.234, "signed_percent", "ok") == "+1.23%"
+    assert dashboard_metric_builder.format_value(1.23, "pp", "ok") == "+1.23pp"
+    assert dashboard_metric_builder.format_value(1234, "number", "ok") == "1,234"
+    assert dashboard_metric_builder.format_value(1234.5, "number", "ok") == "1,234.5"
+    assert dashboard_metric_builder.format_value(True, "bool", "ok") == "true"
+    assert dashboard_metric_builder.format_value(False, "bool", "ok") == "false"
+    assert dashboard_metric_builder.format_value(None, "number", "missing") == "missing"
+    assert dashboard_metric_builder.format_value(None, "number", "research_needed") == "research needed"
+    assert dashboard_metric_builder.format_value(None, "number", "insufficient_history") == "insufficient history"
+    assert dashboard_metric_builder.format_value(None, "number", "not_available") == "not available"
+    assert dashboard_metric_builder.format_value(None, "number", "stale") == "stale"
+    assert dashboard_metric_builder.format_value(None, "number", "ok") == "missing"
 
 
-def test_key_metrics_for_module_special_routing_characterization(monkeypatch):
+def test_key_metrics_for_module_special_routing_characterization():
     calls = []
 
     def apply_historical(metrics, **kwargs):
@@ -312,81 +306,114 @@ def test_key_metrics_for_module_special_routing_characterization(monkeypatch):
         calls.append(("fallback", {}))
         return {"dgs10": {"value": 4.2}}
 
-    monkeypatch.setattr(dashboard_service, "_apply_historical_derived_metrics", apply_historical)
-    monkeypatch.setattr(dashboard_service, "_apply_ppi_final_demand_history", apply_ppi)
-    monkeypatch.setattr(dashboard_service, "_compact_dgs_fallback_observations", compact_fallback)
-    monkeypatch.setattr(dashboard_service, "_build_metric", lambda module_key, reports, spec: _metric(spec[0]))
-
     reports = (report("market_snapshot", {"generated_at": "2026-01-01"}),)
 
-    dashboard_service._key_metrics_for_module("equity_trend", reports, market_history_db_path="db")
-    dashboard_service._key_metrics_for_module("inflation_energy_pressure", reports, market_history_db_path="db")
-    dashboard_service._key_metrics_for_module("breadth_concentration_proxy", reports, market_history_db_path="db")
-    dashboard_service._key_metrics_for_module("market_stress_derived", reports, market_history_db_path="db")
-    dashboard_service._key_metrics_for_module("rate_pressure", reports, market_history_db_path="db")
-    dashboard_service._key_metrics_for_module("portfolio_deviation", reports, market_history_db_path="db")
+    def build(module_key):
+        return dashboard_key_metrics.key_metrics_for_module(
+            module_key,
+            reports,
+            market_history_db_path="db",
+            build_metric=lambda module_key, reports, spec: _metric(spec[0]),
+            apply_historical_derived_metrics=apply_historical,
+            apply_ppi_final_demand_history=apply_ppi,
+            compact_dgs_fallback_observations=compact_fallback,
+        )
+
+    for module_key in (
+        "equity_trend",
+        "inflation_energy_pressure",
+        "breadth_concentration_proxy",
+        "market_stress_derived",
+        "rate_pressure",
+        "portfolio_deviation",
+    ):
+        build(module_key)
 
     assert calls[0] == (
         "historical",
         {
             "module_key": "equity_trend",
-            "metric_keys": dashboard_service.EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
-            "hint_suffix": dashboard_service.EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX,
+            "metric_keys": dashboard_historical_derived.EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+            "hint_suffix": dashboard_historical_derived.EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX,
             "fallback_source": "local_market_history",
             "db_path": "db",
         },
     )
     assert [name for name, _ in calls[1:4]] == ["ppi", "historical", "historical"]
-    assert calls[2][1]["metric_keys"] == dashboard_service.OIL_HISTORICAL_DERIVED_METRIC_KEYS
+    assert calls[2][1]["metric_keys"] == dashboard_historical_derived.OIL_HISTORICAL_DERIVED_METRIC_KEYS
     assert calls[2][1]["required_dependency_source_badges"] == {"official"}
     assert calls[2][1]["replace_existing"] is True
-    assert calls[3][1]["metric_keys"] == dashboard_service.PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS
+    assert (
+        calls[3][1]["metric_keys"]
+        == dashboard_historical_derived.PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS
+    )
     assert calls[3][1]["required_dependency_source_badges"] == {"official"}
     assert calls[3][1]["replace_existing"] is True
-    assert calls[4][1]["metric_keys"] == dashboard_service.PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS
+    assert (
+        calls[4][1]["metric_keys"]
+        == dashboard_historical_derived.PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS
+    )
     assert calls[4][1]["required_dependency_source_badges"] == {"proxy"}
     assert calls[5][0] == "fallback"
-    assert calls[6][1]["metric_keys"] == dashboard_service.MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS
+    assert (
+        calls[6][1]["metric_keys"]
+        == dashboard_historical_derived.MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS
+    )
     assert calls[6][1]["fallback_observations"] == {"dgs10": {"value": 4.2}}
 
 
-def test_build_metric_derived_portfolio_find_order_characterization(monkeypatch):
+def test_build_metric_derived_portfolio_find_order_characterization():
     calls = []
     derived_metric = _metric("custom_metric", source_badge="derived")
     compact_metric = _metric("custom_metric", source_badge="local")
 
-    monkeypatch.setattr(dashboard_service, "_derived_metric", lambda *args: calls.append("derived") or derived_metric)
-    monkeypatch.setattr(dashboard_service, "_portfolio_compact_metric", lambda **kwargs: calls.append("compact") or compact_metric)
-    monkeypatch.setattr(
-        dashboard_service,
-        "_find_metric",
-        lambda *args, **kwargs: calls.append("find")
-        or (1.0, _payload(1.0), report("market_snapshot", {"custom_metric": {"value": 1.0}})),
+    def find_metric(*args, **kwargs):
+        calls.append("find")
+        return 1.0, _payload(1.0), report(
+            "market_snapshot",
+            {"custom_metric": {"value": 1.0}},
+        )
+    result = dashboard_metric_builder.build_metric(
+        "rate_pressure",
+        (),
+        _spec("custom_metric"),
+        derived_metric=lambda *args: calls.append("derived") or derived_metric,
+        portfolio_compact_metric=lambda **kwargs: calls.append("compact") or compact_metric,
+        find_metric_callback=find_metric,
     )
-    assert dashboard_service._build_metric("rate_pressure", (), _spec("custom_metric")) is derived_metric
+    assert result is derived_metric
     assert calls == ["derived"]
 
     calls.clear()
-    monkeypatch.setattr(dashboard_service, "_derived_metric", lambda *args: calls.append("derived") or None)
-    assert dashboard_service._build_metric("portfolio_deviation", (), _spec("custom_metric")) is compact_metric
+    result = dashboard_metric_builder.build_metric(
+        "portfolio_deviation",
+        (),
+        _spec("custom_metric"),
+        derived_metric=lambda *args: calls.append("derived") or None,
+        portfolio_compact_metric=lambda **kwargs: calls.append("compact") or compact_metric,
+        find_metric_callback=find_metric,
+    )
+    assert result is compact_metric
     assert calls == ["derived", "compact"]
 
     calls.clear()
-    monkeypatch.setattr(dashboard_service, "_portfolio_compact_metric", lambda **kwargs: calls.append("compact") or None)
-    result = dashboard_service._build_metric(
+    result = dashboard_metric_builder.build_metric(
         "rate_pressure",
         (report("market_snapshot", {"custom_metric": {"value": 1.0}}),),
         _spec("custom_metric", unit=None, format_kind="number"),
+        derived_metric=lambda *args: calls.append("derived") or None,
+        portfolio_compact_metric=lambda **kwargs: calls.append("compact") or None,
+        find_metric_callback=find_metric,
     )
     assert result.metric_key == "custom_metric"
     assert calls == ["derived", "compact", "find"]
 
 
 def test_dependency_unusable_characterization():
-    assert dashboard_service._dependency_unusable((1, {"status": "missing"}, report("x"))) is True
-    assert dashboard_service._dependency_unusable((1, {"status": "ok", "freshness_status": "stale"}, report("x"))) is True
-    assert dashboard_service._dependency_unusable((None, {"status": "ok", "freshness_status": "fresh"}, report("x"))) is True
-    assert dashboard_service._dependency_unusable((1, {"status": "ok", "freshness_status": "fresh"}, report("x"))) is False
+    assert dashboard_metric_builder.dependency_unusable((1, {"status": "missing"}, report("x"))) is True
+    assert dashboard_metric_builder.dependency_unusable((1, {"status": "ok", "freshness_status": "stale"}, report("x"))) is True
+    assert dashboard_metric_builder.dependency_unusable((None, {"status": "ok", "freshness_status": "fresh"}, report("x"))) is True
+    assert dashboard_metric_builder.dependency_unusable((1, {"status": "ok", "freshness_status": "fresh"}, report("x"))) is False
 
 
 def test_historical_derived_metric_snapshot_characterization():
@@ -422,7 +449,7 @@ def test_historical_derived_metric_snapshot_characterization():
         dependency_source_series=["^GSPC"],
     )
 
-    metric = dashboard_service._historical_derived_metric(
+    metric = dashboard_historical_derived.historical_derived_metric(
         original,
         candidate,
         metric_keys={"sp500_30d_return"},
@@ -476,8 +503,8 @@ def test_portfolio_compact_metric_snapshot_characterization():
         },
     )
 
-    compact = dashboard_service._portfolio_deviation_compact(portfolio_report)
-    metric = dashboard_service._portfolio_compact_metric(
+    compact = dashboard_portfolio_compact.portfolio_deviation_compact(portfolio_report)
+    metric = dashboard_portfolio_compact.portfolio_compact_metric(
         module_key="portfolio_deviation",
         reports=(portfolio_report,),
         metric_key="max_deviation_pp",
@@ -505,7 +532,7 @@ def test_portfolio_compact_metric_snapshot_characterization():
         "generated_at": "2026-06-10T00:00:00+00:00",
         "freshness_status": "fresh",
         "missing_reason": None,
-        "interpretation_hint": dashboard_service.PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+        "interpretation_hint": dashboard_metric_catalog.PORTFOLIO_COMPACT_INTERPRETATION_HINT,
         "ai_context_allowed": True,
     }
 
@@ -523,7 +550,7 @@ def test_derived_status_metric_snapshot_characterization():
         ),
     )
 
-    metric = dashboard_service._credit_stress_status_metric(reports)
+    metric = dashboard_derived_metrics.credit_stress_status_metric(reports)
 
     assert _metric_snapshot(metric) == {
         "metric_key": "credit_stress_status",
@@ -569,7 +596,7 @@ def test_ai_context_gate_through_build_metric_characterization(case, expected_al
         "search_derived": _payload(4.2, source_badge="search-derived"),
         "proxy": _payload(4.2, source_badge="proxy"),
     }
-    metric = dashboard_service._build_metric(
+    metric = BUILDERS.build_metric(
         "rate_pressure",
         (report("market_snapshot", {"custom_metric": payloads[case]}),),
         _spec("custom_metric"),
@@ -579,23 +606,12 @@ def test_ai_context_gate_through_build_metric_characterization(case, expected_al
     assert metric.source_badge == expected_badge
 
 
-def test_legacy_metric_builder_callable_surface_characterization():
-    for name in (
-        "_build_metric",
-        "_key_metrics_for_module",
-        "_missing_metric",
-        "_metric_status",
-        "_metric_freshness",
-        "_metric_source",
-        "_metric_source_badge",
-        "_metric_observation_date",
-        "_metric_generated_at",
-        "_metric_quality_metadata",
-        "_format_value",
-        "_normalize_inflation_yoy_value",
-        "_find_metric",
-    ):
-        assert callable(getattr(dashboard_service, name))
+def test_composition_root_exposes_required_builders():
+    assert callable(BUILDERS.build_metric)
+    assert callable(BUILDERS.key_metrics_for_module)
+    assert callable(BUILDERS.build_modules)
+    assert callable(BUILDERS.apply_historical_derived_metrics)
+    assert callable(BUILDERS.apply_labor_history_fallback)
 
 
 def report(name, data=None, *, exists=True, error_summary=None):

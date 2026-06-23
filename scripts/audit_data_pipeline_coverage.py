@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
+from app_backend.services.dashboard_metric_catalog import CORE_METRIC_KEYS  # noqa: E402
 from data_providers import market_data_service  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
 from data_quality import official_macro_pack  # noqa: E402
@@ -383,7 +384,7 @@ def _dashboard_overall_degraded_reasons(
             row.metric_key
             for row in rows
             if row.module == module_key
-            and row.metric_key in dashboard_service.CORE_METRIC_KEYS.get(module_key, set())
+            and row.metric_key in CORE_METRIC_KEYS.get(module_key, set())
             and row.status in BAD_AI_STATUSES
         ]
         if blocked_core:
@@ -493,7 +494,7 @@ def _dependency_anomalies(
             anomalies.append(_anomaly(row, f"{metric_key}_ok_without_history_hint", "dependency_metadata_incomplete"))
 
     for module_key, module in modules.items():
-        core_keys = dashboard_service.CORE_METRIC_KEYS.get(module_key, set())
+        core_keys = CORE_METRIC_KEYS.get(module_key, set())
         core_rows = [row for row in rows if row.module == module_key and row.metric_key in core_keys]
         if not core_rows:
             continue
