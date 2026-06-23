@@ -168,22 +168,23 @@ def _insert_series(
     *,
     source_series=None,
 ):
-    for index in range(count):
-        market_history_store.upsert_market_observation(
-            {
-                "metric_key": metric_key,
-                "observation_date": (start_date + timedelta(days=index)).isoformat(),
-                "value": float(index + 1),
-                "status": "ok",
-                "source": "FRED",
-                "source_badge": "official",
-                "provider": "FRED",
-                "source_series": source_series or audit.TARGET_METRICS.get(metric_key, {}).get("series_id", metric_key.upper()),
-                "generated_at": "2026-01-01T00:00:00+00:00",
-                "fetched_at": "2026-01-01T00:00:00+00:00",
-                "freshness_status": "historical",
-                "ai_context_allowed": True,
-                "metric_kind": "raw",
-            },
-            db_path=db_path,
-        )
+    series_id = source_series or audit.TARGET_METRICS.get(metric_key, {}).get("series_id", metric_key.upper())
+    observations = [
+        {
+            "metric_key": metric_key,
+            "observation_date": (start_date + timedelta(days=index)).isoformat(),
+            "value": float(index + 1),
+            "status": "ok",
+            "source": "FRED",
+            "source_badge": "official",
+            "provider": "FRED",
+            "source_series": series_id,
+            "generated_at": "2026-01-01T00:00:00+00:00",
+            "fetched_at": "2026-01-01T00:00:00+00:00",
+            "freshness_status": "historical",
+            "ai_context_allowed": True,
+            "metric_kind": "raw",
+        }
+        for index in range(count)
+    ]
+    market_history_store.upsert_market_observations(observations, db_path=db_path)
