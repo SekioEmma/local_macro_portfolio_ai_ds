@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import os
 import socket
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Lock
 
 from fastapi.testclient import TestClient
 
@@ -42,6 +45,28 @@ def test_cache_hit_returns_identical_default_summary_and_evidence(monkeypatch, t
     assert _row_signature(second) == _row_signature(first)
     assert set(summary.modules) <= set(second.modules)
     assert "cache_key" not in second.model_dump()
+
+
+def test_concurrent_summary_builds_share_one_locked_build(monkeypatch, tmp_path):
+    _block_network(monkeypatch)
+    _install_default_reports(monkeypatch, tmp_path)
+    original = dashboard_service._load_dashboard_reports
+    count_lock = Lock()
+    calls = {"count": 0}
+
+    def wrapped(reports_dir):
+        with count_lock:
+            calls["count"] += 1
+        time.sleep(0.05)
+        return original(reports_dir)
+
+    monkeypatch.setattr(dashboard_service, "_load_dashboard_reports", wrapped)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        summaries = list(executor.map(lambda _: dashboard_service.build_dashboard_summary(), range(4)))
+
+    assert calls["count"] == 1
+    assert all(summary == summaries[0] for summary in summaries[1:])
 
 
 def test_cache_invalidates_on_report_file_stat_change(monkeypatch, tmp_path):
