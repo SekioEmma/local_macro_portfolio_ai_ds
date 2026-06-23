@@ -483,3 +483,278 @@ def test_calendar_outside_coverage_never_claims_fresh():
     assert snapshot.status == "stale"
     assert snapshot.calendar_covered is False
     assert snapshot.reason_code == "calendar_not_covered"
+
+
+def _curve_service(
+    fred_reader,
+    *,
+    history_lookup=None,
+    now: str = "2026-06-23T10:00:00",
+):
+    return RealtimeQuoteService(
+        alpha_history_reader=lambda symbol, outputsize: {},
+        fred_series_reader=fred_reader,
+        history_lookup=history_lookup or (lambda metric_key: None),
+        calendar_loader=load_nyse_trading_calendar,
+        now_provider=lambda: _at(now),
+    )
+
+
+def _fred_curve_payload(series_id, observations):
+    return {
+        "series_id": series_id,
+        "status": "ok",
+        "error": None,
+        "data": [
+            {"date": observation_date, "value": value}
+            for observation_date, value in observations
+        ],
+    }
+
+
+def test_treasury_curve_has_fixed_four_maturities():
+    service = _curve_service(
+        lambda series_id, limit: _fred_curve_payload(
+            series_id,
+            [("2026-06-22", 4.0)],
+        )
+    )
+
+    curve = service.treasury_curve()
+
+    assert curve.curve_kind == "nominal_treasury"
+    assert curve.complete is True
+    assert curve.status == "ok"
+    assert [(point.tenor, point.source_series) for point in curve.points] == [
+        ("2Y", "DGS2"),
+        ("10Y", "DGS10"),
+        ("20Y", "DGS20"),
+        ("30Y", "DGS30"),
+    ]
+
+
+def test_tips_curve_has_fixed_three_maturities():
+    service = _curve_service(
+        lambda series_id, limit: _fred_curve_payload(
+            series_id,
+            [("2026-06-22", 2.0)],
+        )
+    )
+
+    curve = service.tips_curve()
+
+    assert curve.curve_kind == "tips_real_yield"
+    assert curve.complete is True
+    assert [(point.tenor, point.source_series) for point in curve.points] == [
+        ("5Y", "DFII5"),
+        ("10Y", "DFII10"),
+        ("30Y", "DFII30"),
+    ]
+
+
+def test_historical_curve_selects_on_or_before_and_never_future_value():
+    calls = []
+
+    def fred_reader(series_id, limit):
+        calls.append((series_id, limit))
+        return _fred_curve_payload(
+            series_id,
+            [
+                ("2025-06-17", 9.9),
+                ("2025-06-16", 4.2),
+                ("2025-06-13", 4.1),
+            ],
+        )
+
+    curve = _curve_service(fred_reader).treasury_curve("2025-06-16")
+
+    assert {point.observation_date for point in curve.points} == {"2025-06-16"}
+    assert {point.value for point in curve.points} == {4.2}
+    assert {limit for _, limit in calls} == {5000}
+
+
+def test_partial_and_unavailable_curves_are_not_presented_as_complete():
+    def partial_reader(series_id, limit):
+        if series_id == "DGS20":
+            return {"status": "ok", "data": []}
+        return _fred_curve_payload(series_id, [("2026-06-22", 4.0)])
+
+    partial = _curve_service(partial_reader).treasury_curve()
+    unavailable = _curve_service(
+        lambda series_id, limit: {"status": "error", "error": "raw secret"}
+    ).tips_curve()
+
+    assert partial.status == "partial"
+    assert partial.complete is False
+    assert next(point for point in partial.points if point.tenor == "20Y").status == "unavailable"
+    assert unavailable.status == "unavailable"
+    assert unavailable.complete is False
+    assert all(point.value is None for point in unavailable.points)
+    assert "raw secret" not in unavailable.model_dump_json()
+
+
+def test_curve_point_uses_safe_stale_history_fallback():
+    def fred_reader(series_id, limit):
+        if series_id == "DGS10":
+            return {"status": "error"}
+        return _fred_curve_payload(series_id, [("2026-06-22", 4.0)])
+
+    def history_lookup(metric_key):
+        if metric_key != "dgs10":
+            return None
+        return {
+            "metric_key": "dgs10",
+            "observation_date": "2026-06-20",
+            "value": 4.15,
+            "status": "ok",
+            "lineage": {"raw": "ignored"},
+        }
+
+    curve = _curve_service(
+        fred_reader,
+        history_lookup=history_lookup,
+    ).treasury_curve()
+    point = next(point for point in curve.points if point.tenor == "10Y")
+
+    assert point.status == "stale"
+    assert point.stale is True
+    assert point.value == 4.15
+    assert curve.status == "partial"
+    assert "lineage" not in curve.model_dump_json()
+
+
+def test_curve_rejects_fallback_after_requested_date():
+    curve = _curve_service(
+        lambda series_id, limit: {"status": "error"},
+        history_lookup=lambda metric_key: {
+            "metric_key": metric_key,
+            "observation_date": "2025-06-17",
+            "value": 4.0,
+            "status": "ok",
+        },
+    ).treasury_curve("2025-06-16")
+
+    assert curve.status == "unavailable"
+    assert all(point.value is None for point in curve.points)
+
+
+@pytest.mark.parametrize("requested_date", ["not-a-date", "2026-06-24", "2024-12-31"])
+def test_invalid_future_or_uncovered_curve_date_calls_no_provider(requested_date):
+    calls = []
+
+    def fred_reader(*args):
+        calls.append(args)
+        raise AssertionError("invalid date must not call provider")
+
+    curve = _curve_service(fred_reader).treasury_curve(requested_date)
+
+    assert curve.status == "unavailable"
+    assert curve.complete is False
+    assert curve.points == []
+    assert calls == []
+
+
+def test_malformed_fred_payload_does_not_leak():
+    curve = _curve_service(
+        lambda series_id, limit: {
+            "status": "ok",
+            "data": [{"date": "bad", "value": "Authorization Bearer secret"}],
+            "raw_payload": {"api_key": "secret"},
+        }
+    ).tips_curve()
+
+    serialized = curve.model_dump_json()
+    assert curve.status == "unavailable"
+    assert "Authorization" not in serialized
+    assert "Bearer" not in serialized
+    assert "api_key" not in serialized
+    assert "raw_payload" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("pair", "reason"),
+    [
+        ("USDCNH", "native_usdcnh_not_configured"),
+        ("USDJPY", "unsupported_pair"),
+        ("DEXCHUS", "unsupported_pair"),
+    ],
+)
+def test_fx_gap_is_explicit_and_calls_no_provider(pair, reason):
+    calls = []
+
+    def forbidden(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("FX gap must not call quote providers")
+
+    service = RealtimeQuoteService(
+        alpha_history_reader=forbidden,
+        fred_series_reader=forbidden,
+        history_lookup=forbidden,
+        calendar_loader=load_nyse_trading_calendar,
+        now_provider=lambda: _at("2026-06-23T10:00:00"),
+    )
+
+    snapshot = service.fx_rate(pair)
+
+    assert snapshot.status == "unavailable"
+    assert snapshot.value is None
+    assert snapshot.observed_pair is None
+    assert snapshot.reason_code == reason
+    assert calls == []
+    if pair == "USDCNH":
+        assert "DEXCHUS" not in snapshot.model_dump_json()
+        assert "USD/CNY" not in snapshot.model_dump_json()
+
+
+def test_b5_source_and_route_boundaries_remain_closed():
+    service_source = (
+        _REPO_ROOT / "src/app_backend/services/realtime_quote_service.py"
+    ).read_text(encoding="utf-8")
+    main_source = (_REPO_ROOT / "src/app_backend/main.py").read_text(
+        encoding="utf-8"
+    )
+
+    for forbidden in (
+        "import requests",
+        "import httpx",
+        "import aiohttp",
+        "os.environ",
+        "os.getenv",
+        "dotenv",
+        "sqlite3",
+        "FastAPI",
+        "app_backend.main",
+    ):
+        assert forbidden not in service_source
+    for route in (
+        "/api/quote/etf",
+        "/api/quote/treasury_curve",
+        "/api/quote/fx",
+        "/api/search/tavily",
+    ):
+        assert route not in main_source
+
+
+def test_b5_public_output_contains_no_action_or_prediction_language():
+    service = _curve_service(
+        lambda series_id, limit: _fred_curve_payload(
+            series_id,
+            [("2026-06-22", 4.0)],
+        )
+    )
+    serialized = " ".join(
+        [
+            service.treasury_curve().model_dump_json(),
+            service.tips_curve().model_dump_json(),
+            service.fx_rate().model_dump_json(),
+        ]
+    ).lower()
+
+    for forbidden in (
+        "buy",
+        "sell",
+        "probability",
+        "win rate",
+        "return forecast",
+    ):
+        assert forbidden not in serialized

@@ -30,10 +30,12 @@ Tag：`era1-frontend-redesign-complete`。
 - AI-2：单轮 DeepSeek V4 Pro 研究端点（7 节中文输出 + 全守门链）
 - UI-0：前端信息架构审计
 - Phase A：搜索与收益区间治理边界已获用户批准并正式生效
-- Phase B1–B4：Tavily contract、query sanitizer、guarded adapter 与 real transport
+- Phase B1–B5：Tavily 搜索边界与 read-only quote service
   - B4 transport 已实现，但尚未接入 API
-  - 尚无前端搜索按钮或自动搜索
-  - B5/B6/B7 尚未完成
+  - B5 ETF/VIX/Treasury/TIPS quote contracts 已完成，但尚未接入 API
+  - native USDCNH 明确 unavailable，等待独立数据源批准
+  - 尚无前端、自动搜索或自动报价刷新
+  - B6/B7 尚未完成
 
 ### 进行中
 
@@ -42,7 +44,7 @@ Tag：`era1-frontend-redesign-complete`。
 | Phase | 主题 | 预计周 | L4 人审 |
 |---|---|---|---|
 | A | 治理与边界（解冻 Tavily + 收益区间） | 已完成 | ✅ A1 |
-| B | Tavily + 实时报价 + 商品价 | 进行中（B1–B4 完成） | — |
+| B | Tavily + 实时报价 + 商品价 | 进行中（B1–B5 完成） | — |
 | C | 搜索分类持久化 + 经济日历 | 1.5 | — |
 | D | RAG 知识库 | 2 | — |
 | E | 情景化收益区间引擎 | 2 | ✅ E1 |

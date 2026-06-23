@@ -9,7 +9,13 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict
 
-from app_backend.schemas.realtime_quote import MarketState, QuoteSnapshot
+from app_backend.schemas.realtime_quote import (
+    CurvePoint,
+    FxSnapshot,
+    MarketState,
+    QuoteSnapshot,
+    YieldCurveSnapshot,
+)
 
 
 _NEW_YORK = ZoneInfo("America/New_York")
@@ -63,6 +69,17 @@ _HISTORY_METRIC_KEYS = {
     "GLD": "gld_close",
     "VIX": "vix",
 }
+_TREASURY_SERIES = (
+    ("2Y", "DGS2"),
+    ("10Y", "DGS10"),
+    ("20Y", "DGS20"),
+    ("30Y", "DGS30"),
+)
+_TIPS_SERIES = (
+    ("5Y", "DFII5"),
+    ("10Y", "DFII10"),
+    ("30Y", "DFII30"),
+)
 
 
 class RealtimeQuoteService:
@@ -96,6 +113,171 @@ class RealtimeQuoteService:
             )
             for symbol in normalized
         ]
+
+    def treasury_curve(
+        self,
+        date: str | None = None,
+    ) -> YieldCurveSnapshot:
+        return self._yield_curve(
+            curve_kind="nominal_treasury",
+            series=_TREASURY_SERIES,
+            requested_date=date,
+        )
+
+    def tips_curve(
+        self,
+        date: str | None = None,
+    ) -> YieldCurveSnapshot:
+        return self._yield_curve(
+            curve_kind="tips_real_yield",
+            series=_TIPS_SERIES,
+            requested_date=date,
+        )
+
+    def fx_rate(self, pair: str = "USDCNH") -> FxSnapshot:
+        requested_pair = str(pair).strip().upper()
+        calendar = self._calendar_loader()
+        state = market_state_at(self._now_provider(), calendar)
+        reason = (
+            "native_usdcnh_not_configured"
+            if requested_pair == "USDCNH"
+            else "unsupported_pair"
+        )
+        return FxSnapshot(
+            requested_pair=requested_pair,
+            status="unavailable",
+            stale=False,
+            reason_code=reason,
+            market_state=state.market_state,
+            calendar_covered=state.calendar_covered,
+        )
+
+    def _yield_curve(
+        self,
+        *,
+        curve_kind: str,
+        series: tuple[tuple[str, str], ...],
+        requested_date: str | None,
+    ) -> YieldCurveSnapshot:
+        calendar = self._calendar_loader()
+        now = self._now_provider()
+        state = market_state_at(now, calendar)
+        selection_date = _curve_selection_date(
+            requested_date,
+            now=now,
+            calendar=calendar,
+        )
+        if selection_date is None:
+            return YieldCurveSnapshot(
+                curve_kind=curve_kind,
+                requested_date=requested_date,
+                status="unavailable",
+                complete=False,
+                market_state=state.market_state,
+                calendar_covered=state.calendar_covered,
+            )
+
+        limit = 5000 if requested_date is not None else 10
+        points = [
+            self._curve_point(
+                tenor=tenor,
+                series_id=series_id,
+                selection_date=selection_date,
+                limit=limit,
+            )
+            for tenor, series_id in series
+        ]
+        available = [point for point in points if point.value is not None]
+        complete = len(available) == len(points)
+        if complete and not any(point.stale for point in points):
+            status = "ok"
+        elif available:
+            status = "partial"
+        else:
+            status = "unavailable"
+        dates = {point.observation_date for point in available}
+        selected_date = dates.pop() if len(dates) == 1 else None
+        return YieldCurveSnapshot(
+            curve_kind=curve_kind,
+            requested_date=requested_date,
+            selected_observation_date=selected_date,
+            points=points,
+            status=status,
+            complete=complete,
+            market_state=state.market_state,
+            calendar_covered=state.calendar_covered,
+        )
+
+    def _curve_point(
+        self,
+        *,
+        tenor: str,
+        series_id: str,
+        selection_date: date,
+        limit: int,
+    ) -> CurvePoint:
+        try:
+            payload = self._fred_series_reader(series_id, limit)
+            observation = _latest_fred_observation(payload, selection_date)
+        except Exception:
+            payload = None
+            observation = None
+        if observation is not None:
+            observed_date, value = observation
+            return CurvePoint(
+                tenor=tenor,
+                value=value,
+                observation_date=observed_date.isoformat(),
+                source_series=series_id,
+                status="ok",
+                stale=False,
+            )
+
+        fallback = self._safe_curve_fallback(
+            series_id,
+            selection_date=selection_date,
+        )
+        if fallback is not None:
+            observed_date, value = fallback
+            return CurvePoint(
+                tenor=tenor,
+                value=value,
+                observation_date=observed_date.isoformat(),
+                source_series=series_id,
+                status="stale",
+                stale=True,
+            )
+        reason = (
+            "provider_unavailable"
+            if not isinstance(payload, dict) or payload.get("status") != "ok"
+            else "malformed_provider_data"
+        )
+        return CurvePoint(
+            tenor=tenor,
+            source_series=series_id,
+            status="unavailable",
+            stale=False,
+            reason_code=reason,
+        )
+
+    def _safe_curve_fallback(
+        self,
+        series_id: str,
+        *,
+        selection_date: date,
+    ) -> tuple[date, float] | None:
+        metric_key = series_id.lower()
+        try:
+            row = self._history_lookup(metric_key)
+        except Exception:
+            return None
+        fallback = _safe_history_observation(
+            row,
+            expected_metric_key=metric_key,
+        )
+        if fallback is None or fallback[0] > selection_date:
+            return None
+        return fallback
 
     def _quote_symbol(
         self,
@@ -388,6 +570,27 @@ def _previous_session_date(
             return candidate
         candidate -= timedelta(days=1)
     return None
+
+
+def _curve_selection_date(
+    requested_date: str | None,
+    *,
+    now: datetime,
+    calendar: NyseTradingCalendar,
+) -> date | None:
+    today = now.astimezone(_NEW_YORK).date()
+    if requested_date is None:
+        if not calendar.coverage_start <= today <= calendar.coverage_end:
+            return None
+        return today
+    parsed = _date_or_none(requested_date)
+    if parsed is None:
+        return None
+    if parsed > today:
+        return None
+    if not calendar.coverage_start <= parsed <= calendar.coverage_end:
+        return None
+    return parsed
 
 
 def _date_or_none(value: Any) -> date | None:
