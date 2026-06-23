@@ -101,6 +101,13 @@ scripts/                  # Ingest, audit, benchmark scripts
 - `tavily_real_transport.load_tavily_api_key_from_env()` may read only `TAVILY_API_KEY` from the process environment. It must not read `.env`, dotenv, config files, or any other secret source.
 - `/api/search/tavily` remains forbidden until the separately approved TASK-B7.
 
+### Era 2 read-only quote exception
+
+- `src/app_backend/services/realtime_quote_service.py` may call only the existing audited `alpha_vantage_history_provider.get_daily_time_series`, `fred_provider.get_fred_series`, and read-only `market_history_store.get_latest_observation` callables when one of its public query methods is explicitly invoked.
+- The B5 service itself must not import network clients, read environment variables, `.env`, secrets, or provider config, write databases, persist provider responses, call Tavily, or run automatically.
+- Provider payloads and free-text provider errors must not enter B5 public schemas or responses.
+- B5 does not approve API routes, frontend controls, background refresh, app-start calls, or page-load calls. Any `/api/quote/*` route remains reserved for the separately approved TASK-B7.
+
 ## Key Design Invariants
 
 - `ExternalAIRuntimePolicy` has 10 required-true gates + 12 required-false dangerous permissions. Default: fail-closed.

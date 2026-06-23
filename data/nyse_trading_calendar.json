@@ -1,0 +1,44 @@
+{
+  "version": "2026-06-23",
+  "timezone": "America/New_York",
+  "coverage_start": "2025-01-01",
+  "coverage_end": "2026-12-31",
+  "sessions": {
+    "pre_market_start": "04:00",
+    "regular_open": "09:30",
+    "regular_close": "16:00",
+    "after_hours_end": "20:00",
+    "early_close": "13:00"
+  },
+  "closed_dates": [
+    "2025-01-01",
+    "2025-01-09",
+    "2025-01-20",
+    "2025-02-17",
+    "2025-04-18",
+    "2025-05-26",
+    "2025-06-19",
+    "2025-07-04",
+    "2025-09-01",
+    "2025-11-27",
+    "2025-12-25",
+    "2026-01-01",
+    "2026-01-19",
+    "2026-02-16",
+    "2026-04-03",
+    "2026-05-25",
+    "2026-06-19",
+    "2026-07-03",
+    "2026-09-07",
+    "2026-11-26",
+    "2026-12-25"
+  ],
+  "early_close_dates": [
+    "2025-07-03",
+    "2025-11-28",
+    "2025-12-24",
+    "2026-11-27",
+    "2026-12-24"
+  ],
+  "source_note": "Public maintenance calendar derived from official NYSE holiday and trading-hours publications. Includes the January 9, 2025 National Day of Mourning closure. Future years require an explicit tracked update; dates outside coverage must not be inferred."
+}
