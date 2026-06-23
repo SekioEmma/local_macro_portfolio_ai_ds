@@ -5,6 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from app_backend.schemas.responses import DashboardMetric, DashboardModule
+from app_backend.services.dashboard_evidence_policy import AI_BLOCKED_METRIC_STATUSES
+from app_backend.services.dashboard_historical_derived import (
+    EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+    MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
+    PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+)
+from app_backend.services.dashboard_metric_catalog import CORE_METRIC_KEYS
 from app_backend.services.dashboard_report_loader import ReportState
 from app_backend.services.dashboard_summary_assembly import (
     coerce_status,
@@ -30,11 +37,11 @@ def build_modules(
     key_metrics_for_module: KeyMetricsForModule,
     portfolio_deviation_compact: PortfolioCompactBuilder,
     portfolio_compact_module_status: PortfolioCompactStatusBuilder,
-    core_metric_keys: dict[str, set[str]],
-    ai_blocked_metric_statuses: set[str],
-    equity_historical_derived_metric_keys: set[str],
-    proxy_historical_derived_metric_keys: set[str],
-    market_stress_historical_derived_metric_keys: set[str],
+    core_metric_keys: dict[str, set[str]] = CORE_METRIC_KEYS,
+    ai_blocked_metric_statuses: set[str] = AI_BLOCKED_METRIC_STATUSES,
+    equity_historical_derived_metric_keys: set[str] = EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+    proxy_historical_derived_metric_keys: set[str] = PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+    market_stress_historical_derived_metric_keys: set[str] = MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
 ) -> dict[str, DashboardModule]:
     market = reports["market_snapshot"]
     temperature = reports["market_temperature"]
@@ -165,11 +172,11 @@ def market_module(
     reports: tuple[ReportState, ...],
     signal_terms: tuple[str, ...],
     key_metrics: list[DashboardMetric],
-    core_metric_keys: dict[str, set[str]],
-    ai_blocked_metric_statuses: set[str],
-    equity_historical_derived_metric_keys: set[str],
-    proxy_historical_derived_metric_keys: set[str],
-    market_stress_historical_derived_metric_keys: set[str],
+    core_metric_keys: dict[str, set[str]] = CORE_METRIC_KEYS,
+    ai_blocked_metric_statuses: set[str] = AI_BLOCKED_METRIC_STATUSES,
+    equity_historical_derived_metric_keys: set[str] = EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
+    proxy_historical_derived_metric_keys: set[str] = PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
+    market_stress_historical_derived_metric_keys: set[str] = MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
 ) -> DashboardModule:
     error = first_error(reports)
     if error is not None:
@@ -287,8 +294,8 @@ def portfolio_module(
     key_metrics_for_module: KeyMetricsForModule,
     portfolio_deviation_compact: PortfolioCompactBuilder,
     portfolio_compact_module_status: PortfolioCompactStatusBuilder,
-    core_metric_keys: dict[str, set[str]],
-    ai_blocked_metric_statuses: set[str],
+    core_metric_keys: dict[str, set[str]] = CORE_METRIC_KEYS,
+    ai_blocked_metric_statuses: set[str] = AI_BLOCKED_METRIC_STATUSES,
 ) -> DashboardModule:
     key_metrics = key_metrics_for_module("portfolio_deviation", (report,))
     if report.error_summary is not None:
@@ -354,8 +361,8 @@ def module(
     error_summary: str | None = None,
     key_metrics: list[DashboardMetric] | None = None,
     *,
-    core_metric_keys: dict[str, set[str]],
-    ai_blocked_metric_statuses: set[str],
+    core_metric_keys: dict[str, set[str]] = CORE_METRIC_KEYS,
+    ai_blocked_metric_statuses: set[str] = AI_BLOCKED_METRIC_STATUSES,
 ) -> DashboardModule:
     metrics = key_metrics or []
     coerced_status = coerce_status(status)
@@ -383,7 +390,7 @@ def module(
 def equity_historical_derived_metrics_available(
     metrics: list[DashboardMetric],
     *,
-    metric_keys: set[str],
+    metric_keys: set[str] = EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
 ) -> bool:
     return _historical_derived_metrics_available(metrics, metric_keys=metric_keys)
 
@@ -391,7 +398,7 @@ def equity_historical_derived_metrics_available(
 def proxy_historical_derived_metrics_available(
     metrics: list[DashboardMetric],
     *,
-    metric_keys: set[str],
+    metric_keys: set[str] = PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
 ) -> bool:
     return _historical_derived_metrics_available(metrics, metric_keys=metric_keys)
 
@@ -399,7 +406,7 @@ def proxy_historical_derived_metrics_available(
 def market_stress_historical_derived_metrics_available(
     metrics: list[DashboardMetric],
     *,
-    metric_keys: set[str],
+    metric_keys: set[str] = MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
 ) -> bool:
     return _historical_derived_metrics_available(metrics, metric_keys=metric_keys)
 
@@ -433,8 +440,8 @@ def module_status_with_coverage(
     status: str,
     key_metrics: list[DashboardMetric],
     *,
-    core_metric_keys: dict[str, set[str]],
-    ai_blocked_metric_statuses: set[str],
+    core_metric_keys: dict[str, set[str]] = CORE_METRIC_KEYS,
+    ai_blocked_metric_statuses: set[str] = AI_BLOCKED_METRIC_STATUSES,
 ) -> tuple[str, str | None]:
     if status in {"error", "missing", "stale"}:
         return status, None

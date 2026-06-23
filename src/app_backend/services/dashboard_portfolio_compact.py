@@ -6,6 +6,9 @@ from typing import Any
 
 from app_backend.schemas.responses import DashboardMetric
 from app_backend.services.dashboard_evidence_policy import ai_context_allowed
+from app_backend.services.dashboard_metric_catalog import (
+    PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+)
 from app_backend.services.dashboard_metric_builder import (
     format_value,
     missing_metric,
@@ -22,10 +25,6 @@ PORTFOLIO_DEFAULT_TARGET_WEIGHTS = {
     "short_bond": 0.20,
     "gold": 0.10,
 }
-PORTFOLIO_COMPACT_INTERPRETATION_HINT = (
-    "Cash reserve excluded from target mix; portfolio deviation is not "
-    "attributed to market factors; reference review only."
-)
 
 
 @dataclass(frozen=True)

@@ -9,6 +9,11 @@ from app_backend.services.dashboard_evidence_policy import (
     AI_BLOCKED_FRESHNESS_STATUSES,
     ai_context_allowed,
 )
+from app_backend.services.dashboard_metric_catalog import (
+    DERIVED_METRIC_KEYS,
+    METRIC_ALIASES,
+    SOURCE_BADGE_ALIASES,
+)
 from app_backend.services.dashboard_metric_builder import (
     dependency_unusable,
     find_metric,
@@ -104,7 +109,13 @@ def apply_historical_derived_metrics(
     db_path: Path | str | None = None,
     default_market_history_db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    target_db_path = db_path if db_path is not None else default_market_history_db_path
+    target_db_path = (
+        db_path
+        if db_path is not None
+        else default_market_history_db_path
+        if default_market_history_db_path is not None
+        else market_history_store.get_default_market_history_db_path()
+    )
     candidates = {
         item.metric_key: item
         for item in historical_derived_metrics.build_historical_dashboard_candidates(
@@ -133,7 +144,13 @@ def apply_ppi_final_demand_history(
     db_path: Path | str | None = None,
     default_market_history_db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    target_db_path = db_path if db_path is not None else default_market_history_db_path
+    target_db_path = (
+        db_path
+        if db_path is not None
+        else default_market_history_db_path
+        if default_market_history_db_path is not None
+        else market_history_store.get_default_market_history_db_path()
+    )
     latest = latest_ppifis_observation(target_db_path)
     if latest is None:
         return metrics
@@ -151,7 +168,13 @@ def apply_labor_history_fallback(
     db_path: Path | str | None = None,
     default_market_history_db_path: Path | str | None = None,
 ) -> list[DashboardMetric]:
-    target_db_path = db_path if db_path is not None else default_market_history_db_path
+    target_db_path = (
+        db_path
+        if db_path is not None
+        else default_market_history_db_path
+        if default_market_history_db_path is not None
+        else market_history_store.get_default_market_history_db_path()
+    )
     labor_keys = [m.metric_key for m in metrics if is_labor_official_metric(m.metric_key)]
     if not labor_keys:
         return metrics
@@ -456,9 +479,9 @@ def historical_derived_metric(
 def compact_dgs_fallback_observations(
     reports: tuple[ReportState, ...],
     *,
-    metric_aliases: dict[str, tuple[str, ...]],
-    derived_metric_keys: set[str],
-    source_badge_aliases: dict[str, str],
+    metric_aliases: dict[str, tuple[str, ...]] = METRIC_ALIASES,
+    derived_metric_keys: set[str] = DERIVED_METRIC_KEYS,
+    source_badge_aliases: dict[str, str] = SOURCE_BADGE_ALIASES,
 ) -> dict[str, dict[str, Any]]:
     observations: dict[str, dict[str, Any]] = {}
     for metric_key in ("dgs2", "dgs10", "dgs30"):

@@ -203,7 +203,19 @@ METRIC_ALIASES = {
     "wti_30d_change": ("wti_oil_30d_change",),
     "brent_30d_change": ("brent_oil_30d_change",),
 }
+SOURCE_BADGE_ALIASES = {
+    "official_api": "official",
+    "official_or_public_data_api": "official",
+    "public_data_api": "official",
+    "third_party_api": "proxy",
+    "manual": "local",
+    "cached_report": "derived",
+}
 DGS30_BREAKOUT_MISSING_REASON = "Requires explicit confirmation rule and sufficient DGS30 history."
+PORTFOLIO_COMPACT_INTERPRETATION_HINT = (
+    "Cash reserve excluded from target mix; portfolio deviation is not "
+    "attributed to market factors; reference review only."
+)
 LABOR_METRIC_SPECS = [
     ("unemployment_rate", "Unemployment rate", "percent", "percent", "missing"),
     ("initial_jobless_claims", "Initial jobless claims", "claims", "number", "missing"),

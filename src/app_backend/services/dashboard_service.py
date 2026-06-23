@@ -528,11 +528,6 @@ def _build_modules(
         key_metrics_for_module=_key_metrics_for_module,
         portfolio_deviation_compact=_portfolio_deviation_compact,
         portfolio_compact_module_status=_portfolio_compact_module_status,
-        core_metric_keys=CORE_METRIC_KEYS,
-        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
-        equity_historical_derived_metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
-        proxy_historical_derived_metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
-        market_stress_historical_derived_metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
@@ -549,11 +544,6 @@ def _market_module(
         reports=reports,
         signal_terms=signal_terms,
         key_metrics=key_metrics,
-        core_metric_keys=CORE_METRIC_KEYS,
-        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
-        equity_historical_derived_metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
-        proxy_historical_derived_metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
-        market_stress_historical_derived_metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
@@ -563,8 +553,6 @@ def _portfolio_module(report: ReportState) -> DashboardModule:
         key_metrics_for_module=_key_metrics_for_module,
         portfolio_deviation_compact=_portfolio_deviation_compact,
         portfolio_compact_module_status=_portfolio_compact_module_status,
-        core_metric_keys=CORE_METRIC_KEYS,
-        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
     )
 
 
@@ -589,8 +577,6 @@ def _module(
         next_action=next_action,
         error_summary=error_summary,
         key_metrics=key_metrics,
-        core_metric_keys=CORE_METRIC_KEYS,
-        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
     )
 
 
@@ -604,18 +590,10 @@ def _key_metrics_for_module(
         module_key,
         reports,
         market_history_db_path=market_history_db_path,
-        metric_specs=METRIC_SPECS,
         build_metric=_build_metric,
         apply_historical_derived_metrics=_apply_historical_derived_metrics,
         apply_ppi_final_demand_history=_apply_ppi_final_demand_history,
         compact_dgs_fallback_observations=_compact_dgs_fallback_observations,
-        equity_historical_derived_metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
-        oil_historical_derived_metric_keys=OIL_HISTORICAL_DERIVED_METRIC_KEYS,
-        ppi_final_demand_historical_derived_metric_keys=PPI_FINAL_DEMAND_HISTORICAL_DERIVED_METRIC_KEYS,
-        proxy_breadth_historical_derived_metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
-        market_stress_historical_derived_metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
-        equity_historical_derived_hint_suffix=EQUITY_HISTORICAL_DERIVED_HINT_SUFFIX,
-        oil_historical_derived_hint_suffix=OIL_HISTORICAL_DERIVED_HINT_SUFFIX,
     )
 
 
@@ -631,11 +609,6 @@ def _build_metric(
         derived_metric=_derived_metric,
         portfolio_compact_metric=_portfolio_compact_metric,
         find_metric_callback=_find_metric,
-        derived_metric_keys=DERIVED_METRIC_KEYS,
-        metric_aliases=METRIC_ALIASES,
-        source_badge_aliases=SOURCE_BADGE_ALIASES,
-        portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
-        dgs30_breakout_missing_reason=DGS30_BREAKOUT_MISSING_REASON,
     )
 
 
@@ -661,7 +634,6 @@ def _apply_historical_derived_metrics(
         required_dependency_source_badges=required_dependency_source_badges,
         replace_existing=replace_existing,
         db_path=db_path,
-        default_market_history_db_path=DEFAULT_MARKET_HISTORY_DB_PATH,
     )
 
 
@@ -673,7 +645,6 @@ def _apply_ppi_final_demand_history(
     return _historical_derived_apply_ppi_final_demand_history(
         metrics,
         db_path=db_path,
-        default_market_history_db_path=DEFAULT_MARKET_HISTORY_DB_PATH,
     )
 
 
@@ -685,7 +656,6 @@ def _apply_labor_history_fallback(
     return _historical_derived_apply_labor_history_fallback(
         metrics,
         db_path=db_path,
-        default_market_history_db_path=DEFAULT_MARKET_HISTORY_DB_PATH,
     )
 
 
@@ -694,9 +664,6 @@ def _compact_dgs_fallback_observations(
 ) -> dict[str, dict[str, Any]]:
     return _historical_derived_compact_dgs_fallback_observations(
         reports,
-        metric_aliases=METRIC_ALIASES,
-        derived_metric_keys=DERIVED_METRIC_KEYS,
-        source_badge_aliases=SOURCE_BADGE_ALIASES,
     )
 
 
@@ -705,7 +672,6 @@ def _equity_historical_derived_metrics_available(
 ) -> bool:
     return _module_builder_equity_historical_derived_metrics_available(
         metrics,
-        metric_keys=EQUITY_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
@@ -714,7 +680,6 @@ def _proxy_historical_derived_metrics_available(
 ) -> bool:
     return _module_builder_proxy_historical_derived_metrics_available(
         metrics,
-        metric_keys=PROXY_BREADTH_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
@@ -723,7 +688,6 @@ def _market_stress_historical_derived_metrics_available(
 ) -> bool:
     return _module_builder_market_stress_historical_derived_metrics_available(
         metrics,
-        metric_keys=MARKET_STRESS_HISTORICAL_DERIVED_METRIC_KEYS,
     )
 
 
@@ -738,8 +702,6 @@ def _derived_metric(
     return _derived_metrics_derived_metric(
         metric_key,
         reports,
-        metric_aliases=METRIC_ALIASES,
-        dgs30_breakout_missing_reason=DGS30_BREAKOUT_MISSING_REASON,
     )
 
 
@@ -748,7 +710,6 @@ def _credit_stress_status_metric(
 ) -> DashboardMetric:
     return _derived_credit_stress_status_metric(
         reports,
-        metric_aliases=METRIC_ALIASES,
     )
 
 
@@ -757,7 +718,6 @@ def _real_yield_pressure_status_metric(
 ) -> DashboardMetric:
     return _derived_real_yield_pressure_status_metric(
         reports,
-        metric_aliases=METRIC_ALIASES,
     )
 
 
@@ -782,7 +742,6 @@ def _missing_metric(
         source=source,
         source_badge=source_badge,
         missing_reason=missing_reason,
-        dgs30_breakout_missing_reason=DGS30_BREAKOUT_MISSING_REASON,
     )
 
 
@@ -796,7 +755,6 @@ def _find_metric(
         metric_key,
         reports,
         include_aliases=include_aliases,
-        metric_aliases=METRIC_ALIASES,
     )
 
 
@@ -807,7 +765,6 @@ def _usable_numeric_metric(
     return _derived_usable_numeric_metric(
         metric_key,
         reports,
-        metric_aliases=METRIC_ALIASES,
     )
 
 
@@ -836,15 +793,12 @@ def _metric_source_badge(
         module_key,
         metric_key,
         quality_metadata,
-        derived_metric_keys=DERIVED_METRIC_KEYS,
-        source_badge_aliases=SOURCE_BADGE_ALIASES,
     )
 
 
 def _interpretation_hint(metric_key: str) -> str | None:
     return _metric_builder_interpretation_hint(
         metric_key,
-        portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
     )
 
 
@@ -852,7 +806,6 @@ def _metric_interpretation_hint(metric_key: str, payload: dict[str, Any]) -> str
     return _metric_builder_metric_interpretation_hint(
         metric_key,
         payload,
-        portfolio_compact_interpretation_hint=PORTFOLIO_COMPACT_INTERPRETATION_HINT,
     )
 
 
@@ -865,6 +818,4 @@ def _module_status_with_coverage(
         module_key,
         status,
         key_metrics,
-        core_metric_keys=CORE_METRIC_KEYS,
-        ai_blocked_metric_statuses=AI_BLOCKED_METRIC_STATUSES,
     )

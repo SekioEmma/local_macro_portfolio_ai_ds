@@ -9,6 +9,13 @@ from app_backend.services.dashboard_evidence_policy import (
     ai_context_allowed,
     missing_value_text,
 )
+from app_backend.services.dashboard_metric_catalog import (
+    DERIVED_METRIC_KEYS,
+    DGS30_BREAKOUT_MISSING_REASON,
+    METRIC_ALIASES,
+    PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+    SOURCE_BADGE_ALIASES,
+)
 from app_backend.services.dashboard_report_loader import ReportState
 from app_backend.services.dashboard_summary_assembly import (
     contains_signal,
@@ -46,14 +53,6 @@ ALLOWED_SOURCE_BADGES = {
     "local",
     "derived",
 }
-SOURCE_BADGE_ALIASES = {
-    "official_api": "official",
-    "official_or_public_data_api": "official",
-    "public_data_api": "official",
-    "third_party_api": "proxy",
-    "manual": "local",
-    "cached_report": "derived",
-}
 INFLATION_YOY_METRIC_KEYS = {
     "core_cpi_yoy",
     "core_pce_yoy",
@@ -81,11 +80,11 @@ def build_metric(
     derived_metric: DerivedMetricBuilder,
     portfolio_compact_metric: PortfolioCompactMetricBuilder,
     find_metric_callback: FindMetricBuilder | None = None,
-    derived_metric_keys: set[str],
-    metric_aliases: dict[str, tuple[str, ...]],
-    source_badge_aliases: dict[str, str],
-    portfolio_compact_interpretation_hint: str,
-    dgs30_breakout_missing_reason: str,
+    derived_metric_keys: set[str] = DERIVED_METRIC_KEYS,
+    metric_aliases: dict[str, tuple[str, ...]] = METRIC_ALIASES,
+    source_badge_aliases: dict[str, str] = SOURCE_BADGE_ALIASES,
+    portfolio_compact_interpretation_hint: str = PORTFOLIO_COMPACT_INTERPRETATION_HINT,
+    dgs30_breakout_missing_reason: str = DGS30_BREAKOUT_MISSING_REASON,
 ) -> DashboardMetric:
     metric_key, display_name, unit, format_kind, missing_status = spec
     derived = derived_metric(metric_key, reports)
@@ -256,7 +255,7 @@ def missing_metric(
     source: str | None = None,
     source_badge: str | None = None,
     missing_reason: str | None = None,
-    dgs30_breakout_missing_reason: str,
+    dgs30_breakout_missing_reason: str = DGS30_BREAKOUT_MISSING_REASON,
 ) -> DashboardMetric:
     normalized_status = metric_status_value(status)
     normalized_source_badge = (
@@ -429,7 +428,7 @@ def metric_source_badge(
     metric_key: str | None = None,
     quality_metadata: dict[str, Any] | None = None,
     *,
-    derived_metric_keys: set[str],
+    derived_metric_keys: set[str] = DERIVED_METRIC_KEYS,
     source_badge_aliases: dict[str, str] | None = None,
 ) -> str:
     if module_key == "portfolio_deviation":
@@ -586,7 +585,7 @@ def to_float(value: Any) -> float | None:
 def interpretation_hint(
     metric_key: str,
     *,
-    portfolio_compact_interpretation_hint: str,
+    portfolio_compact_interpretation_hint: str = PORTFOLIO_COMPACT_INTERPRETATION_HINT,
 ) -> str | None:
     official_macro = official_macro_pack.get_official_macro_metric(metric_key)
     if official_macro is not None:
@@ -611,7 +610,7 @@ def metric_interpretation_hint(
     metric_key: str,
     payload: dict[str, Any],
     *,
-    portfolio_compact_interpretation_hint: str,
+    portfolio_compact_interpretation_hint: str = PORTFOLIO_COMPACT_INTERPRETATION_HINT,
 ) -> str | None:
     hint = string_or_none(payload.get("interpretation_hint"))
     if metric_key == "ppiaco_yoy" and hint:

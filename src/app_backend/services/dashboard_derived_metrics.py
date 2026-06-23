@@ -7,6 +7,10 @@ from app_backend.services.dashboard_evidence_policy import (
     ai_context_allowed,
     missing_value_text,
 )
+from app_backend.services.dashboard_metric_catalog import (
+    DGS30_BREAKOUT_MISSING_REASON,
+    METRIC_ALIASES,
+)
 from app_backend.services.dashboard_metric_builder import (
     dependency_unusable,
     find_metric,
@@ -27,8 +31,8 @@ def derived_metric(
     metric_key: str,
     reports: tuple[ReportState, ...],
     *,
-    metric_aliases: dict[str, tuple[str, ...]],
-    dgs30_breakout_missing_reason: str,
+    metric_aliases: dict[str, tuple[str, ...]] = METRIC_ALIASES,
+    dgs30_breakout_missing_reason: str = DGS30_BREAKOUT_MISSING_REASON,
 ) -> DashboardMetric | None:
     if metric_key == "credit_stress_status":
         if find_metric(
@@ -158,7 +162,7 @@ def derived_metric(
 def credit_stress_status_metric(
     reports: tuple[ReportState, ...],
     *,
-    metric_aliases: dict[str, tuple[str, ...]],
+    metric_aliases: dict[str, tuple[str, ...]] = METRIC_ALIASES,
 ) -> DashboardMetric:
     high_yield = usable_numeric_metric("high_yield_spread", reports, metric_aliases=metric_aliases)
     investment_grade = usable_numeric_metric("investment_grade_spread", reports, metric_aliases=metric_aliases)
@@ -261,7 +265,7 @@ def credit_status_from_values(
 def real_yield_pressure_status_metric(
     reports: tuple[ReportState, ...],
     *,
-    metric_aliases: dict[str, tuple[str, ...]],
+    metric_aliases: dict[str, tuple[str, ...]] = METRIC_ALIASES,
 ) -> DashboardMetric:
     real_yield = usable_numeric_metric("dfii10", reports, metric_aliases=metric_aliases)
     breakeven = usable_numeric_metric("t10yie", reports, metric_aliases=metric_aliases)
@@ -416,7 +420,7 @@ def usable_numeric_metric(
     metric_key: str,
     reports: tuple[ReportState, ...],
     *,
-    metric_aliases: dict[str, tuple[str, ...]],
+    metric_aliases: dict[str, tuple[str, ...]] = METRIC_ALIASES,
 ) -> tuple[float, dict[str, Any], ReportState] | None:
     found = find_metric(metric_key, reports, metric_aliases=metric_aliases)
     if found is None or dependency_unusable(found):
