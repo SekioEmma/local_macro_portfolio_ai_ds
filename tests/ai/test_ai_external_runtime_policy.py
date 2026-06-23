@@ -14,8 +14,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-_REPO_ROOT = Path(__file__).resolve().parents[2]
 from pydantic import ValidationError
 
 from app_backend.schemas.ai_external import (
@@ -27,6 +25,8 @@ from app_backend.services.ai_external_runtime_policy import (
     assert_external_ai_runtime_policy_allowed,
     guard_external_ai_runtime_policy,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ---------------------------------------------------------------------------

@@ -681,8 +681,6 @@ class TestComplianceAuditReinforcement:
         assert d16_audit["uses_evidence_index"] is True
 
     def test_d16_production_files_contain_no_forbidden_surfaces(self):
-        from pathlib import Path
-
         text = (_REPO_ROOT / "src/data_quality/scenario_stress.py").read_text(encoding="utf-8")
         for token in (
             "/api/chat",
