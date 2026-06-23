@@ -6,7 +6,7 @@ Local-first macro risk research workbench. CS learning vehicle > macro research 
 
 ```bash
 # Backend (FastAPI + Uvicorn)
-cd src && python -m uvicorn app_backend.main:app --reload --host 127.0.0.1 --port 8000
+cd src && python -m uvicorn app_backend.main:app --reload --host 127.0.0.1 --port 8765
 
 # Frontend (React 18 + Vite 5 + TypeScript 5.5)
 cd app_frontend && npm run dev

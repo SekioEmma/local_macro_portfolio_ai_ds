@@ -34,7 +34,7 @@
 
 ```bash
 # 后端
-cd src && python -m uvicorn app_backend.main:app --reload --host 127.0.0.1 --port 8000
+cd src && python -m uvicorn app_backend.main:app --reload --host 127.0.0.1 --port 8765
 
 # 前端
 cd app_frontend && npm run dev
