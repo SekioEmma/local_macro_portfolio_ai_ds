@@ -1,9 +1,7 @@
 from pathlib import Path
 
-from app_backend.services.dashboard_service import (
-    ReportState,
-    _portfolio_deviation_compact,
-)
+from app_backend.services.dashboard_portfolio_compact import portfolio_deviation_compact
+from app_backend.services.dashboard_report_loader import ReportState
 
 
 def test_portfolio_deviation_compact_uses_non_cash_target_denominator():
@@ -31,7 +29,7 @@ def test_portfolio_deviation_compact_uses_non_cash_target_denominator():
         },
     )
 
-    compact = _portfolio_deviation_compact(report)
+    compact = portfolio_deviation_compact(report)
 
     assert compact is not None
     assert compact.target_weights == {
@@ -69,7 +67,7 @@ def test_portfolio_deviation_compact_marks_stale_holdings():
         },
     )
 
-    compact = _portfolio_deviation_compact(report)
+    compact = portfolio_deviation_compact(report)
 
     assert compact is not None
     assert compact.stale_status == "stale"
