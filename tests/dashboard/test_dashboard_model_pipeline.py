@@ -8,9 +8,7 @@ P-M1 adds conversion-count and input-order regression tests.
 import json
 import socket
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app_backend.main import app

@@ -24,8 +24,6 @@ from fastapi.testclient import TestClient
 from app_backend.main import app
 from app_backend.schemas.ai_preview import (
     AIPreviewChatRequest,
-    AIPreviewMemoRequest,
-    AIPreviewReportRequest,
 )
 from app_backend.services import ai_context_service, ai_preview_service
 

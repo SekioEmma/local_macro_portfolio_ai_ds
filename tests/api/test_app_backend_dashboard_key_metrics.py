@@ -102,14 +102,15 @@ def test_provider_health_not_run_yet_is_not_provider_broken(monkeypatch, tmp_pat
 def test_credit_stress_status_derives_partial_when_ig_missing(monkeypatch, tmp_path):
     _block_network(monkeypatch)
     generated_at = "2026-01-01T00:00:00+00:00"
-    metric = lambda value, source="FRED", source_badge="official": {
-        "value": value,
-        "status": "ok",
-        "source": source,
-        "source_badge": source_badge,
-        "observation_date": "2026-01-01",
-        "freshness_status": "fresh",
-    }
+    def metric(value, source="FRED", source_badge="official"):
+        return {
+            "value": value,
+            "status": "ok",
+            "source": source,
+            "source_badge": source_badge,
+            "observation_date": "2026-01-01",
+            "freshness_status": "fresh",
+        }
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -269,14 +270,15 @@ def _write_json(path, payload):
 
 def _write_fake_reports(tmp_path):
     generated_at = "2026-01-01T00:00:00+00:00"
-    metric = lambda value, source="FRED", source_badge="official": {
-        "value": value,
-        "status": "ok",
-        "source": source,
-        "source_badge": source_badge,
-        "observation_date": "2026-01-01",
-        "freshness_status": "fresh",
-    }
+    def metric(value, source="FRED", source_badge="official"):
+        return {
+            "value": value,
+            "status": "ok",
+            "source": source,
+            "source_badge": source_badge,
+            "observation_date": "2026-01-01",
+            "freshness_status": "fresh",
+        }
     (tmp_path / "market_snapshot.json").write_text(
         json.dumps(
             {

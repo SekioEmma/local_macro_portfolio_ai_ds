@@ -3,7 +3,7 @@ from __future__ import annotations
 import bisect
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from data_quality.historical_validation_replay import (

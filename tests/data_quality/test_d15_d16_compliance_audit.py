@@ -8,7 +8,7 @@ from app_backend.services import dashboard_service
 from data_quality import macro_regime_review as d15
 from data_quality import scenario_stress as d16
 from modeling.metric_lookup import D15_PUBLIC_OUTPUT_KEYS, D16_PUBLIC_OUTPUT_KEYS
-from modeling.model_registry import FORBIDDEN_PUBLIC_OUTPUT_KEYS, ModelRegistry
+from modeling.model_registry import FORBIDDEN_PUBLIC_OUTPUT_KEYS
 
 
 FORBIDDEN_OUTPUT_PHRASES = (

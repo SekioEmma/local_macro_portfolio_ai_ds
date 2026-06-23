@@ -24,7 +24,6 @@ from app_backend.services.deepseek_adapter import (
     mocked_transport_only_config,
 )
 from app_backend.services.deepseek_transport_contract import (
-    DeepSeekTransportError,
     MockDeepSeekTransport,
 )
 

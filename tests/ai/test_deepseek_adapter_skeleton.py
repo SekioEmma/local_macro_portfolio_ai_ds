@@ -10,7 +10,6 @@ import-surface test.
 from __future__ import annotations
 
 import socket
-import sys
 from pathlib import Path
 
 import pytest

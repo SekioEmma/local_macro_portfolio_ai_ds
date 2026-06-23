@@ -13,7 +13,6 @@ import json
 import socket
 from types import SimpleNamespace
 
-import pytest
 
 from app_backend.schemas.responses import DashboardEvidenceRow
 from app_backend.services import ai_context_service

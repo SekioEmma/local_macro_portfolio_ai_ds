@@ -4,7 +4,6 @@ from typing import Any
 
 from app_backend.schemas.responses import DashboardMetric
 from app_backend.services.dashboard_evidence_policy import (
-    AI_BLOCKED_METRIC_STATUSES,
     ai_context_allowed,
     missing_value_text,
 )
@@ -17,7 +16,6 @@ from app_backend.services.dashboard_metric_builder import (
     metric_observation_date,
     metric_source,
     metric_source_series,
-    metric_status,
     metric_status_value,
     to_float,
 )

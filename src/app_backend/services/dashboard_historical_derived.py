@@ -25,7 +25,6 @@ from app_backend.services.dashboard_metric_builder import (
 )
 from app_backend.services.dashboard_report_loader import ReportState
 from app_backend.services.dashboard_summary_assembly import (
-    first_updated_at,
     string_or_none,
 )
 from data_providers import market_history_store

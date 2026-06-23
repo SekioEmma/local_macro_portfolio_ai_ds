@@ -1,4 +1,3 @@
-import math
 
 from data_providers import yfinance_history_provider as provider
 

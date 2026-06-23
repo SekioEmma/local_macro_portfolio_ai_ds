@@ -244,7 +244,7 @@ def build_deepseek_prompt(
         f"[输出合同]\n{output_contract}",
         f"[预检清单]\n{preflight}",
         f"[选中的证据上下文]\n{selected_context.selected_context_text}",
-        f"[上下文选择说明]\n" + "\n".join(selected_context.selection_notes),
+        "[上下文选择说明]\n" + "\n".join(selected_context.selection_notes),
         f"[约束摘要]\n{selected_context.constraint_summary.summary_zh}",
         f"[来源与新鲜度摘要]\n{source_quality}",
         _SECTION_FORMAT_INSTRUCTION,

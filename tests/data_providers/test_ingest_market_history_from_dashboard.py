@@ -1,8 +1,6 @@
 import json
 import socket
-import sys
 
-import pytest
 
 import ingest_market_history_from_dashboard as ingest
 from data_providers import market_history_store as store
