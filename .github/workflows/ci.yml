@@ -25,11 +25,6 @@ jobs:
       - name: Lint Python
         run: python -m ruff check src tests
 
-      - name: Test Python
-        env:
-          PYTHONPATH: src
-        run: python -m pytest tests/ -x -q
-
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -39,6 +34,11 @@ jobs:
       - name: Install frontend dependencies
         working-directory: app_frontend
         run: npm ci
+
+      - name: Test Python
+        env:
+          PYTHONPATH: src
+        run: python -m pytest tests/ -x -q
 
       - name: Type-check frontend
         working-directory: app_frontend
