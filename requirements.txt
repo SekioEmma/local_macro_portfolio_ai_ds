@@ -1,6 +1,6 @@
-pyyaml
-yfinance
-requests
-python-dotenv
+pyyaml>=6.0,<7.0
+yfinance>=1.3,<2.0
+requests>=2.32,<3.0
+python-dotenv>=1.1,<2.0
 fastapi>=0.110,<0.200
 uvicorn[standard]>=0.29,<1.0
