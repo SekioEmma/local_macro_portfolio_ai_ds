@@ -258,6 +258,12 @@ def test_d15_d16_no_forbidden_surfaces_in_key_files():
     _AI_2_ALLOWED_IN_MAIN = {
         "DeepSeek",
         "/api/ai/deepseek",
+        # TASK-B7: guarded search surface wired into main.py via
+        # TavilySearchExecutionService (the "/api/search/tavily" route name
+        # contains the "/api/search" and "Tavily" substrings). The D15/D16
+        # data_quality semantic scan above is unchanged and keeps no exemption.
+        "/api/search",
+        "Tavily",
     }
 
     data_quality_text = "\n".join(

@@ -526,6 +526,11 @@ def test_d17_d18_production_files_have_no_forbidden_surfaces():
     _AI_2_ALLOWED_IN_MAIN = {
         "DeepSeek",
         "/api/ai/deepseek",
+        # TASK-B7: guarded search surface wired into main.py via
+        # TavilySearchExecutionService. The D17/D18 data_quality semantic scan
+        # below is unchanged and keeps no exemption.
+        "/api/search",
+        "Tavily",
     }
 
     data_quality_text = "\n".join(

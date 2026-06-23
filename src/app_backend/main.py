@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from app_backend.schemas.ai_preview import (
@@ -31,6 +31,17 @@ from app_backend.schemas.responses import (
     StorageStatusResponse,
     UpdateAppSettingsRequest,
 )
+from app_backend.schemas.commodity_quote import CommodityQuoteSnapshot
+from app_backend.schemas.realtime_quote import (
+    FxSnapshot,
+    QuoteSnapshot,
+    YieldCurveSnapshot,
+)
+from app_backend.schemas.search_external import (
+    SearchRequest,
+    SearchResponse,
+    TavilySearchApiRequest,
+)
 from app_backend.services import (
     ai_context_service,
     ai_deepseek_research_service,
@@ -38,6 +49,15 @@ from app_backend.services import (
     dashboard_service,
     provider_service,
     storage_service,
+)
+from app_backend.services.commodity_quote_service import CommodityQuoteService
+from app_backend.services.realtime_quote_service import (
+    RealtimeQuoteService,
+    build_default_realtime_quote_service,
+)
+from app_backend.services.search_execution_service import (
+    TavilySearchExecutionService,
+    build_default_tavily_search_execution_service,
 )
 from app_backend.services.status_service import build_status
 
@@ -196,3 +216,135 @@ def post_favorite(request: CreateFavoriteAnswerRequest) -> FavoriteAnswer:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# B7 guarded local routes (search + read-only quotes).
+#
+# All calls are explicit user HTTP requests. There is no automatic refresh,
+# background task, app-start call, or page-load call. Importing this module
+# reads no config, env, database, or network; the realtime quote service is
+# built per request and the search execution service is a process-local
+# singleton whose construction touches nothing.
+# ---------------------------------------------------------------------------
+
+_SEARCH_EXECUTION_SERVICE = build_default_tavily_search_execution_service()
+
+
+def get_realtime_quote_service() -> RealtimeQuoteService:
+    return build_default_realtime_quote_service()
+
+
+def get_tavily_search_execution_service() -> TavilySearchExecutionService:
+    return _SEARCH_EXECUTION_SERVICE
+
+
+def _build_commodity_search_callable(
+    search_service: TavilySearchExecutionService,
+):
+    """Request-scoped callable for the commodity endpoint.
+
+    The endpoint itself is the explicit user request, so the callable fixes
+    confirm_external_search=true. Every other gate (config, sanitizer,
+    allowlist, budget, runtime policy, adapter, transport, response guard)
+    still applies inside the execution service.
+    """
+
+    def _search(request: SearchRequest) -> SearchResponse:
+        return search_service.execute(
+            TavilySearchApiRequest(
+                query=request.query,
+                max_results=request.max_results,
+                domain_filter=list(request.domain_filter),
+                confirm_external_search=True,
+            )
+        )
+
+    return _search
+
+
+@app.post("/api/search/tavily", response_model=SearchResponse)
+def post_search_tavily(
+    request: TavilySearchApiRequest,
+    service: TavilySearchExecutionService = Depends(
+        get_tavily_search_execution_service
+    ),
+) -> SearchResponse:
+    try:
+        return service.execute(request)
+    except Exception:
+        return SearchResponse(
+            results=[], search_available=False, guard_passed=False
+        )
+
+
+@app.get("/api/quote/etf", response_model=list[QuoteSnapshot])
+def get_quote_etf(
+    symbols: list[str] = Query(...),
+    service: RealtimeQuoteService = Depends(get_realtime_quote_service),
+) -> list[QuoteSnapshot]:
+    try:
+        return service.quote_etf(symbols)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="unsupported_symbol"
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail="quote_service_unavailable"
+        ) from exc
+
+
+@app.get("/api/quote/treasury_curve", response_model=YieldCurveSnapshot)
+def get_quote_treasury_curve(
+    date: str | None = Query(default=None),
+    curve_kind: str = Query(default="nominal_treasury"),
+    service: RealtimeQuoteService = Depends(get_realtime_quote_service),
+) -> YieldCurveSnapshot:
+    if curve_kind == "nominal_treasury":
+        method = service.treasury_curve
+    elif curve_kind == "tips_real_yield":
+        method = service.tips_curve
+    else:
+        raise HTTPException(status_code=422, detail="unsupported_curve_kind")
+    try:
+        return method(date)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422, detail="invalid_curve_request"
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail="quote_service_unavailable"
+        ) from exc
+
+
+@app.get("/api/quote/fx", response_model=FxSnapshot)
+def get_quote_fx(
+    pair: str = Query(default="USDCNH"),
+    service: RealtimeQuoteService = Depends(get_realtime_quote_service),
+) -> FxSnapshot:
+    try:
+        return service.fx_rate(pair)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail="quote_service_unavailable"
+        ) from exc
+
+
+@app.get("/api/quote/commodity", response_model=CommodityQuoteSnapshot)
+def get_quote_commodity(
+    benchmark: str = Query(default="brent"),
+    search_service: TavilySearchExecutionService = Depends(
+        get_tavily_search_execution_service
+    ),
+) -> CommodityQuoteSnapshot:
+    service = CommodityQuoteService(
+        search_callable=_build_commodity_search_callable(search_service)
+    )
+    try:
+        return service.quote(benchmark)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503, detail="quote_service_unavailable"
+        ) from exc

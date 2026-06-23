@@ -30,12 +30,14 @@ Tag：`era1-frontend-redesign-complete`。
 - AI-2：单轮 DeepSeek V4 Pro 研究端点（7 节中文输出 + 全守门链）
 - UI-0：前端信息架构审计
 - Phase A：搜索与收益区间治理边界已获用户批准并正式生效
-- Phase B1–B5：Tavily 搜索边界与 read-only quote service
-  - B4 transport 已实现，但尚未接入 API
-  - B5 ETF/VIX/Treasury/TIPS quote contracts 已完成，但尚未接入 API
-  - native USDCNH 明确 unavailable，等待独立数据源批准
-  - 尚无前端、自动搜索或自动报价刷新
-  - B6/B7 尚未完成
+- Phase B1–B7：Tavily 搜索边界、read-only quote service、商品价与本地 API routes
+  - B4 Tavily transport 已实现
+  - B5 ETF/VIX/Treasury/TIPS quote contracts 已完成
+  - B6 guarded Brent/WTI commodity quote service 已完成
+  - B7 本地 API routes 已实现：`POST /api/search/tavily`（fail-closed，需 confirm）+ 只读 `GET /api/quote/{etf,treasury_curve,fx,commodity}`
+  - native USDCNH 仍明确 unavailable，等待独立数据源批准
+  - 无前端控制、无自动刷新、无后台/启动时搜索或报价调用
+  - C1 尚未开始
 
 ### 进行中
 
@@ -44,7 +46,7 @@ Tag：`era1-frontend-redesign-complete`。
 | Phase | 主题 | 预计周 | L4 人审 |
 |---|---|---|---|
 | A | 治理与边界（解冻 Tavily + 收益区间） | 已完成 | ✅ A1 |
-| B | Tavily + 实时报价 + 商品价 | 进行中（B1–B5 完成） | — |
+| B | Tavily + 实时报价 + 商品价 + 本地 API routes | 已完成（B1–B7） | — |
 | C | 搜索分类持久化 + 经济日历 | 1.5 | — |
 | D | RAG 知识库 | 2 | — |
 | E | 情景化收益区间引擎 | 2 | ✅ E1 |

@@ -884,6 +884,9 @@ def test_b5_source_and_route_boundaries_remain_closed():
         encoding="utf-8"
     )
 
+    # The B5 quote service itself stays route-free and imports no network
+    # client, env, secrets, or FastAPI. (B7 wires the routes in main.py via
+    # injected services; the service module remains closed.)
     for forbidden in (
         "import requests",
         "import httpx",
@@ -896,11 +899,12 @@ def test_b5_source_and_route_boundaries_remain_closed():
         "app_backend.main",
     ):
         assert forbidden not in service_source
+    # The permanently forbidden routes must never appear in main.py. The
+    # B7-approved /api/quote/* and /api/search/tavily routes are expected to
+    # exist and are covered by the dedicated API route tests.
     for route in (
-        "/api/quote/etf",
-        "/api/quote/treasury_curve",
-        "/api/quote/fx",
-        "/api/search/tavily",
+        "/api/chat",
+        "/api/ai/tavily",
     ):
         assert route not in main_source
 

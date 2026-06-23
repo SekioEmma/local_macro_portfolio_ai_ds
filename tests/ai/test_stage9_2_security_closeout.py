@@ -70,6 +70,9 @@ def test_no_forbidden_routes_present():
 
 AI_2_ALLOWED_ROUTES = {
     "/api/ai/research-deepseek",
+    # TASK-B7: the guarded, fail-closed, POST-only search route is a
+    # sanctioned external boundary routed through TavilySearchExecutionService.
+    "/api/search/tavily",
 }
 
 

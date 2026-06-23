@@ -83,8 +83,8 @@ scripts/                  # Ingest, audit, benchmark scripts
 - Read `os.environ` / `os.getenv`, **except** the approved key loads isolated to `deepseek_real_transport.load_deepseek_api_key_from_env()` and `tavily_real_transport.load_tavily_api_key_from_env()`. Do not scatter new env reads elsewhere.
 - Import `httpx` / `requests` / `aiohttp` outside an explicitly approved transport boundary
 - Make real network calls, **except** the approved AI-2 single-turn DeepSeek call through `deepseek_real_transport.py` and the approved B4 transport boundary in `tavily_real_transport.py`; both remain synchronous and must never run in the background, at app start, or on page load
-- Add `/api/chat`, `/api/ai/deepseek`, `/api/ai/external`, or `/api/ai/tavily` (the bare `/api/ai/deepseek` stays forbidden; the sanctioned model endpoint is `/api/ai/research-deepseek`)
-- Add `/api/search/tavily` before the separately approved TASK-B7
+- Add `/api/chat`, `/api/ai/deepseek`, `/api/ai/external`, or `/api/ai/tavily` (the bare `/api/ai/deepseek` stays forbidden; the sanctioned model endpoint is `/api/ai/research-deepseek`; `/api/chat` and `/api/ai/tavily` stay forbidden)
+- Add a `/api/search/tavily` or `/api/quote/*` route that bypasses its guarded service (TASK-B7 approves these routes only through `TavilySearchExecutionService` / `RealtimeQuoteService` / `CommodityQuoteService`; never call the Tavily transport directly from a route)
 - Send raw questions/prompts/holdings/account/position/transaction data or local paths
 - Change D10-D19 or Stage 8 financial semantics
 - Broaden AI Context Manifest eligibility
@@ -99,14 +99,23 @@ scripts/                  # Ingest, audit, benchmark scripts
 - Automatic, background, app-start, and page-load search calls remain forbidden.
 - Tavily may receive only a sanitizer-approved query. Raw prompts, full account context, holdings, positions, transactions, local paths, and raw provider payloads remain forbidden.
 - `tavily_real_transport.load_tavily_api_key_from_env()` may read only `TAVILY_API_KEY` from the process environment. It must not read `.env`, dotenv, config files, or any other secret source.
-- `/api/search/tavily` remains forbidden until the separately approved TASK-B7.
+- `/api/search/tavily` is approved by TASK-B7 as **POST only**, routed exclusively through `TavilySearchExecutionService.execute`, and requires `confirm_external_search=true`. It must pass the query sanitizer, runtime policy, domain allowlist, per-process daily budget, and response guard. It defaults fail-closed, never calls the Tavily transport directly, never saves the raw query or raw response, and is never invoked automatically, in the background, at app start, or on page load.
 
 ### Era 2 read-only quote exception
 
 - `src/app_backend/services/realtime_quote_service.py` may call only the existing audited `alpha_vantage_history_provider.get_daily_time_series`, `fred_provider.get_fred_series`, and read-only `market_history_store.get_latest_observation` callables when one of its public query methods is explicitly invoked.
 - The B5 service itself must not import network clients, read environment variables, `.env`, secrets, or provider config, write databases, persist provider responses, call Tavily, or run automatically.
 - Provider payloads and free-text provider errors must not enter B5 public schemas or responses.
-- B5 does not approve API routes, frontend controls, background refresh, app-start calls, or page-load calls. Any `/api/quote/*` route remains reserved for the separately approved TASK-B7.
+- B5 itself does not wire API routes; the `/api/quote/*` routes are added by the separately approved TASK-B7 (see below) and remain read-only.
+
+### Era 2 B7 API routes
+
+- TASK-B7 exposes local FastAPI routes only. There is no frontend, no automatic refresh, no background task, no app-start call, and no page-load call. Every call is an explicit user HTTP request.
+- `POST /api/search/tavily` goes only through `TavilySearchExecutionService`, requires `confirm_external_search=true`, and is fail-closed (sanitizer + runtime policy + allowlist + budget + response guard). It never calls the transport directly and never persists raw query/response.
+- The following GET routes are read-only and write no SQLite/cache/outputs: `/api/quote/etf`, `/api/quote/treasury_curve`, `/api/quote/fx`, `/api/quote/commodity`. They emit no trade, forecast, probability, or advice fields.
+- `/api/quote/commodity` runs through the B6 `CommodityQuoteService` over a request-scoped search callable that still passes config, sanitizer, allowlist, budget, runtime policy, adapter, transport, and response guard; it is limited to the three fixed domains (reuters.com / bloomberg.com / oilprice.com).
+- USDCNH on `/api/quote/fx` still returns `unavailable` (`native_usdcnh_not_configured`); `DEXCHUS` / USD/CNY proxies remain forbidden.
+- Importing `main` reads no config, env, database, or network; dependency factories never call providers at app start.
 
 ## Key Design Invariants
 

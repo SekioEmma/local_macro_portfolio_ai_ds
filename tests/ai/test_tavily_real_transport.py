@@ -543,12 +543,16 @@ def test_import_has_no_env_file_or_network_side_effects(monkeypatch):
     assert module.DEFAULT_TAVILY_SEARCH_ENDPOINT == DEFAULT_TAVILY_SEARCH_ENDPOINT
 
 
-def test_main_has_no_tavily_search_route():
+def test_main_tavily_search_route_is_guarded_not_direct():
+    # TASK-B7 adds POST /api/search/tavily, but only through the guarded
+    # TavilySearchExecutionService. main.py must never call the real transport
+    # directly, and the permanently forbidden routes stay absent.
     source = (_REPO_ROOT / "src/app_backend/main.py").read_text(encoding="utf-8")
 
-    assert "/api/search/tavily" not in source
     assert "/api/chat" not in source
     assert "/api/ai/tavily" not in source
+    assert "TavilyRealTransport" not in source
+    assert "TavilySearchExecutionService" in source
 
 
 def test_httpx_import_is_isolated_to_real_transport():
