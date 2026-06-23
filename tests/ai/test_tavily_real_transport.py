@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import socket
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -22,6 +23,17 @@ from app_backend.services.tavily_transport_contract import (
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _TEST_KEY = "tvly-test-only-secret"
+
+
+class ChunkStream(httpx.SyncByteStream):
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+        self.yielded = 0
+
+    def __iter__(self):
+        for chunk in self.chunks:
+            self.yielded += 1
+            yield chunk
 
 
 def _request(**overrides) -> TavilyTransportRequest:
@@ -141,19 +153,21 @@ def test_timeout_and_redirect_policy_are_explicit():
     calls = []
 
     class SpyClient:
-        def post(self, url, **kwargs):
-            calls.append((url, kwargs))
-            return httpx.Response(
+        @contextmanager
+        def stream(self, method, url, **kwargs):
+            calls.append((method, url, kwargs))
+            yield httpx.Response(
                 200,
                 json={"results": []},
-                request=httpx.Request("POST", url),
+                request=httpx.Request(method, url),
             )
 
     transport = TavilyRealTransport(api_key=_TEST_KEY, client=SpyClient())
 
     transport.send(_request())
 
-    _, kwargs = calls[0]
+    method, _, kwargs = calls[0]
+    assert method == "POST"
     assert kwargs["timeout"] == 30.0
     assert kwargs["follow_redirects"] is False
 
@@ -179,10 +193,24 @@ def test_provider_extra_fields_do_not_enter_response():
         assert forbidden not in serialized
 
 
-def test_oversized_response_fails_closed_without_body_leakage():
-    oversized = b"x" * (MAX_TAVILY_RESPONSE_BYTES + 1)
+def test_content_length_over_limit_fails_without_reading_or_decoding(monkeypatch):
+    stream = ChunkStream([b'{"results":[]}'])
+    decoded = []
+
+    def blocked_loads(*args, **kwargs):
+        decoded.append(True)
+        raise AssertionError("oversized response must not be decoded")
+
+    monkeypatch.setattr(
+        "app_backend.services.tavily_real_transport.json.loads",
+        blocked_loads,
+    )
     transport, client = _transport(
-        lambda request: httpx.Response(200, content=oversized)
+        lambda request: httpx.Response(
+            200,
+            headers={"Content-Length": str(MAX_TAVILY_RESPONSE_BYTES + 1)},
+            stream=stream,
+        )
     )
     try:
         with pytest.raises(TavilyTransportError) as exc:
@@ -192,7 +220,68 @@ def test_oversized_response_fails_closed_without_body_leakage():
 
     assert exc.value.kind == "malformed"
     assert exc.value.detail == ""
-    assert "xxx" not in str(exc.value)
+    assert stream.yielded == 0
+    assert decoded == []
+
+
+def test_chunked_response_stops_as_soon_as_stream_limit_is_exceeded():
+    stream = ChunkStream(
+        [
+            b"x" * MAX_TAVILY_RESPONSE_BYTES,
+            b"oversized-provider-body",
+            b"must-not-be-read",
+        ]
+    )
+    transport, client = _transport(
+        lambda request: httpx.Response(200, stream=stream)
+    )
+    try:
+        with pytest.raises(TavilyTransportError) as exc:
+            transport.send(_request())
+    finally:
+        client.close()
+
+    serialized = f"{exc.value!r} {exc.value} {exc.value.detail} {repr(transport)}"
+    assert exc.value.kind == "malformed"
+    assert stream.yielded == 2
+    assert "oversized-provider-body" not in serialized
+    assert "must-not-be-read" not in serialized
+    assert _TEST_KEY not in serialized
+
+
+def test_response_exactly_at_limit_can_be_parsed():
+    prefix = b'{"results":[],"padding":"'
+    suffix = b'"}'
+    padding = b"x" * (MAX_TAVILY_RESPONSE_BYTES - len(prefix) - len(suffix))
+    raw_body = prefix + padding + suffix
+    assert len(raw_body) == MAX_TAVILY_RESPONSE_BYTES
+
+    stream = ChunkStream([raw_body[:500_000], raw_body[500_000:]])
+    transport, client = _transport(
+        lambda request: httpx.Response(200, stream=stream)
+    )
+    try:
+        response = transport.send(_request())
+    finally:
+        client.close()
+
+    assert response.results == []
+    assert stream.yielded == 2
+
+
+def test_small_streamed_response_still_maps_results():
+    raw_body = json.dumps(_response_payload()).encode("utf-8")
+    stream = ChunkStream([raw_body[:17], raw_body[17:]])
+    transport, client = _transport(
+        lambda request: httpx.Response(200, stream=stream)
+    )
+    try:
+        response = transport.send(_request())
+    finally:
+        client.close()
+
+    assert response.results[0].title == "Rates update"
+    assert stream.yielded == 2
 
 
 @pytest.mark.parametrize("status", [400, 404, 429, 500, 503])

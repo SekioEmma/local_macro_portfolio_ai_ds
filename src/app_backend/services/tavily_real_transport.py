@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -68,37 +69,32 @@ class TavilyRealTransport:
 
         try:
             if self._client is not None:
-                response = self._client.post(
-                    self._endpoint,
-                    headers=_headers(api_key),
-                    json=body,
-                    timeout=self._timeout_seconds,
-                    follow_redirects=False,
+                raw_body = _send_and_read_response(
+                    self._client,
+                    endpoint=self._endpoint,
+                    api_key=api_key,
+                    body=body,
+                    timeout_seconds=self._timeout_seconds,
                 )
             else:
                 with httpx.Client(
                     timeout=self._timeout_seconds,
                     follow_redirects=False,
                 ) as client:
-                    response = client.post(
-                        self._endpoint,
-                        headers=_headers(api_key),
-                        json=body,
+                    raw_body = _send_and_read_response(
+                        client,
+                        endpoint=self._endpoint,
+                        api_key=api_key,
+                        body=body,
+                        timeout_seconds=self._timeout_seconds,
                     )
         except httpx.TimeoutException as exc:
             raise TavilyTransportError(kind="timeout") from exc
         except httpx.RequestError as exc:
             raise TavilyTransportError(kind="http_error") from exc
 
-        if response.status_code in {401, 403}:
-            raise TavilyTransportError(kind="provider_refusal")
-        if not 200 <= response.status_code < 300:
-            raise TavilyTransportError(kind="http_error")
-        if len(response.content) > MAX_TAVILY_RESPONSE_BYTES:
-            raise TavilyTransportError(kind="malformed")
-
         return _parse_response(
-            response,
+            raw_body,
             include_domains=request.include_domains,
         )
 
@@ -116,6 +112,47 @@ def _headers(api_key: str) -> dict[str, str]:
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+
+
+def _send_and_read_response(
+    client: httpx.Client,
+    *,
+    endpoint: str,
+    api_key: str,
+    body: dict[str, Any],
+    timeout_seconds: float,
+) -> bytes:
+    with client.stream(
+        "POST",
+        endpoint,
+        headers=_headers(api_key),
+        json=body,
+        timeout=timeout_seconds,
+        follow_redirects=False,
+    ) as response:
+        if response.status_code in {401, 403}:
+            raise TavilyTransportError(kind="provider_refusal")
+        if not 200 <= response.status_code < 300:
+            raise TavilyTransportError(kind="http_error")
+        if _content_length_exceeds_limit(response):
+            raise TavilyTransportError(kind="malformed")
+
+        raw_body = bytearray()
+        for chunk in response.iter_bytes():
+            if len(raw_body) + len(chunk) > MAX_TAVILY_RESPONSE_BYTES:
+                raise TavilyTransportError(kind="malformed")
+            raw_body.extend(chunk)
+        return bytes(raw_body)
+
+
+def _content_length_exceeds_limit(response: httpx.Response) -> bool:
+    value = response.headers.get("content-length")
+    if value is None:
+        return False
+    try:
+        return int(value) > MAX_TAVILY_RESPONSE_BYTES
+    except ValueError:
+        return False
 
 
 def _validate_endpoint(endpoint: str) -> None:
@@ -148,13 +185,13 @@ def _validate_request(request: TavilyTransportRequest) -> None:
 
 
 def _parse_response(
-    response: httpx.Response,
+    raw_body: bytes,
     *,
     include_domains: list[str],
 ) -> TavilyTransportResponse:
     try:
-        payload = response.json()
-    except ValueError as exc:
+        payload = json.loads(raw_body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise TavilyTransportError(kind="malformed") from exc
     if not isinstance(payload, dict):
         raise TavilyTransportError(kind="malformed")

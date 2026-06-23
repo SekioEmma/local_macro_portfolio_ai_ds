@@ -15,7 +15,7 @@ Era 2 TASK-B4 已完成 Tavily real transport 边界实现与 L4 安全回归。
 - `send()` 是唯一 HTTP 出口
 - 固定 canonical endpoint：`https://api.tavily.com/search`
 - 默认 timeout 为 30 秒，禁止 redirect、retry、fallback 与 background work
-- provider response 上限为 1 MiB；超限分类为 `malformed`
+- provider response 上限为 1 MiB，通过 streaming read 在接收过程中强制执行，不是 post-read validation；超限立即停止读取并分类为 `malformed`
 - response 只映射 `url`、`title`、`content -> snippet`
 - transport 不保存 query、raw response、raw HTML、API key，不写 SQLite、outputs、cache 或日志
 - 返回 URL 仅保留 HTTP/HTTPS、拒绝 userinfo、执行 domain allowlist 二次校验，并移除 query string 与 fragment
