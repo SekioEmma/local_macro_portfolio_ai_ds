@@ -18,6 +18,8 @@ from app_backend.schemas.realtime_quote import (
     YieldCurveSnapshot,
 )
 from app_backend.services.realtime_quote_service import (
+    RealtimeQuoteService,
+    build_default_realtime_quote_service,
     load_nyse_trading_calendar,
     market_state_at,
 )
@@ -216,7 +218,7 @@ def test_import_does_not_read_env_files_or_network(monkeypatch):
     )
 
     assert hasattr(module, "market_state_at")
-    assert not hasattr(module, "RealtimeQuoteService")
+    assert hasattr(module, "RealtimeQuoteService")
     assert not hasattr(module, "quote_etf")
 
     source = (
@@ -224,3 +226,260 @@ def test_import_does_not_read_env_files_or_network(monkeypatch):
     ).read_text(encoding="utf-8")
     assert "os.environ" not in source
     assert "os.getenv" not in source
+
+
+def _alpha_payload(symbol: str, observation_date: str, value=100.0):
+    return {
+        "symbol": symbol,
+        "source": "Alpha Vantage",
+        "status": "ok",
+        "error": None,
+        "observations": [
+            {
+                "date": observation_date,
+                "open": value,
+                "high": value,
+                "low": value,
+                "close": value,
+                "volume": 1.0,
+            }
+        ],
+        "timestamp": "2025-07-02T21:00:00+00:00",
+    }
+
+
+def _fred_payload(observation_date: str, value=18.0):
+    return {
+        "series_id": "VIXCLS",
+        "status": "ok",
+        "error": None,
+        "data": [{"date": observation_date, "value": value}],
+        "timestamp": "2025-07-02T21:00:00+00:00",
+    }
+
+
+def _service(
+    *,
+    now: str = "2025-07-02T10:00:00",
+    alpha_reader=None,
+    fred_reader=None,
+    history_lookup=None,
+):
+    return RealtimeQuoteService(
+        alpha_history_reader=alpha_reader
+        or (lambda symbol, outputsize: _alpha_payload(symbol, "2025-07-01")),
+        fred_series_reader=fred_reader
+        or (lambda series_id, limit: _fred_payload("2025-07-01")),
+        history_lookup=history_lookup or (lambda metric_key: None),
+        calendar_loader=load_nyse_trading_calendar,
+        now_provider=lambda: _at(now),
+    )
+
+
+def test_service_construction_does_not_call_any_reader():
+    calls = []
+
+    def forbidden(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("construction must not call dependencies")
+
+    RealtimeQuoteService(
+        alpha_history_reader=forbidden,
+        fred_series_reader=forbidden,
+        history_lookup=forbidden,
+        calendar_loader=forbidden,
+        now_provider=forbidden,
+    )
+
+    assert calls == []
+
+
+def test_default_factory_only_wires_callables(monkeypatch):
+    calls = []
+
+    def forbidden(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("factory must not execute providers")
+
+    monkeypatch.setattr(
+        "data_providers.alpha_vantage_history_provider.get_daily_time_series",
+        forbidden,
+    )
+    monkeypatch.setattr(
+        "data_providers.fred_provider.get_fred_series",
+        forbidden,
+    )
+    monkeypatch.setattr(
+        "data_providers.market_history_store.get_latest_observation",
+        forbidden,
+    )
+
+    service = build_default_realtime_quote_service()
+
+    assert isinstance(service, RealtimeQuoteService)
+    assert calls == []
+
+
+def test_quote_etf_normalizes_deduplicates_and_preserves_order():
+    alpha_calls = []
+    fred_calls = []
+
+    def alpha_reader(symbol, outputsize):
+        alpha_calls.append((symbol, outputsize))
+        return _alpha_payload(symbol, "2025-07-01")
+
+    def fred_reader(series_id, limit):
+        fred_calls.append((series_id, limit))
+        return _fred_payload("2025-07-01")
+
+    snapshots = _service(
+        alpha_reader=alpha_reader,
+        fred_reader=fred_reader,
+    ).quote_etf([" spy ", "QQQ", "spy", "vix"])
+
+    assert [item.symbol for item in snapshots] == ["SPY", "QQQ", "VIX"]
+    assert alpha_calls == [("SPY", "compact"), ("QQQ", "compact")]
+    assert fred_calls == [("VIXCLS", 10)]
+
+
+def test_supported_etfs_and_vix_map_daily_close_contracts():
+    snapshots = _service().quote_etf(["SPY", "QQQ", "SHY", "GLD", "VIX"])
+
+    assert [item.quote_kind for item in snapshots] == [
+        "daily_close",
+        "daily_close",
+        "daily_close",
+        "daily_close",
+        "index_close",
+    ]
+    assert snapshots[0].source == "Alpha Vantage"
+    assert snapshots[-1].source == "FRED"
+    assert snapshots[-1].source_series == "VIXCLS"
+    assert all(item.observation_date == "2025-07-01" for item in snapshots)
+
+
+@pytest.mark.parametrize(
+    ("now", "observation_date", "expected_status"),
+    [
+        ("2025-07-02T08:00:00", "2025-07-01", "ok"),
+        ("2025-07-02T10:00:00", "2025-07-01", "ok"),
+        ("2025-07-02T17:00:00", "2025-07-02", "ok"),
+        ("2025-07-02T17:00:00", "2025-07-01", "stale"),
+        ("2025-07-05T12:00:00", "2025-07-03", "ok"),
+        ("2025-07-04T12:00:00", "2025-07-03", "ok"),
+        ("2025-07-03T13:30:00", "2025-07-03", "ok"),
+    ],
+)
+def test_quote_freshness_uses_completed_sessions(
+    now,
+    observation_date,
+    expected_status,
+):
+    service = _service(
+        now=now,
+        alpha_reader=lambda symbol, outputsize: _alpha_payload(
+            symbol,
+            observation_date,
+        ),
+    )
+
+    snapshot = service.quote_etf(["SPY"])[0]
+
+    assert snapshot.status == expected_status
+    assert snapshot.stale is (expected_status == "stale")
+
+
+@pytest.mark.parametrize("symbols", [[], ["BTC"], ["SPY", "BTC"]])
+def test_empty_or_unsupported_input_calls_nothing(symbols):
+    calls = []
+
+    def forbidden(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("unsupported input must not call dependencies")
+
+    service = RealtimeQuoteService(
+        alpha_history_reader=forbidden,
+        fred_series_reader=forbidden,
+        history_lookup=forbidden,
+        calendar_loader=forbidden,
+        now_provider=forbidden,
+    )
+
+    with pytest.raises(ValueError):
+        service.quote_etf(symbols)
+
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "alpha_reader",
+    [
+        lambda symbol, outputsize: {"status": "ok", "observations": []},
+        lambda symbol, outputsize: {"status": "error", "error": "raw secret"},
+        lambda symbol, outputsize: (_ for _ in ()).throw(
+            RuntimeError("Authorization Bearer secret")
+        ),
+    ],
+)
+def test_provider_failure_without_fallback_is_unavailable(alpha_reader):
+    snapshot = _service(alpha_reader=alpha_reader).quote_etf(["SPY"])[0]
+
+    assert snapshot.status == "unavailable"
+    assert snapshot.value is None
+    assert snapshot.stale is False
+    serialized = snapshot.model_dump_json()
+    assert "raw secret" not in serialized
+    assert "Authorization" not in serialized
+    assert "Bearer" not in serialized
+
+
+def test_safe_local_history_fallback_is_always_stale():
+    snapshot = _service(
+        alpha_reader=lambda symbol, outputsize: {"status": "error"},
+        history_lookup=lambda metric_key: {
+            "metric_key": metric_key,
+            "observation_date": "2025-06-30",
+            "value": 99.5,
+            "status": "ok",
+            "lineage": {"raw": "must not copy"},
+        },
+    ).quote_etf(["SPY"])[0]
+
+    assert snapshot.status == "stale"
+    assert snapshot.stale is True
+    assert snapshot.value == 99.5
+    assert snapshot.source == "local_market_history"
+    assert "lineage" not in snapshot.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"metric_key": "wrong", "observation_date": "2025-06-30", "value": 1, "status": "ok"},
+        {"metric_key": "spy_close", "observation_date": "bad", "value": 1, "status": "ok"},
+        {"metric_key": "spy_close", "observation_date": "2025-06-30", "value": 1, "status": "stale"},
+        {"metric_key": "spy_close", "observation_date": "2025-06-30", "value": "bad", "status": "ok"},
+    ],
+)
+def test_unsafe_history_fallback_is_rejected(row):
+    snapshot = _service(
+        alpha_reader=lambda symbol, outputsize: {"status": "error"},
+        history_lookup=lambda metric_key: row,
+    ).quote_etf(["SPY"])[0]
+
+    assert snapshot.status == "unavailable"
+    assert snapshot.reason_code == "no_safe_history_fallback"
+
+
+def test_calendar_outside_coverage_never_claims_fresh():
+    snapshot = _service(
+        now="2027-01-04T10:00:00",
+        alpha_reader=lambda symbol, outputsize: _alpha_payload(
+            symbol,
+            "2027-01-03",
+        ),
+    ).quote_etf(["SPY"])[0]
+
+    assert snapshot.status == "stale"
+    assert snapshot.calendar_covered is False
+    assert snapshot.reason_code == "calendar_not_covered"
