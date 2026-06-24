@@ -20,6 +20,8 @@ outputs/eval/*
 !outputs/reports/.gitkeep
 !outputs/analyst_memos/.gitkeep
 
+.claude/
+
 __pycache__/
 *.pyc
 *.pyo
