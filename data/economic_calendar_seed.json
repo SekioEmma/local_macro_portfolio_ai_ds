@@ -1,0 +1,42 @@
+{
+  "fixture_only": true,
+  "schema_version": 1,
+  "fixture_notice": "Offline synthetic fixture only. Service does not auto-load this file. Do not treat entries as real economic schedules.",
+  "events": [
+    {
+      "event_key": "consumer_price_index",
+      "release_date": "2001-01-15",
+      "release_time_et": "08:30",
+      "source_url": "https://www.bls.gov/cpi/",
+      "ingested_at": "2001-01-01T00:00:00+00:00"
+    },
+    {
+      "event_key": "employment_situation",
+      "release_date": "2001-01-16",
+      "release_time_et": "08:30",
+      "source_url": "https://www.bls.gov/news.release/empsit.htm",
+      "ingested_at": "2001-01-01T00:00:00+00:00"
+    },
+    {
+      "event_key": "personal_income_and_outlays",
+      "release_date": "2001-01-17",
+      "release_time_et": "08:30",
+      "source_url": "https://www.bea.gov/data/income-saving/personal-income",
+      "ingested_at": "2001-01-01T00:00:00+00:00"
+    },
+    {
+      "event_key": "gross_domestic_product",
+      "release_date": "2001-01-18",
+      "release_time_et": "08:30",
+      "source_url": "https://www.bea.gov/data/gdp/gross-domestic-product",
+      "ingested_at": "2001-01-01T00:00:00+00:00"
+    },
+    {
+      "event_key": "fomc_statement",
+      "release_date": "2001-01-19",
+      "release_time_et": "14:00",
+      "source_url": "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm",
+      "ingested_at": "2001-01-01T00:00:00+00:00"
+    }
+  ]
+}
