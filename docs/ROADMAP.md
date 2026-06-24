@@ -37,7 +37,7 @@ Tag：`era1-frontend-redesign-complete`。
   - B7 本地 API routes 已实现：`POST /api/search/tavily`（fail-closed，需 confirm）+ 只读 `GET /api/quote/{etf,treasury_curve,fx,commodity}`
   - native USDCNH 仍明确 unavailable，等待独立数据源批准
   - 无前端控制、无自动刷新、无后台/启动时搜索或报价调用
-  - C1 尚未开始
+- Phase C1：search result classifier 已完成（deterministic 文档类型分类）
 
 ### 进行中
 
@@ -47,7 +47,7 @@ Tag：`era1-frontend-redesign-complete`。
 |---|---|---|---|
 | A | 治理与边界（解冻 Tavily + 收益区间） | 已完成 | ✅ A1 |
 | B | Tavily + 实时报价 + 商品价 + 本地 API routes | 已完成（B1–B7） | — |
-| C | 搜索分类持久化 + 经济日历 | 1.5 | — |
+| C | 搜索分类持久化 + 经济日历 | 进行中：C1 已完成；C2 historical financial data ingest 未开始；C3 knowledge base 未开始 | — |
 | D | RAG 知识库 | 2 | — |
 | E | 情景化收益区间引擎 | 2 | ✅ E1 |
 | F | Agent + 9 节前端 | 2.5 | — |
