@@ -1,8 +1,10 @@
 import json
-from datetime import date, timedelta
+from datetime import date
 
 import audit_credit_oas_history_coverage as audit
 from data_providers import market_history_store
+
+from tests.helpers.market_history_fixtures import seed_market_history_series_for_tests
 
 
 def test_local_only_default_does_not_probe_network(tmp_path, monkeypatch):
@@ -169,22 +171,10 @@ def _insert_series(
     source_series=None,
 ):
     series_id = source_series or audit.TARGET_METRICS.get(metric_key, {}).get("series_id", metric_key.upper())
-    observations = [
-        {
-            "metric_key": metric_key,
-            "observation_date": (start_date + timedelta(days=index)).isoformat(),
-            "value": float(index + 1),
-            "status": "ok",
-            "source": "FRED",
-            "source_badge": "official",
-            "provider": "FRED",
-            "source_series": series_id,
-            "generated_at": "2026-01-01T00:00:00+00:00",
-            "fetched_at": "2026-01-01T00:00:00+00:00",
-            "freshness_status": "historical",
-            "ai_context_allowed": True,
-            "metric_kind": "raw",
-        }
-        for index in range(count)
-    ]
-    market_history_store.upsert_market_observations(observations, db_path=db_path)
+    seed_market_history_series_for_tests(
+        db_path,
+        metric_key,
+        start_date,
+        count,
+        source_series=series_id,
+    )
