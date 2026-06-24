@@ -124,9 +124,15 @@ I （可选）多 Agent 拆分   ~2 周   触发条件 §10
 
 ### C4 经济日历
 
-- 新表 `economic_calendar(id, event_name, release_date, release_time_et, source_url, ingest_at)`。
-- `scripts/ingest_economic_calendar.py`：月度运行，从 BLS/BEA/Fed 公开日历页爬取。
-- `economic_calendar_service.py`：`next_releases(window_days=30)`、`events_by_name(name, limit=5)`。
+- C4a offline foundation 已完成：fixed event contracts, SQLite schema, synthetic fixture-only seed, local service.
+- C4d read path boundary hardening 已完成：所有 public method 在 DB access 前校验 symlink ancestor chain.
+- C4b guarded BLS/BEA manual official acquisition 已完成：
+  - BLS ICS (`https://www.bls.gov/schedule/news_release/bls.ics`) → `consumer_price_index`, `employment_situation`
+  - BEA JSON (`https://apps.bea.gov/API/signup/release_dates.json`) → `personal_income_and_outlays`, `gross_domestic_product`
+  - 仅 `scripts/ingest_official_economic_calendar.py --live --write` 才 fetch + write
+  - 默认 planned，无网络
+  - `fomc_statement` exact-time acquisition deferred（schema 要求精确 `HH:MM`，不可推断）
+- C4c 未开始。
 
 ## 6. Phase D — RAG
 
