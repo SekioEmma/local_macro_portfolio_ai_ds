@@ -215,7 +215,7 @@ def run_benchmark(
     # 7. D11: pullback_systemic_checklist in-memory portion
     assembled_for_checklist = assembled_for_composite + d10_rows
     t0 = time.perf_counter()
-    d11_rows = pullback_systemic_checklist.build_pullback_checklist_rows(assembled_for_checklist)
+    _d11_rows = pullback_systemic_checklist.build_pullback_checklist_rows(assembled_for_checklist)
     d11_build_ms = _ms(t0)
 
     # 8. audit_data_pipeline_coverage
@@ -303,7 +303,7 @@ def _call_path_audit() -> dict[str, Any]:
         "confirmed_facts": [
             "M2: D13 build_historical_percentile_rows now uses list_market_observations_batch: single DB connect + single query for all unique source metrics",
             "M2: D14 build_liquidity_funding_rows now uses list_market_observations_batch: single DB connect + single query for all raw metrics",
-            f"M2: idx_market_observations_metric_date index (metric_key, observation_date DESC) added via schema migration version 2",
+            "M2: idx_market_observations_metric_date index (metric_key, observation_date DESC) added via schema migration version 2",
             "M3: DashboardPipelineContext is explicit request-scoped state, not process-level or disk cache",
             "M3: build_dashboard_evidence_table can reuse a context summary when supplied",
             "M3: build_ai_context_manifest can reuse a context evidence table when supplied",

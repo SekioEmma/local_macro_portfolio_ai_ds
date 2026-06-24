@@ -17,7 +17,7 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from llm.analyst_memo_provider import generate_analyst_memo, write_analyst_memo_outputs
+from llm.analyst_memo_provider import generate_analyst_memo, write_analyst_memo_outputs  # noqa: E402
 
 
 def main() -> int:

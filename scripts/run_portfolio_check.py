@@ -10,7 +10,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from portfolio.portfolio_engine import generate_portfolio_snapshot
+from portfolio.portfolio_engine import generate_portfolio_snapshot  # noqa: E402
 
 
 CURRENT_HOLDINGS_PATH = PROJECT_ROOT / "data" / "holdings" / "current_holdings.csv"
