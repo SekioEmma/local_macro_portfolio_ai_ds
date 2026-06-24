@@ -15,7 +15,13 @@ C2 does not accept URL, SearchResult, Tavily result, search result, webpage HTML
 
 FRED rate observations always keep `source_badge=official_fallback`. BLS CPI observations always keep `source_badge=official`. Every observation must pass `official_history_ingest_guard` before the writer is called.
 
+C2 route writes are all-or-nothing. Every required source series for a route must produce at least one qualified raw observation before admission validation and before any writer call. Empty results and partial route results are `blocked`; `--live --write` is permission to write only after route completeness and admission both pass.
+
+The writer summary is also treated as an untrusted boundary. A missing, malformed, non-integer, negative, or count-mismatched summary is `write_failed`; it is never reported as `written`.
+
 C2 does not create an API route, frontend control, background task, scheduler, cache, startup call, or page-load call. Raw provider payloads are never written to market history, and raw URLs, snippets, API keys, account data, holdings, positions, transactions, prompts, and raw outputs are rejected before write.
+
+C2 is a manual guarded ingest path, not automatic data refresh or background ingest.
 
 ## Phase Handoff
 

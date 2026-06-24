@@ -15,6 +15,7 @@ from app_backend.services.official_history_ingest_service import (
 
 FRED_SERIES = ("DGS2", "DGS10", "DGS30", "T10Y2Y", "T10YIE", "DFII10")
 BLS_SERIES = ("CUSR0000SA0", "CUSR0000SA0L1E")
+_DEFAULT_WRITER_RESULT = object()
 
 
 class RecordingDeps:
@@ -23,6 +24,7 @@ class RecordingDeps:
         self.bls_calls: list[tuple[tuple[str, ...], int, int]] = []
         self.writer_calls: list[list[dict]] = []
         self.raise_writer = False
+        self.writer_result = _DEFAULT_WRITER_RESULT
 
     def fred_reader(self, series_id: str, limit: int) -> dict:
         self.fred_calls.append((series_id, limit))
@@ -59,7 +61,9 @@ class RecordingDeps:
         self.writer_calls.append(list(observations))
         if self.raise_writer:
             raise RuntimeError("raw writer failure with secret")
-        return {"inserted_count": len(observations), "updated_count": 0}
+        if self.writer_result is not _DEFAULT_WRITER_RESULT:
+            return self.writer_result
+        return {"observation_count": len(observations), "inserted_count": len(observations), "updated_count": 0}
 
 
 def _service(deps: RecordingDeps) -> OfficialHistoryIngestService:
@@ -69,6 +73,32 @@ def _service(deps: RecordingDeps) -> OfficialHistoryIngestService:
         history_writer=deps.writer,
         now_provider=lambda: "2026-06-24T00:00:00+00:00",
     )
+
+
+def _fred_payload(series_id: str, data: list[dict] | None = None) -> dict:
+    return {
+        "status": "ok",
+        "series_id": series_id,
+        "timestamp": "2026-06-24T00:00:00+00:00",
+        "data": data if data is not None else [{"date": "2026-06-18", "value": "4.25"}],
+    }
+
+
+def _bls_series_payload(series_id: str, data: list[dict] | None = None) -> dict:
+    return {
+        "seriesID": series_id,
+        "seriesTitle": (
+            "CPI-U All items in U.S. city average, seasonally adjusted"
+            if series_id == "CUSR0000SA0"
+            else "CPI-U less food and energy in U.S. city average"
+        ),
+        "data": data
+        if data is not None
+        else [
+            {"year": "2025", "period": "M05", "value": "300.0"},
+            {"year": "2026", "period": "M05", "value": "309.0"},
+        ],
+    }
 
 
 def test_construction_has_zero_reader_or_writer_side_effects() -> None:
@@ -169,6 +199,31 @@ def test_fred_writer_receives_only_approved_metric_catalog() -> None:
     assert all(row["source_badge"] != "official" for row in deps.writer_calls[0])
 
 
+@pytest.mark.parametrize("write", [False, True])
+def test_fred_missing_one_required_series_blocks_and_never_writes(write: bool) -> None:
+    deps = RecordingDeps()
+
+    def fred_reader(series_id: str, limit: int) -> dict:
+        deps.fred_calls.append((series_id, limit))
+        return _fred_payload(series_id, data=[] if series_id == "DGS10" else None)
+
+    deps.fred_reader = fred_reader  # type: ignore[method-assign]
+    summary = _service(deps).run("fred_rates", live=True, write=write)
+    assert summary["status"] == "blocked"
+    assert summary["error_codes"] == ["missing_required_series"]
+    assert deps.writer_calls == []
+
+
+def test_fred_all_required_series_empty_blocks_and_never_writes() -> None:
+    deps = RecordingDeps()
+    deps.fred_reader = lambda series_id, _limit: _fred_payload(series_id, data=[])  # type: ignore[method-assign]
+    summary = _service(deps).run("fred_rates", live=True, write=True)
+    assert summary["status"] == "blocked"
+    assert summary["error_codes"] == ["missing_required_series"]
+    assert summary["normalized_observations"] == 0
+    assert deps.writer_calls == []
+
+
 def test_bls_dry_run_uses_reader_but_not_writer() -> None:
     deps = RecordingDeps()
     summary = _service(deps).run(
@@ -213,6 +268,55 @@ def test_bls_writer_receives_only_approved_metric_catalog() -> None:
         "core_cpi_yoy",
     }
     assert all(row["source_badge"] != "official_fallback" for row in deps.writer_calls[0])
+
+
+@pytest.mark.parametrize("only_series_id", BLS_SERIES)
+def test_bls_missing_one_required_index_series_blocks_and_never_writes(only_series_id: str) -> None:
+    deps = RecordingDeps()
+    deps.bls_reader = lambda _series_ids, _start, _end: {  # type: ignore[method-assign]
+        "status": "ok",
+        "retrieved_at": "2026-06-24T00:00:00+00:00",
+        "series": [_bls_series_payload(only_series_id)],
+    }
+    summary = _service(deps).run("bls_cpi", live=True, write=True, start_year=2025, end_year=2026)
+    assert summary["status"] == "blocked"
+    assert summary["error_codes"] == ["missing_required_series"]
+    assert deps.writer_calls == []
+
+
+def test_bls_empty_series_payload_blocks_and_never_writes() -> None:
+    deps = RecordingDeps()
+    deps.bls_reader = lambda _series_ids, _start, _end: {  # type: ignore[method-assign]
+        "status": "ok",
+        "retrieved_at": "2026-06-24T00:00:00+00:00",
+        "series": [],
+    }
+    summary = _service(deps).run("bls_cpi", live=True, write=True, start_year=2025, end_year=2026)
+    assert summary["status"] == "blocked"
+    assert summary["error_codes"] == ["missing_required_series"]
+    assert summary["normalized_observations"] == 0
+    assert deps.writer_calls == []
+
+
+def test_bls_required_index_series_without_yoy_is_allowed_to_dry_run_and_write() -> None:
+    deps = RecordingDeps()
+    deps.bls_reader = lambda _series_ids, _start, _end: {  # type: ignore[method-assign]
+        "status": "ok",
+        "retrieved_at": "2026-06-24T00:00:00+00:00",
+        "series": [
+            _bls_series_payload("CUSR0000SA0", data=[{"year": "2026", "period": "M05", "value": "309.0"}]),
+            _bls_series_payload("CUSR0000SA0L1E", data=[{"year": "2026", "period": "M05", "value": "318.0"}]),
+        ],
+    }
+    dry_run = _service(deps).run("bls_cpi", live=True, write=False, start_year=2026, end_year=2026)
+    written = _service(deps).run("bls_cpi", live=True, write=True, start_year=2026, end_year=2026)
+    assert dry_run["status"] == "dry_run"
+    assert dry_run["normalized_observations"] == 2
+    assert dry_run["metric_kind_distribution"] == {"raw": 2}
+    assert written["status"] == "written"
+    assert written["normalized_observations"] == 2
+    assert len(deps.writer_calls) == 1
+    assert {row["metric_kind"] for row in deps.writer_calls[0]} == {"raw"}
 
 
 def test_bls_default_end_year_comes_from_now_provider() -> None:
@@ -377,6 +481,42 @@ def test_writer_exception_returns_safe_summary_without_raw_exception() -> None:
     assert len(deps.writer_calls) == 1
 
 
+@pytest.mark.parametrize(
+    "writer_result",
+    [
+        None,
+        [],
+        ["raw writer secret"],
+        {},
+        {"inserted_count": 6, "updated_count": 0},
+        {"observation_count": 5, "inserted_count": 5, "updated_count": 0},
+        {"observation_count": 6, "inserted_count": 5, "updated_count": 0},
+        {"observation_count": True, "inserted_count": 6, "updated_count": 0},
+        {"observation_count": 6, "inserted_count": -1, "updated_count": 7},
+        {"observation_count": "6", "inserted_count": 6, "updated_count": 0},
+    ],
+)
+def test_malformed_writer_summary_blocks_without_reporting_written(writer_result) -> None:
+    deps = RecordingDeps()
+    deps.writer_result = writer_result
+    summary = _service(deps).run("fred_rates", live=True, write=True)
+    assert summary["status"] == "blocked"
+    assert summary["error_codes"] == ["write_failed"]
+    assert len(deps.writer_calls) == 1
+    serialized = json.dumps(summary, sort_keys=True)
+    assert "raw writer" not in serialized
+    assert "secret" not in serialized
+
+
+def test_valid_writer_summary_with_matching_counts_reports_written() -> None:
+    deps = RecordingDeps()
+    deps.writer_result = {"observation_count": 6, "inserted_count": 2, "updated_count": 4}
+    summary = _service(deps).run("fred_rates", live=True, write=True)
+    assert summary["status"] == "written"
+    assert summary["inserted_count"] == 2
+    assert summary["updated_count"] == 4
+
+
 def test_dry_run_never_calls_writer_even_with_valid_observations() -> None:
     deps = RecordingDeps()
     _service(deps).run("fred_rates", live=True, write=False)
@@ -438,6 +578,7 @@ def test_service_source_has_no_external_runtime_imports() -> None:
         "aiohttp",
         "os.environ",
         "os.getenv",
+        "sqlite3",
         "FastAPI",
         "main.py",
     ]

@@ -12,7 +12,7 @@ from app_backend.services.official_history_ingest_guard import (
 
 FredReader = Callable[[str, int], dict[str, Any]]
 BlsWindowReader = Callable[[list[str], int, int], dict[str, Any]]
-HistoryWriter = Callable[[list[dict[str, Any]]], dict[str, int]]
+HistoryWriter = Callable[[list[dict[str, Any]]], Any]
 NowProvider = Callable[[], str]
 
 
@@ -125,6 +125,16 @@ class OfficialHistoryIngestService:
                 error_codes=sorted(set(errors)),
             )
 
+        if not _has_complete_required_series(route_key, observations):
+            return _summary(
+                route_key,
+                status="blocked",
+                live=live,
+                write=write,
+                normalized_observations=len(observations),
+                error_codes=["missing_required_series"],
+            )
+
         try:
             validated = list(validate_history_batch(route_key, observations))
         except OfficialHistoryAdmissionError as exc:
@@ -159,14 +169,25 @@ class OfficialHistoryIngestService:
                 normalized_observations=len(validated),
                 error_codes=["write_failed"],
             )
+        write_counts = _validated_writer_counts(write_result, expected_count=len(validated))
+        if write_counts is None:
+            return _summary(
+                route_key,
+                status="blocked",
+                live=True,
+                write=True,
+                normalized_observations=len(validated),
+                error_codes=["write_failed"],
+            )
+        inserted_count, updated_count = write_counts
         return _summary(
             route_key,
             status="written",
             live=True,
             write=True,
             normalized_observations=len(validated),
-            inserted_count=int(write_result.get("inserted_count", 0)),
-            updated_count=int(write_result.get("updated_count", 0)),
+            inserted_count=inserted_count,
+            updated_count=updated_count,
             source_badge_distribution=_source_badge_distribution(validated),
             metric_kind_distribution=_metric_kind_distribution(validated),
         )
@@ -521,6 +542,38 @@ def _source_badge_distribution(observations: list[dict[str, Any]]) -> dict[str, 
 
 def _metric_kind_distribution(observations: list[dict[str, Any]]) -> dict[str, int]:
     return _count_by_key(observations, "metric_kind")
+
+
+def _has_complete_required_series(route_key: str, observations: list[dict[str, Any]]) -> bool:
+    if route_key == "fred_rates":
+        required = set(_FRED_RATE_SERIES)
+    elif route_key == "bls_cpi":
+        required = set(_BLS_CPI_SERIES)
+    else:
+        return False
+    present = {
+        str(item.get("source_series") or "")
+        for item in observations
+        if item.get("metric_kind") == "raw"
+    }
+    return required <= present
+
+
+def _validated_writer_counts(result: Any, *, expected_count: int) -> tuple[int, int] | None:
+    if not isinstance(result, dict):
+        return None
+    required_keys = ("observation_count", "inserted_count", "updated_count")
+    if any(key not in result for key in required_keys):
+        return None
+    counts = [result[key] for key in required_keys]
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in counts):
+        return None
+    observation_count, inserted_count, updated_count = counts
+    if observation_count != expected_count:
+        return None
+    if inserted_count + updated_count != expected_count:
+        return None
+    return inserted_count, updated_count
 
 
 def _count_by_key(observations: list[dict[str, Any]], key: str) -> dict[str, int]:
