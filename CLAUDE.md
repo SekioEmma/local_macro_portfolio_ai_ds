@@ -128,6 +128,14 @@ scripts/                  # Ingest, audit, benchmark scripts
 - C2 must not persist raw provider payloads, URLs, API keys, account data, holdings, positions, transactions, prompts, or raw outputs.
 - All other live-network, search, AI, quote, privacy, and persistence prohibitions remain in force.
 
+### Era 2 C3 guarded local knowledge-base store exception
+
+- `data/knowledge_base.sqlite` and `data/knowledge_base/raw/` remain forbidden for manual reading, printing, copying, or committing.
+- Only `src/app_backend/services/knowledge_base_service.py` may access those paths at runtime, and only through explicit public methods. Import, construction, lookup, list, and mark-stale operations must not create DB/raw files.
+- C3 adds no network, provider, API route, frontend, scheduler, background task, automatic ingest, Tavily/SearchResult/provider-payload ingestion, embedding, vector store, RAG, or private-notes access.
+- Raw text must stay local: it must not enter API responses, model context, logs, error text, public service result objects, or the `documents` table.
+- C3 tests must use temporary DB/raw roots. Existing privacy, network, AI, and RAG prohibitions remain in force.
+
 ## Key Design Invariants
 
 - `ExternalAIRuntimePolicy` has 10 required-true gates + 12 required-false dangerous permissions. Default: fail-closed.

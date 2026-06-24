@@ -43,6 +43,14 @@ docs/
 - `outputs/`
 - 任何 raw provider payload、API key、本地日志
 
+**C3 狭窄例外**：
+
+- `data/knowledge_base.sqlite` 与 `data/knowledge_base/raw/` 默认仍禁止人工读取、打印、复制或提交。
+- 仅 `src/app_backend/services/knowledge_base_service.py` 的显式 public method 可在运行时访问该路径。
+- C3 不解锁 network、provider、AI、Tavily、DeepSeek、private notes、embedding、vector store、RAG、API、前端、scheduler、background task 或 automatic ingest。
+- raw text 不得离开 local store，不得进入 API、模型、日志、错误消息、公开 return object 或 `documents` 表。
+- C3 tests 必须使用 `tmp_path`，不得在真实 `data/` 下创建样例 DB/raw text。
+
 **禁 import**（除明确允许的 transport 边界文件）：
 - `httpx` / `requests` / `aiohttp`
 - 直接读 `os.environ` / `os.getenv`
