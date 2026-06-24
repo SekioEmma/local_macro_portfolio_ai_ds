@@ -18,7 +18,6 @@ if str(SRC_ROOT) not in sys.path:
 from app_backend.schemas.responses import DashboardEvidenceRow  # noqa: E402
 from app_backend.services import dashboard_service  # noqa: E402
 from app_backend.services.dashboard_metric_catalog import CORE_METRIC_KEYS  # noqa: E402
-from data_providers import market_data_service  # noqa: E402
 from data_quality import last_good_cache  # noqa: E402
 from data_quality import official_macro_pack  # noqa: E402
 from audit_sections.common import (  # noqa: E402
@@ -27,8 +26,6 @@ from audit_sections.common import (  # noqa: E402
     BAD_FRESHNESS,
     STATUS_KEYS,
     _anomaly,
-    _anomaly_detail,
-    _compact_dgs_fallback_observations,
     _has_clear_history_hint,
     _has_complete_metadata,
     _has_value,

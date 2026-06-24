@@ -31,7 +31,6 @@ from app_backend.services.ai_external_runtime_policy import (  # noqa: E402
 )
 from app_backend.services.deepseek_adapter import (  # noqa: E402
     DeepSeekNetworkAdapter,
-    fake_only_config,
     network_config,
 )
 from app_backend.services.deepseek_provider_contract import (  # noqa: E402
