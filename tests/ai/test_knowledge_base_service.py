@@ -4,10 +4,12 @@ from dataclasses import fields, is_dataclass
 from hashlib import sha256
 import inspect
 from pathlib import Path
+import re
 import sqlite3
 
 import pytest
 
+from app_backend.services import knowledge_base_service as service_module
 from app_backend.services.knowledge_base_contracts import (
     KnowledgeBaseAdmissionError,
     KnowledgeDocumentInput,
@@ -61,6 +63,18 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return connection
 
 
+def _make_dir_symlink(link_path: Path, target_path: Path) -> None:
+    target_path.mkdir(parents=True, exist_ok=True)
+    try:
+        link_path.symlink_to(target_path, target_is_directory=True)
+    except NotImplementedError as exc:
+        pytest.skip(f"directory symlink creation is unavailable: {exc.__class__.__name__}")
+    except OSError as exc:
+        if isinstance(exc, PermissionError) or getattr(exc, "winerror", None) == 1314:
+            pytest.skip(f"directory symlink creation is unavailable: {exc.__class__.__name__}")
+        raise
+
+
 def test_import_and_default_factory_create_no_tmp_files(tmp_path: Path) -> None:
     db_path, raw_root = _paths(tmp_path)
     service = KnowledgeBaseService(db_path=db_path, raw_root=raw_root)
@@ -71,6 +85,19 @@ def test_import_and_default_factory_create_no_tmp_files(tmp_path: Path) -> None:
     assert not raw_root.exists()
 
 
+def test_default_paths_are_repo_root_anchored_not_current_working_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    service = build_default_knowledge_base_service()
+    assert service._db_path == service_module.PROJECT_ROOT / "data" / "knowledge_base.sqlite"
+    assert service._raw_root == service_module.PROJECT_ROOT / "data" / "knowledge_base" / "raw"
+    assert service._db_path != tmp_path / "data" / "knowledge_base.sqlite"
+    assert service._raw_root != tmp_path / "data" / "knowledge_base" / "raw"
+    assert not (tmp_path / "data").exists()
+
+
 def test_lookup_list_and_mark_stale_missing_db_create_no_files(tmp_path: Path) -> None:
     db_path, raw_root = _paths(tmp_path)
     service = _service(tmp_path)
@@ -79,6 +106,17 @@ def test_lookup_list_and_mark_stale_missing_db_create_no_files(tmp_path: Path) -
     assert service.mark_stale("https://example.com/policy/report").status == "not_found"
     assert not db_path.exists()
     assert not raw_root.exists()
+
+
+def test_custom_tmp_path_service_still_supports_ingest_lookup_stale_and_recent(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    created = service.ingest_document(_document())
+    assert service.lookup_by_url(created.document.url) == created.document
+    assert [item.id for item in service.list_recent()] == [created.document.id]
+    stale = service.mark_stale(created.document.url)
+    assert stale.status == "stale"
+    assert service.list_recent() == []
+    assert [item.id for item in service.list_recent(include_stale=True)] == [created.document.id]
 
 
 @pytest.mark.parametrize("doc_type", ["policy_doc", "research_report", "historical_data", "one_shot_news"])
@@ -258,6 +296,41 @@ def test_invalid_ingest_rejects_without_creating_db_or_raw_file(
     assert exc_info.value.code == code
     assert not db_path.exists()
     assert not raw_root.exists()
+
+
+def test_ingest_rejects_raw_root_symlink_before_db_or_raw_file_creation(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_base.sqlite"
+    raw_parent = tmp_path / "knowledge_base"
+    raw_parent.mkdir()
+    raw_root = raw_parent / "raw"
+    target = tmp_path / "outside_raw"
+    _make_dir_symlink(raw_root, target)
+    service = KnowledgeBaseService(db_path=db_path, raw_root=raw_root)
+
+    with pytest.raises(KnowledgeBaseAdmissionError) as exc_info:
+        service.ingest_document(_document())
+
+    assert exc_info.value.code == "invalid_raw_root"
+    assert str(exc_info.value) == "invalid_raw_root"
+    assert not db_path.exists()
+    assert list(target.glob("*.txt")) == []
+
+
+def test_ingest_rejects_raw_root_parent_symlink_before_db_or_raw_file_creation(tmp_path: Path) -> None:
+    db_path = tmp_path / "knowledge_base.sqlite"
+    raw_parent = tmp_path / "knowledge_base"
+    target_parent = tmp_path / "outside_parent"
+    _make_dir_symlink(raw_parent, target_parent)
+    raw_root = raw_parent / "raw"
+    service = KnowledgeBaseService(db_path=db_path, raw_root=raw_root)
+
+    with pytest.raises(KnowledgeBaseAdmissionError) as exc_info:
+        service.ingest_document(_document())
+
+    assert exc_info.value.code == "invalid_raw_root"
+    assert str(exc_info.value) == "invalid_raw_root"
+    assert not db_path.exists()
+    assert not (target_parent / "raw").exists()
 
 
 def test_lookup_returns_metadata_only_and_canonicalizes_url(tmp_path: Path) -> None:
@@ -487,6 +560,10 @@ def test_service_source_has_no_forbidden_runtime_boundaries() -> None:
         "main.py",
         "Tavily",
         "DeepSeek",
+        "embedding",
+        "vector store",
+        "os.getcwd",
+        "dotenv",
         "data_providers",
         "fetch_url",
         "download",
@@ -495,6 +572,7 @@ def test_service_source_has_no_forbidden_runtime_boundaries() -> None:
         "vector_query",
     ]
     assert not any(token in source for token in forbidden)
+    assert re.search(r"\bRAG\b", source) is None
 
 
 def test_only_service_source_imports_sqlite3_for_knowledge_base() -> None:

@@ -14,8 +14,9 @@ from app_backend.services.knowledge_base_contracts import (
 )
 
 
-_DEFAULT_DB_PATH = Path("data/knowledge_base.sqlite")
-_DEFAULT_RAW_ROOT = Path("data/knowledge_base/raw")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "knowledge_base.sqlite"
+_DEFAULT_RAW_ROOT = PROJECT_ROOT / "data" / "knowledge_base" / "raw"
 _SCHEMA_PATH = Path(__file__).with_name("knowledge_base_schema.sql")
 
 
@@ -59,6 +60,7 @@ class KnowledgeBaseService:
 
     def ingest_document(self, document: KnowledgeDocumentInput) -> KnowledgeIngestResult:
         admitted = admit_document(document)
+        self._validate_raw_root_boundary()
         raw_relative_path = f"raw/{admitted.content_sha256}.txt"
         raw_file = self._safe_raw_file(admitted.content_sha256)
 
@@ -202,6 +204,19 @@ class KnowledgeBaseService:
         if raw_root != resolved_file.parent:
             raise KnowledgeBaseAdmissionError("invalid_raw_text")
         return raw_file
+
+    def _validate_raw_root_boundary(self) -> None:
+        cursor = self._raw_root
+        while True:
+            try:
+                is_symlink = cursor.is_symlink()
+            except OSError as exc:
+                raise KnowledgeBaseAdmissionError("invalid_raw_root") from exc
+            if is_symlink:
+                raise KnowledgeBaseAdmissionError("invalid_raw_root")
+            if cursor == cursor.parent:
+                return
+            cursor = cursor.parent
 
     def _connect_existing_or_new(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path)
