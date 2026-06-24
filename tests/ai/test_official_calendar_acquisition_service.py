@@ -885,9 +885,9 @@ def test_writer_negative_count_blocked(tmp_path, monkeypatch):
     assert "write_failed" in result.error_codes
 
 
-# B9 – string count: test _validate_mutation_result directly via frozen-dataclass bypass
-def test_validate_mutation_result_rejects_string_count():
-    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+# B9 – subclass with string count: rejected by exact-type check
+def test_validate_mutation_counts_rejects_subclass():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_counts
 
     class _Bad(EconomicCalendarMutationResult):
         pass
@@ -897,31 +897,31 @@ def test_validate_mutation_result_rejects_string_count():
     object.__setattr__(bad, "event_count", "4")
     object.__setattr__(bad, "created_count", 4)
     object.__setattr__(bad, "updated_count", 0)
-    assert not _validate_mutation_result(bad, 4)
+    assert _validate_mutation_counts(bad, 4) is None
 
 
-# B10 – event_count mismatch via _validate_mutation_result
-def test_validate_mutation_result_rejects_count_mismatch():
-    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+# B10 – event_count mismatch via _validate_mutation_counts
+def test_validate_mutation_counts_rejects_count_mismatch():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_counts
 
     result = EconomicCalendarMutationResult(status="ok", event_count=999, created_count=999, updated_count=0)
-    assert not _validate_mutation_result(result, 4)
+    assert _validate_mutation_counts(result, 4) is None
 
 
-# B11 – created + updated != event_count via _validate_mutation_result
-def test_validate_mutation_result_rejects_sum_mismatch():
-    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+# B11 – created + updated != event_count via _validate_mutation_counts
+def test_validate_mutation_counts_rejects_sum_mismatch():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_counts
 
     result = EconomicCalendarMutationResult(status="ok", event_count=4, created_count=3, updated_count=0)
-    assert not _validate_mutation_result(result, 4)
+    assert _validate_mutation_counts(result, 4) is None
 
 
-# B12 – valid EconomicCalendarMutationResult passes _validate_mutation_result
-def test_validate_mutation_result_accepts_valid():
-    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+# B12 – valid EconomicCalendarMutationResult returns the count tuple
+def test_validate_mutation_counts_accepts_valid():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_counts
 
     result = EconomicCalendarMutationResult(status="ok", event_count=4, created_count=4, updated_count=0)
-    assert _validate_mutation_result(result, 4)
+    assert _validate_mutation_counts(result, 4) == (4, 4, 0)
 
 
 # B13 – several malformed writer returns never produce status="ok"
@@ -956,3 +956,391 @@ def test_c4b_bls_bea_write_still_succeeds_after_c4c(tmp_path):
     assert result.created_count == 4
     assert result.updated_count == 0
     assert (tmp_path / "cal.sqlite").exists()
+
+
+# ===========================================================================
+# C4e: Exception-total payload and writer-result hardening
+# ===========================================================================
+
+_SECRET = "SECRET_LEAK_TOKEN_C4E"
+
+
+class _SourcePropertyRaises:
+    """Payload whose .source property raises RuntimeError."""
+
+    content_type = "text/calendar"
+    body = "BEGIN:VCALENDAR\nEND:VCALENDAR"
+
+    @property
+    def source(self):
+        raise RuntimeError(_SECRET + "_source")
+
+
+class _ContentTypePropertyRaises:
+    """Payload whose .content_type property raises RuntimeError."""
+
+    source = "bls"
+    body = "BEGIN:VCALENDAR\nEND:VCALENDAR"
+
+    @property
+    def content_type(self):
+        raise RuntimeError(_SECRET + "_ct")
+
+
+class _BodyPropertyRaises:
+    """Payload whose .body property raises RuntimeError."""
+
+    source = "bls"
+    content_type = "text/calendar"
+
+    @property
+    def body(self):
+        raise RuntimeError(_SECRET + "_body")
+
+
+class _GetattributeRaises:
+    """Payload whose generic attribute access raises RuntimeError."""
+
+    def __getattribute__(self, name):
+        if name in {"source", "content_type", "body"}:
+            raise RuntimeError(_SECRET + "_getattr_" + name)
+        return object.__getattribute__(self, name)
+
+
+class _EnumValueRaises:
+    """An enum-like object whose .value property raises RuntimeError."""
+
+    @property
+    def value(self):
+        raise RuntimeError(_SECRET + "_value")
+
+
+class _RaisingContentTypeStr(str):
+    """str subclass whose .split raises RuntimeError."""
+
+    def split(self, *_args, **_kwargs):  # type: ignore[override]
+        raise RuntimeError(_SECRET + "_split")
+
+
+class _RaisingBodyStr(str):
+    """str subclass whose .encode raises RuntimeError."""
+
+    def encode(self, *_args, **_kwargs):  # type: ignore[override]
+        raise RuntimeError(_SECRET + "_encode")
+
+
+# ---- A. Payload property / dynamic-object failures ----
+
+def test_c4e_source_property_raises_blocked(tmp_path):
+    svc, transport = _svc_with_payload(tmp_path, _SourcePropertyRaises())
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_content_type_property_raises_blocked(tmp_path):
+    svc, transport = _svc_with_payload(tmp_path, _ContentTypePropertyRaises())
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_body_property_raises_blocked(tmp_path):
+    svc, transport = _svc_with_payload(tmp_path, _BodyPropertyRaises())
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_getattribute_raises_blocked(tmp_path):
+    svc, transport = _svc_with_payload(tmp_path, _GetattributeRaises())
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_enum_value_property_raises_blocked(tmp_path):
+    payload = _SimplePayload(
+        source=_EnumValueRaises(),
+        content_type="text/calendar",
+        body=_minimal_bls_ics(),
+    )
+    svc, transport = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_content_type_str_subclass_split_raises_blocked(tmp_path):
+    bad_ct = _RaisingContentTypeStr("text/calendar")
+    payload = _SimplePayload(
+        source="bls",
+        content_type=bad_ct,
+        body=_minimal_bls_ics(),
+    )
+    svc, transport = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_body_str_subclass_encode_raises_blocked(tmp_path):
+    bad_body = _RaisingBodyStr(_minimal_bls_ics())
+    payload = _SimplePayload(
+        source="bls",
+        content_type="text/calendar",
+        body=bad_body,
+    )
+    svc, transport = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_payload_property_failures_writer_zero_calls(tmp_path, monkeypatch):
+    """For every dynamic-object payload failure, the writer must remain uncalled."""
+    db_path = tmp_path / "cal.sqlite"
+    cal_svc = EconomicCalendarService(db_path=db_path, now_provider=_now_provider)
+    writer_calls: list[object] = []
+    monkeypatch.setattr(
+        cal_svc,
+        "upsert_events",
+        lambda events: writer_calls.append(events) or EconomicCalendarMutationResult(
+            status="ok", event_count=0, created_count=0, updated_count=0,
+        ),
+    )
+    payloads = [
+        _SourcePropertyRaises(),
+        _ContentTypePropertyRaises(),
+        _BodyPropertyRaises(),
+        _GetattributeRaises(),
+    ]
+    for payload in payloads:
+        t = _PayloadTransport(payload)
+        svc = OfficialCalendarAcquisitionService(
+            transport_factory=lambda transport=t: transport,
+            calendar_service=cal_svc,
+            now_provider=_now_provider,
+        )
+        result = svc.run(source_keys=("bls",), live=True, write=True)
+        assert result.status == "blocked"
+        assert result.error_codes == ["invalid_response"]
+    assert writer_calls == []
+
+
+# ---- B. Outer-call safety net ----
+
+def test_c4e_outer_safety_net_when_helper_raises(tmp_path, monkeypatch):
+    """Even if the payload helper itself is broken to raise, run() must fail closed."""
+    payload = _SimplePayload(
+        source="bls",
+        content_type="text/calendar",
+        body=_minimal_bls_ics(),
+    )
+    svc, transport = _svc_with_payload(tmp_path, payload)
+
+    import app_backend.services.official_calendar_acquisition_service as svc_mod
+
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError(_SECRET + "_helper")
+
+    monkeypatch.setattr(svc_mod, "_validate_transport_payload", _raise)
+    result = svc.run(source_keys=("bls",), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["invalid_response"]
+    assert _SECRET not in repr(result)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_outer_safety_net_writer_helper_raises(tmp_path, monkeypatch):
+    """If the mutation-count helper itself raises, run() falls back to blocked."""
+    transport = _FakeTransport(
+        responses={"bls": _minimal_bls_ics(), "bea": _minimal_bea_json()},
+    )
+    db_path = tmp_path / "cal.sqlite"
+    cal_svc = EconomicCalendarService(db_path=db_path, now_provider=_now_provider)
+    svc = OfficialCalendarAcquisitionService(
+        transport_factory=lambda: transport,
+        calendar_service=cal_svc,
+        now_provider=_now_provider,
+    )
+    import app_backend.services.official_calendar_acquisition_service as svc_mod
+
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError(_SECRET + "_count_helper")
+
+    monkeypatch.setattr(svc_mod, "_validate_mutation_counts", _raise)
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["write_failed"]
+    assert _SECRET not in repr(result)
+
+
+# ---- C. Writer TOCTOU / subclass failures ----
+
+def test_c4e_writer_subclass_rejected(tmp_path, monkeypatch):
+    """Even a subclass with otherwise-valid counts must be rejected."""
+
+    class _SubResult(EconomicCalendarMutationResult):
+        pass
+
+    sub = object.__new__(_SubResult)
+    object.__setattr__(sub, "status", "ok")
+    object.__setattr__(sub, "event_count", 4)
+    object.__setattr__(sub, "created_count", 4)
+    object.__setattr__(sub, "updated_count", 0)
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: sub)
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["write_failed"]
+
+
+def test_c4e_writer_subclass_getattribute_raises(tmp_path, monkeypatch):
+    """Subclass whose __getattribute__ raises on count reads must be rejected."""
+
+    class _RaisingResult(EconomicCalendarMutationResult):
+        def __getattribute__(self, name):
+            if name == "event_count":
+                raise RuntimeError(_SECRET + "_getattribute_event_count")
+            return object.__getattribute__(self, name)
+
+    bad = object.__new__(_RaisingResult)
+    object.__setattr__(bad, "status", "ok")
+    object.__setattr__(bad, "event_count", 4)
+    object.__setattr__(bad, "created_count", 4)
+    object.__setattr__(bad, "updated_count", 0)
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: bad)
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["write_failed"]
+    assert _SECRET not in repr(result)
+
+
+def test_c4e_writer_property_status_raises(tmp_path, monkeypatch):
+    """Imposter object with a status property that raises must be rejected, not crash run()."""
+
+    class _ImposterStatusRaises:
+        event_count = 4
+        created_count = 4
+        updated_count = 0
+
+        @property
+        def status(self):
+            raise RuntimeError(_SECRET + "_status_property")
+
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: _ImposterStatusRaises())
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["write_failed"]
+    assert _SECRET not in repr(result)
+
+
+def test_c4e_writer_imposter_duck_typed_rejected(tmp_path, monkeypatch):
+    """An imposter with matching field names but wrong exact type is rejected."""
+
+    class _DuckImposter:
+        status = "ok"
+        event_count = 4
+        created_count = 4
+        updated_count = 0
+
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: _DuckImposter())
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert result.error_codes == ["write_failed"]
+
+
+def test_c4e_writer_toctou_subclass_flipping_counts(tmp_path, monkeypatch):
+    """A subclass that flips its count attribute between reads must not influence the summary.
+
+    Because the helper now returns captured primitive counts and the success
+    summary uses only those primitives, even if the writer object mutates its
+    underlying attributes between reads, no malformed value can reach the
+    summary — the helper rejects subclasses outright.
+    """
+
+    class _FlippingSub(EconomicCalendarMutationResult):
+        _reads: list[int] = []
+
+        def __getattribute__(self, name):
+            if name == "event_count":
+                reads = object.__getattribute__(type(self), "_reads")
+                reads.append(len(reads))
+                if len(reads) == 1:
+                    return 4
+                return 999
+            return object.__getattribute__(self, name)
+
+    flipping = object.__new__(_FlippingSub)
+    object.__setattr__(flipping, "status", "ok")
+    object.__setattr__(flipping, "event_count", 4)
+    object.__setattr__(flipping, "created_count", 4)
+    object.__setattr__(flipping, "updated_count", 0)
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: flipping)
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    # Subclass rejected, so write_failed and counts are 0, not 999.
+    assert result.status == "blocked"
+    assert result.error_codes == ["write_failed"]
+    assert result.event_count == 0
+    assert result.updated_count == 0
+    assert result.created_count == 0
+
+
+# ---- D. Regression: legitimate paths still pass ----
+
+def test_c4e_regression_bls_bea_dry_run_succeeds(tmp_path):
+    transport = _FakeTransport(
+        responses={"bls": _minimal_bls_ics(), "bea": _minimal_bea_json()},
+    )
+    svc = _service(tmp_path, transport)
+    result = svc.run(source_keys=("bls", "bea"), live=True)
+    assert result.status == "dry_run"
+    assert result.event_count == 4
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_regression_bls_bea_live_write_succeeds(tmp_path):
+    transport = _FakeTransport(
+        responses={"bls": _minimal_bls_ics(), "bea": _minimal_bea_json()},
+    )
+    svc = _service(tmp_path, transport)
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "ok"
+    assert result.event_count == 4
+    assert result.created_count == 4
+    assert result.updated_count == 0
+    assert (tmp_path / "cal.sqlite").exists()
+
+
+def test_c4e_regression_fomc_still_unavailable(tmp_path):
+    svc = _service(tmp_path)
+    result = svc.run(source_keys=("bls",))
+    assert result.unavailable_event_keys == ("fomc_statement",)
+
+
+def test_c4e_regression_no_live_writes_zero_db(tmp_path):
+    transport = _FakeTransport()
+    svc = _service(tmp_path, transport)
+    svc.run(source_keys=("bls", "bea"))
+    svc.run(source_keys=("bls", "bea"), write=True)
+    assert transport.call_log == []
+    assert not (tmp_path / "cal.sqlite").exists()

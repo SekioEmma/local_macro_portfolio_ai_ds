@@ -109,7 +109,10 @@ class OfficialCalendarAcquisitionService:
             except Exception:
                 error_codes.append("fetch_failed")
                 break
-            body = _validate_transport_payload(raw_payload, source_key)
+            try:
+                body = _validate_transport_payload(raw_payload, source_key)
+            except Exception:
+                body = None
             if body is None:
                 error_codes.append("invalid_response")
                 break
@@ -176,7 +179,11 @@ class OfficialCalendarAcquisitionService:
                 error_codes=["write_failed"],
             )
 
-        if not _validate_mutation_result(mutation, len(all_events)):
+        try:
+            counts = _validate_mutation_counts(mutation, len(all_events))
+        except Exception:
+            counts = None
+        if counts is None:
             return OfficialCalendarAcquisitionSummary(
                 status="blocked",
                 live=live,
@@ -187,6 +194,7 @@ class OfficialCalendarAcquisitionService:
                 error_codes=["write_failed"],
             )
 
+        event_count, created_count, updated_count = counts
         return OfficialCalendarAcquisitionSummary(
             status="ok",
             live=live,
@@ -194,10 +202,10 @@ class OfficialCalendarAcquisitionService:
             selected_sources=validated_sources,
             start_date=resolved_start,
             end_date=resolved_end,
-            event_count=mutation.event_count,
+            event_count=event_count,
             event_key_counts=key_counts,
-            created_count=mutation.created_count,
-            updated_count=mutation.updated_count,
+            created_count=created_count,
+            updated_count=updated_count,
         )
 
     def _validate_sources(self, source_keys: tuple[str, ...]) -> tuple[str, ...]:
@@ -254,58 +262,86 @@ def build_default_official_calendar_acquisition_service() -> OfficialCalendarAcq
 
 
 def _validate_transport_payload(payload: object, expected_source: str) -> str | None:
-    """Return body string if payload passes all boundary checks, None otherwise. Never raises."""
+    """Return body string if payload passes all boundary checks, None otherwise.
+
+    Exception-total: any failure raised while reading attributes, normalising the
+    source, inspecting MIME parts, or encoding the body is swallowed and treated
+    as an invalid payload. Never raises ``Exception``. System-level exits propagate.
+    """
     if payload is None:
         return None
     try:
         raw_source = payload.source  # type: ignore[union-attr]
         content_type = payload.content_type  # type: ignore[union-attr]
         body = payload.body  # type: ignore[union-attr]
-    except AttributeError:
+
+        # Normalise source: accept enum (.value) or plain built-in str.
+        source_str = raw_source.value if hasattr(raw_source, "value") else raw_source
+        if type(source_str) is not str:
+            return None
+        if source_str != expected_source:
+            return None
+
+        # Validate content type: must be exact built-in str so .split / .strip /
+        # .lower cannot be overridden by a subclass.
+        if type(content_type) is not str:
+            return None
+        ct_base = content_type.split(";")[0].strip().lower()
+        if ct_base != _EXPECTED_CONTENT_TYPES.get(expected_source):
+            return None
+
+        # Validate body: must be exact built-in str so .encode cannot be
+        # overridden by a subclass.
+        if type(body) is not str:
+            return None
+        if "\x00" in body:
+            return None
+        encoded = body.encode("utf-8")
+        if len(encoded) > _MAX_PAYLOAD_BYTES:
+            return None
+        return body
+    except Exception:
         return None
-    # Normalise source: accept enum (.value) or plain string
-    source_str = raw_source.value if hasattr(raw_source, "value") else raw_source
-    if not isinstance(source_str, str) or source_str != expected_source:
-        return None
-    # Validate content type: strip MIME params, lowercase exact match
-    if not isinstance(content_type, str):
-        return None
-    ct_base = content_type.split(";")[0].strip().lower()
-    if ct_base != _EXPECTED_CONTENT_TYPES.get(expected_source):
-        return None
-    # Validate body
-    if not isinstance(body, str):
-        return None
-    if "\x00" in body:
+
+
+def _validate_mutation_counts(
+    result: object,
+    expected_count: int,
+) -> tuple[int, int, int] | None:
+    """Return ``(event_count, created_count, updated_count)`` on success.
+
+    Exception-total: any failure raised while reading attributes from a
+    malicious or broken result object is swallowed and treated as a write
+    failure. Returns ``None`` for any validation failure. Never raises
+    ``Exception``. System-level exits propagate.
+
+    Only an exact ``EconomicCalendarMutationResult`` instance is accepted —
+    subclasses that could override attribute access are rejected.
+    """
+    if type(result) is not EconomicCalendarMutationResult:
         return None
     try:
-        encoded = body.encode("utf-8")
-    except (UnicodeEncodeError, UnicodeDecodeError):
-        return None
-    if len(encoded) > _MAX_PAYLOAD_BYTES:
-        return None
-    return body
+        status = result.status  # type: ignore[union-attr]
+        event_count = result.event_count  # type: ignore[union-attr]
+        created_count = result.created_count  # type: ignore[union-attr]
+        updated_count = result.updated_count  # type: ignore[union-attr]
 
-
-def _validate_mutation_result(result: object, expected_count: int) -> bool:
-    """Return True only when result is a fully-valid EconomicCalendarMutationResult."""
-    if not isinstance(result, EconomicCalendarMutationResult):
-        return False
-    if result.status != "ok":
-        return False
-    for attr in ("event_count", "created_count", "updated_count"):
-        val = getattr(result, attr)
-        if isinstance(val, bool):
-            return False
-        if not isinstance(val, int):
-            return False
-        if val < 0:
-            return False
-    if result.event_count != expected_count:
-        return False
-    if result.created_count + result.updated_count != result.event_count:
-        return False
-    return True
+        if status != "ok":
+            return None
+        for val in (event_count, created_count, updated_count):
+            if type(val) is bool:
+                return None
+            if type(val) is not int:
+                return None
+            if val < 0:
+                return None
+        if event_count != expected_count:
+            return None
+        if created_count + updated_count != event_count:
+            return None
+        return (event_count, created_count, updated_count)
+    except Exception:
+        return None
 
 
 def _event_key_counts(events: list[EconomicCalendarEventInput]) -> dict[str, int]:
