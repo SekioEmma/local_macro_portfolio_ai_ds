@@ -6,7 +6,7 @@ from typing import Any
 from datetime import date
 
 from . import bea_provider, bls_provider, fred_provider, treasury_provider
-from .market_data_service import (
+from .market_data_common import (
     _optional_mapping,
     _to_float_or_none,
     _utc_now,

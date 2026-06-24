@@ -9,7 +9,7 @@ from .market_data_packaging import (
     _parse_date,
     _source_error_derived_item,
 )
-from .market_data_service import _to_float_or_none
+from .market_data_common import _to_float_or_none
 
 
 def _build_treasury_derived_metrics(treasury_yields: dict[str, dict], timestamp: str) -> dict[str, dict]:

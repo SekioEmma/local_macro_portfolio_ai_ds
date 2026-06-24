@@ -9,16 +9,15 @@ from . import (
     treasury_provider,
     yfinance_provider,
 )
-from .market_data_service import (
+from .market_data_common import (
     _asset_type_from_fred_series_config,
     _asset_type_from_market_symbols,
-    _bea_config,
-    _bls_config,
     _candidate_source_label,
     _get_manual_market_item,
     _optional_mapping,
     _utc_now,
 )
+from .market_data_packaging import _bea_config, _bls_config
 
 
 def _provider_candidates(key: str, config: dict) -> list[dict]:
