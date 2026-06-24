@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any
 
 from . import fred_provider
-from .market_data_service import (
+from .market_data_packaging import (
     _derived_package_error,
     _package_item,
+    _parse_date,
     _source_error_derived_item,
-    _to_float_or_none,
 )
+from .market_data_service import _to_float_or_none
 
 
 def _build_treasury_derived_metrics(treasury_yields: dict[str, dict], timestamp: str) -> dict[str, dict]:
@@ -647,12 +647,3 @@ def _nearest_observation(
     if not candidates:
         return None
     return min(candidates, key=lambda item: abs((item["date"] - target_date).days))
-
-
-def _parse_date(value: Any) -> date | None:
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(str(value)[:10])
-    except ValueError:
-        return None
