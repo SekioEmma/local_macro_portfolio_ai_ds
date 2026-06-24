@@ -117,6 +117,17 @@ scripts/                  # Ingest, audit, benchmark scripts
 - USDCNH on `/api/quote/fx` still returns `unavailable` (`native_usdcnh_not_configured`); `DEXCHUS` / USD/CNY proxies remain forbidden.
 - Importing `main` reads no config, env, database, or network; dependency factories never call providers at app start.
 
+### Era 2 C2 official-history ingest exception
+
+- TASK-C2 allows only `OfficialHistoryIngestService` and `scripts/ingest_approved_official_history.py` to call existing FRED/BLS history provider paths, and only after a user manually executes the CLI with `--live`.
+- C2 adds no network import, transport, API route, frontend, background task, startup call, scheduler, or page-load call.
+- The default mode is planned dry-run. Fetching requires `--live`; market-history writes require `--live --write`.
+- Every write candidate must pass `official_history_ingest_guard` before the writer is called.
+- C2 accepts no URL, SearchResult, Tavily result, search result, or webpage body as market-history input.
+- The catalog is fixed to approved FRED rate series and BLS CPI series only. FRED remains `official_fallback`; BLS remains `official`.
+- C2 must not persist raw provider payloads, URLs, API keys, account data, holdings, positions, transactions, prompts, or raw outputs.
+- All other live-network, search, AI, quote, privacy, and persistence prohibitions remain in force.
+
 ## Key Design Invariants
 
 - `ExternalAIRuntimePolicy` has 10 required-true gates + 12 required-false dangerous permissions. Default: fail-closed.
