@@ -1,4 +1,4 @@
-from data_providers import market_data_service
+from data_providers import market_data_service, market_derived_metrics
 
 
 def test_market_data_package_builds_labor_indicators_from_existing_fred_provider(monkeypatch):
@@ -19,7 +19,7 @@ def test_market_data_package_builds_labor_indicators_from_existing_fred_provider
         }
 
     monkeypatch.setattr(market_data_service.fred_provider, "get_fred_latest", fake_latest)
-    monkeypatch.setattr(market_data_service, "_fred_history", lambda series_id, limit: [])
+    monkeypatch.setattr(market_derived_metrics, "_fred_history", lambda series_id, limit: [])
 
     config = market_data_service.load_data_source_config("configs/data_sources.yaml")
     package = market_data_service.get_market_data_package(
@@ -59,7 +59,7 @@ def test_market_data_package_includes_investment_grade_spread_from_existing_fred
         }
 
     monkeypatch.setattr(market_data_service.fred_provider, "get_fred_latest", fake_latest)
-    monkeypatch.setattr(market_data_service, "_fred_history", lambda series_id, limit: [])
+    monkeypatch.setattr(market_derived_metrics, "_fred_history", lambda series_id, limit: [])
 
     config = market_data_service.load_data_source_config("configs/data_sources.yaml")
     financial_conditions = {
