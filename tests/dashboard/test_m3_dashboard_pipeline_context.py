@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 import socket
 
 from app_backend.services import ai_context_service
 from app_backend.services import dashboard_context
 from app_backend.services import dashboard_filters
 from app_backend.services import dashboard_service
+from tests.helpers.dashboard_fixtures import write_dashboard_reports
 
 
 def test_dashboard_pipeline_context_import_is_reexported():
@@ -22,7 +22,7 @@ def test_dashboard_pipeline_context_starts_empty():
 
 def test_evidence_table_reuses_context_summary(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
     context = dashboard_service.DashboardPipelineContext(summary=summary)
     monkeypatch.setattr(
@@ -44,7 +44,7 @@ def test_evidence_table_reuses_context_summary(monkeypatch, tmp_path):
 
 def test_evidence_table_builds_summary_when_context_missing(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     original = dashboard_service.build_dashboard_summary
     calls = {"count": 0}
 
@@ -68,7 +68,7 @@ def test_evidence_table_builds_summary_when_context_missing(monkeypatch, tmp_pat
 
 def test_ai_manifest_reuses_context_evidence(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     evidence = dashboard_service.build_dashboard_evidence_table(
         reports_dir=tmp_path,
         write_last_good=False,
@@ -88,7 +88,7 @@ def test_ai_manifest_reuses_context_evidence(monkeypatch, tmp_path):
 
 def test_ai_manifest_builds_evidence_when_context_missing(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
     original = dashboard_service.build_dashboard_evidence_table
     calls = {"count": 0}
@@ -109,7 +109,7 @@ def test_ai_manifest_builds_evidence_when_context_missing(monkeypatch, tmp_path)
 
 def test_shared_context_outputs_equal_legacy_outputs(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
     legacy_summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
     legacy_evidence = dashboard_service.build_dashboard_evidence_table(
@@ -141,7 +141,7 @@ def test_shared_context_outputs_equal_legacy_outputs(monkeypatch, tmp_path):
 
 def test_write_last_good_false_is_respected_with_context(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     context = dashboard_service.DashboardPipelineContext()
     monkeypatch.setattr(
         dashboard_service,
@@ -158,7 +158,7 @@ def test_write_last_good_false_is_respected_with_context(monkeypatch, tmp_path):
 
 def test_evidence_filters_still_work_with_context_summary(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     context = dashboard_service.DashboardPipelineContext(
         summary=dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
     )
@@ -183,7 +183,7 @@ def test_evidence_filters_still_work_with_context_summary(monkeypatch, tmp_path)
 
 def test_extracted_evidence_filters_match_service_filtering(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
     filters = {
         "module": "rate_pressure",
         "status": "ok",
@@ -211,7 +211,7 @@ def test_extracted_evidence_filters_match_service_filtering(monkeypatch, tmp_pat
 
 def test_unfiltered_context_row_order_matches_legacy(monkeypatch, tmp_path):
     _block_network(monkeypatch)
-    _write_reports(tmp_path)
+    write_dashboard_reports(tmp_path)
 
     legacy = dashboard_service.build_dashboard_evidence_table(
         reports_dir=tmp_path,
@@ -234,8 +234,8 @@ def test_write_last_good_true_does_not_reuse_context_evidence(monkeypatch, tmp_p
     second_dir = tmp_path / "second"
     first_dir.mkdir()
     second_dir.mkdir()
-    _write_reports(first_dir, dgs10=4.1)
-    _write_reports(second_dir, dgs10=5.2)
+    write_dashboard_reports(first_dir, dgs10=4.1)
+    write_dashboard_reports(second_dir, dgs10=5.2)
     first = dashboard_service.build_dashboard_evidence_table(
         reports_dir=first_dir,
         write_last_good=False,
@@ -259,8 +259,8 @@ def test_no_process_level_stale_cache_between_contexts(monkeypatch, tmp_path):
     second_dir = tmp_path / "second"
     first_dir.mkdir()
     second_dir.mkdir()
-    _write_reports(first_dir, dgs10=4.1)
-    _write_reports(second_dir, dgs10=5.2)
+    write_dashboard_reports(first_dir, dgs10=4.1)
+    write_dashboard_reports(second_dir, dgs10=5.2)
 
     first = dashboard_service.build_dashboard_evidence_table(
         reports_dir=first_dir,
@@ -295,59 +295,6 @@ def _stable(value):
     if isinstance(value, list):
         return [_stable(item) for item in value]
     return value
-
-
-def _write_reports(tmp_path, *, dgs10=4.52):
-    generated_at = "2026-01-01T00:00:00+00:00"
-
-    def metric(value, source="FRED", badge="official", status="ok"):
-        return {
-            "value": value,
-            "status": status,
-            "source": source,
-            "source_badge": badge,
-            "observation_date": "2026-01-01",
-            "freshness_status": "fresh",
-        }
-
-    (tmp_path / "market_snapshot.json").write_text(
-        json.dumps(
-            {
-                "generated_at": generated_at,
-                "status": "ok",
-                "risk_level": "watch",
-                "high_yield_spread": metric(3.4),
-                "investment_grade_spread": metric(1.2),
-                "vix": metric(18.2, source="CBOE"),
-                "credit_stress_status": metric("watch"),
-                "dgs10": metric(dgs10),
-                "dgs30": metric(4.83),
-                "dfii10": metric(2.1),
-                "t10yie": metric(2.35),
-                "real_yield_pressure_status": metric("pressure"),
-                "core_cpi_yoy": metric(3.1),
-                "core_pce_yoy": metric(2.8),
-                "ppiaco_yoy": metric(1.7),
-                "unemployment_rate": metric(4.0),
-                "initial_jobless_claims": metric(230000),
-            }
-        ),
-        encoding="utf-8",
-    )
-    (tmp_path / "portfolio_snapshot.json").write_text(
-        json.dumps(
-            {
-                "generated_at": generated_at,
-                "status": "ok",
-                "max_deviation_asset": {"value": "equity", "status": "ok"},
-                "max_deviation_pp": {"value": 2.3, "status": "ok"},
-                "equity_total_deviation_pp": {"value": 1.4, "status": "ok"},
-                "cash_reserve_status": {"value": "available", "status": "ok"},
-                "holdings_updated_at": {"value": "2026-01-01", "status": "ok"},
-            }
-        ),
-        encoding="utf-8",
-    )
 
 
 def _block_network(monkeypatch):
