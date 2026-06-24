@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import socket
 
 from app_backend.services import ai_context_service
 from app_backend.services import dashboard_context
 from app_backend.services import dashboard_filters
 from app_backend.services import dashboard_service
-from tests.helpers.dashboard_fixtures import write_dashboard_reports
+from tests.helpers.dashboard_fixtures import block_network_calls, write_dashboard_reports
 
 
 def test_dashboard_pipeline_context_import_is_reexported():
@@ -21,7 +20,7 @@ def test_dashboard_pipeline_context_starts_empty():
 
 
 def test_evidence_table_reuses_context_summary(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
     context = dashboard_service.DashboardPipelineContext(summary=summary)
@@ -43,7 +42,7 @@ def test_evidence_table_reuses_context_summary(monkeypatch, tmp_path):
 
 
 def test_evidence_table_builds_summary_when_context_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     original = dashboard_service.build_dashboard_summary
     calls = {"count": 0}
@@ -67,7 +66,7 @@ def test_evidence_table_builds_summary_when_context_missing(monkeypatch, tmp_pat
 
 
 def test_ai_manifest_reuses_context_evidence(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     evidence = dashboard_service.build_dashboard_evidence_table(
         reports_dir=tmp_path,
@@ -87,7 +86,7 @@ def test_ai_manifest_reuses_context_evidence(monkeypatch, tmp_path):
 
 
 def test_ai_manifest_builds_evidence_when_context_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
     original = dashboard_service.build_dashboard_evidence_table
@@ -108,7 +107,7 @@ def test_ai_manifest_builds_evidence_when_context_missing(monkeypatch, tmp_path)
 
 
 def test_shared_context_outputs_equal_legacy_outputs(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
     legacy_summary = dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
@@ -140,7 +139,7 @@ def test_shared_context_outputs_equal_legacy_outputs(monkeypatch, tmp_path):
 
 
 def test_write_last_good_false_is_respected_with_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     context = dashboard_service.DashboardPipelineContext()
     monkeypatch.setattr(
@@ -157,7 +156,7 @@ def test_write_last_good_false_is_respected_with_context(monkeypatch, tmp_path):
 
 
 def test_evidence_filters_still_work_with_context_summary(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     context = dashboard_service.DashboardPipelineContext(
         summary=dashboard_service.build_dashboard_summary(reports_dir=tmp_path)
@@ -182,7 +181,7 @@ def test_evidence_filters_still_work_with_context_summary(monkeypatch, tmp_path)
 
 
 def test_extracted_evidence_filters_match_service_filtering(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
     filters = {
         "module": "rate_pressure",
@@ -210,7 +209,7 @@ def test_extracted_evidence_filters_match_service_filtering(monkeypatch, tmp_pat
 
 
 def test_unfiltered_context_row_order_matches_legacy(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     write_dashboard_reports(tmp_path)
 
     legacy = dashboard_service.build_dashboard_evidence_table(
@@ -229,7 +228,7 @@ def test_unfiltered_context_row_order_matches_legacy(monkeypatch, tmp_path):
 
 
 def test_write_last_good_true_does_not_reuse_context_evidence(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     first_dir = tmp_path / "first"
     second_dir = tmp_path / "second"
     first_dir.mkdir()
@@ -254,7 +253,7 @@ def test_write_last_good_true_does_not_reuse_context_evidence(monkeypatch, tmp_p
 
 
 def test_no_process_level_stale_cache_between_contexts(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     first_dir = tmp_path / "first"
     second_dir = tmp_path / "second"
     first_dir.mkdir()
@@ -295,10 +294,3 @@ def _stable(value):
     if isinstance(value, list):
         return [_stable(item) for item in value]
     return value
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in M3 tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

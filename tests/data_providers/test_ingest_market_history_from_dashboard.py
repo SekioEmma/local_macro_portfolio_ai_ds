@@ -1,13 +1,14 @@
 import json
-import socket
 
 
 import ingest_market_history_from_dashboard as ingest
 from data_providers import market_history_store as store
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 def test_ingest_dry_run_does_not_create_db(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     db_path = tmp_path / "market_history.sqlite3"
 
@@ -24,7 +25,7 @@ def test_ingest_dry_run_does_not_create_db(monkeypatch, tmp_path):
 
 
 def test_ingest_write_uses_tmp_db_and_filters_rows(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     db_path = tmp_path / "market_history.sqlite3"
 
@@ -44,7 +45,7 @@ def test_ingest_write_uses_tmp_db_and_filters_rows(monkeypatch, tmp_path):
 
 
 def test_ingest_second_write_updates_existing_rows(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     db_path = tmp_path / "market_history.sqlite3"
 
@@ -59,7 +60,7 @@ def test_ingest_second_write_updates_existing_rows(monkeypatch, tmp_path):
 
 
 def test_observation_from_evidence_row_skips_portfolio_and_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     evidence = ingest.dashboard_service.build_dashboard_evidence_table(
         reports_dir=tmp_path,
@@ -77,7 +78,7 @@ def test_observation_from_evidence_row_skips_portfolio_and_missing(monkeypatch, 
 
 
 def test_cli_dry_run_outputs_summary(monkeypatch, tmp_path, capsys):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     db_path = tmp_path / "market_history.sqlite3"
 
@@ -146,10 +147,3 @@ def _write_fake_reports(tmp_path):
         ),
         encoding="utf-8",
     )
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in market history ingest tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

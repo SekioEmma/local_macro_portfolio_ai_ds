@@ -1,9 +1,10 @@
 import json
-import socket
 
 import audit_data_pipeline_coverage as audit
 from data_quality import scenario_stress as d16
 from modeling.model_registry import ModelRegistry
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 EXPECTED_SCENARIOS = {
@@ -141,7 +142,7 @@ def test_d16_is_registered_in_model_registry():
 
 
 def test_d16_audit_section_exists_and_leak_flags_are_false(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -177,7 +178,7 @@ def test_d16_compact_rows_have_stable_public_contract():
 
 
 def test_d16_works_with_fake_rows_without_live_data(monkeypatch):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     rows = d16.build_scenario_stress_rows(
         [
             _row("rate_pressure", "dgs10", value=4.8, status="pressure"),
@@ -234,10 +235,3 @@ def _by_key(rows, metric_key):
 
 def _write_json(path, payload):
     path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in D16 tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

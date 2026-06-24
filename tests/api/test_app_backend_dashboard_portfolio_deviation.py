@@ -1,14 +1,15 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 def test_dashboard_exposes_portfolio_deviation_compact_fields(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_portfolio_snapshot(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -36,7 +37,7 @@ def test_dashboard_exposes_portfolio_deviation_compact_fields(monkeypatch, tmp_p
 
 
 def test_evidence_table_allows_only_portfolio_compact_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_portfolio_snapshot(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -62,7 +63,7 @@ def test_evidence_table_allows_only_portfolio_compact_context(monkeypatch, tmp_p
 
 
 def test_stale_portfolio_compact_is_not_ok_or_ai_allowed(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_portfolio_snapshot(tmp_path, holdings_updated_at="2026-04-01")
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -111,10 +112,3 @@ def _metric(module, metric_key):
         if metric["metric_key"] == metric_key:
             return metric
     raise AssertionError(f"missing portfolio_deviation.{metric_key}")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in portfolio dashboard tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

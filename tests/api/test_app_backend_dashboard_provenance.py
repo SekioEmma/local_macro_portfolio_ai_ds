@@ -1,14 +1,15 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 def test_high_yield_with_complete_provenance_enters_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -35,7 +36,7 @@ def test_high_yield_with_complete_provenance_enters_ai_context(monkeypatch, tmp_
 
 
 def test_dgs10_official_quality_metadata_enters_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -71,7 +72,7 @@ def test_dgs10_official_quality_metadata_enters_ai_context(monkeypatch, tmp_path
 
 
 def test_derived_dgs10_average_without_hint_is_blocked(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -100,7 +101,7 @@ def test_derived_dgs10_average_without_hint_is_blocked(monkeypatch, tmp_path):
 
 
 def test_holdings_updated_at_is_local_fresh_without_holdings_detail(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     (tmp_path / "portfolio_snapshot.json").write_text(
         json.dumps(
             {
@@ -126,7 +127,7 @@ def test_holdings_updated_at_is_local_fresh_without_holdings_detail(monkeypatch,
 
 
 def test_value_with_missing_provenance_has_blocked_reason(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -177,10 +178,3 @@ def _row(data, module_key, metric_key):
         if row["module"] == module_key and row["metric_key"] == metric_key:
             return row
     raise AssertionError(f"missing row {module_key}.{metric_key}")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in provenance tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

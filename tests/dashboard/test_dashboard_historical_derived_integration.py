@@ -1,5 +1,4 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
@@ -7,9 +6,11 @@ from app_backend.main import app
 from app_backend.services import dashboard_service
 from data_providers import market_history_store
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 def test_equity_historical_derived_metrics_integrate_into_dashboard(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2026-01-01", 100.0, source_series="^GSPC")
     _insert(db_path, "sp500", "2026-03-02", 110.0, source_series="^GSPC")
@@ -48,7 +49,7 @@ def test_equity_historical_derived_metrics_integrate_into_dashboard(monkeypatch,
 
 
 def test_evidence_table_uses_integrated_equity_rows(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2026-01-01", 100.0, source_series="^GSPC")
     _insert(db_path, "sp500", "2026-03-02", 110.0, source_series="^GSPC")
@@ -67,7 +68,7 @@ def test_evidence_table_uses_integrated_equity_rows(monkeypatch, tmp_path):
 
 
 def test_proxy_breadth_metrics_surface_in_evidence_table(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_proxy_series(db_path)
     _write_market_report(tmp_path)
@@ -104,7 +105,7 @@ def test_proxy_breadth_metrics_surface_in_evidence_table(monkeypatch, tmp_path):
 
 
 def test_proxy_breadth_metrics_stay_blocked_when_history_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_proxy(db_path, "spy_proxy", "2026-03-02", 120.0, source_series="SPY")
     _write_market_report(tmp_path)
@@ -122,7 +123,7 @@ def test_proxy_breadth_metrics_stay_blocked_when_history_missing(monkeypatch, tm
 
 
 def test_market_stress_derived_metrics_surface_in_evidence_table(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2025-08-01", 95.0, source_series="^GSPC")
     _insert(db_path, "sp500", "2025-11-01", 100.0, source_series="^GSPC")
@@ -173,7 +174,7 @@ def test_market_stress_derived_metrics_surface_in_evidence_table(monkeypatch, tm
 
 
 def test_market_stress_derived_metrics_block_when_history_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2026-03-02", 96.0, source_series="^GSPC")
     _write_market_report(tmp_path)
@@ -194,7 +195,7 @@ def test_market_stress_derived_metrics_block_when_history_missing(monkeypatch, t
 
 
 def test_market_stress_curve_slope_uses_compact_dgs_fallback(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2025-08-01", 95.0, source_series="^GSPC")
     _insert(db_path, "sp500", "2026-03-02", 96.0, source_series="^GSPC")
@@ -224,7 +225,7 @@ def test_market_stress_curve_slope_uses_compact_dgs_fallback(monkeypatch, tmp_pa
 
 
 def test_market_stress_curve_slope_blocks_when_compact_dgs_value_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     payload = _compact_dgs_payload()
     payload["dgs10"]["value"] = None
@@ -243,7 +244,7 @@ def test_market_stress_curve_slope_blocks_when_compact_dgs_value_missing(monkeyp
 
 
 def test_market_stress_curve_slope_blocks_when_compact_dgs_metadata_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     payload = _compact_dgs_payload()
     payload["dgs2"].pop("source")
@@ -261,7 +262,7 @@ def test_market_stress_curve_slope_blocks_when_compact_dgs_metadata_missing(monk
 
 
 def test_rate_and_oil_metrics_are_not_replaced_by_equity_history(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2026-01-01", 100.0, source_series="^GSPC")
     _insert(db_path, "sp500", "2026-03-02", 110.0, source_series="^GSPC")
@@ -285,7 +286,7 @@ def test_rate_and_oil_metrics_are_not_replaced_by_equity_history(monkeypatch, tm
 
 
 def test_oil_historical_derived_metrics_integrate_into_dashboard(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_official_energy(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
     _insert_official_energy(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
@@ -314,7 +315,7 @@ def test_oil_historical_derived_metrics_integrate_into_dashboard(monkeypatch, tm
 
 
 def test_oil_historical_derived_prefers_official_market_history(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_official_energy(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
     _insert_official_energy(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
@@ -347,7 +348,7 @@ def test_oil_historical_derived_prefers_official_market_history(monkeypatch, tmp
 
 
 def test_oil_historical_derived_requires_official_history(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "wti", "2026-01-31", 70.0, source_series="DCOILWTICO")
     _insert(db_path, "wti", "2026-03-02", 77.0, source_series="DCOILWTICO")
@@ -363,7 +364,7 @@ def test_oil_historical_derived_requires_official_history(monkeypatch, tmp_path)
 
 
 def test_ppifis_history_surfaces_final_demand_and_yoy(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     values = [
         150.0,
@@ -426,7 +427,7 @@ def test_ppifis_history_surfaces_final_demand_and_yoy(monkeypatch, tmp_path):
 
 
 def test_ppifis_yoy_stays_blocked_with_insufficient_history(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_official_ppifis(db_path, "2026-01-01", 162.0)
     _write_market_report(tmp_path)
@@ -447,7 +448,7 @@ def test_ppifis_yoy_stays_blocked_with_insufficient_history(monkeypatch, tmp_pat
 
 
 def test_equity_history_insufficient_keeps_dashboard_insufficient(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2026-03-02", 110.0, source_series="^GSPC")
     _insert(db_path, "nasdaq100", "2026-03-02", 130.0, source_series="^NDX")
@@ -464,7 +465,7 @@ def test_equity_history_insufficient_keeps_dashboard_insufficient(monkeypatch, t
 
 
 def test_dashboard_historical_derived_response_is_compact(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert(db_path, "sp500", "2026-01-01", 100.0, source_series="^GSPC")
     _insert(db_path, "sp500", "2026-03-02", 110.0, source_series="^GSPC")
@@ -704,10 +705,3 @@ def _row(data, metric_key):
         if row["metric_key"] == metric_key:
             return row
     raise AssertionError(f"missing row {metric_key}")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in dashboard derived tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

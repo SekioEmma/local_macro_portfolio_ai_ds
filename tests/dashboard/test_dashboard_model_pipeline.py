@@ -6,7 +6,6 @@ in build_dashboard_evidence_table. These tests lock behavior for M7/M8-A.
 P-M1 adds conversion-count and input-order regression tests.
 """
 import json
-import socket
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -22,6 +21,8 @@ from app_backend.services.dashboard_model_pipeline import (
 )
 from app_backend.services.dashboard_report_loader import load_dashboard_reports
 from modeling.model_registry import ModelRegistry
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 MODEL_REGISTRY = ModelRegistry()
@@ -95,7 +96,7 @@ def _build_pipeline(monkeypatch, tmp_path):
 
 
 def test_pipeline_result_type(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     assert isinstance(result, DashboardModelPipelineResult)
     assert isinstance(result.rows, list)
@@ -103,13 +104,13 @@ def test_pipeline_result_type(monkeypatch, tmp_path):
 
 
 def test_pipeline_row_groups_keys(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     assert set(result.row_groups.keys()) == EXPECTED_MODEL_ROW_GROUPS
 
 
 def test_pipeline_rows_are_nonempty(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     assert len(result.rows) > 0
     for group_key, group_rows in result.row_groups.items():
@@ -117,7 +118,7 @@ def test_pipeline_rows_are_nonempty(monkeypatch, tmp_path):
 
 
 def test_pipeline_rows_module_matches_group_key(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     for group_key, group_rows in result.row_groups.items():
         for row in group_rows:
@@ -129,7 +130,7 @@ def test_pipeline_rows_module_matches_group_key(monkeypatch, tmp_path):
 
 def test_pipeline_rows_assembly_order(monkeypatch, tmp_path):
     """rows list starts with financial_stress groups and ends with percentile/liquidity."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
 
     # Collect module sequence from result.rows (deduped, order-preserving)
@@ -168,7 +169,7 @@ def test_pipeline_rows_assembly_order(monkeypatch, tmp_path):
 
 
 def test_pipeline_d10_public_keys_present(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     d10_keys = {row.metric_key for row in result.row_groups["financial_stress_composite"]}
     assert D10_PUBLIC_KEYS <= d10_keys, (
@@ -177,7 +178,7 @@ def test_pipeline_d10_public_keys_present(monkeypatch, tmp_path):
 
 
 def test_pipeline_d11_public_keys_present(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     d11_keys = {row.metric_key for row in result.row_groups["pullback_systemic_risk_checklist"]}
     assert D11_PUBLIC_KEYS <= d11_keys, (
@@ -187,7 +188,7 @@ def test_pipeline_d11_public_keys_present(monkeypatch, tmp_path):
 
 def test_pipeline_registry_model_public_keys_present(monkeypatch, tmp_path):
     """ModelRegistry public output keys must appear in pipeline row_groups."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     all_pipeline_keys = {row.metric_key for row in result.rows}
 
@@ -208,7 +209,7 @@ def test_pipeline_registry_model_public_keys_present(monkeypatch, tmp_path):
 
 
 def test_pipeline_derived_rows_have_ai_context_field(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     for row in result.rows:
         assert hasattr(row, "ai_context_allowed"), (
@@ -218,7 +219,7 @@ def test_pipeline_derived_rows_have_ai_context_field(monkeypatch, tmp_path):
 
 def test_pipeline_stage8_overlay_rows_have_downstream_only_gate(monkeypatch, tmp_path):
     """Stage 8 rows must not be classified as base fact rows."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     result = _build_pipeline(monkeypatch, tmp_path)
     overlay_rows = result.row_groups["portfolio_exposure_overlay"]
     assert overlay_rows, "portfolio_exposure_overlay group is empty"
@@ -239,7 +240,7 @@ def test_pipeline_stage8_overlay_rows_have_downstream_only_gate(monkeypatch, tmp
 
 def test_pipeline_output_matches_evidence_table_row_count(monkeypatch, tmp_path):
     """build_dashboard_model_rows + base_rows must produce same count as evidence table."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -274,7 +275,7 @@ def test_pipeline_output_matches_evidence_table_row_count(monkeypatch, tmp_path)
 
 def test_pipeline_module_keys_present_in_evidence_table(monkeypatch, tmp_path):
     """All EXPECTED_MODEL_ROW_GROUPS appear as modules in the API evidence table."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -310,7 +311,7 @@ def test_no_search_endpoint(monkeypatch, tmp_path):
 
 def test_pm1_model_to_dict_called_once_per_row(monkeypatch, tmp_path):
     """Each DashboardEvidenceRow should be converted to dict at most once."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     call_count = 0
     original_fn = dashboard_model_pipeline._model_to_dict
 
@@ -346,7 +347,7 @@ def test_pm1_model_to_dict_called_once_per_row(monkeypatch, tmp_path):
 
 def test_pm1_no_repeated_base_row_conversion(monkeypatch, tmp_path):
     """base_rows should be converted exactly once, not once per downstream model."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     converted_ids: list[int] = []
     original_fn = dashboard_model_pipeline._model_to_dict
 
@@ -377,7 +378,7 @@ def test_pm1_no_repeated_base_row_conversion(monkeypatch, tmp_path):
 def test_pm1_scenario_stress_input_includes_historical_validation(monkeypatch, tmp_path):
     """Scenario Stress Matrix input must include Historical Validation Replay
     rows after Macro Regime Review rows."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     captured_input: list[dict] = []
 
     from data_quality import scenario_stress as ss_mod
@@ -411,7 +412,7 @@ def test_pm1_scenario_stress_input_includes_historical_validation(monkeypatch, t
 def test_pm1_portfolio_overlay_input_order(monkeypatch, tmp_path):
     """Portfolio Exposure Overlay input must include Scenario Stress Matrix
     before Historical Validation Replay."""
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     captured_input: list[dict] = []
 
     from data_quality import portfolio_exposure_overlay as peo_mod
@@ -447,12 +448,6 @@ def test_pm1_portfolio_overlay_input_order(monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _block_network(monkeypatch):
-    def _raise(*args, **kwargs):
-        raise AssertionError("Network access not allowed in pipeline tests.")
-    monkeypatch.setattr(socket, "create_connection", _raise)
 
 
 def _write_fake_reports(tmp_path: Path) -> None:

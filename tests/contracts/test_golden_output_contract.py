@@ -1,5 +1,4 @@
 import json
-import socket
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -8,6 +7,8 @@ import audit_data_pipeline_coverage as audit
 from app_backend.main import app
 from app_backend.services import dashboard_service
 from modeling.model_registry import FORBIDDEN_PUBLIC_OUTPUT_KEYS, ModelRegistry
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -83,7 +84,7 @@ PRIVATE_TOKENS = (
 
 
 def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -197,7 +198,7 @@ def test_golden_evidence_row_and_model_output_contract(monkeypatch, tmp_path):
 
 
 def test_golden_ai_context_manifest_contract(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -472,10 +473,3 @@ def _write_fake_reports(tmp_path):
         ),
         encoding="utf-8",
     )
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in golden contract tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

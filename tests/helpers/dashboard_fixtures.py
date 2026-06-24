@@ -84,9 +84,13 @@ def install_default_reports(monkeypatch, reports_dir: Path, *, dgs10: float = 4.
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", reports_dir)
 
 
-@pytest.fixture
-def block_network(monkeypatch):
+def block_network_calls(monkeypatch) -> None:
     def _raise_on_network(*args, **kwargs):
         raise AssertionError("Network access is not allowed in tests.")
 
     monkeypatch.setattr(socket, "create_connection", _raise_on_network)
+
+
+@pytest.fixture
+def block_network(monkeypatch):
+    block_network_calls(monkeypatch)

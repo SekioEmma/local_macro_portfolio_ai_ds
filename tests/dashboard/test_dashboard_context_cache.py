@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -19,7 +18,7 @@ from app_backend.services.dashboard_context_cache import (
     CachedDashboardContext,
     SharedDashboardContextCache,
 )
-from tests.helpers.dashboard_fixtures import install_default_reports, write_dashboard_reports
+from tests.helpers.dashboard_fixtures import block_network_calls, install_default_reports, write_dashboard_reports
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -33,7 +32,7 @@ def teardown_function() -> None:
 
 
 def test_cache_hit_returns_identical_default_summary_and_evidence(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     install_default_reports(monkeypatch, tmp_path)
     calls = _count_pipeline_builds(monkeypatch)
 
@@ -50,7 +49,7 @@ def test_cache_hit_returns_identical_default_summary_and_evidence(monkeypatch, t
 
 
 def test_concurrent_summary_builds_share_one_locked_build(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     install_default_reports(monkeypatch, tmp_path)
     original = dashboard_service._load_dashboard_reports
     count_lock = Lock()
@@ -72,7 +71,7 @@ def test_concurrent_summary_builds_share_one_locked_build(monkeypatch, tmp_path)
 
 
 def test_cache_invalidates_on_report_file_stat_change(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     install_default_reports(monkeypatch, tmp_path, dgs10=4.1)
     calls = _count_pipeline_builds(monkeypatch)
 
@@ -117,7 +116,7 @@ def test_cache_invalidates_on_market_history_db_stat_change(tmp_path):
 
 
 def test_write_last_good_uses_cache_but_still_saves(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     install_default_reports(monkeypatch, tmp_path)
     calls = _count_pipeline_builds(monkeypatch)
     saves = {"count": 0}
@@ -137,7 +136,7 @@ def test_write_last_good_uses_cache_but_still_saves(monkeypatch, tmp_path):
 
 
 def test_custom_path_bypasses_and_does_not_poison_default_cache(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     default_dir = tmp_path / "default"
     custom_dir = tmp_path / "custom"
     default_dir.mkdir()
@@ -161,7 +160,7 @@ def test_custom_path_bypasses_and_does_not_poison_default_cache(monkeypatch, tmp
 
 
 def test_preloaded_context_summary_bypasses_and_does_not_poison_cache(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     default_dir = tmp_path / "default"
     context_dir = tmp_path / "context"
     default_dir.mkdir()
@@ -187,7 +186,7 @@ def test_preloaded_context_summary_bypasses_and_does_not_poison_cache(monkeypatc
 
 
 def test_filtered_calls_do_not_poison_unfiltered_cache(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     install_default_reports(monkeypatch, tmp_path)
     calls = _count_pipeline_builds(monkeypatch)
 
@@ -209,7 +208,7 @@ def test_filtered_calls_do_not_poison_unfiltered_cache(monkeypatch, tmp_path):
 
 
 def test_cached_responses_are_defensive_copies(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     install_default_reports(monkeypatch, tmp_path)
     dashboard_service.build_dashboard_evidence_table(write_last_good=False)
     cached = dashboard_service.build_dashboard_evidence_table(write_last_good=False)
@@ -226,7 +225,7 @@ def test_cached_responses_are_defensive_copies(monkeypatch, tmp_path):
 
 
 def test_no_private_payload_or_cache_diagnostics_in_route_responses(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     install_default_reports(monkeypatch, tmp_path)
     client = TestClient(app)
 
@@ -329,10 +328,3 @@ def _dummy_evidence_table() -> DashboardEvidenceTableResponse:
         filters={"available": {}, "applied": {}},
         next_actions=[],
     )
-
-
-def _block_network(monkeypatch) -> None:
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in cache tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

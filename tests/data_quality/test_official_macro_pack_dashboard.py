@@ -1,5 +1,4 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
@@ -7,6 +6,8 @@ from app_backend.main import app
 from app_backend.services import dashboard_service
 from data_providers import market_history_store
 from data_quality import official_macro_pack
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 def test_official_macro_pack_definitions_are_stable():
@@ -30,7 +31,7 @@ def test_official_macro_pack_definitions_are_stable():
 
 
 def test_official_macro_values_surface_with_provenance(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -65,7 +66,7 @@ def test_official_macro_values_surface_with_provenance(monkeypatch, tmp_path):
 
 
 def test_official_macro_aliases_surface_real_yield_rows(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -86,7 +87,7 @@ def test_official_macro_aliases_surface_real_yield_rows(monkeypatch, tmp_path):
 
 
 def test_official_labor_compact_rows_surface_in_evidence_table(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -150,7 +151,7 @@ def test_official_labor_compact_rows_surface_in_evidence_table(monkeypatch, tmp_
 
 
 def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(tmp_path, {})
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -177,7 +178,7 @@ def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_pa
 
 
 def test_labor_compact_missing_uses_official_history_fallback(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_history(db_path, "continuing_claims", "2026-06-07", 1700000, source_series="CCSA")
     _write_market(
@@ -212,7 +213,7 @@ def test_labor_compact_missing_uses_official_history_fallback(monkeypatch, tmp_p
 
 
 def test_labor_payems_compact_unknown_freshness_uses_history_metadata(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_history(db_path, "nonfarm_payrolls", "2026-05-01", 160000, source_series="PAYEMS")
     _write_market(
@@ -247,7 +248,7 @@ def test_labor_payems_compact_unknown_freshness_uses_history_metadata(monkeypatc
 
 
 def test_labor_history_fallback_stale_blocks_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     _insert_history(db_path, "continuing_claims", "2026-01-01", 1700000, source_series="CCSA")
     _write_market(tmp_path, {})
@@ -266,7 +267,7 @@ def test_labor_history_fallback_stale_blocks_ai_context(monkeypatch, tmp_path):
 
 
 def test_labor_compact_missing_stays_missing_without_history(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(tmp_path, {})
 
     data = dashboard_service.build_dashboard_evidence_table(
@@ -282,7 +283,7 @@ def test_labor_compact_missing_stays_missing_without_history(monkeypatch, tmp_pa
 
 
 def test_ppi_boundary_preserves_missing_final_demand(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(tmp_path, {"ppiaco_yoy": _metric(1.6)})
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -298,7 +299,7 @@ def test_ppi_boundary_preserves_missing_final_demand(monkeypatch, tmp_path):
 
 
 def test_ppi_final_demand_official_metadata_allows_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -341,7 +342,7 @@ def test_ppi_final_demand_official_metadata_allows_ai_context(monkeypatch, tmp_p
 
 
 def test_ppi_final_demand_missing_metadata_blocks_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -371,7 +372,7 @@ def test_ppi_final_demand_missing_metadata_blocks_ai_context(monkeypatch, tmp_pa
 
 
 def test_core_inflation_index_levels_are_not_displayed_as_yoy(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -399,7 +400,7 @@ def test_core_inflation_index_levels_are_not_displayed_as_yoy(monkeypatch, tmp_p
 
 
 def test_ppi_final_demand_index_level_is_not_displayed_as_yoy(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -419,7 +420,7 @@ def test_ppi_final_demand_index_level_is_not_displayed_as_yoy(monkeypatch, tmp_p
 
 
 def test_core_inflation_yoy_decimal_and_percent_format_correctly(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -436,7 +437,7 @@ def test_core_inflation_yoy_decimal_and_percent_format_correctly(monkeypatch, tm
 
 
 def test_official_macro_yoy_aliases_surface_existing_compact_fields(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -490,7 +491,7 @@ def test_official_macro_yoy_aliases_surface_existing_compact_fields(monkeypatch,
 
 
 def test_official_macro_response_avoids_raw_and_consensus_words(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -563,10 +564,3 @@ def _row(data, module_key, metric_key):
         if row["module"] == module_key and row["metric_key"] == metric_key:
             return row
     raise AssertionError(f"missing row {module_key}.{metric_key}")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in official macro tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

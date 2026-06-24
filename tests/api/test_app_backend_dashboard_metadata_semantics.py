@@ -1,14 +1,15 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 def test_value_with_missing_source_badge_is_not_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -30,7 +31,7 @@ def test_value_with_missing_source_badge_is_not_ai_context(monkeypatch, tmp_path
 
 
 def test_value_with_unknown_freshness_is_not_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -53,7 +54,7 @@ def test_value_with_unknown_freshness_is_not_ai_context(monkeypatch, tmp_path):
 
 
 def test_dgs30_missing_blocks_distance_to_5pct(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -80,7 +81,7 @@ def test_dgs30_missing_blocks_distance_to_5pct(monkeypatch, tmp_path):
 
 
 def test_all_missing_real_yield_pressure_is_not_ok(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(tmp_path, {"real_yield_10y": {"status": "ok"}})
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -90,7 +91,7 @@ def test_all_missing_real_yield_pressure_is_not_ok(monkeypatch, tmp_path):
 
 
 def test_all_insufficient_history_equity_trend_is_not_ok(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(tmp_path, {"sp500": {"status": "ok"}})
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -100,7 +101,7 @@ def test_all_insufficient_history_equity_trend_is_not_ok(monkeypatch, tmp_path):
 
 
 def test_portfolio_deviation_without_compact_fields_is_not_ok(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     (tmp_path / "portfolio_snapshot.json").write_text(
         json.dumps(
             {
@@ -123,7 +124,7 @@ def test_portfolio_deviation_without_compact_fields_is_not_ok(monkeypatch, tmp_p
 
 
 def test_blocked_statuses_and_search_derived_do_not_enter_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -154,7 +155,7 @@ def test_blocked_statuses_and_search_derived_do_not_enter_ai_context(monkeypatch
 
 
 def test_error_payload_with_null_value_does_not_display_error_as_value(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_market(
         tmp_path,
         {
@@ -200,10 +201,3 @@ def _row(data, module_key, metric_key):
         if row["module"] == module_key and row["metric_key"] == metric_key:
             return row
     raise AssertionError(f"missing row {module_key}.{metric_key}")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in metadata semantics tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)
