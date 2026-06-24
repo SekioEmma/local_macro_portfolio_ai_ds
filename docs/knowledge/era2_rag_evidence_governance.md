@@ -43,6 +43,26 @@ Meaning:
   pipeline *may* consider. It does not by itself authorise reading any
   document content.
 
+## D0b boundary hardening
+
+D0b keeps D0 metadata-only and tightens only the public admission boundary.
+
+- The public admission interface accepts only exact `RagEvidenceCandidate`
+  objects. `None`, dictionaries, plain objects, duck-typed objects, and
+  subclasses are rejected with `RagEvidenceGovernanceError("invalid_candidate")`.
+- Candidate exact-type checking happens before any candidate attribute is
+  read and without calling object `repr`, `str`, or `dir`.
+- Ordinary internal exceptions are collapsed to
+  `RagEvidenceGovernanceError("invalid_candidate")` without exposing the
+  original exception text.
+- Existing field-level validation errors keep their stable codes, including
+  `invalid_document_url`, `invalid_source_domain`, `invalid_title`,
+  `invalid_document_type`, `invalid_fetched_at`, `invalid_content_sha256`,
+  and `invalid_is_stale`.
+- D0 remains metadata-only. `eligible` still does not authorise reading raw
+  text and still does not enter AI context or a model prompt.
+- D1 local embedding work has not started.
+
 ## What D0 does NOT do
 
 - D0 does not read raw text from any knowledge base or document store.

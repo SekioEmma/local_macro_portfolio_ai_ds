@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import importlib
 import re
 from dataclasses import FrozenInstanceError, fields as dc_fields
@@ -28,6 +29,7 @@ _MODULE_PATH = (
     / "services"
     / "rag_evidence_governance.py"
 )
+_TEST_PATH = Path(__file__)
 
 
 def _candidate(**overrides):
@@ -47,6 +49,174 @@ def _candidate(**overrides):
 
 def _module_source() -> str:
     return _MODULE_PATH.read_text(encoding="utf-8")
+
+
+def _assert_invalid_candidate(exc: pytest.ExceptionInfo[RagEvidenceGovernanceError]):
+    assert exc.value.code == "invalid_candidate"
+    rendered = f"{exc.value!s} {exc.value!r}"
+    assert "secret" not in rendered
+    assert "title" not in rendered.lower()
+    assert "https://" not in rendered
+    assert exc.value.__context__ is None
+
+
+def _assert_no_multiline_docstrings(path: Path) -> None:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    nodes = [tree, *[node for node in ast.walk(tree) if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))]]
+    for node in nodes:
+        doc = ast.get_docstring(node, clean=False)
+        assert doc is None or "\n" not in doc
+
+
+# ========== D0b. Exact candidate and exception-total boundary ==========
+
+def test_d0b_none_is_invalid_candidate():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(None)
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_dict_is_invalid_candidate_without_leaking_values():
+    payload = {"title": "secret title", "url": "https://secret.example/path"}
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(payload)
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_plain_object_is_invalid_candidate():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(object())
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_duck_typed_object_is_invalid_candidate():
+    class DuckCandidate:
+        document_id = 1
+        url = "https://secret.example/path"
+        title = "secret title"
+        source_domain = "secret.example"
+        doc_type = "policy_doc"
+        fetched_at = _VALID_FETCHED
+        content_sha256 = _VALID_SHA
+        is_stale = False
+
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(DuckCandidate())
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_candidate_subclass_is_invalid_candidate():
+    class CandidateSubclass(RagEvidenceCandidate):
+        pass
+
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(CandidateSubclass(**_candidate().__dict__))
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_candidate_subclass_getattribute_trap_is_not_touched():
+    class ExplodingCandidate(RagEvidenceCandidate):
+        def __getattribute__(self, name):
+            raise RuntimeError("secret attribute access")
+
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(ExplodingCandidate(**_candidate().__dict__))
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_non_candidate_secret_repr_is_not_called():
+    class SecretRepr:
+        def __repr__(self):
+            raise RuntimeError("secret repr")
+
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(SecretRepr())
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_non_candidate_secret_str_is_not_called():
+    class SecretStr:
+        def __str__(self):
+            raise RuntimeError("secret str")
+
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(SecretStr())
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_canonicalization_runtime_error_becomes_invalid_candidate(monkeypatch):
+    import app_backend.services.rag_evidence_governance as mod
+
+    def boom(value):
+        raise RuntimeError("url secret")
+
+    monkeypatch.setattr(mod, "canonicalize_document_url", boom)
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(_candidate())
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_validation_helper_runtime_error_becomes_invalid_candidate(monkeypatch):
+    import app_backend.services.rag_evidence_governance as mod
+
+    def boom(value):
+        raise RuntimeError("internal secret")
+
+    monkeypatch.setattr(mod, "_validate_title_shape", boom)
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(_candidate())
+    _assert_invalid_candidate(exc)
+
+
+def test_d0b_keyboardinterrupt_is_not_caught(monkeypatch):
+    import app_backend.services.rag_evidence_governance as mod
+
+    def boom(value):
+        raise KeyboardInterrupt("secret interrupt")
+
+    monkeypatch.setattr(mod, "_validated_document_id", boom)
+    with pytest.raises(KeyboardInterrupt):
+        assess_rag_evidence_candidate(_candidate())
+
+
+def test_d0b_systemexit_is_not_caught(monkeypatch):
+    import app_backend.services.rag_evidence_governance as mod
+
+    def boom(value):
+        raise SystemExit("secret exit")
+
+    monkeypatch.setattr(mod, "_validated_document_id", boom)
+    with pytest.raises(SystemExit):
+        assess_rag_evidence_candidate(_candidate())
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_code"),
+    [
+        ({"url": "http://example.com/p"}, "invalid_document_url"),
+        ({"source_domain": "evil.example"}, "invalid_source_domain"),
+        ({"title": ""}, "invalid_title"),
+        ({"doc_type": "discard"}, "invalid_document_type"),
+        ({"fetched_at": "2026-06-24T10:00:00"}, "invalid_fetched_at"),
+        ({"content_sha256": "A" * 64}, "invalid_content_sha256"),
+        ({"is_stale": 0}, "invalid_is_stale"),
+    ],
+)
+def test_d0b_exact_candidate_field_errors_preserve_stable_codes(
+    overrides,
+    expected_code,
+):
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(_candidate(**overrides))
+    assert exc.value.code == expected_code
+
+
+def test_d0b_module_docstrings_are_single_line_or_absent():
+    _assert_no_multiline_docstrings(_MODULE_PATH)
+
+
+def test_d0b_test_docstrings_are_single_line_or_absent():
+    _assert_no_multiline_docstrings(_TEST_PATH)
 
 
 # ========== A. Normal admission path ==========
@@ -746,9 +916,7 @@ def test_d_module_source_no_rag_runtime_terms():
 
 
 def test_d_module_source_has_no_standalone_search_token():
-    """The substring ``search`` appears inside ``research_report`` and must
-    not be banned by a naive substring check. We require that ``search``
-    never stands as its own word."""
+    """The substring ``search`` may appear only inside safe compound terms."""
     src = _module_source()
     assert re.search(r"\bsearch\b", src) is None
 

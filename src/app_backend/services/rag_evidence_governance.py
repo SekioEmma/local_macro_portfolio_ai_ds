@@ -1,20 +1,4 @@
-"""Phase D0 RAG evidence governance contracts.
-
-Pure, in-memory, metadata-only admission contract for caller-supplied
-document descriptors. Validates descriptor shape, normalises a small set of
-fields, and applies a fixed admission policy. Does not access document
-content, does not perform any matching, ranking, similarity, indexing, or
-context assembly. Does not touch storage, the network, configuration,
-secrets, or model interfaces.
-
-Inputs are caller-supplied metadata only. Outputs are caller-safe metadata
-only: title is required for validation but is never carried into the
-assessment.
-
-This module is a governance contract layer. It does not start the future
-RAG pipeline, does not change any persistence path, and does not change any
-existing AI-context exclusion rule.
-"""
+"""Phase D0 metadata-only RAG evidence governance contracts."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -60,12 +44,7 @@ class RagEvidenceExclusionReason(StrEnum):
 
 @dataclass(frozen=True)
 class RagEvidenceCandidate:
-    """Caller-supplied document descriptor accepted by the governance layer.
-
-    Document content, persistence handles, model context, holdings, account,
-    position, transaction, provider payload, and private-note material are
-    not part of this descriptor and must never be supplied here.
-    """
+    """Caller-supplied metadata descriptor accepted by the governance layer."""
 
     document_id: int
     url: str
@@ -79,11 +58,7 @@ class RagEvidenceCandidate:
 
 @dataclass(frozen=True)
 class RagEvidenceAssessment:
-    """Caller-safe metadata-only assessment produced by the governance layer.
-
-    Title is intentionally absent. No content, persistence handle, model
-    context, score, ranking, or other downstream artefact appears here.
-    """
+    """Caller-safe metadata-only assessment produced by the governance layer."""
 
     document_id: int
     url: str
@@ -96,14 +71,26 @@ class RagEvidenceAssessment:
 
 
 def assess_rag_evidence_candidate(
-    candidate: RagEvidenceCandidate,
+    candidate: object,
 ) -> RagEvidenceAssessment:
-    """Validate the candidate metadata and apply the fixed admission policy.
+    """Validate exact candidate metadata and apply the fixed admission policy."""
+    if type(candidate) is not RagEvidenceCandidate:
+        raise RagEvidenceGovernanceError("invalid_candidate")
 
-    The returned assessment is purely a governance signal. It does not by
-    itself authorise reading document content, does not authorise model or
-    network use, and does not change any persistence or AI-context rule.
-    """
+    invalid_candidate = False
+    try:
+        return _assess_exact_candidate(candidate)
+    except RagEvidenceGovernanceError:
+        raise
+    except Exception:
+        invalid_candidate = True
+
+    if invalid_candidate:
+        raise RagEvidenceGovernanceError("invalid_candidate")
+    raise RagEvidenceGovernanceError("invalid_candidate")
+
+
+def _assess_exact_candidate(candidate: RagEvidenceCandidate) -> RagEvidenceAssessment:
     document_id = _validated_document_id(candidate.document_id)
     canonical_url, hostname = _validated_url(candidate.url)
     source_domain = _validated_source_domain(candidate.source_domain, hostname)
