@@ -43,3 +43,7 @@ jobs:
       - name: Type-check frontend
         working-directory: app_frontend
         run: npx tsc --noEmit
+
+      - name: Test frontend
+        working-directory: app_frontend
+        run: npm test
