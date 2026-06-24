@@ -12,7 +12,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from reports.daily_report import (
+from reports.daily_report import (  # noqa: E402
     build_daily_report_json,
     load_json,
     render_daily_report_markdown,

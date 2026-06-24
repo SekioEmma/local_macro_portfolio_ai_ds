@@ -2,11 +2,13 @@ from pathlib import Path
 
 import benchmark_dashboard_pipeline as bench
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_pipeline_benchmark_exposes_reuse_flags(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_minimal_report(tmp_path)
 
     result = bench.run_benchmark(
@@ -45,10 +47,3 @@ def _write_minimal_report(tmp_path):
     )
 
 
-def _block_network(monkeypatch):
-    import socket
-
-    def _raise(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in stabilization tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise)

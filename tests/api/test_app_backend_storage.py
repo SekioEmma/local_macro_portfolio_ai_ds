@@ -1,4 +1,3 @@
-import socket
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,6 +6,8 @@ from app_backend.main import app
 from app_backend.services import storage_service
 from app_backend.storage import database, repositories
 from app_backend.storage.migrations import CURRENT_SCHEMA_VERSION, get_schema_version
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 def test_initialize_app_db_is_idempotent(tmp_path):
@@ -103,7 +104,7 @@ def test_favorite_rejects_secret_like_content(tmp_path):
 
 
 def test_storage_api_uses_tmp_db_and_hides_path(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "app_state.sqlite3"
     monkeypatch.setattr(storage_service, "DEFAULT_DB_PATH", db_path)
 
@@ -121,7 +122,7 @@ def test_storage_api_uses_tmp_db_and_hides_path(monkeypatch, tmp_path):
 
 
 def test_settings_api_updates_allowed_keys(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     monkeypatch.setattr(storage_service, "DEFAULT_DB_PATH", tmp_path / "app.sqlite3")
 
     client = TestClient(app)
@@ -135,7 +136,7 @@ def test_settings_api_updates_allowed_keys(monkeypatch, tmp_path):
 
 
 def test_app_state_api_rejects_secret_like_favorite(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     monkeypatch.setattr(storage_service, "DEFAULT_DB_PATH", tmp_path / "app.sqlite3")
     fake_secret = "sk-" + ("a" * 26)
 
@@ -153,7 +154,7 @@ def test_app_state_api_rejects_secret_like_favorite(monkeypatch, tmp_path):
 
 
 def test_refresh_and_favorites_api_round_trip(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     monkeypatch.setattr(storage_service, "DEFAULT_DB_PATH", tmp_path / "app.sqlite3")
     client = TestClient(app)
 
@@ -181,10 +182,3 @@ def test_refresh_and_favorites_api_round_trip(monkeypatch, tmp_path):
     assert favorite.status_code == 200
     assert client.get("/api/app/refresh-runs").json()[0]["summary"] == {"mode": "fake"}
     assert client.get("/api/app/favorites").json()[0]["context_snapshot"] == {"mode": "fake"}
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in storage tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

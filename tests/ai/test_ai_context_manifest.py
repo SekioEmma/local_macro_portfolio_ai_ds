@@ -1,5 +1,4 @@
 import json
-import socket
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
@@ -9,9 +8,11 @@ from app_backend.main import app
 from app_backend.services import ai_context_service
 from app_backend.services import dashboard_service
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 def test_ai_context_manifest_includes_and_excludes_expected_rows(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -46,7 +47,7 @@ def test_ai_context_manifest_includes_and_excludes_expected_rows(monkeypatch, tm
 
 
 def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -73,7 +74,7 @@ def test_model_outputs_preserve_derived_badge_and_boundaries(monkeypatch, tmp_pa
 
 
 def test_proxy_rows_keep_proxy_badge_and_search_is_excluded(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -91,7 +92,7 @@ def test_proxy_rows_keep_proxy_badge_and_search_is_excluded(monkeypatch, tmp_pat
 
 
 def test_portfolio_policy_excludes_holdings_line_items(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -109,7 +110,7 @@ def test_portfolio_policy_excludes_holdings_line_items(monkeypatch, tmp_path):
 
 
 def test_manifest_does_not_leak_private_payloads_or_credentials(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -126,7 +127,7 @@ def test_manifest_does_not_leak_private_payloads_or_credentials(monkeypatch, tmp
 
 
 def test_manifest_risk_boundaries_are_complete(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -455,10 +456,3 @@ def _write_reports(tmp_path):
         ),
         encoding="utf-8",
     )
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in manifest tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

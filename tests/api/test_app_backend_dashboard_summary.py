@@ -1,10 +1,11 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 MODULE_KEYS = {
@@ -20,7 +21,7 @@ MODULE_KEYS = {
 
 
 def test_dashboard_summary_returns_missing_when_reports_absent(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
     response = TestClient(app).get("/api/dashboard/summary")
@@ -35,7 +36,7 @@ def test_dashboard_summary_returns_missing_when_reports_absent(monkeypatch, tmp_
 
 
 def test_dashboard_summary_returns_compact_fake_reports(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -110,7 +111,7 @@ def test_dashboard_summary_returns_compact_fake_reports(monkeypatch, tmp_path):
 
 
 def test_dashboard_summary_handles_invalid_report_json(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     (tmp_path / "market_snapshot.json").write_text("{invalid json", encoding="utf-8")
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -125,7 +126,7 @@ def test_dashboard_summary_handles_invalid_report_json(monkeypatch, tmp_path):
 
 
 def test_dashboard_summary_accepts_bom_encoded_portfolio_snapshot(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     (tmp_path / "portfolio_snapshot.json").write_text(
         json.dumps(
             {
@@ -157,7 +158,7 @@ def test_dashboard_summary_accepts_bom_encoded_portfolio_snapshot(monkeypatch, t
 
 
 def test_dashboard_summary_does_not_read_real_outputs(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     custom_reports = tmp_path / "custom_reports"
     custom_reports.mkdir()
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", custom_reports)
@@ -170,10 +171,3 @@ def test_dashboard_summary_does_not_read_real_outputs(monkeypatch, tmp_path):
 
 def _write_json(path, payload):
     path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in dashboard summary tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

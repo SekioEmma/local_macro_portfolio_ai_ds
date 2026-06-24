@@ -9,7 +9,6 @@ Covers:
 """
 from __future__ import annotations
 
-import socket
 from datetime import date, timedelta
 
 import pytest
@@ -18,16 +17,12 @@ from data_quality import historical_percentile_metrics as percentile
 from data_quality import liquidity_funding_stress as d14
 from data_providers import market_history_store as store
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-
-def _block_network(monkeypatch):
-    def _raise(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in M2 tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise)
 
 
 def _insert(db_path, metric_key, observation_date, value, *, source_badge="official", source_series=None):
@@ -445,7 +440,7 @@ def test_d14_missing_db_still_returns_all_rows(tmp_path):
 def test_benchmark_output_contains_m2_fields(monkeypatch, tmp_path):
     import json
 
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
 
     (tmp_path / "market_snapshot.json").write_text(
         json.dumps({"generated_at": "2026-01-01T00:00:00+00:00", "status": "ok"}),

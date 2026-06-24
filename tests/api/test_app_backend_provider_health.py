@@ -1,14 +1,15 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import provider_service
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 def test_provider_health_returns_not_run_yet_when_cache_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     monkeypatch.setattr(provider_service, "DEFAULT_HEALTH_PATH", tmp_path / "missing.json")
 
     response = TestClient(app).get("/api/provider-health")
@@ -24,7 +25,7 @@ def test_provider_health_returns_not_run_yet_when_cache_missing(monkeypatch, tmp
 
 
 def test_provider_health_returns_only_compact_cached_fields(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     health_path = tmp_path / "provider_health_check.json"
     health_path.write_text(
         json.dumps(
@@ -75,7 +76,7 @@ def test_provider_health_returns_only_compact_cached_fields(monkeypatch, tmp_pat
 
 
 def test_provider_health_truncates_error_summary(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     health_path = tmp_path / "provider_health_check.json"
     health_path.write_text(
         json.dumps(
@@ -103,7 +104,7 @@ def test_provider_health_truncates_error_summary(monkeypatch, tmp_path):
 
 
 def test_provider_health_preserves_transient_and_fallback_compact_summary(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     health_path = tmp_path / "provider_health_check.json"
     health_path.write_text(
         json.dumps(
@@ -155,7 +156,7 @@ def test_provider_health_preserves_transient_and_fallback_compact_summary(monkey
 
 
 def test_provider_health_handles_invalid_cache(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     health_path = tmp_path / "provider_health_check.json"
     health_path.write_text("{not valid json", encoding="utf-8")
     monkeypatch.setattr(provider_service, "DEFAULT_HEALTH_PATH", health_path)
@@ -169,10 +170,3 @@ def test_provider_health_handles_invalid_cache(monkeypatch, tmp_path):
     assert data["checks"] == []
     assert data["error_summary"] == "provider health cache is invalid or unreadable"
     assert "run_provider_health_check.py --save" in data["next_action"]
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in provider-health tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

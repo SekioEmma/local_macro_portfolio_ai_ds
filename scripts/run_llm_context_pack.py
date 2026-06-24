@@ -10,7 +10,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from reports.llm_context_pack import (
+from reports.llm_context_pack import (  # noqa: E402
     build_llm_context_pack,
     load_json,
     load_text,

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import os
-import socket
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -20,6 +18,7 @@ from app_backend.services.dashboard_context_cache import (
     CachedDashboardContext,
     SharedDashboardContextCache,
 )
+from tests.helpers.dashboard_fixtures import block_network_calls, install_default_reports, write_dashboard_reports
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -33,8 +32,8 @@ def teardown_function() -> None:
 
 
 def test_cache_hit_returns_identical_default_summary_and_evidence(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    _install_default_reports(monkeypatch, tmp_path)
+    block_network_calls(monkeypatch)
+    install_default_reports(monkeypatch, tmp_path)
     calls = _count_pipeline_builds(monkeypatch)
 
     first = dashboard_service.build_dashboard_evidence_table(write_last_good=False)
@@ -50,8 +49,8 @@ def test_cache_hit_returns_identical_default_summary_and_evidence(monkeypatch, t
 
 
 def test_concurrent_summary_builds_share_one_locked_build(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    _install_default_reports(monkeypatch, tmp_path)
+    block_network_calls(monkeypatch)
+    install_default_reports(monkeypatch, tmp_path)
     original = dashboard_service._load_dashboard_reports
     count_lock = Lock()
     calls = {"count": 0}
@@ -72,12 +71,12 @@ def test_concurrent_summary_builds_share_one_locked_build(monkeypatch, tmp_path)
 
 
 def test_cache_invalidates_on_report_file_stat_change(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    _install_default_reports(monkeypatch, tmp_path, dgs10=4.1)
+    block_network_calls(monkeypatch)
+    install_default_reports(monkeypatch, tmp_path, dgs10=4.1)
     calls = _count_pipeline_builds(monkeypatch)
 
     first = dashboard_service.build_dashboard_evidence_table(write_last_good=False)
-    _write_reports(tmp_path, dgs10=5.25, generated_at="2026-01-01T00:00:00+00:00Z-extra")
+    write_dashboard_reports(tmp_path, dgs10=5.25, generated_at="2026-01-01T00:00:00+00:00Z-extra")
     os.utime(tmp_path / "market_snapshot.json", None)
     second = dashboard_service.build_dashboard_evidence_table(write_last_good=False)
 
@@ -89,7 +88,7 @@ def test_cache_invalidates_on_report_file_stat_change(monkeypatch, tmp_path):
 def test_cache_invalidates_on_market_history_db_stat_change(tmp_path):
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
-    _write_reports(reports_dir)
+    write_dashboard_reports(reports_dir)
     db_path = tmp_path / "market_history.sqlite3"
     db_path.write_text("db", encoding="utf-8")
     cache = SharedDashboardContextCache()
@@ -117,8 +116,8 @@ def test_cache_invalidates_on_market_history_db_stat_change(tmp_path):
 
 
 def test_write_last_good_uses_cache_but_still_saves(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    _install_default_reports(monkeypatch, tmp_path)
+    block_network_calls(monkeypatch)
+    install_default_reports(monkeypatch, tmp_path)
     calls = _count_pipeline_builds(monkeypatch)
     saves = {"count": 0}
     monkeypatch.setattr(dashboard_service, "_last_good_write_allowed", lambda reports_dir: True)
@@ -137,13 +136,13 @@ def test_write_last_good_uses_cache_but_still_saves(monkeypatch, tmp_path):
 
 
 def test_custom_path_bypasses_and_does_not_poison_default_cache(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     default_dir = tmp_path / "default"
     custom_dir = tmp_path / "custom"
     default_dir.mkdir()
     custom_dir.mkdir()
-    _write_reports(default_dir, dgs10=4.1)
-    _write_reports(custom_dir, dgs10=5.2)
+    write_dashboard_reports(default_dir, dgs10=4.1)
+    write_dashboard_reports(custom_dir, dgs10=5.2)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", default_dir)
     calls = _count_pipeline_builds(monkeypatch)
 
@@ -161,13 +160,13 @@ def test_custom_path_bypasses_and_does_not_poison_default_cache(monkeypatch, tmp
 
 
 def test_preloaded_context_summary_bypasses_and_does_not_poison_cache(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     default_dir = tmp_path / "default"
     context_dir = tmp_path / "context"
     default_dir.mkdir()
     context_dir.mkdir()
-    _write_reports(default_dir, dgs10=4.1)
-    _write_reports(context_dir, dgs10=5.2)
+    write_dashboard_reports(default_dir, dgs10=4.1)
+    write_dashboard_reports(context_dir, dgs10=5.2)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", default_dir)
     calls = _count_pipeline_builds(monkeypatch)
 
@@ -187,8 +186,8 @@ def test_preloaded_context_summary_bypasses_and_does_not_poison_cache(monkeypatc
 
 
 def test_filtered_calls_do_not_poison_unfiltered_cache(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    _install_default_reports(monkeypatch, tmp_path)
+    block_network_calls(monkeypatch)
+    install_default_reports(monkeypatch, tmp_path)
     calls = _count_pipeline_builds(monkeypatch)
 
     filtered = dashboard_service.build_dashboard_evidence_table(
@@ -209,8 +208,8 @@ def test_filtered_calls_do_not_poison_unfiltered_cache(monkeypatch, tmp_path):
 
 
 def test_cached_responses_are_defensive_copies(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    _install_default_reports(monkeypatch, tmp_path)
+    block_network_calls(monkeypatch)
+    install_default_reports(monkeypatch, tmp_path)
     dashboard_service.build_dashboard_evidence_table(write_last_good=False)
     cached = dashboard_service.build_dashboard_evidence_table(write_last_good=False)
     original_module = cached.rows[0].module
@@ -226,8 +225,8 @@ def test_cached_responses_are_defensive_copies(monkeypatch, tmp_path):
 
 
 def test_no_private_payload_or_cache_diagnostics_in_route_responses(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
-    _install_default_reports(monkeypatch, tmp_path)
+    block_network_calls(monkeypatch)
+    install_default_reports(monkeypatch, tmp_path)
     client = TestClient(app)
 
     dashboard_service.build_dashboard_evidence_table(write_last_good=False)
@@ -280,11 +279,6 @@ def test_dashboard_context_cache_helper_has_no_forbidden_product_surfaces():
         assert token not in text
 
 
-def _install_default_reports(monkeypatch, reports_dir: Path, *, dgs10: float = 4.52) -> None:
-    _write_reports(reports_dir, dgs10=dgs10)
-    monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", reports_dir)
-
-
 def _count_pipeline_builds(monkeypatch):
     original = dashboard_service.build_dashboard_model_rows
     calls = {"count": 0}
@@ -334,80 +328,3 @@ def _dummy_evidence_table() -> DashboardEvidenceTableResponse:
         filters={"available": {}, "applied": {}},
         next_actions=[],
     )
-
-
-def _write_reports(
-    tmp_path: Path,
-    *,
-    dgs10: float = 4.52,
-    generated_at: str = "2026-01-01T00:00:00+00:00",
-) -> None:
-    def metric(value, source="FRED", badge="official"):
-        return {
-            "value": value,
-            "status": "ok",
-            "source": source,
-            "source_badge": badge,
-            "observation_date": "2026-01-01",
-            "freshness_status": "fresh",
-        }
-
-    (tmp_path / "market_snapshot.json").write_text(
-        json.dumps(
-            {
-                "generated_at": generated_at,
-                "status": "ok",
-                "risk_level": "watch",
-                "high_yield_spread": metric(3.4),
-                "investment_grade_spread": metric(1.2),
-                "vix": metric(18.2, source="CBOE"),
-                "credit_stress_status": metric("watch"),
-                "dgs10": metric(dgs10),
-                "dgs30": metric(4.83),
-                "dfii10": metric(2.1),
-                "t10yie": metric(2.35),
-                "real_yield_pressure_status": metric("pressure"),
-                "core_cpi_yoy": metric(3.1),
-                "core_pce_yoy": metric(2.8),
-                "ppiaco_yoy": metric(1.7),
-                "unemployment_rate": metric(4.0),
-                "initial_jobless_claims": metric(230000),
-                "wti_30d_change": metric(-4.2, source="EIA"),
-                "brent_30d_change": metric(-3.8, source="EIA"),
-                "sp500_30d_return": metric(2.2, source="yfinance"),
-                "sp500_60d_return": metric(5.1, source="yfinance"),
-                "nasdaq100_30d_return": metric(3.3, source="yfinance"),
-                "nasdaq100_60d_return": metric(6.4, source="yfinance"),
-            }
-        ),
-        encoding="utf-8",
-    )
-    (tmp_path / "market_temperature.json").write_text(
-        json.dumps({"generated_at": generated_at, "status": "watch"}),
-        encoding="utf-8",
-    )
-    (tmp_path / "portfolio_snapshot.json").write_text(
-        json.dumps(
-            {
-                "generated_at": generated_at,
-                "status": "ok",
-                "max_deviation_asset": {"value": "equity", "status": "ok"},
-                "max_deviation_pp": {"value": 2.3, "status": "ok"},
-                "equity_total_deviation_pp": {"value": 1.4, "status": "ok"},
-                "cash_reserve_status": {"value": "available", "status": "ok"},
-                "holdings_updated_at": {"value": "2026-01-01", "status": "ok"},
-            }
-        ),
-        encoding="utf-8",
-    )
-    (tmp_path / "provider_health_check.json").write_text(
-        json.dumps({"generated_at": generated_at, "overall_status": "ok"}),
-        encoding="utf-8",
-    )
-
-
-def _block_network(monkeypatch) -> None:
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in cache tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

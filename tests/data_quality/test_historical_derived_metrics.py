@@ -1,8 +1,9 @@
 import math
-import socket
 
 from data_quality import historical_derived_metrics as derived
 from data_providers import market_history_store
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 def test_period_return_with_sufficient_history(tmp_path):
@@ -562,10 +563,7 @@ def test_labor_deterioration_status_preserves_inputs_and_missing_inputs(tmp_path
 
 
 def test_no_network_access(monkeypatch, tmp_path):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in historical derived tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)
+    block_network_calls(monkeypatch)
 
     result = derived.calculate_rolling_average("dgs10", 5, db_path=tmp_path / "missing.sqlite3")
 

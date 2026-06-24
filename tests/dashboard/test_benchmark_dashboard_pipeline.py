@@ -4,23 +4,18 @@ Validates read-only behaviour, expected output shape, and privacy guards.
 All tests block network to confirm no external connections are made.
 """
 import json
-import socket
 
 import pytest
 
 import benchmark_dashboard_pipeline as bench
 from data_providers import market_history_store
 
+from tests.helpers.dashboard_fixtures import block_network_calls
+
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-
-def _block_network(monkeypatch):
-    def _raise(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in benchmark tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise)
 
 
 def _write_json(path, payload):
@@ -110,7 +105,7 @@ EXPECTED_KEYS = {
 @pytest.fixture(scope="module")
 def benchmark_result(tmp_path_factory):
     monkeypatch = pytest.MonkeyPatch()
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     try:
         tmp_path = tmp_path_factory.mktemp("benchmark_result")
         return bench.run_benchmark(
@@ -134,7 +129,7 @@ def test_benchmark_runs_without_network(benchmark_result):
 # ---------------------------------------------------------------------------
 
 def test_benchmark_does_not_write_db(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = _minimal_reports_dir(tmp_path)
     db_path = tmp_path / "test_no_write.sqlite3"
 
@@ -145,7 +140,7 @@ def test_benchmark_does_not_write_db(monkeypatch, tmp_path):
 
 
 def test_benchmark_does_not_write_output_files(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = _minimal_reports_dir(tmp_path)
 
     bench.run_benchmark(
@@ -205,7 +200,7 @@ def test_benchmark_timings_are_non_negative(benchmark_result):
 # ---------------------------------------------------------------------------
 
 def test_benchmark_does_not_expose_raw_holdings(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "portfolio_snapshot.json",
         {
@@ -257,7 +252,7 @@ def test_benchmark_does_not_include_api_keys(benchmark_result):
 # ---------------------------------------------------------------------------
 
 def test_benchmark_runs_with_populated_db(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = _minimal_reports_dir(tmp_path)
     db_path = tmp_path / "market_history.sqlite3"
     market_history_store.initialize_market_history_db(db_path=db_path)
@@ -297,7 +292,7 @@ def test_benchmark_runs_with_missing_db(benchmark_result):
 
 
 def test_benchmark_runs_with_empty_db(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = _minimal_reports_dir(tmp_path)
     db_path = tmp_path / "empty_market_history.sqlite3"
     market_history_store.initialize_market_history_db(db_path=db_path)

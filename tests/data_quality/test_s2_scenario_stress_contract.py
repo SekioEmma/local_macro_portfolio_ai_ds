@@ -10,7 +10,6 @@ calculation, production code, frontend, endpoints, or external AI.
 """
 
 import json
-import socket
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -25,6 +24,8 @@ from app_backend.services.ai_memo_renderer import (
 from data_quality import scenario_stress as d16
 from modeling.metric_lookup import D16_PUBLIC_OUTPUT_KEYS
 from modeling.model_registry import ModelRegistry
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -497,7 +498,7 @@ class TestPortfolioOverlayBoundary:
 
 class TestGoldenContractIntegration:
     def test_golden_evidence_table_contains_d16_keys(self, monkeypatch, tmp_path):
-        _block_network(monkeypatch)
+        block_network_calls(monkeypatch)
         _write_fake_reports(tmp_path)
         monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -512,7 +513,7 @@ class TestGoldenContractIntegration:
         assert all(r["source_badge"] == "derived" for r in d16_rows)
 
     def test_golden_d16_boundary_text(self, monkeypatch, tmp_path):
-        _block_network(monkeypatch)
+        block_network_calls(monkeypatch)
         _write_fake_reports(tmp_path)
         monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -530,7 +531,7 @@ class TestGoldenContractIntegration:
         assert "event-odds model" in boundary
 
     def test_golden_d16_scenarios_carry_s1_metadata(self, monkeypatch, tmp_path):
-        _block_network(monkeypatch)
+        block_network_calls(monkeypatch)
         _write_fake_reports(tmp_path)
         monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -937,10 +938,3 @@ def _write_fake_reports(tmp_path):
         }),
         encoding="utf-8",
     )
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in S2 contract tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

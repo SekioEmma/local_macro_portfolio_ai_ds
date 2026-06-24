@@ -151,7 +151,7 @@ def post_ai_research_deepseek(
     try:
         return ai_deepseek_research_service.run_deepseek_research(request)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="deepseek_research_unavailable") from exc
 
 
 @app.get("/api/context/manifest", response_model=AIContextManifestResponse)

@@ -10,7 +10,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from data_providers.market_data_service import (
+from data_providers.market_data_service import (  # noqa: E402
     FINANCIAL_CONDITION_KEYS,
     IMPORTANT_OPTIONAL_KEYS,
     OPTIONAL_MARKET_KEYS,
@@ -18,8 +18,8 @@ from data_providers.market_data_service import (
     get_core_market_snapshot,
     load_data_source_config,
 )
-from data_providers.cache import load_json_cache, save_json_cache
-from data_quality.freshness import calculate_freshness
+from data_providers.cache import load_json_cache, save_json_cache  # noqa: E402
+from data_quality.freshness import calculate_freshness  # noqa: E402
 
 
 DEFAULT_OUTPUT_PATH = PROJECT_ROOT / "outputs" / "reports" / "market_snapshot.json"

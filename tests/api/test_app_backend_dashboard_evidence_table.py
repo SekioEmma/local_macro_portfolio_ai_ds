@@ -1,10 +1,11 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 MODULE_KEYS = {
@@ -33,7 +34,7 @@ EVIDENCE_MODULE_KEYS = MODULE_KEYS | {
 
 
 def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -167,7 +168,7 @@ def test_dashboard_evidence_table_returns_rows(monkeypatch, tmp_path):
 
 
 def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -198,7 +199,7 @@ def test_dashboard_evidence_table_filters_rows(monkeypatch, tmp_path):
 
 
 def test_dashboard_evidence_table_blocks_missing_from_ai_context(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     (tmp_path / "market_snapshot.json").write_text(
         json.dumps(
             {
@@ -234,7 +235,7 @@ def test_dashboard_evidence_table_blocks_missing_from_ai_context(monkeypatch, tm
 def test_dashboard_evidence_table_blocks_search_derived_from_ai_context(
     monkeypatch, tmp_path
 ):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path, source_badge="search-derived")
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -248,7 +249,7 @@ def test_dashboard_evidence_table_blocks_search_derived_from_ai_context(
 def test_dashboard_evidence_table_does_not_leak_raw_or_holdings(
     monkeypatch, tmp_path
 ):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -268,7 +269,7 @@ def test_dashboard_evidence_table_does_not_leak_raw_or_holdings(
 def test_dashboard_evidence_table_preserves_financial_boundaries(
     monkeypatch, tmp_path
 ):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -286,7 +287,7 @@ def test_dashboard_evidence_table_preserves_financial_boundaries(
 def test_dashboard_evidence_table_handles_missing_and_invalid_reports(
     monkeypatch, tmp_path
 ):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     (tmp_path / "market_snapshot.json").write_text("{invalid json", encoding="utf-8")
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -373,10 +374,3 @@ def _write_fake_reports(tmp_path, source_badge="official"):
         ),
         encoding="utf-8",
     )
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in evidence table tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

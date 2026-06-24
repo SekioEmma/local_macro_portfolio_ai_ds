@@ -1,10 +1,11 @@
 import json
-import socket
 
 from fastapi.testclient import TestClient
 
 from app_backend.main import app
 from app_backend.services import dashboard_service
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 MODULE_KEYS = {
@@ -20,7 +21,7 @@ MODULE_KEYS = {
 
 
 def test_dashboard_key_metrics_present_for_all_modules(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -41,7 +42,7 @@ def test_dashboard_key_metrics_present_for_all_modules(monkeypatch, tmp_path):
 
 
 def test_dashboard_key_metrics_missing_fields_are_explicit(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     (tmp_path / "market_snapshot.json").write_text(
         json.dumps({"generated_at": "2026-01-01T00:00:00+00:00", "status": "ok"}),
         encoding="utf-8",
@@ -62,7 +63,7 @@ def test_dashboard_key_metrics_missing_fields_are_explicit(monkeypatch, tmp_path
 
 
 def test_dashboard_key_metrics_do_not_leak_raw_or_holdings(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -75,7 +76,7 @@ def test_dashboard_key_metrics_do_not_leak_raw_or_holdings(monkeypatch, tmp_path
 
 
 def test_ppiaco_and_dgs_financial_boundaries(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_fake_reports(tmp_path)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
@@ -89,7 +90,7 @@ def test_ppiaco_and_dgs_financial_boundaries(monkeypatch, tmp_path):
 
 
 def test_provider_health_not_run_yet_is_not_provider_broken(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     monkeypatch.setattr(dashboard_service, "DEFAULT_REPORTS_DIR", tmp_path)
 
     data = TestClient(app).get("/api/dashboard/summary").json()
@@ -100,7 +101,7 @@ def test_provider_health_not_run_yet_is_not_provider_broken(monkeypatch, tmp_pat
 
 
 def test_credit_stress_status_derives_partial_when_ig_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     generated_at = "2026-01-01T00:00:00+00:00"
     def metric(value, source="FRED", source_badge="official"):
         return {
@@ -137,7 +138,7 @@ def test_credit_stress_status_derives_partial_when_ig_missing(monkeypatch, tmp_p
 
 
 def test_credit_stress_status_does_not_infer_crisis_from_vix_alone(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -166,7 +167,7 @@ def test_credit_stress_status_does_not_infer_crisis_from_vix_alone(monkeypatch, 
 
 
 def test_real_yield_pressure_status_derives_from_dfii10_and_t10yie(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -204,7 +205,7 @@ def test_real_yield_pressure_status_derives_from_dfii10_and_t10yie(monkeypatch, 
 
 
 def test_real_yield_pressure_status_blocks_when_dependency_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -231,7 +232,7 @@ def test_real_yield_pressure_status_blocks_when_dependency_missing(monkeypatch, 
 
 
 def test_dgs30_breakout_remains_research_needed_without_explicit_rule(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -323,10 +324,3 @@ def _write_fake_reports(tmp_path):
         ),
         encoding="utf-8",
     )
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in key metrics tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

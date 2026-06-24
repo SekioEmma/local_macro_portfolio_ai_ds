@@ -1,8 +1,9 @@
 import json
-import socket
 
 import ingest_yfinance_history as ingest
 from data_providers import market_history_store
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 def test_default_dry_run_without_live_does_not_call_downloader_or_write(tmp_path):
@@ -104,10 +105,7 @@ def test_cli_dry_run_does_not_write(tmp_path, capsys):
 
 
 def test_no_network_access(monkeypatch, tmp_path):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in yfinance ingest tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)
+    block_network_calls(monkeypatch)
 
     summary = ingest.build_ingest_summary(
         config_path=_write_config(tmp_path),

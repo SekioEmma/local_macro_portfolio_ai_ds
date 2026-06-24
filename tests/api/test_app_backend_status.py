@@ -1,7 +1,8 @@
 import json
-import socket
 
 import pytest
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 TestClient = pytest.importorskip("fastapi.testclient").TestClient
@@ -21,10 +22,7 @@ def test_status_endpoint_returns_safe_minimal_status(monkeypatch):
     for env_name in API_KEY_ENV_NAMES:
         monkeypatch.delenv(env_name, raising=False)
 
-    def _block_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in /api/status tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _block_network)
+    block_network_calls(monkeypatch)
 
     client = TestClient(app)
     response = client.get("/api/status")

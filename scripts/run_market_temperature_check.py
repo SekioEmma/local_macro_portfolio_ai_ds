@@ -12,8 +12,8 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from data_providers.fred_provider import get_fred_series
-from market.market_temperature import (
+from data_providers.fred_provider import get_fred_series  # noqa: E402
+from market.market_temperature import (  # noqa: E402
     METHODOLOGY_NOTE,
     calculate_change,
     calculate_yoy_change,

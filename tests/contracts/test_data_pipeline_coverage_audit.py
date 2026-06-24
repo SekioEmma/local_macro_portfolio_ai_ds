@@ -1,5 +1,4 @@
 import json
-import socket
 import subprocess
 import sys
 
@@ -8,6 +7,8 @@ import audit_data_pipeline_coverage as audit
 from data_providers import market_history_store
 from modeling.model_registry import ModelRegistry
 from pathlib import Path
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -463,7 +464,7 @@ def test_private_state_paths_are_not_tracked():
 
 
 def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -558,7 +559,7 @@ def test_audit_script_runs_against_fake_reports(monkeypatch, tmp_path):
 
 
 def test_audit_reports_portfolio_compact_coverage(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "portfolio_snapshot.json",
         {
@@ -596,7 +597,7 @@ def test_audit_reports_portfolio_compact_coverage(monkeypatch, tmp_path):
 
 
 def test_audit_reports_last_good_cache_status(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     cache_dir = tmp_path / "cache"
     reports_dir.mkdir()
@@ -651,7 +652,7 @@ def test_audit_reports_last_good_cache_status(monkeypatch, tmp_path):
 
 
 def test_audit_reports_missing_market_history_store(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -674,7 +675,7 @@ def test_audit_reports_missing_market_history_store(monkeypatch, tmp_path):
 
 
 def test_audit_reports_existing_market_history_store(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -732,7 +733,7 @@ def test_audit_reports_existing_market_history_store(monkeypatch, tmp_path):
 
 
 def test_audit_reports_historical_derived_block_when_db_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -756,7 +757,7 @@ def test_audit_reports_historical_derived_block_when_db_missing(monkeypatch, tmp
 
 
 def test_audit_reports_historical_derived_ok_and_blocked_counts(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -790,7 +791,7 @@ def test_audit_reports_historical_derived_ok_and_blocked_counts(monkeypatch, tmp
 
 
 def test_audit_reports_yfinance_history_block_when_db_missing(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -815,7 +816,7 @@ def test_audit_reports_yfinance_history_block_when_db_missing(monkeypatch, tmp_p
 
 
 def test_audit_reports_yfinance_history_observation_counts(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -870,7 +871,7 @@ def test_audit_reports_yfinance_history_observation_counts(monkeypatch, tmp_path
 
 
 def test_audit_reports_dashboard_derived_integration(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -928,7 +929,7 @@ def test_audit_reports_dashboard_derived_integration(monkeypatch, tmp_path):
 
 
 def test_audit_reports_proxy_breadth_coverage(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -960,7 +961,7 @@ def test_audit_reports_proxy_breadth_coverage(monkeypatch, tmp_path):
 
 
 def test_audit_reports_market_stress_derived_coverage(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -1050,7 +1051,7 @@ def test_audit_reports_market_stress_derived_coverage(monkeypatch, tmp_path):
 
 
 def test_audit_reports_curve_slope_available_from_compact_dgs_fallback(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -1084,7 +1085,7 @@ def test_audit_reports_curve_slope_available_from_compact_dgs_fallback(monkeypat
 
 
 def test_audit_reports_energy_history_and_real_yield_status(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -1155,7 +1156,7 @@ def test_audit_reports_energy_history_and_real_yield_status(monkeypatch, tmp_pat
 
 
 def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -1233,7 +1234,7 @@ def test_audit_reports_official_macro_pack(monkeypatch, tmp_path):
 
 
 def test_audit_reports_ppi_final_demand_and_valuation_gates(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir()
     db_path = tmp_path / "market_history.sqlite3"
@@ -1277,7 +1278,7 @@ def test_audit_reports_ppi_final_demand_and_valuation_gates(monkeypatch, tmp_pat
 
 
 def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
     for index in range(12):
         _insert_market_observation(db_path, "unemployment_rate", f"2025-{index + 1:02d}-01", 4.0, source_series="UNRATE")
@@ -1387,7 +1388,7 @@ def test_audit_reports_labor_and_provider_health_followup(monkeypatch, tmp_path)
 
 
 def test_audit_reports_module_coverage_summary_and_degraded_reasons(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -1656,10 +1657,3 @@ def _insert_proxy_series(db_path):
                 metric_kind="proxy",
                 ai_context_allowed=False,
             )
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in audit tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)

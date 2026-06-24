@@ -1,11 +1,12 @@
 import json
-import socket
 
 import audit_data_pipeline_coverage as audit
 from data_quality import macro_regime_review as d15
 from data_quality import scenario_stress as d16
 from data_quality import valuation_equity_structure as d18
 from modeling.model_registry import ModelRegistry
+
+from tests.helpers.dashboard_fixtures import block_network_calls
 
 
 FORBIDDEN_EXACT_TERMS = {
@@ -144,7 +145,7 @@ def test_d18_is_registered_in_model_registry_and_metric_lookup():
 
 
 def test_d18_audit_section_exists_and_leak_flags_are_false(monkeypatch, tmp_path):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     _write_json(
         tmp_path / "market_snapshot.json",
         {
@@ -183,7 +184,7 @@ def test_d18_public_keys_exclude_forbidden_terms():
 
 
 def test_d18_works_with_fake_rows_without_live_data(monkeypatch):
-    _block_network(monkeypatch)
+    block_network_calls(monkeypatch)
     rows = d18.build_valuation_equity_structure_rows(
         [_row("breadth_concentration_proxy", "qqq_vs_spy_30d", -1.0, source_badge="proxy")]
     )
@@ -237,10 +238,3 @@ def _by_key(rows):
 
 def _write_json(path, payload):
     path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-def _block_network(monkeypatch):
-    def _raise_on_network(*args, **kwargs):
-        raise AssertionError("Network access is not allowed in D18 tests.")
-
-    monkeypatch.setattr(socket, "create_connection", _raise_on_network)
