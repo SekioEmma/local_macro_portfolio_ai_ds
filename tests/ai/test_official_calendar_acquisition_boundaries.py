@@ -203,3 +203,73 @@ def test_main_py_no_c4b_route():
 def test_no_frontend_changes():
     app_tsx = _read("app_frontend/src/App.tsx")
     assert "calendar" not in app_tsx.lower()
+
+
+# ===========================================================================
+# C4c: Boundary source scan additions
+# ===========================================================================
+
+def test_acquisition_service_no_urllib():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "urllib" not in source
+
+
+def test_acquisition_service_no_sqlite3():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "sqlite3" not in source
+
+
+def test_acquisition_service_no_os_getenv():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "os.getenv" not in source
+    assert "os.environ" not in source
+
+
+def test_acquisition_service_no_rag_embedding_vector():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for token in ["RAG", "embedding", "vector_store", "VectorStore", "DeepSeek", "deepseek", "Tavily", "tavily"]:
+        assert token not in source, f"{token!r} found in acquisition service"
+
+
+def test_acquisition_service_no_provider_payload_import():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for token in ["knowledge_base", "FetchedOfficialCalendarPayload", "SearchResult"]:
+        assert token not in source, f"{token!r} found in acquisition service"
+
+
+def test_summary_no_new_forbidden_fields():
+    from dataclasses import fields as dc_fields
+    from app_backend.services.official_calendar_acquisition_service import OfficialCalendarAcquisitionSummary
+    names = {f.name for f in dc_fields(OfficialCalendarAcquisitionSummary)}
+    forbidden = {"url", "body", "raw_payload", "headers", "db_path", "exception", "traceback", "raw_body"}
+    overlap = names & forbidden
+    assert not overlap, f"Forbidden fields found: {overlap}"
+
+
+def test_sources_still_only_bls_and_bea():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert '"bls"' in source
+    assert '"bea"' in source
+    # No other sources silently added
+    for forbidden_source in ['"fred"', '"fomc"', '"fed"', '"imf"', '"wsj"']:
+        assert forbidden_source not in source, f"{forbidden_source} found in acquisition service"
+
+
+def test_fomc_still_in_unavailable_not_transport():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "fomc_statement" in source
+    # Must be in unavailable list, not a new fetch path
+    assert "federalreserve" not in source.lower()
+    assert "fomc_transport" not in source
+
+
+def test_no_new_api_route_in_main():
+    source = _read("src/app_backend/main.py")
+    assert "acquisition" not in source.lower()
+    assert "c4c" not in source.lower()
+
+
+def test_no_scheduler_or_background_in_acquisition():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for token in ["schedule", "cron", "background", "daemon", "asyncio", "threading"]:
+        assert token not in source.lower(), f"{token!r} found in acquisition service"

@@ -64,8 +64,50 @@ C4a offline foundation remains unchanged:
 
 The existing `economic_calendar_schema.sql` enforces `release_time_et` as `HH:MM` (exact time). FOMC statements have historically been released "typically around 14:00 ET" but the exact time varies. Inferring a default time would violate the schema's precision guarantee. C4b does not fetch Fed pages, does not write FOMC records, and does not create placeholder times.
 
+## C4c: Acquisition result boundary hardening
+
+C4c treats both the transport output and the writer result as untrusted boundaries.
+
+### Transport payload guard (`_validate_transport_payload`)
+
+Before the parser is called, each payload object is validated:
+
+- `source`, `content_type`, and `body` attributes must be readable.
+- `source` must normalise to the expected source key (`enum.value` or plain string).
+- `content_type` must exactly match after stripping MIME parameters and lowercasing:
+  - BLS: `text/calendar`
+  - BEA: `application/json`
+- `body` must be `str`, must be NUL-free, must be UTF-8 encodable, must not exceed 1 MiB.
+- Any failure → `status="blocked"`, `error_codes=["invalid_response"]`.
+- Remaining sources in the batch are not fetched. The writer is not called.
+- Raw payload object, URL, headers, and exception text never enter the public summary.
+
+### Parser exception guard
+
+- `OfficialCalendarParseError` → its stable `.code` is recorded as-is.
+- Any other `Exception` → converted to `"invalid_response"`. Exception text never enters the summary.
+- `BaseException` is not caught.
+
+### Writer result guard (`_validate_mutation_result`)
+
+All of the following must hold for `status="ok"` to be returned:
+
+1. Result must be an instance of `EconomicCalendarMutationResult`.
+2. `result.status` must equal `"ok"`.
+3. `event_count`, `created_count`, `updated_count` must each be a non-bool, non-negative `int`.
+4. `result.event_count == len(all_events)`.
+5. `result.created_count + result.updated_count == result.event_count`.
+
+Any failure → `status="blocked"`, `error_codes=["write_failed"]`. Writer object repr, SQLite exception text, and raw event data never enter the public summary.
+
+### What C4c does NOT change
+
+- BLS and BEA remain the only sources.
+- FOMC exact-time acquisition remains deferred.
+- Transport, parsers, CLI, calendar schema, calendar service, and C4a/C4d semantics are unchanged.
+- No new API route, frontend, scheduler, background task, RAG, embedding, vector store, or Agent.
+
 ## What remains not started
 
-- C4c (if defined): further calendar features
 - Phase D: RAG, embedding, vector store
 - No API route, frontend, scheduler, automatic refresh, background task, or Agent

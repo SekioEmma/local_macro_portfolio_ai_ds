@@ -476,3 +476,483 @@ def test_second_source_failure_blocks_entire_batch(tmp_path):
     result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
     assert result.status == "blocked"
     assert not (tmp_path / "cal.sqlite").exists()
+
+
+# ===========================================================================
+# C4c: Transport payload boundary
+# ===========================================================================
+
+class _SimplePayload:
+    """Flexible payload for boundary tests — any attr can be set or omitted."""
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+
+class _PayloadTransport:
+    """Transport that returns a fixed payload object regardless of source."""
+    def __init__(self, payload):
+        self._payload = payload
+        self.call_log: list[str] = []
+
+    def fetch(self, source):
+        key = source.value if hasattr(source, "value") else str(source)
+        self.call_log.append(key)
+        return self._payload
+
+
+def _svc_with_payload(tmp_path, payload):
+    t = _PayloadTransport(payload)
+    db_path = tmp_path / "cal.sqlite"
+    cal_svc = EconomicCalendarService(db_path=db_path, now_provider=_now_provider)
+    svc = OfficialCalendarAcquisitionService(
+        transport_factory=lambda: t,
+        calendar_service=cal_svc,
+        now_provider=_now_provider,
+    )
+    return svc, t
+
+
+# A1 – payload is None
+def test_payload_none_blocked(tmp_path):
+    svc, _ = _svc_with_payload(tmp_path, None)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A2 – payload has no source attribute
+def test_payload_no_source_attr_blocked(tmp_path):
+    payload = _SimplePayload(content_type="text/calendar", body="BEGIN:VCALENDAR\nEND:VCALENDAR")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A3 – payload.source is the wrong source key
+def test_payload_wrong_source_blocked(tmp_path):
+    payload = _SimplePayload(source="bea", content_type="text/calendar", body="BEGIN:VCALENDAR\nEND:VCALENDAR")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A4 – payload.source is an enum whose .value matches → validation passes, parser runs
+def test_payload_enum_source_accepted(tmp_path):
+    class _FakeEnum:
+        value = "bls"
+    payload = _SimplePayload(source=_FakeEnum(), content_type="text/calendar", body=_minimal_bls_ics())
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "dry_run"
+
+
+# A5 – payload.source is a plain string → accepted
+def test_payload_string_source_accepted(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=_minimal_bls_ics())
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "dry_run"
+
+
+# A6 – payload has no body attribute
+def test_payload_no_body_attr_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendar")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A7 – payload.body is bytes
+def test_payload_body_bytes_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=b"BEGIN:VCALENDAR\nEND:VCALENDAR")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A8 – payload.body is None
+def test_payload_body_none_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=None)
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A9 – body contains NUL byte
+def test_payload_body_nul_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body="BEGIN\x00END")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A10 – body UTF-8 encoded size exceeds 1 MiB
+def test_payload_body_over_1mib_blocked(tmp_path):
+    big_body = "x" * (1_048_576 + 1)
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=big_body)
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A11 – body contains a lone surrogate that cannot be UTF-8 encoded
+def test_payload_body_surrogate_blocked(tmp_path):
+    body_with_surrogate = "prefix\ud800suffix"
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=body_with_surrogate)
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A12 – payload has no content_type attribute
+def test_payload_no_content_type_attr_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", body="BEGIN:VCALENDAR\nEND:VCALENDAR")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A13 – content_type is not a string
+def test_payload_content_type_nonstring_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", content_type=42, body="BEGIN:VCALENDAR\nEND:VCALENDAR")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A14 – content_type is "text/html"
+def test_payload_text_html_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/html", body="BEGIN:VCALENDAR\nEND:VCALENDAR")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A15 – content_type is "text/calendarish"
+def test_payload_text_calendarish_blocked(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendarish", body="BEGIN:VCALENDAR\nEND:VCALENDAR")
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A16 – content_type is "application/jsonish" for BEA
+def test_payload_application_jsonish_blocked(tmp_path):
+    payload = _SimplePayload(source="bea", content_type="application/jsonish", body=_minimal_bea_json())
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bea",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A17 – "text/calendar; charset=utf-8" is accepted for BLS
+def test_payload_calendar_with_charset_accepted(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendar; charset=utf-8", body=_minimal_bls_ics())
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "dry_run"
+
+
+# A18 – "application/json; charset=utf-8" is accepted for BEA
+def test_payload_json_with_charset_accepted(tmp_path):
+    payload = _SimplePayload(source="bea", content_type="application/json; charset=utf-8", body=_minimal_bea_json())
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bea",), live=True)
+    assert result.status == "dry_run"
+
+
+# A19 – BLS payload invalid → BEA fetch is never called, no write
+def test_bls_invalid_payload_bea_not_called(tmp_path):
+    bad_bls = _SimplePayload(source="bls", content_type="text/html", body="garbage")
+
+    class _SelectiveTransport:
+        def __init__(self):
+            self.call_log: list[str] = []
+
+        def fetch(self, source):
+            key = source.value if hasattr(source, "value") else str(source)
+            self.call_log.append(key)
+            if key == "bls":
+                return bad_bls
+            return _SimplePayload(source="bea", content_type="application/json", body=_minimal_bea_json())
+
+    t = _SelectiveTransport()
+    db_path = tmp_path / "cal.sqlite"
+    cal_svc = EconomicCalendarService(db_path=db_path, now_provider=_now_provider)
+    svc = OfficialCalendarAcquisitionService(
+        transport_factory=lambda: t,
+        calendar_service=cal_svc,
+        now_provider=_now_provider,
+    )
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "bea" not in t.call_log
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+# A20 – BEA payload invalid → entire batch blocked, no SQLite
+def test_bea_invalid_payload_batch_blocked(tmp_path):
+    good_bls = _SimplePayload(source="bls", content_type="text/calendar", body=_minimal_bls_ics())
+    bad_bea = _SimplePayload(source="bea", content_type="text/plain", body="{}")
+
+    class _SelectiveTransport2:
+        def fetch(self, source):
+            key = source.value if hasattr(source, "value") else str(source)
+            return good_bls if key == "bls" else bad_bea
+
+    db_path = tmp_path / "cal.sqlite"
+    cal_svc = EconomicCalendarService(db_path=db_path, now_provider=_now_provider)
+    svc = OfficialCalendarAcquisitionService(
+        transport_factory=_SelectiveTransport2,
+        calendar_service=cal_svc,
+        now_provider=_now_provider,
+    )
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+# A21 – transport validation failure creates no SQLite
+def test_transport_validation_failure_no_db(tmp_path):
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=None)
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    svc.run(source_keys=("bls",), live=True, write=True)
+    assert not (tmp_path / "cal.sqlite").exists()
+
+
+# A22 – raw body marker does not appear in summary repr
+def test_raw_body_marker_not_in_summary_repr(tmp_path):
+    marker = "SECRET_BODY_MARKER_XYZ"
+    payload = _SimplePayload(source="bls", content_type="text/html", body=marker)
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    result = svc.run(source_keys=("bls",), live=True)
+    assert marker not in repr(result)
+
+
+# A23 – parser raises RuntimeError → blocked, code is "invalid_response"
+def test_parser_runtime_error_becomes_invalid_response(tmp_path, monkeypatch):
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=_minimal_bls_ics())
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    import app_backend.services.official_calendar_acquisition_service as svc_mod
+    monkeypatch.setattr(
+        svc_mod,
+        "parse_bls_calendar_ics",
+        lambda *a: (_ for _ in ()).throw(RuntimeError("secret parser failure")),
+    )
+    result = svc.run(source_keys=("bls",), live=True)
+    assert result.status == "blocked"
+    assert "invalid_response" in result.error_codes
+
+
+# A24 – parser RuntimeError text does not appear in summary repr
+def test_parser_runtime_error_no_leak(tmp_path, monkeypatch):
+    payload = _SimplePayload(source="bls", content_type="text/calendar", body=_minimal_bls_ics())
+    svc, _ = _svc_with_payload(tmp_path, payload)
+    import app_backend.services.official_calendar_acquisition_service as svc_mod
+    monkeypatch.setattr(
+        svc_mod,
+        "parse_bls_calendar_ics",
+        lambda *a: (_ for _ in ()).throw(RuntimeError("secret parser failure")),
+    )
+    result = svc.run(source_keys=("bls",), live=True)
+    assert "secret parser failure" not in repr(result)
+
+
+# ===========================================================================
+# C4c: Writer-result boundary
+# ===========================================================================
+
+def _write_svc(tmp_path):
+    transport = _FakeTransport(responses={"bls": _minimal_bls_ics(), "bea": _minimal_bea_json()})
+    db_path = tmp_path / "cal.sqlite"
+    cal_svc = EconomicCalendarService(db_path=db_path, now_provider=_now_provider)
+    return OfficialCalendarAcquisitionService(
+        transport_factory=lambda: transport,
+        calendar_service=cal_svc,
+        now_provider=_now_provider,
+    ), cal_svc
+
+
+# B1 – writer returns None
+def test_writer_returns_none_blocked(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: None)
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B2 – writer returns list
+def test_writer_returns_list_blocked(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: [])
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B3 – writer returns dict
+def test_writer_returns_dict_blocked(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: {"status": "ok"})
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B4 – writer returns arbitrary object that duck-types but is not EconomicCalendarMutationResult
+def test_writer_returns_nonresult_object_blocked(tmp_path, monkeypatch):
+    class _Imposter:
+        status = "ok"
+        event_count = 4
+        created_count = 4
+        updated_count = 0
+
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(cal_svc, "upsert_events", lambda events: _Imposter())
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B5 – writer result status is not "ok"
+def test_writer_status_not_ok_blocked(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(
+        cal_svc, "upsert_events",
+        lambda events: EconomicCalendarMutationResult(
+            status="error", event_count=4, created_count=4, updated_count=0
+        ),
+    )
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B6 – event_count=True (bool is subclass of int but must be rejected)
+def test_writer_event_count_bool_blocked(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(
+        cal_svc, "upsert_events",
+        lambda events: EconomicCalendarMutationResult(
+            status="ok", event_count=True, created_count=1, updated_count=0
+        ),
+    )
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B7 – created_count=True
+def test_writer_created_count_bool_blocked(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(
+        cal_svc, "upsert_events",
+        lambda events: EconomicCalendarMutationResult(
+            status="ok", event_count=4, created_count=True, updated_count=3
+        ),
+    )
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B8 – negative count
+def test_writer_negative_count_blocked(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(
+        cal_svc, "upsert_events",
+        lambda events: EconomicCalendarMutationResult(
+            status="ok", event_count=-1, created_count=-1, updated_count=0
+        ),
+    )
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "blocked"
+    assert "write_failed" in result.error_codes
+
+
+# B9 – string count: test _validate_mutation_result directly via frozen-dataclass bypass
+def test_validate_mutation_result_rejects_string_count():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+
+    class _Bad(EconomicCalendarMutationResult):
+        pass
+
+    bad = object.__new__(_Bad)
+    object.__setattr__(bad, "status", "ok")
+    object.__setattr__(bad, "event_count", "4")
+    object.__setattr__(bad, "created_count", 4)
+    object.__setattr__(bad, "updated_count", 0)
+    assert not _validate_mutation_result(bad, 4)
+
+
+# B10 – event_count mismatch via _validate_mutation_result
+def test_validate_mutation_result_rejects_count_mismatch():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+
+    result = EconomicCalendarMutationResult(status="ok", event_count=999, created_count=999, updated_count=0)
+    assert not _validate_mutation_result(result, 4)
+
+
+# B11 – created + updated != event_count via _validate_mutation_result
+def test_validate_mutation_result_rejects_sum_mismatch():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+
+    result = EconomicCalendarMutationResult(status="ok", event_count=4, created_count=3, updated_count=0)
+    assert not _validate_mutation_result(result, 4)
+
+
+# B12 – valid EconomicCalendarMutationResult passes _validate_mutation_result
+def test_validate_mutation_result_accepts_valid():
+    from app_backend.services.official_calendar_acquisition_service import _validate_mutation_result
+
+    result = EconomicCalendarMutationResult(status="ok", event_count=4, created_count=4, updated_count=0)
+    assert _validate_mutation_result(result, 4)
+
+
+# B13 – several malformed writer returns never produce status="ok"
+def test_malformed_writer_never_returns_ok_status(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    for bad_return in [None, [], {}, object(), False, 0, "ok"]:
+        monkeypatch.setattr(cal_svc, "upsert_events", lambda events, r=bad_return: r)
+        result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+        assert result.status != "ok", f"Expected non-ok for writer returning {bad_return!r}"
+
+
+# B14 – writer exception text does not appear in summary repr
+def test_writer_exception_no_leak(tmp_path, monkeypatch):
+    svc, cal_svc = _write_svc(tmp_path)
+    monkeypatch.setattr(
+        cal_svc,
+        "upsert_events",
+        lambda events: (_ for _ in ()).throw(RuntimeError("secret_db_error_xyzzy")),
+    )
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert "secret_db_error_xyzzy" not in repr(result)
+    assert result.status == "blocked"
+
+
+# B15 – C4b success path still works after C4c changes
+def test_c4b_bls_bea_write_still_succeeds_after_c4c(tmp_path):
+    transport = _FakeTransport(responses={"bls": _minimal_bls_ics(), "bea": _minimal_bea_json()})
+    svc = _service(tmp_path, transport)
+    result = svc.run(source_keys=("bls", "bea"), live=True, write=True)
+    assert result.status == "ok"
+    assert result.event_count == 4
+    assert result.created_count == 4
+    assert result.updated_count == 0
+    assert (tmp_path / "cal.sqlite").exists()
