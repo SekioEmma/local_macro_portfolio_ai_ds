@@ -45,6 +45,13 @@ Tag：`era1-frontend-redesign-complete`。
 - C4b：guarded BLS/BEA manual official acquisition 已完成（手动 CLI，默认 planned，`--live --write` 才写入；FOMC exact-time acquisition deferred）
 - C4c：acquisition result boundary hardening 已完成（transport output 与 writer result 均视为不可信；malformed payload/result fail-closed；raw body/exception 不进入公开 summary）
 - C4e：exception-total payload/writer hardening 已完成（payload guard 对所有 ordinary `Exception` fail-closed；strict built-in `str` 防止恶意 str subclass；writer result 用 exact-type 检查 + captured primitive counts 消除 TOCTOU；FOMC exact-time acquisition 仍 deferred）
+- Phase C 在当前 BLS/BEA + FOMC-deferred scope 内已完成
+- D0：RAG evidence governance contracts 已完成（纯内存、metadata-only admission contract；不读 raw text、不 chunk、不 embed、不建 vector store、不 retrieval、不接入 AI context；`historical_data` / `one_shot_news` / stale 文档为固定排除；`eligible` 仅是未来 RAG pipeline 的候选信号，不授权读取内容）
+- D1 embedding 未开始
+- D2 vector store 未开始
+- D3 hybrid retrieval 未开始
+- D4 AI-context RAG integration 未开始
+- D5 seed corpus 未开始
 
 ### 进行中
 
