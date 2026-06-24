@@ -440,6 +440,139 @@ def test_default_db_parent_symlink_rejected_before_sqlite_initialization(tmp_pat
     assert not (target_parent / "economic_calendar.sqlite").exists()
 
 
+def test_next_releases_rejects_db_file_symlink(tmp_path: Path) -> None:
+    db_path = tmp_path / "economic_calendar.sqlite"
+    target_path = tmp_path / "target.sqlite"
+    _make_file_symlink(db_path, target_path)
+    service = EconomicCalendarService(db_path=db_path)
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.next_releases()
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert not target_path.exists()
+
+
+def test_next_releases_rejects_immediate_parent_symlink(tmp_path: Path) -> None:
+    link_parent = tmp_path / "link_dir"
+    target_parent = tmp_path / "real_dir"
+    _make_dir_symlink(link_parent, target_parent)
+    service = EconomicCalendarService(db_path=link_parent / "cal.sqlite")
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.next_releases()
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert not (target_parent / "cal.sqlite").exists()
+
+
+def test_next_releases_rejects_non_immediate_ancestor_symlink(tmp_path: Path) -> None:
+    target_grandparent = tmp_path / "real_gp"
+    link_grandparent = tmp_path / "link_gp"
+    _make_dir_symlink(link_grandparent, target_grandparent)
+    db_path = link_grandparent / "child" / "cal.sqlite"
+    service = EconomicCalendarService(db_path=db_path)
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.next_releases()
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert not (target_grandparent / "child" / "cal.sqlite").exists()
+
+
+def test_events_by_name_rejects_db_file_symlink(tmp_path: Path) -> None:
+    db_path = tmp_path / "economic_calendar.sqlite"
+    target_path = tmp_path / "target.sqlite"
+    _make_file_symlink(db_path, target_path)
+    service = EconomicCalendarService(db_path=db_path)
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.events_by_name("Consumer Price Index")
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert not target_path.exists()
+
+
+def test_events_by_name_rejects_immediate_parent_symlink(tmp_path: Path) -> None:
+    link_parent = tmp_path / "link_dir"
+    target_parent = tmp_path / "real_dir"
+    _make_dir_symlink(link_parent, target_parent)
+    service = EconomicCalendarService(db_path=link_parent / "cal.sqlite")
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.events_by_name("Consumer Price Index")
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert not (target_parent / "cal.sqlite").exists()
+
+
+def test_events_by_name_rejects_non_immediate_ancestor_symlink(tmp_path: Path) -> None:
+    target_grandparent = tmp_path / "real_gp"
+    link_grandparent = tmp_path / "link_gp"
+    _make_dir_symlink(link_grandparent, target_grandparent)
+    db_path = link_grandparent / "child" / "cal.sqlite"
+    service = EconomicCalendarService(db_path=db_path)
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.events_by_name("Consumer Price Index")
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert not (target_grandparent / "child" / "cal.sqlite").exists()
+
+
+def test_upsert_rejects_non_immediate_ancestor_symlink(tmp_path: Path) -> None:
+    target_grandparent = tmp_path / "real_gp"
+    link_grandparent = tmp_path / "link_gp"
+    _make_dir_symlink(link_grandparent, target_grandparent)
+    db_path = link_grandparent / "child" / "cal.sqlite"
+    service = EconomicCalendarService(db_path=db_path)
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.upsert_events([_event()])
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert not (target_grandparent / "child" / "cal.sqlite").exists()
+
+
+def test_read_path_guard_runs_before_connect_existing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "economic_calendar.sqlite"
+    target = tmp_path / "target.sqlite"
+    _make_file_symlink(db_path, target)
+    service = EconomicCalendarService(db_path=db_path)
+    connect_calls: list[str] = []
+    monkeypatch.setattr(
+        service,
+        "_connect_existing",
+        lambda: connect_calls.append("connect") or (_ for _ in ()).throw(AssertionError("should not reach")),
+    )
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.next_releases()
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert connect_calls == []
+
+
+def test_upsert_guard_runs_before_connect_existing_or_new(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_path = tmp_path / "economic_calendar.sqlite"
+    target = tmp_path / "target.sqlite"
+    _make_file_symlink(db_path, target)
+    service = EconomicCalendarService(db_path=db_path)
+    connect_calls: list[str] = []
+    monkeypatch.setattr(
+        service,
+        "_connect_existing_or_new",
+        lambda: connect_calls.append("connect") or (_ for _ in ()).throw(AssertionError("should not reach")),
+    )
+    with pytest.raises(EconomicCalendarAdmissionError) as exc_info:
+        service.upsert_events([_event()])
+    assert exc_info.value.code == "invalid_calendar_root"
+    assert connect_calls == []
+
+
+def test_symlink_guard_does_not_return_empty_list(tmp_path: Path) -> None:
+    db_path = tmp_path / "economic_calendar.sqlite"
+    target = tmp_path / "target.sqlite"
+    _make_file_symlink(db_path, target)
+    service = EconomicCalendarService(db_path=db_path)
+    with pytest.raises(EconomicCalendarAdmissionError):
+        service.next_releases()
+    with pytest.raises(EconomicCalendarAdmissionError):
+        service.events_by_name("Consumer Price Index")
+
+
+def test_valid_tmp_path_service_still_works_after_guard_hardening(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    result = service.upsert_events([_event()])
+    assert result.status == "ok"
+    assert service.next_releases(window_days=1) != []
+    assert service.events_by_name("Consumer Price Index") != []
+
+
 def test_schema_rejects_duplicate_key_date_time_direct_insert(tmp_path: Path) -> None:
     db_path, _db_parent = _paths(tmp_path)
     _service(tmp_path).upsert_events([_event()])

@@ -133,6 +133,7 @@ class EconomicCalendarService:
     def next_releases(self, window_days: int = 30) -> list[EconomicCalendarEventRecord]:
         if isinstance(window_days, bool) or not isinstance(window_days, int) or not 1 <= window_days <= 365:
             raise EconomicCalendarAdmissionError("invalid_window_days")
+        self._validate_calendar_root()
         if not self._db_path.exists():
             return []
         now_et = _coerce_et(self._now_provider())
@@ -161,6 +162,7 @@ class EconomicCalendarService:
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
             raise EconomicCalendarAdmissionError("invalid_limit")
         event_name = _resolve_event_name(name)
+        self._validate_calendar_root()
         if not self._db_path.exists():
             return []
         with self._connect_existing() as connection:
@@ -178,13 +180,16 @@ class EconomicCalendarService:
             return [_record_from_row(row) for row in rows]
 
     def _validate_calendar_root(self) -> None:
-        for path in (self._db_path, self._db_path.parent):
+        cursor = self._db_path
+        while True:
             try:
-                is_symlink = path.is_symlink()
+                if cursor.is_symlink():
+                    raise EconomicCalendarAdmissionError("invalid_calendar_root")
             except OSError as exc:
                 raise EconomicCalendarAdmissionError("invalid_calendar_root") from exc
-            if is_symlink:
-                raise EconomicCalendarAdmissionError("invalid_calendar_root")
+            if cursor == cursor.parent:
+                return
+            cursor = cursor.parent
 
     def _connect_existing_or_new(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self._db_path)
