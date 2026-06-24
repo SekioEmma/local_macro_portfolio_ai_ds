@@ -51,6 +51,15 @@ docs/
 - raw text 不得离开 local store，不得进入 API、模型、日志、错误消息、公开 return object 或 `documents` 表。
 - C3 tests 必须使用 `tmp_path`，不得在真实 `data/` 下创建样例 DB/raw text。
 
+**C4a 狭窄例外**：
+
+- `data/economic_calendar.sqlite` 默认仍禁止人工读取、打印、复制或提交。
+- 仅 `src/app_backend/services/economic_calendar_service.py` 的显式 public method 可在运行时访问该路径。
+- C4a 不解锁 BLS/BEA/Federal Reserve 网络请求、网页抓取、Tavily、provider payload、API、前端、CLI、scheduler、automatic refresh、startup seed、page-load seed 或 background task。
+- `data/economic_calendar_seed.json` 是 tracked synthetic fixture-only 数据，仅测试显式读取，production service 不得自动加载，也不得解释为真实经济日程。
+- C4a 不包含 actual、forecast、previous、surprise、value、score、probability、trading signal、RAG、embedding、vector store 或 Agent。
+- 其它隐私、网络、AI、持久化、D10-D19 / Stage 8 禁止项保持不变。
+
 **禁 import**（除明确允许的 transport 边界文件）：
 - `httpx` / `requests` / `aiohttp`
 - 直接读 `os.environ` / `os.getenv`

@@ -40,6 +40,8 @@ Tag：`era1-frontend-redesign-complete`。
 - Phase C1：search result classifier 已完成（deterministic 文档类型分类）
 - Phase C2：official historical data ingest 已完成（manual CLI，默认 dry-run，`--live --write` 才写入）
 - Phase C3：guarded local knowledge base store 已完成（本地 SQLite metadata + raw-text root；无 RAG / embedding / API）
+- Phase C4a：offline economic calendar schema/service/fixture 已完成（synthetic fixture-only；无官方抓取 / API / 自动刷新）
+- C4 economic calendar 未开始（指 official schedule acquisition / C4b；C4a offline foundation 已完成）
 
 ### 进行中
 
@@ -49,7 +51,7 @@ Tag：`era1-frontend-redesign-complete`。
 |---|---|---|---|
 | A | 治理与边界（解冻 Tavily + 收益区间） | 已完成 | ✅ A1 |
 | B | Tavily + 实时报价 + 商品价 + 本地 API routes | 已完成（B1–B7） | — |
-| C | 搜索分类持久化 + 经济日历 | 进行中：C1 已完成；C2 official historical data ingest 已完成；C3 guarded local knowledge base store 已完成；C4 economic calendar 未开始 | — |
+| C | 搜索分类持久化 + 经济日历 | 进行中：C1 已完成；C2 official historical data ingest 已完成；C3 guarded local knowledge base store 已完成；C4a offline calendar foundation 已完成；C4b official schedule acquisition 未开始 | — |
 | D | RAG 知识库 | 2 | — |
 | E | 情景化收益区间引擎 | 2 | ✅ E1 |
 | F | Agent + 9 节前端 | 2.5 | — |

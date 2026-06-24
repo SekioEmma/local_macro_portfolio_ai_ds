@@ -136,6 +136,15 @@ scripts/                  # Ingest, audit, benchmark scripts
 - Raw text must stay local: it must not enter API responses, model context, logs, error text, public service result objects, or the `documents` table.
 - C3 tests must use temporary DB/raw roots. Existing privacy, network, AI, and RAG prohibitions remain in force.
 
+### Era 2 C4a offline economic-calendar exception
+
+- `data/economic_calendar.sqlite` remains forbidden for manual reading, printing, copying, or committing.
+- Only `src/app_backend/services/economic_calendar_service.py` may access that path at runtime, and only through explicit public methods.
+- C4a does not unlock BLS/BEA/Federal Reserve network requests, webpage scraping, Tavily, provider payloads, API routes, frontend, CLI, scheduler, automatic refresh, startup seed, page-load seed, or background tasks.
+- `data/economic_calendar_seed.json` is tracked synthetic fixture-only data for tests. Production service code must not automatically load it or present it as a real economic schedule.
+- C4a does not add actual, forecast, previous, surprise, value, score, probability, trading signal, RAG, embedding, vector store, or Agent work.
+- Existing privacy, network, AI, persistence, and D10-D19 / Stage 8 prohibitions remain in force.
+
 ## Key Design Invariants
 
 - `ExternalAIRuntimePolicy` has 10 required-true gates + 12 required-false dangerous permissions. Default: fail-closed.

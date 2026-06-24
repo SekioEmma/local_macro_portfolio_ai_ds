@@ -13,6 +13,8 @@ data/market_history/*.sqlite3-*
 data/knowledge_base.sqlite
 data/knowledge_base.sqlite-*
 data/knowledge_base/
+data/economic_calendar.sqlite
+data/economic_calendar.sqlite-*
 data/manual/market_data_manual.csv
 
 outputs/reports/*
