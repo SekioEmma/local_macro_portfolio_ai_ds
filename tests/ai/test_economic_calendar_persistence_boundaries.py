@@ -55,10 +55,11 @@ def test_seed_fixture_is_documented_as_synthetic_fixture_only() -> None:
     assert "not real, current, or future economic schedule data" in closeout
 
 
-def test_roadmap_marks_c4a_complete_and_c4b_not_started() -> None:
+def test_roadmap_marks_c4a_and_c4b_complete() -> None:
     roadmap = _read("docs/ROADMAP.md")
     assert "C4a offline calendar foundation 已完成" in roadmap
-    assert "C4b official schedule acquisition 未开始" in roadmap
+    assert "C4b" in roadmap
+    assert "FOMC" in roadmap
     assert "| D | RAG 知识库" in roadmap
 
 

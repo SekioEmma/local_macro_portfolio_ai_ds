@@ -60,6 +60,16 @@ docs/
 - C4a 不包含 actual、forecast、previous、surprise、value、score、probability、trading signal、RAG、embedding、vector store 或 Agent。
 - 其它隐私、网络、AI、持久化、D10-D19 / Stage 8 禁止项保持不变。
 
+**C4b 狭窄例外**：
+
+- `src/data_providers/official_calendar_real_transport.py` 可 import `httpx`，仅 GET 两个固定 BLS/BEA URL。
+- 仅用户手动 `scripts/ingest_official_economic_calendar.py --live` 时允许 fetch。默认 planned，不 fetch，不写 DB。
+- 写入需 `--live --write`。任一 source 失败整批取消。
+- 无 API key、无 env、无 config、无 redirect、无 retry、无 credentials。
+- raw response 仅驻留进程内，不落盘、不进 SQLite、不进 log、不进 CLI output、不进公开 result。
+- 仅 BLS 和 BEA；不抓 Fed；不推断 FOMC statement 发布时间。
+- 不新增 API、前端、scheduler、background、自动刷新、RAG、embedding、vector store 或 Agent。
+
 **禁 import**（除明确允许的 transport 边界文件）：
 - `httpx` / `requests` / `aiohttp`
 - 直接读 `os.environ` / `os.getenv`
@@ -67,6 +77,7 @@ docs/
 允许的 transport 边界例外（已显式 allowlist）：
 - `src/app_backend/services/deepseek_real_transport.py`
 - `src/app_backend/services/tavily_real_transport.py`
+- `src/data_providers/official_calendar_real_transport.py`
 - `src/data_providers/` 下已审计的 provider 文件
 
 ## 3. 持久输出边界

@@ -140,10 +140,21 @@ scripts/                  # Ingest, audit, benchmark scripts
 
 - `data/economic_calendar.sqlite` remains forbidden for manual reading, printing, copying, or committing.
 - Only `src/app_backend/services/economic_calendar_service.py` may access that path at runtime, and only through explicit public methods.
-- C4a does not unlock BLS/BEA/Federal Reserve network requests, webpage scraping, Tavily, provider payloads, API routes, frontend, CLI, scheduler, automatic refresh, startup seed, page-load seed, or background tasks.
+- C4a does not unlock Federal Reserve network requests, webpage scraping, Tavily, provider payloads, API routes, frontend, scheduler, automatic refresh, startup seed, page-load seed, or background tasks.
 - `data/economic_calendar_seed.json` is tracked synthetic fixture-only data for tests. Production service code must not automatically load it or present it as a real economic schedule.
 - C4a does not add actual, forecast, previous, surprise, value, score, probability, trading signal, RAG, embedding, vector store, or Agent work.
 - Existing privacy, network, AI, persistence, and D10-D19 / Stage 8 prohibitions remain in force.
+
+### Era 2 C4b official calendar acquisition exception
+
+- `src/data_providers/official_calendar_real_transport.py` is the only new file that may import `httpx`. It fetches exactly two fixed official URLs: BLS ICS (`https://www.bls.gov/schedule/news_release/bls.ics`) and BEA JSON (`https://apps.bea.gov/API/signup/release_dates.json`).
+- Live fetch is only allowed when a user manually runs `scripts/ingest_official_economic_calendar.py --live`. Default mode is planned (no network, no write).
+- DB writes require `--live --write`. Any source failure blocks the entire batch.
+- No API key, no env read, no config, no redirect, no retry, no credentials, no cookie.
+- Raw response body stays in-process only — never persisted to SQLite, log, CLI output, error message, or public result.
+- BLS and BEA are the only allowed sources. Fed / FOMC is not fetched. FOMC statement exact-time acquisition is deferred because the schema requires precise `HH:MM` and inferring "usually 14:00" is not permitted.
+- C4b adds no API route, frontend, scheduler, background task, automatic refresh, RAG, embedding, vector store, or Agent.
+- All other privacy, network, AI, persistence, D10-D19 / Stage 8, and AI Context Manifest prohibitions remain in force.
 
 ## Key Design Invariants
 
