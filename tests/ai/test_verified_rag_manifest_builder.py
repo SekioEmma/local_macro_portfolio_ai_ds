@@ -40,6 +40,7 @@ def _manifest_row(
         "local_only": False,
         "rights_status": "official_public",
         "source_kind": "central_bank_policy",
+        "source_file_sha256": "f" * 64,
         "temporal_status": "as_released",
         "fomc_material_type": material_type,
         "extraction_status": "ready",
@@ -56,13 +57,14 @@ def _ledger_row(
     document_id: str = "fomc_statement_2026_06_17",
     *,
     verification_status: str = "verified",
-    canonical_url: str = "https://federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm",
-    source_domain: str = "federalreserve.gov",
+    canonical_url: str | None = None,
+    source_domain: str | None = None,
     document_type: str = "policy_doc",
     publisher: str = "Board of Governors of the Federal Reserve System",
 ) -> dict[str, object]:
     return {
         "document_id": document_id,
+        "source_relpath": "raw/path/that/must/not/appear.pdf",
         "canonical_url": canonical_url,
         "source_domain": source_domain,
         "publisher": publisher,
@@ -71,7 +73,7 @@ def _ledger_row(
         "publication_date": "2026-06-17",
         "verification_status": verification_status,
         "verified_by": "user",
-        "verification_basis": "official_federalreserve_page_or_saved_metadata",
+        "verification_basis": "user_curated_local_file",
     }
 
 
@@ -89,7 +91,7 @@ def _override_row(
 
 
 def test_verified_fomc_statement_is_promoted_to_verified_eligible(tmp_path):
-    result = _run_builder(tmp_path, [_manifest_row()], [_override_row()], [_ledger_row()])
+    result = _run_builder(tmp_path, [_manifest_row()], [], [_ledger_row()])
 
     assert result.audit["summary"]["promoted_documents"] == 1
     derived = result.derived_rows[0]
@@ -99,6 +101,27 @@ def test_verified_fomc_statement_is_promoted_to_verified_eligible(tmp_path):
     assert derived["admission_source"] == "source_ledger"
     assert derived["verified_by"] == "user"
     assert derived["cleaned_content_sha256"] == "a" * 64
+    assert derived["canonical_url"] is None
+
+
+def test_verified_fomc_statement_with_url_is_promoted_when_url_matches_ledger(tmp_path):
+    result = _run_builder(
+        tmp_path,
+        [_manifest_row()],
+        [_override_row()],
+        [
+            _ledger_row(
+                canonical_url="https://federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm",
+                source_domain="federalreserve.gov",
+            )
+        ],
+    )
+
+    assert result.audit["summary"]["promoted_documents"] == 1
+    assert result.derived_rows[0]["canonical_url"] == (
+        "https://federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm"
+    )
+    assert result.derived_rows[0]["source_domain"] == "federalreserve.gov"
 
 
 def test_missing_source_ledger_keeps_partial_hold(tmp_path):
@@ -117,7 +140,13 @@ def test_url_override_without_verified_ledger_does_not_promote(tmp_path):
         tmp_path,
         [_manifest_row()],
         [_override_row()],
-        [_ledger_row(verification_status="pending")],
+        [
+            _ledger_row(
+                verification_status="pending",
+                canonical_url="https://federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm",
+                source_domain="federalreserve.gov",
+            )
+        ],
     )
 
     assert result.audit["summary"]["promoted_documents"] == 0
@@ -146,7 +175,7 @@ def test_local_only_document_is_not_promoted(tmp_path):
     row = _manifest_row()
     row["local_only"] = True
 
-    result = _run_builder(tmp_path, [row], [_override_row()], [_ledger_row()])
+    result = _run_builder(tmp_path, [row], [], [_ledger_row()])
 
     assert result.audit["summary"]["rejection_reason_counts"] == {"external_llm_not_allowed": 1}
     assert result.derived_rows[0]["local_only"] is True
@@ -157,7 +186,7 @@ def test_external_llm_context_false_document_is_not_promoted(tmp_path):
     row = _manifest_row()
     row["external_llm_context_allowed"] = False
 
-    result = _run_builder(tmp_path, [row], [_override_row()], [_ledger_row()])
+    result = _run_builder(tmp_path, [row], [], [_ledger_row()])
 
     assert result.audit["summary"]["rejection_reason_counts"] == {"external_llm_not_allowed": 1}
     assert result.derived_rows[0]["external_llm_context_allowed"] is False
@@ -191,7 +220,7 @@ def test_cleaned_content_sha256_mutation_attempt_is_rejected(tmp_path):
     ledger = _ledger_row()
     ledger["cleaned_content_sha256"] = "b" * 64
 
-    result = _run_builder(tmp_path, [_manifest_row()], [_override_row()], [ledger])
+    result = _run_builder(tmp_path, [_manifest_row()], [], [ledger])
 
     assert result.audit["summary"]["rejection_reason_counts"] == {"hash_or_identity_mutation_attempt": 1}
     assert result.audit["summary"]["hard_error_count"] == 1
@@ -205,7 +234,7 @@ def test_dry_run_does_not_write_manifest_or_audit(tmp_path):
     output_manifest = tmp_path / "derived.jsonl"
     audit_report = tmp_path / "audit.json"
     _write_jsonl(manifest, [_manifest_row()])
-    _write_jsonl(overrides, [_override_row()])
+    _write_jsonl(overrides, [])
     _write_jsonl(ledger, [_ledger_row()])
 
     completed = subprocess.run(
@@ -214,8 +243,6 @@ def test_dry_run_does_not_write_manifest_or_audit(tmp_path):
             str(SCRIPT),
             "--manifest",
             str(manifest),
-            "--overrides",
-            str(overrides),
             "--source-ledger",
             str(ledger),
             "--output-manifest",
@@ -246,17 +273,15 @@ def test_repeated_runs_are_deterministic(tmp_path):
     second_manifest = tmp_path / "second_manifest.jsonl"
     second_audit = tmp_path / "second_audit.json"
     _write_jsonl(manifest, [_manifest_row()])
-    _write_jsonl(overrides, [_override_row()])
+    _write_jsonl(overrides, [])
     _write_jsonl(ledger, [_ledger_row()])
 
     first = module.build_verified_manifest(
         manifest_path=manifest,
-        overrides_path=overrides,
         source_ledger_path=ledger,
     )
     second = module.build_verified_manifest(
         manifest_path=manifest,
-        overrides_path=overrides,
         source_ledger_path=ledger,
     )
     module.write_outputs(first, output_manifest=first_manifest, audit_report=first_audit)

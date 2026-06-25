@@ -55,6 +55,8 @@ def _base_row(root: Path, *, document_id: str = "fomc_statement_2026_06_17") -> 
         "canonical_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm",
         "source_domain": "www.federalreserve.gov",
         "cleaned_content_sha256": digest,
+        "source_relpath": "FOMC/statement/monetary20260617a1.pdf",
+        "source_file_sha256": "f" * 64,
         "source_kind": "central_bank_policy",
         "temporal_status": "as_released",
         "release_date": "2026-06-17",
@@ -149,6 +151,23 @@ def test_missing_canonical_url_is_rejected(tmp_path):
 
     assert plan.accepted_document_count == 0
     assert plan.rejected_reasons["missing_canonical_url"] == 1
+
+
+def test_verified_local_provenance_can_be_planned_without_canonical_url(tmp_path):
+    row = _base_row(tmp_path)
+    row["canonical_url"] = None
+    row["source_domain"] = None
+    row["admission_source"] = "source_ledger"
+    row["admission_status"] = "verified"
+    row["admission_reason"] = "verified_fomc_policy_doc"
+    row["verified_by"] = "user"
+    row["verification_basis"] = "user_curated_local_file"
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 1
+    assert plan.accepted[0].source_domain == "local_user_verified"
 
 
 def test_duplicate_document_id_is_rejected(tmp_path):

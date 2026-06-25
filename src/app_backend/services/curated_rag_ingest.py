@@ -247,12 +247,13 @@ def _classify_row(row: dict[str, Any], duplicate_ids: set[str]) -> tuple[str, st
 
     canonical_url = row.get("canonical_url")
     source_domain = row.get("source_domain")
-    if not isinstance(canonical_url, str) or not canonical_url.strip():
+    if isinstance(canonical_url, str) and canonical_url.strip():
+        if not isinstance(source_domain, str) or not source_domain.strip():
+            return "rejected", "missing_source_domain"
+        if _url_host(canonical_url) != _normal_host(source_domain):
+            return "rejected", "canonical_url_source_domain_mismatch"
+    elif not _has_verified_local_provenance(row):
         return "rejected", "missing_canonical_url"
-    if not isinstance(source_domain, str) or not source_domain.strip():
-        return "rejected", "missing_source_domain"
-    if _url_host(canonical_url) != _normal_host(source_domain):
-        return "rejected", "canonical_url_source_domain_mismatch"
     return "accepted", "accepted"
 
 
@@ -285,7 +286,7 @@ def _document_from_row(curated_root: Path, row: dict[str, Any]) -> CuratedDocume
         path=path,
         title=_title_from_markdown(text, row["document_id"]),
         doc_type=row["runtime_doc_type"],
-        source_domain=_normal_host(row["source_domain"]),
+        source_domain=_source_label(row),
         external_llm_context_allowed=True,
         metadata=_safe_metadata(row),
     )
@@ -305,7 +306,7 @@ def _safe_metadata(row: dict[str, Any]) -> dict[str, Any]:
     metadata = {
         "title": _metadata_str(row.get("title")),
         "doc_type": row["runtime_doc_type"],
-        "source_domain": _normal_host(row["source_domain"]),
+        "source_domain": _source_label(row),
         "external_llm_context_allowed": True,
         "source_kind": _metadata_str(row.get("source_kind")),
         "temporal_status": _metadata_str(row.get("temporal_status")),
@@ -357,3 +358,25 @@ def _url_host(url: str) -> str:
 def _normal_host(host: str) -> str:
     parsed = urlparse(host if "://" in host else f"https://{host}")
     return (parsed.hostname or "").lower().strip(".")
+
+
+def _has_verified_local_provenance(row: dict[str, Any]) -> bool:
+    return (
+        row.get("admission_source") == "source_ledger"
+        and row.get("admission_status") == "verified"
+        and row.get("verified_by") == "user"
+        and row.get("verification_basis") == "user_curated_local_file"
+        and isinstance(row.get("source_relpath"), str)
+        and bool(row["source_relpath"].strip())
+        and isinstance(row.get("source_file_sha256"), str)
+        and bool(row["source_file_sha256"].strip())
+    )
+
+
+def _source_label(row: dict[str, Any]) -> str:
+    source_domain = row.get("source_domain")
+    if isinstance(source_domain, str) and source_domain.strip():
+        return _normal_host(source_domain)
+    if _has_verified_local_provenance(row):
+        return "local_user_verified"
+    return "unknown"

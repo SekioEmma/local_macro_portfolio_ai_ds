@@ -49,11 +49,11 @@ class AdmissionResult:
 def build_verified_manifest(
     *,
     manifest_path: Path,
-    overrides_path: Path,
+    overrides_path: Path | None = None,
     source_ledger_path: Path,
 ) -> AdmissionResult:
     manifest_rows = _read_jsonl(manifest_path)
-    override_rows = _read_jsonl(overrides_path)
+    override_rows = _read_jsonl(overrides_path) if overrides_path is not None else []
     ledger_rows = _read_jsonl(source_ledger_path)
 
     manifest_counts = _document_id_counts(manifest_rows)
@@ -202,8 +202,13 @@ def _derive_manifest_row(
         return _unchanged(row, doc_id, reason, fields, hard_error=hard_error)
 
     derived = dict(row)
-    derived["canonical_url"] = proposed_url
-    derived["source_domain"] = proposed_domain
+    if proposed_url is not None:
+        derived["canonical_url"] = proposed_url
+        derived["source_domain"] = proposed_domain
+    elif "canonical_url" not in derived:
+        derived["canonical_url"] = None
+    if proposed_domain is None and "source_domain" not in derived:
+        derived["source_domain"] = None
     derived["provenance_status"] = "verified"
     derived["ingest_status"] = "eligible"
     derived["admission_source"] = "source_ledger"
@@ -216,8 +221,6 @@ def _derive_manifest_row(
         "verified",
         "verified_fomc_policy_doc",
         (
-            "canonical_url",
-            "source_domain",
             "provenance_status",
             "ingest_status",
             "admission_status",
@@ -233,14 +236,18 @@ def _admission_rejection(
 ) -> tuple[str | None, tuple[str, ...], bool]:
     if ledger.get("verification_status") != "verified":
         return "ledger_not_verified", ("verification_status",), False
+    if ledger.get("verified_by") != "user" or not _coalesce_text(ledger.get("verification_basis")):
+        return "ledger_not_verified", ("verified_by", "verification_basis"), False
     if ledger.get("publisher") != FEDERAL_RESERVE_PUBLISHER:
         return "non_federalreserve_domain", ("publisher",), False
-    if proposed_domain != FEDERAL_RESERVE_DOMAIN or ledger.get("source_domain") != FEDERAL_RESERVE_DOMAIN:
-        return "non_federalreserve_domain", ("source_domain",), False
-
-    url_reason, url_host = _validate_canonical_url(proposed_url)
-    if url_reason is not None or url_host != proposed_domain:
-        return "url_domain_mismatch", ("canonical_url", "source_domain"), True
+    if proposed_url is not None or proposed_domain is not None:
+        if proposed_domain != FEDERAL_RESERVE_DOMAIN or ledger.get("source_domain") != FEDERAL_RESERVE_DOMAIN:
+            return "non_federalreserve_domain", ("source_domain",), False
+        url_reason, url_host = _validate_canonical_url(proposed_url)
+        if url_reason is not None or url_host != proposed_domain:
+            return "url_domain_mismatch", ("canonical_url", "source_domain"), True
+    elif not _has_verified_local_source(row, ledger):
+        return "missing_source_ledger", ("source_relpath", "verification_basis"), False
 
     material_type = _material_type(row, ledger)
     if material_type not in ALLOWED_FOMC_MATERIAL_TYPES or not str(row.get("document_id", "")).startswith("fomc_"):
@@ -254,6 +261,18 @@ def _admission_rejection(
     if row.get("pending_governance") is True:
         return "not_policy_doc", ("pending_governance",), False
     return None, (), False
+
+
+def _has_verified_local_source(row: dict[str, Any], ledger: dict[str, Any]) -> bool:
+    if ledger.get("verification_basis") != "user_curated_local_file":
+        return False
+    manifest_relpath = row.get("source_relpath")
+    ledger_relpath = ledger.get("source_relpath")
+    if not isinstance(manifest_relpath, str) or not manifest_relpath.strip():
+        return False
+    if not isinstance(ledger_relpath, str) or ledger_relpath != manifest_relpath:
+        return False
+    return isinstance(row.get("source_file_sha256"), str) and bool(row["source_file_sha256"])
 
 
 def _validate_canonical_url(value: object) -> tuple[str | None, str]:
@@ -394,7 +413,7 @@ def _decision_to_json(decision: AdmissionDecision) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build a source-ledger-verified derived RAG manifest.")
     parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--overrides", type=Path, required=True)
+    parser.add_argument("--overrides", type=Path)
     parser.add_argument("--source-ledger", type=Path, required=True)
     parser.add_argument("--output-manifest", type=Path, required=True)
     parser.add_argument("--audit-report", type=Path, required=True)
@@ -404,9 +423,10 @@ def main() -> int:
 
     protected_inputs = {
         args.manifest.resolve(),
-        args.overrides.resolve(),
         args.source_ledger.resolve(),
     }
+    if args.overrides is not None:
+        protected_inputs.add(args.overrides.resolve())
     if args.output_manifest.resolve() in protected_inputs or args.audit_report.resolve() in protected_inputs:
         print(json.dumps({"status": "blocked", "reason": "outputs_must_not_replace_inputs"}))
         return 2
