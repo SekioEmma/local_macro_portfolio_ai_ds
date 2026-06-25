@@ -374,12 +374,21 @@ def _cleaned_content_sha256(content: bytes) -> str:
 
 
 def _has_verified_local_provenance(row: dict[str, Any]) -> bool:
-    return (
+    if not _has_local_source_file_markers(row):
+        return False
+    if (
         row.get("admission_source") == "source_ledger"
         and row.get("admission_status") == "verified"
         and row.get("verified_by") == "user"
         and row.get("verification_basis") == "user_curated_local_file"
-        and isinstance(row.get("source_relpath"), str)
+    ):
+        return True
+    return row.get("provenance_status") == "verified"
+
+
+def _has_local_source_file_markers(row: dict[str, Any]) -> bool:
+    return (
+        isinstance(row.get("source_relpath"), str)
         and bool(row["source_relpath"].strip())
         and isinstance(row.get("source_file_sha256"), str)
         and bool(row["source_file_sha256"].strip())

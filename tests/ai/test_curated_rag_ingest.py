@@ -160,6 +160,8 @@ def test_canonical_url_source_domain_mismatch_is_rejected(tmp_path):
 def test_missing_canonical_url_is_rejected(tmp_path):
     row = _base_row(tmp_path)
     row["canonical_url"] = None
+    row["source_relpath"] = ""
+    row["source_file_sha256"] = ""
     manifest = _manifest(tmp_path, [row])
 
     plan = build_ingest_plan(tmp_path, manifest)
@@ -183,6 +185,44 @@ def test_verified_local_provenance_can_be_planned_without_canonical_url(tmp_path
 
     assert plan.accepted_document_count == 1
     assert plan.accepted[0].source_domain == "local_user_verified"
+
+
+def test_manifest_verified_provenance_with_source_markers_is_admitted(tmp_path):
+    row = _base_row(tmp_path)
+    row["canonical_url"] = None
+    row["source_domain"] = None
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 1
+    assert plan.accepted[0].source_domain == "local_user_verified"
+
+
+def test_unverified_provenance_without_admission_markers_is_rejected(tmp_path):
+    row = _base_row(tmp_path)
+    row["canonical_url"] = None
+    row["source_domain"] = None
+    row["provenance_status"] = "pending"
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 0
+    assert plan.skipped_reasons["provenance_pending"] == 1
+
+
+def test_missing_source_file_markers_blocks_local_admission(tmp_path):
+    row = _base_row(tmp_path)
+    row["canonical_url"] = None
+    row["source_domain"] = None
+    row["source_file_sha256"] = ""
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 0
+    assert plan.rejected_reasons["missing_canonical_url"] == 1
 
 
 def test_duplicate_document_id_is_rejected(tmp_path):
@@ -225,6 +265,8 @@ def test_dry_run_does_not_write_chunk_store_or_vector_store(tmp_path):
 def test_write_with_zero_eligible_documents_does_not_create_vector_root(tmp_path):
     row = _base_row(tmp_path)
     row["canonical_url"] = None
+    row["source_relpath"] = ""
+    row["source_file_sha256"] = ""
     manifest = _manifest(tmp_path, [row])
     vector_root = tmp_path / "vector_store"
 
