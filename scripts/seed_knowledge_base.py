@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Seed the RAG knowledge base from files the user has placed in data/knowledge_base/input/.
+"""Seed the RAG knowledge base from staged local text files.
 
 Usage:
     python scripts/seed_knowledge_base.py                  # dry-run: shows what would be indexed
     python scripts/seed_knowledge_base.py --write          # write chunk text store + vector store
     python scripts/seed_knowledge_base.py --doc-type research_report  # override doc_type
     python scripts/seed_knowledge_base.py --scan-dir /path/to/files   # custom input dir
+    python scripts/seed_knowledge_base.py --manifest /path/to/rag_manifest.jsonl
 
 Supported file extensions: .txt, .md
 Each file is split into overlapping chunks, embedded, and stored in:
@@ -24,20 +25,31 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from llm.document_chunker import chunk_text
-from llm.chunk_text_store import ChunkTextStore, StoredChunk
+from llm.document_chunker import chunk_text  # noqa: E402
+from llm.chunk_text_store import ChunkTextStore, StoredChunk  # noqa: E402
 
 _DEFAULT_INPUT_DIR = ROOT / "data" / "knowledge_base" / "input"
 _DEFAULT_VECTOR_DIR = ROOT / "data" / "vector_store"
 _CHUNK_TEXT_DB = _DEFAULT_VECTOR_DIR / "chunks.sqlite"
 _VALID_DOC_TYPES = {"policy_doc", "research_report", "historical_data", "one_shot_news"}
 _EXTENSIONS = {".txt", ".md"}
+_MANIFEST_DEFAULT_COHORTS = {"policy_doc", "research_report"}
+
+
+@dataclass(frozen=True)
+class SeedDocument:
+    path: Path
+    doc_id: str
+    doc_type: str
+    external_llm_context_allowed: bool
 
 
 def _doc_id_for_file(path: Path) -> str:
@@ -56,6 +68,77 @@ def _source_domain_for(path: Path) -> str:
     return "local"
 
 
+def _scan_dir_documents(
+    scan_dir: Path,
+    *,
+    doc_type: str,
+    external_llm_context_allowed: bool,
+) -> list[SeedDocument]:
+    files = sorted(p for p in scan_dir.iterdir() if p.suffix in _EXTENSIONS) if scan_dir.exists() else []
+    return [
+        SeedDocument(
+            path=fpath,
+            doc_id=_doc_id_for_file(fpath),
+            doc_type=doc_type,
+            external_llm_context_allowed=external_llm_context_allowed,
+        )
+        for fpath in files
+    ]
+
+
+def _manifest_documents(
+    manifest_path: Path,
+    *,
+    include_review_required: bool = False,
+) -> list[SeedDocument]:
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"manifest not found: {manifest_path}")
+
+    staging_root = manifest_path.parent.parent
+    allowed_cohorts = set(_MANIFEST_DEFAULT_COHORTS)
+    if include_review_required:
+        allowed_cohorts.add("review_required")
+
+    documents: list[SeedDocument] = []
+    for line_no, line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not _manifest_row_is_external_seed_candidate(row, allowed_cohorts):
+            continue
+
+        output_relpath = row.get("output_relpath")
+        doc_path = staging_root / output_relpath
+        if doc_path.suffix not in _EXTENSIONS:
+            raise ValueError(f"manifest line {line_no}: unsupported output extension: {output_relpath!r}")
+        if not doc_path.exists():
+            raise FileNotFoundError(f"manifest line {line_no}: staged file not found: {doc_path}")
+
+        documents.append(
+            SeedDocument(
+                path=doc_path,
+                doc_id=row["document_id"],
+                doc_type=row["runtime_doc_type"],
+                external_llm_context_allowed=True,
+            )
+        )
+    return documents
+
+
+def _manifest_row_is_external_seed_candidate(row: dict[str, object], allowed_cohorts: set[str]) -> bool:
+    return (
+        row.get("cohort") in allowed_cohorts
+        and row.get("ingest_status") == "eligible"
+        and row.get("extraction_status") == "ready"
+        and row.get("provenance_status") == "verified"
+        and row.get("external_llm_context_allowed") is True
+        and row.get("allowed_use") == "external_context_candidate"
+        and row.get("runtime_doc_type") in _VALID_DOC_TYPES
+        and isinstance(row.get("document_id"), str)
+        and isinstance(row.get("output_relpath"), str)
+    )
+
+
 def seed(
     *,
     scan_dir: Path,
@@ -63,16 +146,29 @@ def seed(
     doc_type: str,
     write: bool,
     external_llm_context_allowed: bool = True,
+    manifest_path: Path | None = None,
+    include_review_required: bool = False,
     verbose: bool = True,
 ) -> dict[str, int]:
     if doc_type not in _VALID_DOC_TYPES:
         raise ValueError(f"doc_type must be one of {sorted(_VALID_DOC_TYPES)}, got {doc_type!r}")
 
-    files = sorted(p for p in scan_dir.iterdir() if p.suffix in _EXTENSIONS) if scan_dir.exists() else []
+    if manifest_path is not None:
+        documents = _manifest_documents(
+            manifest_path,
+            include_review_required=include_review_required,
+        )
+    else:
+        documents = _scan_dir_documents(
+            scan_dir,
+            doc_type=doc_type,
+            external_llm_context_allowed=external_llm_context_allowed,
+        )
 
-    if not files:
+    if not documents:
         if verbose:
-            print(f"No .txt/.md files found in {scan_dir}")
+            source = f"manifest candidates in {manifest_path}" if manifest_path else f".txt/.md files in {scan_dir}"
+            print(f"No seedable {source}")
         return {"files": 0, "chunks": 0, "written": 0}
 
     chunk_store = ChunkTextStore(_CHUNK_TEXT_DB) if write else None
@@ -94,18 +190,21 @@ def seed(
     total_chunks = 0
     total_written = 0
 
-    for fpath in files:
+    for document in documents:
+        fpath = document.path
         text = fpath.read_text(encoding="utf-8", errors="replace")
-        doc_id = _doc_id_for_file(fpath)
         title = _title_from_file(fpath, text)
         source_domain = _source_domain_for(fpath)
-        chunks = chunk_text(text, doc_id=doc_id)
+        chunks = chunk_text(text, doc_id=document.doc_id)
         total_chunks += len(chunks)
 
         if verbose:
-            llm_flag = "llm=yes" if external_llm_context_allowed else "llm=no(local-only)"
+            llm_flag = "llm=yes" if document.external_llm_context_allowed else "llm=no(local-only)"
             mode = "[dry-run]" if not write else "[write]"
-            print(f"  {mode} {fpath.name} → {len(chunks)} chunks  doc_id={doc_id}  {llm_flag}")
+            print(
+                f"  {mode} {fpath.name} -> {len(chunks)} chunks  "
+                f"doc_id={document.doc_id}  doc_type={document.doc_type}  {llm_flag}"
+            )
 
         if write and chunk_store is not None and vs is not None and emb_svc is not None:
             texts = [c.text for c in chunks]
@@ -116,9 +215,9 @@ def seed(
                     chunk_index=chunk.chunk_index,
                     text=chunk.text,
                     title=title,
-                    doc_type=doc_type,
+                    doc_type=document.doc_type,
                     source_domain=source_domain,
-                    external_llm_context_allowed=external_llm_context_allowed,
+                    external_llm_context_allowed=document.external_llm_context_allowed,
                 )
                 chunk_store.upsert_chunk(stored)
                 vs.upsert(
@@ -127,19 +226,19 @@ def seed(
                     embedding=embedding,
                     metadata={
                         "title": title,
-                        "doc_type": doc_type,
+                        "doc_type": document.doc_type,
                         "source_domain": source_domain,
-                        "external_llm_context_allowed": external_llm_context_allowed,
+                        "external_llm_context_allowed": document.external_llm_context_allowed,
                     },
                 )
                 total_written += 1
 
     if verbose:
-        print(f"\nSummary: {len(files)} file(s), {total_chunks} chunk(s), {total_written} written.")
+        print(f"\nSummary: {len(documents)} file(s), {total_chunks} chunk(s), {total_written} written.")
         if not write:
             print("Run with --write to actually index.")
 
-    return {"files": len(files), "chunks": total_chunks, "written": total_written}
+    return {"files": len(documents), "chunks": total_chunks, "written": total_written}
 
 
 def main() -> None:
@@ -147,6 +246,16 @@ def main() -> None:
     parser.add_argument("--write", action="store_true", help="Write chunks to vector store (default: dry-run)")
     parser.add_argument("--doc-type", default="research_report", help="Document type for all files in this run")
     parser.add_argument("--scan-dir", type=Path, default=_DEFAULT_INPUT_DIR, help="Directory to scan for .txt/.md files")
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="Read a macro-rag-corpus-curator rag_manifest.jsonl and seed only eligible external candidates",
+    )
+    parser.add_argument(
+        "--include-review-required",
+        action="store_true",
+        help="Also seed review_required manifest rows when they otherwise pass external-context gates",
+    )
     parser.add_argument(
         "--no-external-llm-context",
         action="store_true",
@@ -158,9 +267,14 @@ def main() -> None:
     external_llm_context_allowed = not args.no_external_llm_context
 
     print(f"Mode: {'WRITE' if args.write else 'DRY-RUN'}")
-    print(f"Scanning: {args.scan_dir}")
-    print(f"doc_type: {args.doc_type}")
-    print(f"external_llm_context: {'yes' if external_llm_context_allowed else 'NO — local-only'}\n")
+    if args.manifest:
+        print(f"Manifest: {args.manifest}")
+        print("Manifest gates: eligible + ready + verified + external_context_candidate")
+        print(f"review_required: {'included' if args.include_review_required else 'excluded'}\n")
+    else:
+        print(f"Scanning: {args.scan_dir}")
+        print(f"doc_type: {args.doc_type}")
+        print(f"external_llm_context: {'yes' if external_llm_context_allowed else 'NO - local-only'}\n")
 
     seed(
         scan_dir=args.scan_dir,
@@ -168,6 +282,8 @@ def main() -> None:
         doc_type=args.doc_type,
         write=args.write,
         external_llm_context_allowed=external_llm_context_allowed,
+        manifest_path=args.manifest,
+        include_review_required=args.include_review_required,
     )
 
 

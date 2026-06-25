@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from llm.document_chunker import Chunk, chunk_text
+from llm.document_chunker import chunk_text
 
 
 # ---- basic structure ----

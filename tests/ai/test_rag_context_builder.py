@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from app_backend.services.rag_context_builder import (
-    RAGContextBlock,
     build_rag_context,
     _SECTION_HEADER,
     _CHUNK_SEPARATOR,

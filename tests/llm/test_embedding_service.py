@@ -136,7 +136,6 @@ def test_module_import_does_not_import_sentence_transformers():
 
 def test_missing_sentence_transformers_raises_import_error(monkeypatch):
     import sys
-    import importlib
 
     monkeypatch.setitem(sys.modules, "sentence_transformers", None)  # type: ignore[assignment]
     svc = EmbeddingService(model_name="dummy-model")
