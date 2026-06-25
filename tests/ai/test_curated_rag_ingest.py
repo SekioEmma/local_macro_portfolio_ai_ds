@@ -240,6 +240,40 @@ def test_duplicate_document_id_is_rejected(tmp_path):
     assert plan.rejected_reasons["duplicate_document_id"] == 2
 
 
+def test_identical_cross_cohort_copies_collapse_to_priority_cohort(tmp_path):
+    primary = _base_row(tmp_path)
+    review_relpath = "review_required/fomc_statement_2026_06_17.md"
+    review_text = (tmp_path / primary["output_relpath"]).read_text(encoding="utf-8")
+    digest = _write_doc(tmp_path, review_relpath, review_text)
+    review = dict(primary)
+    review["cohort"] = "review_required"
+    review["output_relpath"] = review_relpath
+    review["cleaned_content_sha256"] = digest
+    manifest = _manifest(tmp_path, [review, primary])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 1
+    assert plan.accepted[0].path.name == "fomc_statement_2026_06_17.md"
+    assert "policy_doc" in str(plan.accepted[0].path)
+    assert plan.skipped_reasons["duplicate_cohort_copy"] == 1
+
+
+def test_same_id_different_content_still_rejects_as_duplicate(tmp_path):
+    first = _base_row(tmp_path)
+    second_relpath = "policy_doc/other.md"
+    second_hash = _write_doc(tmp_path, second_relpath, "# Different\n\nBody")
+    second = dict(first)
+    second["output_relpath"] = second_relpath
+    second["cleaned_content_sha256"] = second_hash
+    manifest = _manifest(tmp_path, [first, second])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 0
+    assert plan.rejected_reasons["duplicate_document_id"] == 2
+
+
 def test_dry_run_does_not_write_chunk_store_or_vector_store(tmp_path):
     row = _base_row(tmp_path)
     manifest = _manifest(tmp_path, [row])

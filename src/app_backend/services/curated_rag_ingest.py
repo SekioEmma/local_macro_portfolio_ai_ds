@@ -16,6 +16,7 @@ from llm.document_chunker import Chunk, chunk_text
 ALLOWED_RUNTIME_DOC_TYPES = frozenset({"policy_doc", "research_report"})
 ALLOWED_CONTENT_COHORTS = frozenset({"policy_doc", "research_report"})
 READABLE_COHORTS = frozenset({"policy_doc", "research_report", "pending_governance", "review_required"})
+_COHORT_PRIORITY = {"policy_doc": 0, "research_report": 1, "review_required": 2}
 DEFAULT_VECTOR_ROOT = Path(__file__).resolve().parents[3] / "data" / "vector_store"
 DEFAULT_VECTOR_DIR = DEFAULT_VECTOR_ROOT
 
@@ -63,6 +64,7 @@ def build_ingest_plan(curated_root: Path, manifest_path: Path) -> CuratedIngestP
     manifest_path = manifest_path.resolve()
     _validate_manifest_location(curated_root, manifest_path)
     rows = _read_manifest_rows(manifest_path)
+    rows, dedup_skipped = _deduplicate_identical_documents(rows)
     duplicate_ids = _duplicate_document_ids(rows)
 
     accepted: list[CuratedDocument] = []
@@ -70,6 +72,7 @@ def build_ingest_plan(curated_root: Path, manifest_path: Path) -> CuratedIngestP
     rejected: Counter[str] = Counter()
     doc_types: Counter[str] = Counter()
     fomc_types: Counter[str] = Counter()
+    skipped.update(dedup_skipped)
 
     for row in rows:
         decision, reason = _classify_row(row, duplicate_ids)
@@ -225,6 +228,64 @@ def _read_manifest_rows(manifest_path: Path) -> list[dict[str, Any]]:
 def _duplicate_document_ids(rows: list[dict[str, Any]]) -> set[str]:
     counts = Counter(row.get("document_id") for row in rows if isinstance(row.get("document_id"), str))
     return {doc_id for doc_id, count in counts.items() if count > 1}
+
+
+def _deduplicate_identical_documents(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], Counter[str]]:
+    """Collapse rows sharing both document_id and cleaned_content_sha256.
+
+    Same id + same content across cohorts is a legitimate cross-cohort copy
+    (a user-curated original was placed in two cohort folders). Keep the
+    highest-priority cohort and skip the rest with reason 'duplicate_cohort_copy'.
+    Rows with same id but DIFFERENT sha256 are left untouched so the existing
+    duplicate_document_id rejection still fires.
+    """
+    by_id: dict[str, list[dict[str, Any]]] = {}
+    order: list[str | None] = []
+    seen_keys: set[str] = set()
+    for row in rows:
+        doc_id = row.get("document_id")
+        if isinstance(doc_id, str):
+            by_id.setdefault(doc_id, []).append(row)
+            if doc_id not in seen_keys:
+                seen_keys.add(doc_id)
+                order.append(doc_id)
+        else:
+            order.append(None)
+
+    skipped: Counter[str] = Counter()
+    surviving: dict[str, dict[str, Any]] = {}
+    for doc_id, group in by_id.items():
+        if len(group) == 1:
+            surviving[doc_id] = group[0]
+            continue
+        hashes = {row.get("cleaned_content_sha256") for row in group}
+        if len(hashes) > 1 or None in hashes:
+            for row in group:
+                surviving.setdefault(f"__keep_dup__{id(row)}", row)
+            continue
+        winner = min(group, key=lambda r: (_COHORT_PRIORITY.get(r.get("cohort", ""), 99), group.index(r)))
+        skipped["duplicate_cohort_copy"] += len(group) - 1
+        surviving[doc_id] = winner
+
+    result: list[dict[str, Any]] = []
+    placed: set[str] = set()
+    for key in order:
+        if key is None or key not in by_id:
+            continue
+        if key in placed:
+            continue
+        placed.add(key)
+        group = by_id[key]
+        if key in surviving:
+            result.append(surviving[key])
+        else:
+            for row in group:
+                marker = f"__keep_dup__{id(row)}"
+                if marker in surviving:
+                    result.append(row)
+    return result, skipped
 
 
 def _classify_row(row: dict[str, Any], duplicate_ids: set[str]) -> tuple[str, str]:
