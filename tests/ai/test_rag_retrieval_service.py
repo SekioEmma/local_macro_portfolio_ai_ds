@@ -30,6 +30,7 @@ class _FakeRawChunk:
     title: str
     doc_type: str
     source_domain: str
+    external_llm_context_allowed: bool = True
 
 
 class _StubEmbedding:

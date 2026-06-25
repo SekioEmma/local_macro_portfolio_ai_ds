@@ -17,6 +17,7 @@ class RetrievedChunk:
     title: str
     doc_type: str
     source_domain: str
+    external_llm_context_allowed: bool = True
 
 
 class RAGRetrievalService:
@@ -80,6 +81,7 @@ class RAGRetrievalService:
                 title=raw.title,
                 doc_type=raw.doc_type,
                 source_domain=raw.source_domain,
+                external_llm_context_allowed=raw.external_llm_context_allowed,
             ))
         return chunks
 

@@ -7,15 +7,22 @@ from pathlib import Path
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS chunks (
-    doc_id       TEXT NOT NULL,
-    chunk_index  INTEGER NOT NULL,
-    text         TEXT NOT NULL,
-    title        TEXT NOT NULL,
-    doc_type     TEXT NOT NULL,
-    source_domain TEXT NOT NULL,
+    doc_id                       TEXT NOT NULL,
+    chunk_index                  INTEGER NOT NULL,
+    text                         TEXT NOT NULL,
+    title                        TEXT NOT NULL,
+    doc_type                     TEXT NOT NULL,
+    source_domain                TEXT NOT NULL,
+    external_llm_context_allowed INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (doc_id, chunk_index)
 );
 """
+
+# Column added after initial schema — migrated on first connect.
+_MIGRATION_ADD_LLM_ALLOWED = (
+    "ALTER TABLE chunks "
+    "ADD COLUMN external_llm_context_allowed INTEGER NOT NULL DEFAULT 1"
+)
 
 
 @dataclass(frozen=True)
@@ -26,6 +33,7 @@ class StoredChunk:
     title: str
     doc_type: str
     source_domain: str
+    external_llm_context_allowed: bool = True
 
 
 class ChunkTextStore:
@@ -49,8 +57,9 @@ class ChunkTextStore:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO chunks
-                    (doc_id, chunk_index, text, title, doc_type, source_domain)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (doc_id, chunk_index, text, title, doc_type, source_domain,
+                     external_llm_context_allowed)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chunk.doc_id,
@@ -59,19 +68,30 @@ class ChunkTextStore:
                     chunk.title,
                     chunk.doc_type,
                     chunk.source_domain,
+                    int(chunk.external_llm_context_allowed),
                 ),
             )
 
     def get_chunk(self, doc_id: str, chunk_index: int) -> StoredChunk | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT doc_id, chunk_index, text, title, doc_type, source_domain "
+                "SELECT doc_id, chunk_index, text, title, doc_type, source_domain, "
+                "external_llm_context_allowed "
                 "FROM chunks WHERE doc_id = ? AND chunk_index = ?",
                 (doc_id, chunk_index),
             ).fetchone()
         if row is None:
             return None
-        return StoredChunk(*row)
+        doc_id_, chunk_index_, text, title, doc_type, source_domain, llm_allowed = row
+        return StoredChunk(
+            doc_id=doc_id_,
+            chunk_index=chunk_index_,
+            text=text,
+            title=title,
+            doc_type=doc_type,
+            source_domain=source_domain,
+            external_llm_context_allowed=bool(llm_allowed),
+        )
 
     def delete_doc(self, doc_id: str) -> int:
         with self._connect() as conn:
@@ -93,6 +113,10 @@ class ChunkTextStore:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._db_path)
         conn.execute(_SCHEMA)
+        try:
+            conn.execute(_MIGRATION_ADD_LLM_ALLOWED)
+        except sqlite3.OperationalError:
+            pass  # column already exists
         return conn
 
     @staticmethod
