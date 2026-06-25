@@ -219,3 +219,40 @@ def test_retrieve_bm25_result_fused():
     results = svc.retrieve("keyword match")
     ids = [r.doc_id for r in results]
     assert "bm25-doc" in ids
+
+
+def test_retrieve_filters_local_only_chunks_by_default():
+    raw = {
+        ("public", 0): _chunk("public"),
+        ("private", 0): _FakeRawChunk(
+            text="private text",
+            title="Private",
+            doc_type="research_report",
+            source_domain="example.com",
+            external_llm_context_allowed=False,
+        ),
+    }
+    vec = [_FakeVecResult("private", 0, 0.9), _FakeVecResult("public", 0, 0.8)]
+    svc = _make_svc(vec=vec, raw=raw)
+
+    results = svc.retrieve("rate", top_k=5)
+
+    assert [r.doc_id for r in results] == ["public"]
+
+
+def test_retrieve_can_include_local_only_when_explicitly_requested():
+    raw = {
+        ("private", 0): _FakeRawChunk(
+            text="private text",
+            title="Private",
+            doc_type="research_report",
+            source_domain="example.com",
+            external_llm_context_allowed=False,
+        ),
+    }
+    vec = [_FakeVecResult("private", 0, 0.9)]
+    svc = _make_svc(vec=vec, raw=raw)
+
+    results = svc.retrieve("rate", include_local_only=True)
+
+    assert [r.doc_id for r in results] == ["private"]

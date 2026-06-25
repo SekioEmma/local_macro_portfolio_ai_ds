@@ -109,6 +109,28 @@ def test_list_doc_ids(tmp_path):
     assert ids == sorted(ids)
 
 
+def test_list_chunks_filters_external_llm_context_allowed(tmp_path):
+    store = _store(tmp_path)
+    store.upsert_chunk(_chunk(doc_id="public"))
+    store.upsert_chunk(
+        StoredChunk(
+            doc_id="private",
+            chunk_index=0,
+            text="private",
+            title="Private",
+            doc_type="research_report",
+            source_domain="local",
+            external_llm_context_allowed=False,
+        )
+    )
+
+    public_chunks = store.list_chunks(external_llm_context_allowed=True)
+    private_chunks = store.list_chunks(external_llm_context_allowed=False)
+
+    assert [chunk.doc_id for chunk in public_chunks] == ["public"]
+    assert [chunk.doc_id for chunk in private_chunks] == ["private"]
+
+
 # ---- validation ----
 
 def test_upsert_non_stored_chunk_raises(tmp_path):

@@ -49,6 +49,7 @@ class RAGRetrievalService:
         top_k: int = _DEFAULT_TOP_K,
         *,
         doc_type_filter: str | None = None,
+        include_local_only: bool = False,
     ) -> list[RetrievedChunk]:
         """Return up to top_k chunks fused from vector + BM25 search.
 
@@ -72,6 +73,8 @@ class RAGRetrievalService:
         for (doc_id, chunk_index), score in fused:
             raw = self._raw.get_chunk(doc_id, chunk_index)
             if raw is None:
+                continue
+            if not include_local_only and not raw.external_llm_context_allowed:
                 continue
             chunks.append(RetrievedChunk(
                 doc_id=doc_id,

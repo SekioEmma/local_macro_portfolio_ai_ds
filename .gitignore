@@ -12,10 +12,12 @@ data/market_history/*.sqlite3
 data/market_history/*.sqlite3-*
 data/knowledge_base.sqlite
 data/knowledge_base.sqlite-*
+data/knowledge_base
 data/knowledge_base/
 data/economic_calendar.sqlite
 data/economic_calendar.sqlite-*
 data/manual/market_data_manual.csv
+data/vector_store
 data/vector_store/
 
 outputs/reports/*

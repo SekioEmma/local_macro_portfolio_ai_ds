@@ -109,6 +109,31 @@ class ChunkTextStore:
             ).fetchall()
         return [r[0] for r in rows]
 
+    def list_chunks(self, *, external_llm_context_allowed: bool | None = None) -> list[StoredChunk]:
+        query = (
+            "SELECT doc_id, chunk_index, text, title, doc_type, source_domain, "
+            "external_llm_context_allowed FROM chunks"
+        )
+        params: tuple[int, ...] = ()
+        if external_llm_context_allowed is not None:
+            query += " WHERE external_llm_context_allowed = ?"
+            params = (int(external_llm_context_allowed),)
+        query += " ORDER BY doc_id, chunk_index"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [
+            StoredChunk(
+                doc_id=row[0],
+                chunk_index=row[1],
+                text=row[2],
+                title=row[3],
+                doc_type=row[4],
+                source_domain=row[5],
+                external_llm_context_allowed=bool(row[6]),
+            )
+            for row in rows
+        ]
+
     def _connect(self) -> sqlite3.Connection:
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self._db_path)
