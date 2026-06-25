@@ -136,6 +136,14 @@ I （可选）多 Agent 拆分   ~2 周   触发条件 §10
 
 ## 6. Phase D — RAG
 
+### D0 RAG evidence governance contracts（已完成）
+
+- `src/app_backend/services/rag_evidence_governance.py`：纯 metadata-only admission contract。
+- 不读 raw text、不 chunk、不 embed、不建 vector store、不 retrieval、不接入 AI context。
+- 不新增 network、provider、API route、CLI、scheduler、background task、automatic ingest。
+- 固定排除政策：`historical_data` / `one_shot_news` / stale 文档；`policy_doc` / `research_report` 为未来 RAG pipeline 的候选信号；`eligible` 不授权读取内容、不进入 AI context、不进入模型 prompt。
+- 详见 [`knowledge/era2_rag_evidence_governance.md`](knowledge/era2_rag_evidence_governance.md)。
+
 ### D1 Embedding
 
 - `src/llm/embedding_service.py`：默认 `BAAI/bge-small-zh-v1.5`，本地 sentence-transformers。

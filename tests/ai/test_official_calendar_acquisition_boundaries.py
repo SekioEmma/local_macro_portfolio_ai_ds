@@ -203,3 +203,178 @@ def test_main_py_no_c4b_route():
 def test_no_frontend_changes():
     app_tsx = _read("app_frontend/src/App.tsx")
     assert "calendar" not in app_tsx.lower()
+
+
+# ===========================================================================
+# C4c: Boundary source scan additions
+# ===========================================================================
+
+def test_acquisition_service_no_urllib():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "urllib" not in source
+
+
+def test_acquisition_service_no_sqlite3():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "sqlite3" not in source
+
+
+def test_acquisition_service_no_os_getenv():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "os.getenv" not in source
+    assert "os.environ" not in source
+
+
+def test_acquisition_service_no_rag_embedding_vector():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for token in ["RAG", "embedding", "vector_store", "VectorStore", "DeepSeek", "deepseek", "Tavily", "tavily"]:
+        assert token not in source, f"{token!r} found in acquisition service"
+
+
+def test_acquisition_service_no_provider_payload_import():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for token in ["knowledge_base", "FetchedOfficialCalendarPayload", "SearchResult"]:
+        assert token not in source, f"{token!r} found in acquisition service"
+
+
+def test_summary_no_new_forbidden_fields():
+    from dataclasses import fields as dc_fields
+    from app_backend.services.official_calendar_acquisition_service import OfficialCalendarAcquisitionSummary
+    names = {f.name for f in dc_fields(OfficialCalendarAcquisitionSummary)}
+    forbidden = {"url", "body", "raw_payload", "headers", "db_path", "exception", "traceback", "raw_body"}
+    overlap = names & forbidden
+    assert not overlap, f"Forbidden fields found: {overlap}"
+
+
+def test_sources_still_only_bls_and_bea():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert '"bls"' in source
+    assert '"bea"' in source
+    # No other sources silently added
+    for forbidden_source in ['"fred"', '"fomc"', '"fed"', '"imf"', '"wsj"']:
+        assert forbidden_source not in source, f"{forbidden_source} found in acquisition service"
+
+
+def test_fomc_still_in_unavailable_not_transport():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "fomc_statement" in source
+    # Must be in unavailable list, not a new fetch path
+    assert "federalreserve" not in source.lower()
+    assert "fomc_transport" not in source
+
+
+def test_no_new_api_route_in_main():
+    source = _read("src/app_backend/main.py")
+    assert "acquisition" not in source.lower()
+    assert "c4c" not in source.lower()
+
+
+def test_no_scheduler_or_background_in_acquisition():
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for token in ["schedule", "cron", "background", "daemon", "asyncio", "threading"]:
+        assert token not in source.lower(), f"{token!r} found in acquisition service"
+
+
+# ===========================================================================
+# C4e: Exception-total boundary source scan
+# ===========================================================================
+
+
+def test_c4e_acquisition_service_does_not_catch_base_exception():
+    """The acquisition service must never catch BaseException — only Exception."""
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "BaseException" not in source
+
+
+def test_c4e_validate_mutation_counts_helper_present():
+    """The C4e writer-count normalizer must be present and exported under its new name."""
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "_validate_mutation_counts" in source
+
+
+def test_c4e_legacy_validate_mutation_result_removed():
+    """The legacy bool-returning helper must be replaced by the count-returning normalizer."""
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "def _validate_mutation_result" not in source
+
+
+def test_c4e_success_summary_uses_captured_counts_not_mutation_attrs():
+    """The success summary must not re-access mutation.* attributes after validation."""
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for forbidden in [
+        "mutation.event_count",
+        "mutation.created_count",
+        "mutation.updated_count",
+    ]:
+        assert forbidden not in source, (
+            f"{forbidden!r} found in acquisition service — success summary "
+            "must use only the helper-returned primitive counts (C4e TOCTOU)."
+        )
+
+
+def test_c4e_payload_strict_builtin_str_for_content_type_and_body():
+    """Content type and body must be checked with exact `type() is str`, not isinstance,
+    so str subclasses cannot override .split / .strip / .lower / .encode."""
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "type(content_type) is not str" in source
+    assert "type(body) is not str" in source
+
+
+def test_c4e_mutation_result_exact_type_check():
+    """The mutation-count helper must use exact-type check, not isinstance, so
+    subclasses cannot override attribute access."""
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    assert "type(result) is not EconomicCalendarMutationResult" in source
+
+
+def test_c4e_acquisition_service_no_new_forbidden_imports():
+    """No new network / persistence / AI / search imports may sneak in via C4e."""
+    source = _read("src/app_backend/services/official_calendar_acquisition_service.py")
+    for token in [
+        "httpx",
+        "requests",
+        "aiohttp",
+        "urllib",
+        "sqlite3",
+        "os.getenv",
+        "os.environ",
+        "Tavily",
+        "tavily",
+        "DeepSeek",
+        "deepseek",
+        "RAG",
+        "embedding",
+        "VectorStore",
+        "vector_store",
+        "FastAPI",
+        "APIRouter",
+        "scheduler",
+        "background",
+    ]:
+        assert token not in source, f"{token!r} found in acquisition service"
+
+
+def test_c4e_public_summary_repr_clean_of_secrets():
+    """The summary dataclass must expose no field that could carry raw payload,
+    URL, exception, traceback, or DB path."""
+    from dataclasses import fields as dc_fields
+
+    from app_backend.services.official_calendar_acquisition_service import (
+        OfficialCalendarAcquisitionSummary,
+    )
+
+    names = {f.name for f in dc_fields(OfficialCalendarAcquisitionSummary)}
+    forbidden = {
+        "url",
+        "raw_body",
+        "raw_payload",
+        "headers",
+        "response",
+        "db_path",
+        "exception",
+        "traceback",
+        "stack",
+        "body",
+        "payload",
+    }
+    assert not names & forbidden

@@ -16,6 +16,7 @@ data/knowledge_base/
 data/economic_calendar.sqlite
 data/economic_calendar.sqlite-*
 data/manual/market_data_manual.csv
+data/vector_store/
 
 outputs/reports/*
 outputs/analyst_memos/*

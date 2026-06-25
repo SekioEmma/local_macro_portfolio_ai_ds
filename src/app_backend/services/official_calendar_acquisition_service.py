@@ -9,6 +9,7 @@ from app_backend.services.economic_calendar_contracts import (
     EconomicCalendarEventInput,
 )
 from app_backend.services.economic_calendar_service import (
+    EconomicCalendarMutationResult,
     EconomicCalendarService,
 )
 from app_backend.services.official_calendar_parsers import (
@@ -21,6 +22,12 @@ _ET = ZoneInfo("America/New_York")
 _ALLOWED_SOURCES = frozenset(("bls", "bea"))
 _MAX_WINDOW_DAYS = 366
 _UNAVAILABLE_EVENT_KEYS = ("fomc_statement",)
+_MAX_PAYLOAD_BYTES = 1_048_576  # 1 MiB
+
+_EXPECTED_CONTENT_TYPES: dict[str, str] = {
+    "bls": "text/calendar",
+    "bea": "application/json",
+}
 
 
 class _TransportProtocol(Protocol):
@@ -98,27 +105,37 @@ class OfficialCalendarAcquisitionService:
 
         for source_key in validated_sources:
             try:
-                payload = transport.fetch(_source_enum(source_key))
+                raw_payload = transport.fetch(_source_enum(source_key))
             except Exception:
                 error_codes.append("fetch_failed")
                 break
             try:
+                body = _validate_transport_payload(raw_payload, source_key)
+            except Exception:
+                body = None
+            if body is None:
+                error_codes.append("invalid_response")
+                break
+            try:
                 if source_key == "bls":
                     events = parse_bls_calendar_ics(
-                        payload.body,
+                        body,
                         resolved_start,
                         resolved_end,
                         ingested_at,
                     )
                 else:
                     events = parse_bea_release_dates_json(
-                        payload.body,
+                        body,
                         resolved_start,
                         resolved_end,
                         ingested_at,
                     )
             except OfficialCalendarParseError as exc:
                 error_codes.append(exc.code)
+                break
+            except Exception:
+                error_codes.append("invalid_response")
                 break
             all_events.extend(events)
         else:
@@ -162,17 +179,11 @@ class OfficialCalendarAcquisitionService:
                 error_codes=["write_failed"],
             )
 
-        if mutation.event_count != len(all_events):
-            return OfficialCalendarAcquisitionSummary(
-                status="blocked",
-                live=live,
-                write=write,
-                selected_sources=validated_sources,
-                start_date=resolved_start,
-                end_date=resolved_end,
-                error_codes=["write_failed"],
-            )
-        if mutation.created_count + mutation.updated_count != mutation.event_count:
+        try:
+            counts = _validate_mutation_counts(mutation, len(all_events))
+        except Exception:
+            counts = None
+        if counts is None:
             return OfficialCalendarAcquisitionSummary(
                 status="blocked",
                 live=live,
@@ -183,6 +194,7 @@ class OfficialCalendarAcquisitionService:
                 error_codes=["write_failed"],
             )
 
+        event_count, created_count, updated_count = counts
         return OfficialCalendarAcquisitionSummary(
             status="ok",
             live=live,
@@ -190,10 +202,10 @@ class OfficialCalendarAcquisitionService:
             selected_sources=validated_sources,
             start_date=resolved_start,
             end_date=resolved_end,
-            event_count=mutation.event_count,
+            event_count=event_count,
             event_key_counts=key_counts,
-            created_count=mutation.created_count,
-            updated_count=mutation.updated_count,
+            created_count=created_count,
+            updated_count=updated_count,
         )
 
     def _validate_sources(self, source_keys: tuple[str, ...]) -> tuple[str, ...]:
@@ -247,6 +259,89 @@ def build_default_official_calendar_acquisition_service() -> OfficialCalendarAcq
         transport_factory=OfficialCalendarRealTransport,
         calendar_service=EconomicCalendarService(),
     )
+
+
+def _validate_transport_payload(payload: object, expected_source: str) -> str | None:
+    """Return body string if payload passes all boundary checks, None otherwise.
+
+    Exception-total: any failure raised while reading attributes, normalising the
+    source, inspecting MIME parts, or encoding the body is swallowed and treated
+    as an invalid payload. Never raises ``Exception``. System-level exits propagate.
+    """
+    if payload is None:
+        return None
+    try:
+        raw_source = payload.source  # type: ignore[union-attr]
+        content_type = payload.content_type  # type: ignore[union-attr]
+        body = payload.body  # type: ignore[union-attr]
+
+        # Normalise source: accept enum (.value) or plain built-in str.
+        source_str = raw_source.value if hasattr(raw_source, "value") else raw_source
+        if type(source_str) is not str:
+            return None
+        if source_str != expected_source:
+            return None
+
+        # Validate content type: must be exact built-in str so .split / .strip /
+        # .lower cannot be overridden by a subclass.
+        if type(content_type) is not str:
+            return None
+        ct_base = content_type.split(";")[0].strip().lower()
+        if ct_base != _EXPECTED_CONTENT_TYPES.get(expected_source):
+            return None
+
+        # Validate body: must be exact built-in str so .encode cannot be
+        # overridden by a subclass.
+        if type(body) is not str:
+            return None
+        if "\x00" in body:
+            return None
+        encoded = body.encode("utf-8")
+        if len(encoded) > _MAX_PAYLOAD_BYTES:
+            return None
+        return body
+    except Exception:
+        return None
+
+
+def _validate_mutation_counts(
+    result: object,
+    expected_count: int,
+) -> tuple[int, int, int] | None:
+    """Return ``(event_count, created_count, updated_count)`` on success.
+
+    Exception-total: any failure raised while reading attributes from a
+    malicious or broken result object is swallowed and treated as a write
+    failure. Returns ``None`` for any validation failure. Never raises
+    ``Exception``. System-level exits propagate.
+
+    Only an exact ``EconomicCalendarMutationResult`` instance is accepted —
+    subclasses that could override attribute access are rejected.
+    """
+    if type(result) is not EconomicCalendarMutationResult:
+        return None
+    try:
+        status = result.status  # type: ignore[union-attr]
+        event_count = result.event_count  # type: ignore[union-attr]
+        created_count = result.created_count  # type: ignore[union-attr]
+        updated_count = result.updated_count  # type: ignore[union-attr]
+
+        if status != "ok":
+            return None
+        for val in (event_count, created_count, updated_count):
+            if type(val) is bool:
+                return None
+            if type(val) is not int:
+                return None
+            if val < 0:
+                return None
+        if event_count != expected_count:
+            return None
+        if created_count + updated_count != event_count:
+            return None
+        return (event_count, created_count, updated_count)
+    except Exception:
+        return None
 
 
 def _event_key_counts(events: list[EconomicCalendarEventInput]) -> dict[str, int]:
