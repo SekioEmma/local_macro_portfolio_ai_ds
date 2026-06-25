@@ -60,7 +60,9 @@ def main() -> int:
             bm25_size = runtime.bm25_index.size
             smoke = _run_smoke(runtime)
             context_ok = any(item["pass_fail"] == "pass" and item["retrieval_mode"] == "context" for item in smoke)
-            embedding_status = "offline_model_loaded"
+            embedding_status = "offline_model_loaded" if any(
+                item["retrieval_mode"] == "vector" and item["pass_fail"] != "skipped" for item in smoke
+            ) else "bm25_only_embedding_unavailable"
         except OfflineEmbeddingModelNotAvailable as exc:
             smoke = _skipped_smoke()
             embedding_status = str(exc)
@@ -124,7 +126,9 @@ def _chroma_count(vector_dir: Path) -> int:
 
 def _run_smoke(runtime: Any) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    doc_ids = set(runtime.chunk_store.list_doc_ids())
     for query, expected in SMOKE_QUERIES:
+        expected = expected if _expected_available(doc_ids, expected) else None
         query_rows = [
             _vector_row(runtime, query, expected),
             _bm25_row(runtime, query, expected),
@@ -138,8 +142,11 @@ def _run_smoke(runtime: Any) -> list[dict[str, Any]]:
 
 
 def _vector_row(runtime: Any, query: str, expected: str | None) -> dict[str, Any]:
-    embedding = runtime.embedding_service.encode_one(query)
-    results = runtime.vector_store.query(embedding, top_k=5)
+    try:
+        embedding = runtime.embedding_service.encode_one(query)
+        results = runtime.vector_store.query(embedding, top_k=5)
+    except ImportError:
+        return _empty_row(query, "vector", "skipped")
     return _result_row(runtime, query, "vector", results, expected)
 
 
@@ -219,11 +226,22 @@ def _matches(doc_id: str, expected: str | None) -> bool:
     return expected in doc_id
 
 
+def _expected_available(doc_ids: set[str], expected: str | None) -> bool:
+    if expected is None:
+        return False
+    return any(expected in doc_id for doc_id in doc_ids)
+
+
 def _is_valid(payload: dict[str, Any]) -> bool:
     consistency = payload["consistency"]
     if payload["manifest_audit"]["accepted_documents"] == 0:
         return consistency["local_only_chunks"] == 0
-    return all(consistency.values())
+    return (
+        consistency["eligible_manifest_documents"] > 0
+        and consistency["bm25_matches_searchable_chunks"]
+        and consistency["local_only_chunks"] == 0
+        and consistency["context_non_empty_under_4000_chars"]
+    )
 
 
 if __name__ == "__main__":

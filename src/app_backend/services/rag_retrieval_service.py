@@ -63,8 +63,11 @@ class RAGRetrievalService:
         if top_k < 1:
             raise ValueError("top_k must be >= 1")
 
-        query_emb = self._emb.encode_one(query)
-        vec_results = self._vs.query(query_emb, top_k=top_k * 2, doc_type_filter=doc_type_filter)
+        try:
+            query_emb = self._emb.encode_one(query)
+            vec_results = self._vs.query(query_emb, top_k=top_k * 2, doc_type_filter=doc_type_filter)
+        except ImportError:
+            vec_results = []
         bm25_results = self._bm25.query(query, top_k=top_k * 2)
 
         fused = _rrf_fuse(vec_results, bm25_results, top_k=top_k)

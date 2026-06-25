@@ -128,16 +128,21 @@ def ingest_curated_corpus(
 
     vector_root = vector_root.resolve()
 
-    if embedding_service is None:
-        from llm.embedding_service import EmbeddingService
-
-        embedding_service = EmbeddingService(offline_only=offline_only)
-        embedding_service.load()
-
     chunk_store = chunk_store or ChunkTextStore(vector_root / "chunks.sqlite")
     _guard_existing_docs(chunk_store, {doc.document_id for doc in plan.accepted})
 
-    if vector_store is None:
+    vector_enabled = True
+    if embedding_service is None:
+        try:
+            from llm.embedding_service import EmbeddingService
+
+            embedding_service = EmbeddingService(offline_only=offline_only)
+            embedding_service.load()
+        except ImportError:
+            embedding_service = None
+            vector_enabled = False
+
+    if vector_enabled and vector_store is None:
         from llm.vector_store import VectorStore
 
         vector_store = VectorStore(vector_root / "chroma")
@@ -147,20 +152,23 @@ def ingest_curated_corpus(
         text = doc.path.read_text(encoding="utf-8")
         chunks = chunk_text(text, doc_id=doc.document_id)
         chunk_store.delete_doc(doc.document_id)
-        vector_store.delete(doc.document_id)
+        if vector_enabled and vector_store is not None:
+            vector_store.delete(doc.document_id)
         if not chunks:
             continue
-        embeddings = embedding_service.encode([chunk.text for chunk in chunks])
-        for chunk, embedding in zip(chunks, embeddings):
+        embeddings = embedding_service.encode([chunk.text for chunk in chunks]) if embedding_service is not None else []
+        for index, chunk in enumerate(chunks):
             chunk_store.upsert_chunk(_stored_chunk(doc, chunk))
-            vector_store.upsert(
-                doc_id=chunk.doc_id,
-                chunk_index=chunk.chunk_index,
-                embedding=embedding,
-                metadata=_vector_metadata(doc),
-            )
+            if vector_enabled and vector_store is not None:
+                vector_store.upsert(
+                    doc_id=chunk.doc_id,
+                    chunk_index=chunk.chunk_index,
+                    embedding=embeddings[index],
+                    metadata=_vector_metadata(doc),
+                )
             written += 1
-    result = CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=written, mode="write")
+    mode = "write" if vector_enabled else "write-bm25-only"
+    result = CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=written, mode=mode)
     _write_ingest_audit(vector_root, result)
     return result
 
@@ -277,7 +285,7 @@ def _document_from_row(curated_root: Path, row: dict[str, Any]) -> CuratedDocume
 
     content = path.read_bytes()
     expected_hash = row.get("cleaned_content_sha256")
-    if not isinstance(expected_hash, str) or hashlib.sha256(content).hexdigest() != expected_hash:
+    if not isinstance(expected_hash, str) or _cleaned_content_sha256(content) != expected_hash:
         raise CuratedRAGIngestError("cleaned_content_hash_mismatch")
 
     text = content.decode("utf-8", errors="replace")
@@ -358,6 +366,11 @@ def _url_host(url: str) -> str:
 def _normal_host(host: str) -> str:
     parsed = urlparse(host if "://" in host else f"https://{host}")
     return (parsed.hostname or "").lower().strip(".")
+
+
+def _cleaned_content_sha256(content: bytes) -> str:
+    text = content.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _has_verified_local_provenance(row: dict[str, Any]) -> bool:

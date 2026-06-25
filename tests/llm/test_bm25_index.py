@@ -194,10 +194,13 @@ def test_query_ranking_order():
 
 # ---- missing rank_bm25 ----
 
-def test_missing_rank_bm25_gives_import_error(monkeypatch):
+def test_missing_rank_bm25_uses_local_fallback(monkeypatch):
     import sys
     monkeypatch.setitem(sys.modules, "rank_bm25", None)  # type: ignore[assignment]
     idx = BM25Index()
-    with pytest.raises(ImportError, match="rank-bm25"):
-        idx.build([("d", 0, "text")])
+    idx.build([("d", 0, "federal reserve policy"), ("x", 0, "equity market")])
+
+    results = idx.query("federal policy")
+
+    assert results[0].doc_id == "d"
     monkeypatch.delitem(sys.modules, "rank_bm25")

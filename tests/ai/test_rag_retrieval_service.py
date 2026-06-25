@@ -37,6 +37,11 @@ class _StubEmbedding:
         return [float(ord(c)) / 1000 for c in text[:3].ljust(3)]
 
 
+class _MissingEmbedding:
+    def encode_one(self, text: str) -> list[float]:
+        raise ImportError("embedding model unavailable")
+
+
 class _StubVectorStore:
     def __init__(self, results: list[_FakeVecResult]) -> None:
         self._results = results
@@ -67,12 +72,13 @@ def _make_svc(
     vec: list[_FakeVecResult] | None = None,
     bm25: list[_FakeBM25Result] | None = None,
     raw: dict[tuple[str, int], _FakeRawChunk] | None = None,
+    embedding_service=None,
 ) -> RAGRetrievalService:
     vec = vec or []
     bm25 = bm25 or []
     raw = raw or {}
     return RAGRetrievalService(
-        embedding_service=_StubEmbedding(),
+        embedding_service=embedding_service or _StubEmbedding(),
         vector_store=_StubVectorStore(vec),
         bm25_index=_StubBM25Index(bm25),
         raw_text_store=_StubRawStore(raw),
@@ -219,6 +225,16 @@ def test_retrieve_bm25_result_fused():
     results = svc.retrieve("keyword match")
     ids = [r.doc_id for r in results]
     assert "bm25-doc" in ids
+
+
+def test_retrieve_degrades_to_bm25_when_embedding_unavailable():
+    raw = {("bm25-doc", 0): _chunk("bm25-doc")}
+    bm25 = [_FakeBM25Result("bm25-doc", 0, 8.0)]
+    svc = _make_svc(bm25=bm25, raw=raw, embedding_service=_MissingEmbedding())
+
+    results = svc.retrieve("keyword match")
+
+    assert [r.doc_id for r in results] == ["bm25-doc"]
 
 
 def test_retrieve_filters_local_only_chunks_by_default():

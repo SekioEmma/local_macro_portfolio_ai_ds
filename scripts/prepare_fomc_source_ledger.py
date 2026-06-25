@@ -18,6 +18,13 @@ ALLOWED_FOMC_MATERIAL_TYPES = frozenset(
     }
 )
 FEDERAL_RESERVE_PUBLISHER = "Board of Governors of the Federal Reserve System"
+FOMC_ID_PREFIX_MATERIAL_TYPES = {
+    "fomc_statement_": "statement",
+    "fomc_minutes_": "minutes",
+    "fomc_projection_": "sep",
+    "fomc_implementation_": "implementation_note",
+    "fomc_longer_": "longer_run_goals",
+}
 
 
 def build_template_rows(manifest_path: Path) -> list[dict[str, Any]]:
@@ -89,7 +96,15 @@ def _template_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def _material_type(row: dict[str, Any]) -> str | None:
     value = row.get("fomc_material_type") or row.get("material_type")
-    return value if isinstance(value, str) else None
+    if isinstance(value, str):
+        return value
+    document_id = row.get("document_id")
+    if not isinstance(document_id, str):
+        return None
+    for prefix, material_type in FOMC_ID_PREFIX_MATERIAL_TYPES.items():
+        if document_id.startswith(prefix):
+            return material_type
+    return None
 
 
 def _copy_or_null(value: object) -> object:

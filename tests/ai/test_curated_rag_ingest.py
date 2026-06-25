@@ -6,11 +6,8 @@ import sys
 import types
 from pathlib import Path
 
-import pytest
-
 from app_backend.services.curated_rag_ingest import build_ingest_plan, ingest_curated_corpus
 from llm.chunk_text_store import ChunkTextStore
-from llm.embedding_service import OFFLINE_MODEL_ERROR_CODE, OfflineEmbeddingModelNotAvailable
 
 
 class _FakeEmbedding:
@@ -36,7 +33,8 @@ def _write_doc(root: Path, relpath: str, text: str) -> str:
     path = root / relpath
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    normalized = path.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def _base_row(root: Path, *, document_id: str = "fomc_statement_2026_06_17") -> dict[str, object]:
@@ -129,6 +127,23 @@ def test_cleaned_content_hash_mismatch_is_rejected(tmp_path):
 
     assert plan.accepted_document_count == 0
     assert plan.rejected_reasons["cleaned_content_hash_mismatch"] == 1
+
+
+def test_cleaned_content_hash_uses_normalized_line_endings(tmp_path):
+    text_lf = "# FOMC Statement - 2026-06-17\n\nFederal funds target range.\n"
+    text_crlf = text_lf.replace("\n", "\r\n")
+    relpath = "policy_doc/fomc_statement_2026_06_17.md"
+    row = _base_row(tmp_path)
+    path = tmp_path / relpath
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text_crlf, encoding="utf-8", newline="")
+    row["output_relpath"] = relpath
+    row["cleaned_content_sha256"] = hashlib.sha256(text_lf.encode("utf-8")).hexdigest()
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 1
 
 
 def test_canonical_url_source_domain_mismatch_is_rejected(tmp_path):
@@ -229,7 +244,7 @@ def test_write_with_zero_eligible_documents_does_not_create_vector_root(tmp_path
     assert not (vector_root / "ingest_audits").exists()
 
 
-def test_write_missing_offline_embedding_model_fails_before_index_write(tmp_path, monkeypatch):
+def test_write_missing_offline_embedding_model_writes_bm25_only_chunks(tmp_path, monkeypatch):
     row = _base_row(tmp_path)
     manifest = _manifest(tmp_path, [row])
     vector_root = tmp_path / "vector_store"
@@ -241,18 +256,19 @@ def test_write_missing_offline_embedding_model_fails_before_index_write(tmp_path
     fake_module = types.SimpleNamespace(SentenceTransformer=_FakeSentenceTransformer)
     monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
 
-    with pytest.raises(OfflineEmbeddingModelNotAvailable, match=OFFLINE_MODEL_ERROR_CODE):
-        ingest_curated_corpus(
-            curated_root=tmp_path,
-            manifest_path=manifest,
-            vector_root=vector_root,
-            write=True,
-            offline_only=True,
-        )
+    result = ingest_curated_corpus(
+        curated_root=tmp_path,
+        manifest_path=manifest,
+        vector_root=vector_root,
+        write=True,
+        offline_only=True,
+    )
 
-    assert not (vector_root / "chunks.sqlite").exists()
+    assert result.mode == "write-bm25-only"
+    assert result.written_chunk_count > 0
+    assert ChunkTextStore(vector_root / "chunks.sqlite").list_doc_ids() == ["fomc_statement_2026_06_17"]
     assert not (vector_root / "chroma").exists()
-    assert not (vector_root / "ingest_audits").exists()
+    assert (vector_root / "ingest_audits" / "last_ingest_audit.json").exists()
 
 
 def test_strict_write_blocks_when_any_manifest_record_is_rejected(tmp_path):

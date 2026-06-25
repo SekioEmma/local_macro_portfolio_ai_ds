@@ -102,6 +102,7 @@ def test_verified_fomc_statement_is_promoted_to_verified_eligible(tmp_path):
     assert derived["verified_by"] == "user"
     assert derived["cleaned_content_sha256"] == "a" * 64
     assert derived["canonical_url"] is None
+    assert derived["fomc_material_type"] == "statement"
 
 
 def test_verified_fomc_statement_with_url_is_promoted_when_url_matches_ledger(tmp_path):
@@ -122,6 +123,18 @@ def test_verified_fomc_statement_with_url_is_promoted_when_url_matches_ledger(tm
         "https://federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm"
     )
     assert result.derived_rows[0]["source_domain"] == "federalreserve.gov"
+
+
+def test_verified_fomc_projection_is_promoted_from_stable_id_when_material_field_missing(tmp_path):
+    row = _manifest_row("fomc_projection_materials_2026_06_17", material_type="sep")
+    row.pop("fomc_material_type")
+    ledger = _ledger_row("fomc_projection_materials_2026_06_17")
+
+    result = _run_builder(tmp_path, [row], [], [ledger])
+
+    assert result.audit["summary"]["promoted_documents"] == 1
+    assert result.derived_rows[0]["admission_status"] == "verified"
+    assert result.derived_rows[0]["fomc_material_type"] == "sep"
 
 
 def test_missing_source_ledger_keeps_partial_hold(tmp_path):

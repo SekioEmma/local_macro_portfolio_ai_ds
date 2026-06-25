@@ -71,6 +71,19 @@ def test_template_contains_only_fomc_policy_candidates_and_pending_fields(tmp_pa
     assert {row["verification_basis"] for row in rows} == {None}
 
 
+def test_template_maps_curator_fomc_id_prefix_when_material_field_is_missing(tmp_path):
+    module = _load_module()
+    manifest = tmp_path / "rag_manifest.jsonl"
+    row = _manifest_row("fomc_projection_materials_2026_06_17", material_type="sep")
+    row.pop("fomc_material_type")
+    _write_jsonl(manifest, [row])
+
+    rows = module.build_template_rows(manifest)
+
+    assert len(rows) == 1
+    assert rows[0]["material_type"] == "sep"
+
+
 def test_template_writes_deterministic_jsonl_without_manifest_body(tmp_path):
     module = _load_module()
     manifest = tmp_path / "rag_manifest.jsonl"

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import math
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -134,8 +136,38 @@ def _tokenize(text: str) -> list[str]:
 def _default_bm25_factory(tokenized_corpus: list[list[str]]) -> Any:
     try:
         from rank_bm25 import BM25Okapi  # type: ignore[import-untyped]
-    except ImportError as exc:
-        raise ImportError(
-            "rank-bm25 is not installed. Run: pip install rank-bm25"
-        ) from exc
+    except ImportError:
+        return _SimpleBM25(tokenized_corpus)
     return BM25Okapi(tokenized_corpus)
+
+
+class _SimpleBM25:
+    def __init__(self, tokenized_corpus: list[list[str]], *, k1: float = 1.5, b: float = 0.75) -> None:
+        self._k1 = k1
+        self._b = b
+        self._doc_freqs = [Counter(doc) for doc in tokenized_corpus]
+        self._doc_lens = [len(doc) for doc in tokenized_corpus]
+        self._avgdl = sum(self._doc_lens) / len(self._doc_lens) if self._doc_lens else 0.0
+        doc_occurrence: Counter[str] = Counter()
+        for doc in tokenized_corpus:
+            doc_occurrence.update(set(doc))
+        doc_count = len(tokenized_corpus)
+        self._idf = {
+            term: math.log(1 + (doc_count - freq + 0.5) / (freq + 0.5))
+            for term, freq in doc_occurrence.items()
+        }
+
+    def get_scores(self, query_tokens: list[str]) -> list[float]:
+        scores: list[float] = []
+        for freqs, doc_len in zip(self._doc_freqs, self._doc_lens):
+            score = 0.0
+            norm = self._k1 * (1 - self._b + self._b * (doc_len / self._avgdl)) if self._avgdl else self._k1
+            for token in query_tokens:
+                freq = freqs.get(token, 0)
+                if not freq:
+                    continue
+                numerator = freq * (self._k1 + 1)
+                denominator = freq + norm
+                score += self._idf.get(token, 0.0) * numerator / denominator
+            scores.append(score)
+        return scores

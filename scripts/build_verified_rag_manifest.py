@@ -21,6 +21,13 @@ ALLOWED_FOMC_MATERIAL_TYPES = frozenset(
 )
 FEDERAL_RESERVE_PUBLISHER = "Board of Governors of the Federal Reserve System"
 FEDERAL_RESERVE_DOMAIN = "federalreserve.gov"
+FOMC_ID_PREFIX_MATERIAL_TYPES = {
+    "fomc_statement_": "statement",
+    "fomc_minutes_": "minutes",
+    "fomc_projection_": "sep",
+    "fomc_implementation_": "implementation_note",
+    "fomc_longer_": "longer_run_goals",
+}
 HARD_ERROR_REASONS = frozenset(
     {
         "duplicate_document_id",
@@ -211,6 +218,7 @@ def _derive_manifest_row(
         derived["source_domain"] = None
     derived["provenance_status"] = "verified"
     derived["ingest_status"] = "eligible"
+    derived["fomc_material_type"] = _material_type(row, ledger)
     derived["admission_source"] = "source_ledger"
     derived["admission_status"] = "verified"
     derived["admission_reason"] = "verified_fomc_policy_doc"
@@ -223,6 +231,7 @@ def _derive_manifest_row(
         (
             "provenance_status",
             "ingest_status",
+            "fomc_material_type",
             "admission_status",
         ),
     )
@@ -318,7 +327,15 @@ def _material_type(row: dict[str, Any], ledger: dict[str, Any]) -> str | None:
         or ledger.get("fomc_material_type")
         or ledger.get("material_type")
     )
-    return value if isinstance(value, str) else None
+    if isinstance(value, str):
+        return value
+    document_id = row.get("document_id")
+    if not isinstance(document_id, str):
+        return None
+    for prefix, material_type in FOMC_ID_PREFIX_MATERIAL_TYPES.items():
+        if document_id.startswith(prefix):
+            return material_type
+    return None
 
 
 def _coalesce_text(*values: object) -> str | None:
