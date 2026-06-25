@@ -144,3 +144,36 @@ def test_seed_manifest_dry_run_uses_stable_manifest_document_id(tmp_path, capsys
     assert result["written"] == 0
     assert "doc_id=fomc_statement_2026_06_17" in captured.out
     assert "doc_type=policy_doc" in captured.out
+
+
+def test_seed_scan_dir_falls_back_to_bm25_only_when_vector_unavailable(
+    tmp_path, capsys, monkeypatch
+):
+    seed_module = _load_seed_module()
+    scan_dir = tmp_path / "memo"
+    scan_dir.mkdir()
+    (scan_dir / "research_report_x.md").write_text(
+        "# Research Report X\nGlobal outlook commentary text.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(seed_module, "_CHUNK_TEXT_DB", tmp_path / "vector_store" / "chunks.sqlite")
+
+    import sys
+    monkeypatch.setitem(sys.modules, "sentence_transformers", None)
+
+    result = seed_module.seed(
+        scan_dir=scan_dir,
+        vector_dir=tmp_path / "vector_store",
+        doc_type="research_report",
+        write=True,
+    )
+
+    captured = capsys.readouterr()
+    assert result["files"] == 1
+    assert result["chunks"] >= 1
+    assert result["written"] == result["chunks"]
+    assert "write-bm25-only" in captured.out
+    from llm.chunk_text_store import ChunkTextStore
+    store = ChunkTextStore(tmp_path / "vector_store" / "chunks.sqlite")
+    assert store.count() == result["written"]
+    assert not (tmp_path / "vector_store" / "chroma").exists()

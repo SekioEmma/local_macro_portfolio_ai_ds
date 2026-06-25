@@ -173,19 +173,21 @@ def seed(
 
     chunk_store = ChunkTextStore(_CHUNK_TEXT_DB) if write else None
 
+    vs = None
+    emb_svc = None
+    vector_enabled = False
     if write:
         try:
             from llm.vector_store import VectorStore
             from llm.embedding_service import EmbeddingService
+            emb_svc_candidate = EmbeddingService()
+            emb_svc_candidate.load()
             vs = VectorStore(vector_dir)
-            emb_svc = EmbeddingService()
+            emb_svc = emb_svc_candidate
+            vector_enabled = True
         except ImportError as exc:
-            print(f"[error] Missing dependency: {exc}")
-            print("Install with: pip install sentence-transformers chromadb")
-            sys.exit(1)
-    else:
-        vs = None
-        emb_svc = None
+            if verbose:
+                print(f"[warn] vector store unavailable ({exc}); writing BM25-only chunks")
 
     total_chunks = 0
     total_written = 0
@@ -200,30 +202,32 @@ def seed(
 
         if verbose:
             llm_flag = "llm=yes" if document.external_llm_context_allowed else "llm=no(local-only)"
-            mode = "[dry-run]" if not write else "[write]"
+            mode_label = "[dry-run]" if not write else ("[write]" if vector_enabled else "[write-bm25-only]")
             print(
-                f"  {mode} {fpath.name} -> {len(chunks)} chunks  "
+                f"  {mode_label} {fpath.name} -> {len(chunks)} chunks  "
                 f"doc_id={document.doc_id}  doc_type={document.doc_type}  {llm_flag}"
             )
 
-        if write and chunk_store is not None and vs is not None and emb_svc is not None:
-            texts = [c.text for c in chunks]
-            embeddings = emb_svc.encode(texts)
-            for chunk, embedding in zip(chunks, embeddings):
-                stored = StoredChunk(
-                    doc_id=chunk.doc_id,
-                    chunk_index=chunk.chunk_index,
-                    text=chunk.text,
-                    title=title,
-                    doc_type=document.doc_type,
-                    source_domain=source_domain,
-                    external_llm_context_allowed=document.external_llm_context_allowed,
-                )
-                chunk_store.upsert_chunk(stored)
+        if not write or chunk_store is None or not chunks:
+            continue
+
+        embeddings = emb_svc.encode([c.text for c in chunks]) if vector_enabled else []
+        for index, chunk in enumerate(chunks):
+            stored = StoredChunk(
+                doc_id=chunk.doc_id,
+                chunk_index=chunk.chunk_index,
+                text=chunk.text,
+                title=title,
+                doc_type=document.doc_type,
+                source_domain=source_domain,
+                external_llm_context_allowed=document.external_llm_context_allowed,
+            )
+            chunk_store.upsert_chunk(stored)
+            if vector_enabled and vs is not None:
                 vs.upsert(
                     doc_id=chunk.doc_id,
                     chunk_index=chunk.chunk_index,
-                    embedding=embedding,
+                    embedding=embeddings[index],
                     metadata={
                         "title": title,
                         "doc_type": document.doc_type,
@@ -231,7 +235,7 @@ def seed(
                         "external_llm_context_allowed": document.external_llm_context_allowed,
                     },
                 )
-                total_written += 1
+            total_written += 1
 
     if verbose:
         print(f"\nSummary: {len(documents)} file(s), {total_chunks} chunk(s), {total_written} written.")
