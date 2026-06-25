@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections import Counter
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -15,7 +16,8 @@ from llm.document_chunker import Chunk, chunk_text
 ALLOWED_RUNTIME_DOC_TYPES = frozenset({"policy_doc", "research_report"})
 ALLOWED_CONTENT_COHORTS = frozenset({"policy_doc", "research_report"})
 READABLE_COHORTS = frozenset({"policy_doc", "research_report", "pending_governance", "review_required"})
-DEFAULT_VECTOR_DIR = Path(__file__).resolve().parents[3] / "data" / "vector_store"
+DEFAULT_VECTOR_ROOT = Path(__file__).resolve().parents[3] / "data" / "vector_store"
+DEFAULT_VECTOR_DIR = DEFAULT_VECTOR_ROOT
 
 
 class CuratedRAGIngestError(RuntimeError):
@@ -103,32 +105,42 @@ def ingest_curated_corpus(
     *,
     curated_root: Path,
     manifest_path: Path,
-    vector_dir: Path = DEFAULT_VECTOR_DIR,
     write: bool,
+    vector_root: Path = DEFAULT_VECTOR_ROOT,
+    vector_dir: Path | None = None,
+    offline_only: bool = True,
+    strict: bool = False,
     embedding_service: Any | None = None,
     vector_store: Any | None = None,
     chunk_store: ChunkTextStore | None = None,
 ) -> CuratedIngestResult:
+    if vector_dir is not None:
+        vector_root = vector_dir
     plan = build_ingest_plan(curated_root, manifest_path)
     chunk_count = sum(len(chunk_text(doc.path.read_text(encoding="utf-8"), doc_id=doc.document_id)) for doc in plan.accepted)
 
     if not write:
         return CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=0, mode="dry-run")
     if not plan.accepted:
-        return CuratedIngestResult(plan=plan, chunk_count=0, written_chunk_count=0, mode="write-noop")
+        return CuratedIngestResult(plan=plan, chunk_count=0, written_chunk_count=0, mode="blocked-no-eligible")
+    if strict and plan.rejected_reasons:
+        return CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=0, mode="blocked-rejected-records")
 
-    vector_dir = vector_dir.resolve()
-    chunk_store = chunk_store or ChunkTextStore(vector_dir / "chunks.sqlite")
+    vector_root = vector_root.resolve()
+
+    if embedding_service is None:
+        from llm.embedding_service import EmbeddingService
+
+        embedding_service = EmbeddingService(offline_only=offline_only)
+        embedding_service.load()
+
+    chunk_store = chunk_store or ChunkTextStore(vector_root / "chunks.sqlite")
     _guard_existing_docs(chunk_store, {doc.document_id for doc in plan.accepted})
 
     if vector_store is None:
         from llm.vector_store import VectorStore
 
-        vector_store = VectorStore(vector_dir)
-    if embedding_service is None:
-        from llm.embedding_service import EmbeddingService
-
-        embedding_service = EmbeddingService()
+        vector_store = VectorStore(vector_root / "chroma")
 
     written = 0
     for doc in plan.accepted:
@@ -148,7 +160,9 @@ def ingest_curated_corpus(
                 metadata=_vector_metadata(doc),
             )
             written += 1
-    return CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=written, mode="write")
+    result = CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=written, mode="write")
+    _write_ingest_audit(vector_root, result)
+    return result
 
 
 def summarize_plan(plan: CuratedIngestPlan) -> dict[str, Any]:
@@ -163,11 +177,32 @@ def summarize_plan(plan: CuratedIngestPlan) -> dict[str, Any]:
     }
 
 
+def summarize_result(result: CuratedIngestResult) -> dict[str, Any]:
+    payload = summarize_plan(result.plan)
+    payload.update({
+        "mode": result.mode,
+        "candidate_chunks": result.chunk_count,
+        "written_chunks": result.written_chunk_count,
+    })
+    return payload
+
+
+def _write_ingest_audit(vector_root: Path, result: CuratedIngestResult) -> None:
+    audit_dir = vector_root / "ingest_audits"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    payload = summarize_result(result)
+    payload["created_at_utc"] = datetime.now(UTC).isoformat()
+    (audit_dir / "last_ingest_audit.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _validate_manifest_location(curated_root: Path, manifest_path: Path) -> None:
     expected_parent = curated_root / "metadata"
     if manifest_path.parent != expected_parent:
         raise CuratedRAGIngestError("manifest_outside_curated_metadata")
-    if manifest_path.name != "rag_manifest.jsonl":
+    if manifest_path.suffix != ".jsonl":
         raise CuratedRAGIngestError("unexpected_manifest_name")
 
 
@@ -322,4 +357,3 @@ def _url_host(url: str) -> str:
 def _normal_host(host: str) -> str:
     parsed = urlparse(host if "://" in host else f"https://{host}")
     return (parsed.hostname or "").lower().strip(".")
-

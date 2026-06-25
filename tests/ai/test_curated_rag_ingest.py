@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
+import types
 from pathlib import Path
+
+import pytest
 
 from app_backend.services.curated_rag_ingest import build_ingest_plan, ingest_curated_corpus
 from llm.chunk_text_store import ChunkTextStore
+from llm.embedding_service import OFFLINE_MODEL_ERROR_CODE, OfflineEmbeddingModelNotAvailable
 
 
 class _FakeEmbedding:
@@ -57,17 +62,17 @@ def _base_row(root: Path, *, document_id: str = "fomc_statement_2026_06_17") -> 
     }
 
 
-def _manifest(root: Path, rows: list[dict[str, object]]) -> Path:
+def _manifest(root: Path, rows: list[dict[str, object]], name: str = "rag_manifest.jsonl") -> Path:
     metadata = root / "metadata"
     metadata.mkdir(parents=True, exist_ok=True)
-    path = metadata / "rag_manifest.jsonl"
+    path = metadata / name
     path.write_text("\n".join(json.dumps(row, sort_keys=True) for row in rows), encoding="utf-8")
     return path
 
 
 def test_eligible_manifest_document_can_be_planned(tmp_path):
     row = _base_row(tmp_path)
-    manifest = _manifest(tmp_path, [row])
+    manifest = _manifest(tmp_path, [row], name="derived_manifest.jsonl")
 
     plan = build_ingest_plan(tmp_path, manifest)
 
@@ -183,6 +188,81 @@ def test_dry_run_does_not_write_chunk_store_or_vector_store(tmp_path):
     assert vector.upserts == []
 
 
+def test_write_with_zero_eligible_documents_does_not_create_vector_root(tmp_path):
+    row = _base_row(tmp_path)
+    row["canonical_url"] = None
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+
+    result = ingest_curated_corpus(
+        curated_root=tmp_path,
+        manifest_path=manifest,
+        vector_root=vector_root,
+        write=True,
+        embedding_service=_FakeEmbedding(),
+        vector_store=_FakeVectorStore(),
+        chunk_store=ChunkTextStore(vector_root / "chunks.sqlite"),
+    )
+
+    assert result.mode == "blocked-no-eligible"
+    assert result.written_chunk_count == 0
+    assert not (vector_root / "chunks.sqlite").exists()
+    assert not (vector_root / "ingest_audits").exists()
+
+
+def test_write_missing_offline_embedding_model_fails_before_index_write(tmp_path, monkeypatch):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+
+    class _FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, local_files_only: bool = False) -> None:
+            raise OSError("not cached")
+
+    fake_module = types.SimpleNamespace(SentenceTransformer=_FakeSentenceTransformer)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    with pytest.raises(OfflineEmbeddingModelNotAvailable, match=OFFLINE_MODEL_ERROR_CODE):
+        ingest_curated_corpus(
+            curated_root=tmp_path,
+            manifest_path=manifest,
+            vector_root=vector_root,
+            write=True,
+            offline_only=True,
+        )
+
+    assert not (vector_root / "chunks.sqlite").exists()
+    assert not (vector_root / "chroma").exists()
+    assert not (vector_root / "ingest_audits").exists()
+
+
+def test_strict_write_blocks_when_any_manifest_record_is_rejected(tmp_path):
+    good = _base_row(tmp_path)
+    bad = _base_row(tmp_path, document_id="bad_doc")
+    bad["runtime_doc_type"] = "historical_data"
+    bad["output_relpath"] = "policy_doc/bad_doc.md"
+    bad["cleaned_content_sha256"] = _write_doc(tmp_path, "policy_doc/bad_doc.md", "# Bad\n\nBody")
+    manifest = _manifest(tmp_path, [good, bad])
+    vector_root = tmp_path / "vector_store"
+
+    result = ingest_curated_corpus(
+        curated_root=tmp_path,
+        manifest_path=manifest,
+        vector_root=vector_root,
+        write=True,
+        strict=True,
+        embedding_service=_FakeEmbedding(),
+        vector_store=_FakeVectorStore(),
+        chunk_store=ChunkTextStore(vector_root / "chunks.sqlite"),
+    )
+
+    assert result.mode == "blocked-rejected-records"
+    assert result.written_chunk_count == 0
+    assert result.plan.accepted_document_count == 1
+    assert result.plan.rejected_reasons["invalid_runtime_doc_type"] == 1
+    assert not (vector_root / "chunks.sqlite").exists()
+
+
 def test_write_is_idempotent_for_same_manifest(tmp_path):
     row = _base_row(tmp_path)
     manifest = _manifest(tmp_path, [row])
@@ -210,3 +290,4 @@ def test_write_is_idempotent_for_same_manifest(tmp_path):
 
     assert first.written_chunk_count == second.written_chunk_count == chunk_store.count()
     assert chunk_store.list_doc_ids() == ["fomc_statement_2026_06_17"]
+    assert (tmp_path / "vector_store" / "ingest_audits" / "last_ingest_audit.json").exists()

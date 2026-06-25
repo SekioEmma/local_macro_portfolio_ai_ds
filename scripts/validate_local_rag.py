@@ -12,13 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from app_backend.services.curated_rag_ingest import (  # noqa: E402
-    DEFAULT_VECTOR_DIR,
+    DEFAULT_VECTOR_ROOT,
     build_ingest_plan,
     summarize_plan,
 )
 from app_backend.services.local_rag_runtime_factory import build_local_rag_runtime  # noqa: E402
 from app_backend.services.rag_context_builder import build_rag_context  # noqa: E402
 from llm.chunk_text_store import ChunkTextStore  # noqa: E402
+from llm.embedding_service import OfflineEmbeddingModelNotAvailable  # noqa: E402
 
 
 SMOKE_QUERIES = [
@@ -33,30 +34,48 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate local governed RAG indexes without network or LLM calls.")
     parser.add_argument("--curated-root", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--vector-dir", type=Path, default=DEFAULT_VECTOR_DIR)
+    parser.add_argument("--vector-root", type=Path, default=DEFAULT_VECTOR_ROOT)
+    parser.add_argument("--vector-dir", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    plan = build_ingest_plan(args.curated_root, args.manifest)
-    vector_dir = args.vector_dir.resolve()
-    chunk_db = vector_dir / "chunks.sqlite"
+    try:
+        plan = build_ingest_plan(args.curated_root, args.manifest)
+    except FileNotFoundError as exc:
+        print(json.dumps({"status": "blocked", "reason": str(exc)}, ensure_ascii=False, sort_keys=True))
+        return 2
+    vector_root = (args.vector_dir or args.vector_root).resolve()
+    chunk_db = vector_root / "chunks.sqlite"
     chunk_count = _chunk_count(chunk_db)
     local_only_chunk_count = _local_only_chunk_count(chunk_db)
     doc_count = _doc_count(chunk_db)
-    chroma_count = _chroma_count(vector_dir) if chunk_count else 0
+    chroma_count = _chroma_count(vector_root / "chroma") if chunk_count else 0
 
     bm25_size = 0
     smoke: list[dict[str, Any]] = []
     context_ok = False
+    embedding_status = "not_loaded"
     if plan.accepted_document_count and chunk_count:
-        runtime = build_local_rag_runtime(vector_dir)
-        bm25_size = runtime.bm25_index.size
-        smoke = _run_smoke(runtime)
-        context_ok = any(item["pass_fail"] == "pass" and item["retrieval_mode"] == "context" for item in smoke)
+        try:
+            runtime = build_local_rag_runtime(vector_root, offline_only=True)
+            bm25_size = runtime.bm25_index.size
+            smoke = _run_smoke(runtime)
+            context_ok = any(item["pass_fail"] == "pass" and item["retrieval_mode"] == "context" for item in smoke)
+            embedding_status = "offline_model_loaded"
+        except OfflineEmbeddingModelNotAvailable as exc:
+            smoke = _skipped_smoke()
+            embedding_status = str(exc)
     else:
         smoke = _skipped_smoke()
 
     payload = {
         "manifest_audit": summarize_plan(plan),
+        "eligible_document_count": plan.accepted_document_count,
+        "indexed_document_count": doc_count,
+        "chunk_store_count": chunk_count,
+        "rejected_count_by_reason": dict(sorted(plan.rejected_reasons.items())),
+        "external_llm_denied_chunk_count": local_only_chunk_count,
+        "context_builder_status": "ok" if context_ok else "skipped_or_empty",
+        "offline_embedding_status": embedding_status,
         "stored_document_count": doc_count,
         "stored_chunk_count": chunk_count,
         "chroma_chunk_count": chroma_count,
@@ -209,4 +228,3 @@ def _is_valid(payload: dict[str, Any]) -> bool:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -5,6 +5,11 @@ from typing import Protocol, runtime_checkable
 
 DEFAULT_MODEL = "BAAI/bge-small-zh-v1.5"
 EMBEDDING_DIM = 384
+OFFLINE_MODEL_ERROR_CODE = "embedding_model_not_available_offline"
+
+
+class OfflineEmbeddingModelNotAvailable(ImportError):
+    pass
 
 
 @runtime_checkable
@@ -32,9 +37,11 @@ class EmbeddingService:
         model_name: str = DEFAULT_MODEL,
         *,
         _model: EmbeddingModel | None = None,
+        offline_only: bool = False,
     ) -> None:
         self._model_name = model_name
         self._model: EmbeddingModel | None = _model
+        self._offline_only = offline_only
 
     # ------------------------------------------------------------------
     # Public API
@@ -43,7 +50,7 @@ class EmbeddingService:
     def load(self) -> None:
         """Explicitly load the model into memory (idempotent)."""
         if self._model is None:
-            self._model = _load_sentence_transformer(self._model_name)
+            self._model = _load_sentence_transformer(self._model_name, offline_only=self._offline_only)
 
     def encode(self, texts: list[str]) -> list[list[float]]:
         """Return one embedding vector per input text.
@@ -83,7 +90,7 @@ class EmbeddingService:
 # Internal helpers
 # ------------------------------------------------------------------
 
-def _load_sentence_transformer(model_name: str) -> EmbeddingModel:
+def _load_sentence_transformer(model_name: str, *, offline_only: bool = False) -> EmbeddingModel:
     try:
         from sentence_transformers import SentenceTransformer  # type: ignore[import-untyped]
     except ImportError as exc:
@@ -91,7 +98,12 @@ def _load_sentence_transformer(model_name: str) -> EmbeddingModel:
             "sentence-transformers is not installed. "
             "Run: pip install sentence-transformers"
         ) from exc
-    return SentenceTransformer(model_name)  # type: ignore[return-value]
+    if not offline_only:
+        return SentenceTransformer(model_name)  # type: ignore[return-value]
+    try:
+        return SentenceTransformer(model_name, local_files_only=True)  # type: ignore[return-value]
+    except Exception as exc:
+        raise OfflineEmbeddingModelNotAvailable(OFFLINE_MODEL_ERROR_CODE) from exc
 
 
 def _to_float_list(raw: object) -> list[list[float]]:

@@ -11,7 +11,8 @@ from llm.embedding_service import EmbeddingService
 from llm.vector_store import VectorStore
 
 
-DEFAULT_VECTOR_DIR = Path(__file__).resolve().parents[3] / "data" / "vector_store"
+DEFAULT_VECTOR_ROOT = Path(__file__).resolve().parents[3] / "data" / "vector_store"
+DEFAULT_VECTOR_DIR = DEFAULT_VECTOR_ROOT
 
 
 @dataclass(frozen=True)
@@ -25,19 +26,20 @@ class LocalRAGRuntime:
 
 
 def build_local_rag_runtime(
-    vector_dir: Path = DEFAULT_VECTOR_DIR,
+    vector_root: Path = DEFAULT_VECTOR_ROOT,
     *,
     _bm25_factory: Any = None,
+    offline_only: bool = True,
 ) -> LocalRAGRuntime:
-    vector_dir = vector_dir.resolve()
-    chunk_store = ChunkTextStore(vector_dir / "chunks.sqlite")
+    vector_root = vector_root.resolve()
+    chunk_store = ChunkTextStore(vector_root / "chunks.sqlite")
     chunks = chunk_store.list_chunks(external_llm_context_allowed=True)
 
     bm25_index = BM25Index(_bm25_factory=_bm25_factory)
     bm25_index.build([(chunk.doc_id, chunk.chunk_index, chunk.text) for chunk in chunks])
 
-    embedding_service = EmbeddingService()
-    vector_store = VectorStore(vector_dir)
+    embedding_service = EmbeddingService(offline_only=offline_only)
+    vector_store = VectorStore(vector_root / "chroma")
     retrieval_service = RAGRetrievalService(
         embedding_service=embedding_service,
         vector_store=vector_store,

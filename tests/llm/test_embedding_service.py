@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from llm.embedding_service import EmbeddingService, EmbeddingModel, DEFAULT_MODEL, EMBEDDING_DIM
+from llm.embedding_service import (
+    EMBEDDING_DIM,
+    DEFAULT_MODEL,
+    OFFLINE_MODEL_ERROR_CODE,
+    EmbeddingModel,
+    EmbeddingService,
+    OfflineEmbeddingModelNotAvailable,
+)
 
 
 # ---- stub model (no sentence-transformers required) ----
@@ -140,5 +147,46 @@ def test_missing_sentence_transformers_raises_import_error(monkeypatch):
     monkeypatch.setitem(sys.modules, "sentence_transformers", None)  # type: ignore[assignment]
     svc = EmbeddingService(model_name="dummy-model")
     with pytest.raises(ImportError, match="sentence-transformers"):
+        svc.load()
+    monkeypatch.delitem(sys.modules, "sentence_transformers")
+
+
+def test_offline_only_passes_local_files_only_to_sentence_transformer(monkeypatch):
+    import sys
+    import types
+
+    calls: dict[str, object] = {}
+
+    class _FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, local_files_only: bool = False) -> None:
+            calls["model_name"] = model_name
+            calls["local_files_only"] = local_files_only
+
+        def encode(self, sentences, *, normalize_embeddings=True):
+            return [[0.0] * EMBEDDING_DIM for _ in sentences]
+
+    fake_module = types.SimpleNamespace(SentenceTransformer=_FakeSentenceTransformer)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    svc = EmbeddingService(model_name="local-model", offline_only=True)
+    svc.load()
+
+    assert calls == {"model_name": "local-model", "local_files_only": True}
+    monkeypatch.delitem(sys.modules, "sentence_transformers")
+
+
+def test_offline_only_missing_model_fails_closed(monkeypatch):
+    import sys
+    import types
+
+    class _FakeSentenceTransformer:
+        def __init__(self, model_name: str, *, local_files_only: bool = False) -> None:
+            raise OSError("would download")
+
+    fake_module = types.SimpleNamespace(SentenceTransformer=_FakeSentenceTransformer)
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    svc = EmbeddingService(model_name="missing-model", offline_only=True)
+    with pytest.raises(OfflineEmbeddingModelNotAvailable, match=OFFLINE_MODEL_ERROR_CODE):
         svc.load()
     monkeypatch.delitem(sys.modules, "sentence_transformers")

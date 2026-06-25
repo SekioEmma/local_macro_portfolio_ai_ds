@@ -4,10 +4,23 @@
 `macro-rag-corpus-curator` staging output. It is separate from
 `scripts/seed_knowledge_base.py`, which remains a lightweight seed helper.
 
-The importer reads only a curated staging root and
-`metadata/rag_manifest.jsonl`. It does not read original PDFs, private notes,
-holdings, outputs, provider payloads, secrets, or raw SQLite databases. It does
-not make network requests and does not call an LLM.
+The importer reads only a curated staging root and a derived manifest such as
+`metadata/derived_manifest.jsonl`. It does not read original PDFs, private
+notes, holdings, outputs, provider payloads, secrets, or unrelated SQLite
+databases. It does not make network requests and does not call an LLM.
+
+The real vector root layout is:
+
+```text
+<VECTOR_ROOT>/
+  chroma/
+  chunks.sqlite
+  ingest_audits/
+```
+
+Embedding model loading is offline-only by default. If the local
+sentence-transformers model is not cached, ingest fails with
+`embedding_model_not_available_offline` before any Chroma or chunk-store write.
 
 ## Hard Gates
 
@@ -36,8 +49,10 @@ Dry-run:
 ```powershell
 python scripts/ingest_curated_rag_corpus.py `
   --curated-root G:\local_macro_portfolio_ai\rag_staging_20260625_v2 `
-  --manifest G:\local_macro_portfolio_ai\rag_staging_20260625_v2\metadata\rag_manifest.jsonl `
-  --dry-run
+  --manifest G:\local_macro_portfolio_ai\rag_staging_20260625_v2\metadata\derived_manifest.jsonl `
+  --vector-root G:\local_macro_portfolio_ai\local_macro_portfolio_ai_ds\data\vector_store `
+  --dry-run `
+  --strict
 ```
 
 Write after a clean preflight:
@@ -45,8 +60,11 @@ Write after a clean preflight:
 ```powershell
 python scripts/ingest_curated_rag_corpus.py `
   --curated-root G:\local_macro_portfolio_ai\rag_staging_20260625_v2 `
-  --manifest G:\local_macro_portfolio_ai\rag_staging_20260625_v2\metadata\rag_manifest.jsonl `
-  --write
+  --manifest G:\local_macro_portfolio_ai\rag_staging_20260625_v2\metadata\derived_manifest.jsonl `
+  --vector-root G:\local_macro_portfolio_ai\local_macro_portfolio_ai_ds\data\vector_store `
+  --write `
+  --strict `
+  --offline-only
 ```
 
 Validate local indexes:
@@ -54,12 +72,10 @@ Validate local indexes:
 ```powershell
 python scripts/validate_local_rag.py `
   --curated-root G:\local_macro_portfolio_ai\rag_staging_20260625_v2 `
-  --manifest G:\local_macro_portfolio_ai\rag_staging_20260625_v2\metadata\rag_manifest.jsonl
+  --manifest G:\local_macro_portfolio_ai\rag_staging_20260625_v2\metadata\derived_manifest.jsonl `
+  --vector-root G:\local_macro_portfolio_ai\local_macro_portfolio_ai_ds\data\vector_store
 ```
 
-For the current `rag_staging_20260625_v2`, the stricter ingest contract finds
-zero ingestible documents because the manifest has no canonical URLs for the
-otherwise ready external candidates, and it contains duplicate document IDs.
-The correct behavior is therefore no vector write and skipped retrieval smoke
-tests until the manifest is updated.
-
+If the derived manifest has zero eligible documents, ingest exits non-zero and
+writes nothing. The correct behavior is no vector write and skipped retrieval
+smoke tests until the manifest and local offline embedding model are ready.
