@@ -19,12 +19,15 @@ class RAGContextBlock:
     char_count is the length of text (not including the header).
     chunk_count is how many source chunks were included.
     truncated is True when some chunks were dropped due to the char cap.
+    excluded_count is how many chunks were filtered because
+    external_llm_context_allowed=False (local-only documents).
     """
 
     text: str
     char_count: int
     chunk_count: int
     truncated: bool
+    excluded_count: int = 0
 
 
 def build_rag_context(
@@ -35,12 +38,14 @@ def build_rag_context(
 ) -> RAGContextBlock:
     """Format retrieved chunks into a prompt-ready context block.
 
+    Chunks where external_llm_context_allowed=False are silently excluded
+    before any other processing — they must never reach LLM context.
     Chunks are taken in order (caller is responsible for ranking).
     Each chunk is formatted as:
         标题：{title}  [doc_type]
         {text}
     Chunks are added until max_chars would be exceeded; the rest are dropped.
-    Returns an empty block (text="") when chunks is empty.
+    Returns an empty block (text="") when chunks is empty or all excluded.
     """
     if not isinstance(chunks, list):
         raise TypeError("chunks must be a list")
@@ -50,11 +55,15 @@ def build_rag_context(
     parts: list[str] = []
     total = 0
     included = 0
+    excluded = 0
     truncated = False
 
     for chunk in chunks:
         if not isinstance(chunk, RetrievedChunk):
             raise TypeError(f"expected RetrievedChunk, got {type(chunk).__name__}")
+        if not chunk.external_llm_context_allowed:
+            excluded += 1
+            continue
         formatted = _format_chunk(chunk)
         candidate_len = len(formatted) + (len(_CHUNK_SEPARATOR) if parts else 0)
         if total + candidate_len > max_chars:
@@ -68,7 +77,10 @@ def build_rag_context(
         included += 1
 
     if not parts:
-        return RAGContextBlock(text="", char_count=0, chunk_count=0, truncated=truncated)
+        return RAGContextBlock(
+            text="", char_count=0, chunk_count=0, truncated=truncated,
+            excluded_count=excluded,
+        )
 
     body = "".join(parts)
     if include_header:
@@ -81,6 +93,7 @@ def build_rag_context(
         char_count=len(body),
         chunk_count=included,
         truncated=truncated,
+        excluded_count=excluded,
     )
 
 

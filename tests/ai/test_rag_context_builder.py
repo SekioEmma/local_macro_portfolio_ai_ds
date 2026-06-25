@@ -19,6 +19,7 @@ def _chunk(
     doc_type: str = "fomc",
     source_domain: str = "fed.gov",
     rrf_score: float = 0.5,
+    external_llm_context_allowed: bool = True,
 ) -> RetrievedChunk:
     return RetrievedChunk(
         doc_id=doc_id,
@@ -28,6 +29,7 @@ def _chunk(
         title=title,
         doc_type=doc_type,
         source_domain=source_domain,
+        external_llm_context_allowed=external_llm_context_allowed,
     )
 
 
@@ -162,3 +164,51 @@ def test_output_order_matches_input_order():
     result = build_rag_context(chunks, max_chars=10000)
     pos = [result.text.find(f"Doc {i}") for i in range(3)]
     assert pos[0] < pos[1] < pos[2]
+
+
+# ---- external_llm_context_allowed gate ----
+
+def test_local_only_chunk_text_absent_from_output():
+    private = _chunk(text="confidential research", external_llm_context_allowed=False)
+    result = build_rag_context([private])
+    assert "confidential research" not in result.text
+
+
+def test_local_only_chunk_excluded_count():
+    private = _chunk(external_llm_context_allowed=False)
+    result = build_rag_context([private])
+    assert result.excluded_count == 1
+    assert result.chunk_count == 0
+
+
+def test_all_local_only_returns_empty_block():
+    chunks = [_chunk(chunk_index=i, external_llm_context_allowed=False) for i in range(3)]
+    result = build_rag_context(chunks)
+    assert result.text == ""
+    assert result.excluded_count == 3
+    assert result.chunk_count == 0
+
+
+def test_mixed_allowed_and_local_only():
+    chunks = [
+        _chunk(text="public text", chunk_index=0, external_llm_context_allowed=True),
+        _chunk(text="private text", chunk_index=1, external_llm_context_allowed=False),
+        _chunk(text="also public", chunk_index=2, external_llm_context_allowed=True),
+    ]
+    result = build_rag_context(chunks, max_chars=10000)
+    assert "public text" in result.text
+    assert "also public" in result.text
+    assert "private text" not in result.text
+    assert result.chunk_count == 2
+    assert result.excluded_count == 1
+
+
+def test_excluded_count_zero_when_all_allowed():
+    chunks = [_chunk(chunk_index=i) for i in range(3)]
+    result = build_rag_context(chunks, max_chars=10000)
+    assert result.excluded_count == 0
+
+
+def test_empty_input_excluded_count_zero():
+    result = build_rag_context([])
+    assert result.excluded_count == 0
