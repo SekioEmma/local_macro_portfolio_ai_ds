@@ -177,3 +177,55 @@ def test_seed_scan_dir_falls_back_to_bm25_only_when_vector_unavailable(
     store = ChunkTextStore(tmp_path / "vector_store" / "chunks.sqlite")
     assert store.count() == result["written"]
     assert not (tmp_path / "vector_store" / "chroma").exists()
+
+
+def test_seed_scan_dir_writes_chroma_to_chroma_subdirectory(
+    tmp_path, monkeypatch
+):
+    seed_module = _load_seed_module()
+    scan_dir = tmp_path / "memo"
+    scan_dir.mkdir()
+    (scan_dir / "research_report_x.md").write_text(
+        "# Research Report X\nGlobal outlook commentary text.",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(seed_module, "_CHUNK_TEXT_DB", tmp_path / "vector_store" / "chunks.sqlite")
+
+    captured: dict[str, object] = {}
+
+    class _FakeVectorStore:
+        def __init__(self, persist_dir):
+            captured["persist_dir"] = persist_dir
+
+        def upsert(self, *args, **kwargs):
+            captured.setdefault("upserts", 0)
+            captured["upserts"] = captured["upserts"] + 1  # type: ignore[operator]
+
+    class _FakeEmbeddingService:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def load(self):
+            return None
+
+        def encode(self, texts):
+            return [[0.0] * 4 for _ in texts]
+
+    import sys
+    fake_module = type(sys)("llm.vector_store")
+    fake_module.VectorStore = _FakeVectorStore  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "llm.vector_store", fake_module)
+    fake_emb_module = type(sys)("llm.embedding_service")
+    fake_emb_module.EmbeddingService = _FakeEmbeddingService  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "llm.embedding_service", fake_emb_module)
+
+    seed_module.seed(
+        scan_dir=scan_dir,
+        vector_dir=tmp_path / "vector_store",
+        doc_type="research_report",
+        write=True,
+    )
+
+    from pathlib import Path
+    assert captured["persist_dir"] == Path(tmp_path / "vector_store" / "chroma")
+    assert captured.get("upserts", 0) >= 1

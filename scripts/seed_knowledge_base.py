@@ -182,7 +182,7 @@ def seed(
             from llm.embedding_service import EmbeddingService
             emb_svc_candidate = EmbeddingService()
             emb_svc_candidate.load()
-            vs = VectorStore(vector_dir)
+            vs = VectorStore(vector_dir / "chroma")
             emb_svc = emb_svc_candidate
             vector_enabled = True
         except ImportError as exc:

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 
-DEFAULT_MODEL = "BAAI/bge-small-zh-v1.5"
-EMBEDDING_DIM = 384
+DEFAULT_MODEL = "BAAI/bge-m3"
+EMBEDDING_DIM = 1024
 OFFLINE_MODEL_ERROR_CODE = "embedding_model_not_available_offline"
 
 
