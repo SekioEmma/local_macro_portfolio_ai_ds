@@ -47,11 +47,7 @@ Tag：`era1-frontend-redesign-complete`。
 - C4e：exception-total payload/writer hardening 已完成（payload guard 对所有 ordinary `Exception` fail-closed；strict built-in `str` 防止恶意 str subclass；writer result 用 exact-type 检查 + captured primitive counts 消除 TOCTOU；FOMC exact-time acquisition 仍 deferred）
 - Phase C 在当前 BLS/BEA + FOMC-deferred scope 内已完成
 - D0：RAG evidence governance contracts 已完成（纯内存、metadata-only admission contract；不读 raw text、不 chunk、不 embed、不建 vector store、不 retrieval、不接入 AI context；`historical_data` / `one_shot_news` / stale 文档为固定排除；`eligible` 仅是未来 RAG pipeline 的候选信号，不授权读取内容）
-- D1 embedding 未开始
-- D2 vector store 未开始
-- D3 hybrid retrieval 未开始
-- D4 AI-context RAG integration 未开始
-- D5 seed corpus 未开始
+- Phase D：RAG 知识库已完成（D-1 EmbeddingService lazy-load；D-2 VectorStore Chroma；D-3 文档分块器；D-4 BM25Index 中英双语；D-5 RAGRetrievalService RRF 融合；D-6 ChunkTextStore + seed_knowledge_base 脚本；D-7 RAGContextBuilder 4000 字上限）
 
 ### 进行中
 
@@ -61,8 +57,8 @@ Tag：`era1-frontend-redesign-complete`。
 |---|---|---|---|
 | A | 治理与边界（解冻 Tavily + 收益区间） | 已完成 | ✅ A1 |
 | B | Tavily + 实时报价 + 商品价 + 本地 API routes | 已完成（B1–B7） | — |
-| C | 搜索分类持久化 + 经济日历 | 进行中：C1 已完成；C2 official historical data ingest 已完成；C3 guarded local knowledge base store 已完成；C4a offline calendar foundation 已完成；C4d read path hardening 已完成；C4b guarded BLS/BEA manual acquisition 已完成；C4c acquisition result boundary hardening 已完成；C4e exception-total payload/writer hardening 已完成；FOMC exact-time deferred | — |
-| D | RAG 知识库 | 2 | — |
+| C | 搜索分类持久化 + 经济日历 | 已完成（C1–C4e；FOMC exact-time deferred） | — |
+| D | RAG 知识库 | 已完成（D0 governance contracts；D-1~D-7 embedding/vector/BM25/RRF/seed；需安装 sentence-transformers + chromadb + rank-bm25；用户需向 data/knowledge_base/input/ 放置文件） | — |
 | E | 情景化收益区间引擎 | 2 | ✅ E1 |
 | F | Agent + 9 节前端 | 2.5 | — |
 | G | 报告归档 + 历史对比 | 1 | — |
