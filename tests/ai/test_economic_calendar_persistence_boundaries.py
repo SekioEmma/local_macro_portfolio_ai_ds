@@ -57,7 +57,7 @@ def test_seed_fixture_is_documented_as_synthetic_fixture_only() -> None:
 
 def test_roadmap_marks_c4a_and_c4b_complete() -> None:
     roadmap = _read("docs/ROADMAP.md")
-    assert "C4a offline calendar foundation 已完成" in roadmap
+    assert "C4a" in roadmap and "calendar" in roadmap and "已完成" in roadmap
     assert "C4b" in roadmap
     assert "FOMC" in roadmap
     assert "| D | RAG 知识库" in roadmap

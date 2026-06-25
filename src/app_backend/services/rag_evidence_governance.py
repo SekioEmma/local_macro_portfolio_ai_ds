@@ -40,6 +40,10 @@ class RagEvidenceExclusionReason(StrEnum):
     STALE_DOCUMENT = "stale_document"
     HISTORICAL_DATA_EXCLUDED = "historical_data_excluded"
     ONE_SHOT_NEWS_EXCLUDED = "one_shot_news_excluded"
+    LOCAL_ONLY_USE = "local_only_use"
+
+
+_VALID_ALLOWED_USE = frozenset({"external_context_candidate", "local_search_only"})
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,8 @@ class RagEvidenceCandidate:
     fetched_at: str
     content_sha256: str
     is_stale: bool
+    external_llm_context_allowed: bool = True
+    allowed_use: str = "external_context_candidate"
 
 
 @dataclass(frozen=True)
@@ -68,6 +74,8 @@ class RagEvidenceAssessment:
     content_sha256: str
     eligibility: str
     exclusion_reason: str | None
+    external_llm_context_allowed: bool
+    allowed_use: str
 
 
 def assess_rag_evidence_candidate(
@@ -99,8 +107,14 @@ def _assess_exact_candidate(candidate: RagEvidenceCandidate) -> RagEvidenceAsses
     fetched_at = _validated_fetched_at(candidate.fetched_at)
     content_sha256 = _validated_content_sha256(candidate.content_sha256)
     is_stale = _validated_is_stale(candidate.is_stale)
+    external_llm_context_allowed = _validated_external_llm_context_allowed(
+        candidate.external_llm_context_allowed
+    )
+    allowed_use = _validated_allowed_use(candidate.allowed_use)
 
-    eligibility, exclusion_reason = _apply_admission_policy(doc_type, is_stale)
+    eligibility, exclusion_reason = _apply_admission_policy(
+        doc_type, is_stale, external_llm_context_allowed
+    )
     return RagEvidenceAssessment(
         document_id=document_id,
         url=canonical_url,
@@ -110,12 +124,15 @@ def _assess_exact_candidate(candidate: RagEvidenceCandidate) -> RagEvidenceAsses
         content_sha256=content_sha256,
         eligibility=eligibility.value,
         exclusion_reason=exclusion_reason.value if exclusion_reason else None,
+        external_llm_context_allowed=external_llm_context_allowed,
+        allowed_use=allowed_use,
     )
 
 
 def _apply_admission_policy(
     doc_type: str,
     is_stale: bool,
+    external_llm_context_allowed: bool,
 ) -> tuple[RagEvidenceEligibility, RagEvidenceExclusionReason | None]:
     if is_stale:
         return (
@@ -131,6 +148,11 @@ def _apply_admission_policy(
         return (
             RagEvidenceEligibility.EXCLUDED,
             RagEvidenceExclusionReason.ONE_SHOT_NEWS_EXCLUDED,
+        )
+    if not external_llm_context_allowed:
+        return (
+            RagEvidenceEligibility.EXCLUDED,
+            RagEvidenceExclusionReason.LOCAL_ONLY_USE,
         )
     return RagEvidenceEligibility.ELIGIBLE, None
 
@@ -207,6 +229,20 @@ def _validated_content_sha256(value: object) -> str:
 def _validated_is_stale(value: object) -> bool:
     if type(value) is not bool:
         raise RagEvidenceGovernanceError("invalid_is_stale")
+    return value
+
+
+def _validated_external_llm_context_allowed(value: object) -> bool:
+    if type(value) is not bool:
+        raise RagEvidenceGovernanceError("invalid_external_llm_context_allowed")
+    return value
+
+
+def _validated_allowed_use(value: object) -> str:
+    if type(value) is not str:
+        raise RagEvidenceGovernanceError("invalid_allowed_use")
+    if value not in _VALID_ALLOWED_USE:
+        raise RagEvidenceGovernanceError("invalid_allowed_use")
     return value
 
 

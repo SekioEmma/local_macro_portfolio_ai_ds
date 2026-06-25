@@ -62,6 +62,7 @@ def seed(
     vector_dir: Path,
     doc_type: str,
     write: bool,
+    external_llm_context_allowed: bool = True,
     verbose: bool = True,
 ) -> dict[str, int]:
     if doc_type not in _VALID_DOC_TYPES:
@@ -102,7 +103,9 @@ def seed(
         total_chunks += len(chunks)
 
         if verbose:
-            print(f"  {'[dry-run]' if not write else '[write]'} {fpath.name} → {len(chunks)} chunks  doc_id={doc_id}")
+            llm_flag = "llm=yes" if external_llm_context_allowed else "llm=no(local-only)"
+            mode = "[dry-run]" if not write else "[write]"
+            print(f"  {mode} {fpath.name} → {len(chunks)} chunks  doc_id={doc_id}  {llm_flag}")
 
         if write and chunk_store is not None and vs is not None and emb_svc is not None:
             texts = [c.text for c in chunks]
@@ -115,13 +118,19 @@ def seed(
                     title=title,
                     doc_type=doc_type,
                     source_domain=source_domain,
+                    external_llm_context_allowed=external_llm_context_allowed,
                 )
                 chunk_store.upsert_chunk(stored)
                 vs.upsert(
                     doc_id=chunk.doc_id,
                     chunk_index=chunk.chunk_index,
                     embedding=embedding,
-                    metadata={"title": title, "doc_type": doc_type, "source_domain": source_domain},
+                    metadata={
+                        "title": title,
+                        "doc_type": doc_type,
+                        "source_domain": source_domain,
+                        "external_llm_context_allowed": external_llm_context_allowed,
+                    },
                 )
                 total_written += 1
 
@@ -138,17 +147,27 @@ def main() -> None:
     parser.add_argument("--write", action="store_true", help="Write chunks to vector store (default: dry-run)")
     parser.add_argument("--doc-type", default="research_report", help="Document type for all files in this run")
     parser.add_argument("--scan-dir", type=Path, default=_DEFAULT_INPUT_DIR, help="Directory to scan for .txt/.md files")
+    parser.add_argument(
+        "--no-external-llm-context",
+        action="store_true",
+        help="Mark all chunks as local-only (external_llm_context_allowed=False). "
+             "Use for private/copyrighted documents that must not reach any LLM.",
+    )
     args = parser.parse_args()
+
+    external_llm_context_allowed = not args.no_external_llm_context
 
     print(f"Mode: {'WRITE' if args.write else 'DRY-RUN'}")
     print(f"Scanning: {args.scan_dir}")
-    print(f"doc_type: {args.doc_type}\n")
+    print(f"doc_type: {args.doc_type}")
+    print(f"external_llm_context: {'yes' if external_llm_context_allowed else 'NO — local-only'}\n")
 
     seed(
         scan_dir=args.scan_dir,
         vector_dir=_DEFAULT_VECTOR_DIR,
         doc_type=args.doc_type,
         write=args.write,
+        external_llm_context_allowed=external_llm_context_allowed,
     )
 
 

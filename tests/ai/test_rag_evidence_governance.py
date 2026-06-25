@@ -249,6 +249,8 @@ def test_a_assessment_field_order_is_locked():
         "content_sha256",
         "eligibility",
         "exclusion_reason",
+        "external_llm_context_allowed",
+        "allowed_use",
     ]
 
 
@@ -263,6 +265,8 @@ def test_a_candidate_field_order_is_locked():
         "fetched_at",
         "content_sha256",
         "is_stale",
+        "external_llm_context_allowed",
+        "allowed_use",
     ]
 
 
@@ -798,6 +802,8 @@ def test_d_candidate_field_set_locked():
         "fetched_at",
         "content_sha256",
         "is_stale",
+        "external_llm_context_allowed",
+        "allowed_use",
     }
     assert names == expected
 
@@ -842,6 +848,8 @@ def test_d_assessment_field_set_locked():
         "content_sha256",
         "eligibility",
         "exclusion_reason",
+        "external_llm_context_allowed",
+        "allowed_use",
     }
     assert names == expected
 
@@ -995,11 +1003,16 @@ def test_d_assessment_repr_does_not_carry_forbidden_tokens():
 
 def test_d_module_import_creates_no_files(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    before = sorted(p.name for p in tmp_path.iterdir())
     import app_backend.services.rag_evidence_governance as mod
 
+    saved = dict(mod.__dict__)
+    before = sorted(p.name for p in tmp_path.iterdir())
     importlib.reload(mod)
     after = sorted(p.name for p in tmp_path.iterdir())
+    # Restore pre-reload state so subsequent tests in the same process
+    # see the original class objects from their top-level imports.
+    mod.__dict__.clear()
+    mod.__dict__.update(saved)
     assert before == after
 
 
@@ -1054,7 +1067,94 @@ def test_e_d0_does_not_register_api_route():
 def test_e_d0_module_can_be_reimported_without_side_effects():
     import app_backend.services.rag_evidence_governance as mod
 
+    saved = dict(mod.__dict__)
     first = mod.RagEvidenceEligibility.ELIGIBLE.value
     importlib.reload(mod)
     second = mod.RagEvidenceEligibility.ELIGIBLE.value
+    mod.__dict__.clear()
+    mod.__dict__.update(saved)
     assert first == second == "eligible"
+
+
+# ========== F. external_llm_context_allowed + allowed_use fields ==========
+
+def test_f_local_only_candidate_is_excluded():
+    out = assess_rag_evidence_candidate(
+        _candidate(external_llm_context_allowed=False, allowed_use="local_search_only")
+    )
+    assert out.eligibility == "excluded"
+    assert out.exclusion_reason == "local_only_use"
+
+
+def test_f_local_only_reason_is_lower_priority_than_stale():
+    out = assess_rag_evidence_candidate(
+        _candidate(is_stale=True, external_llm_context_allowed=False,
+                   allowed_use="local_search_only")
+    )
+    assert out.exclusion_reason == "stale_document"
+
+
+def test_f_local_only_reason_is_lower_priority_than_doc_type_exclusion():
+    out = assess_rag_evidence_candidate(
+        _candidate(doc_type="historical_data", external_llm_context_allowed=False,
+                   allowed_use="local_search_only")
+    )
+    assert out.exclusion_reason == "historical_data_excluded"
+
+
+def test_f_external_context_candidate_default_is_eligible():
+    out = assess_rag_evidence_candidate(_candidate())
+    assert out.external_llm_context_allowed is True
+    assert out.allowed_use == "external_context_candidate"
+    assert out.eligibility == "eligible"
+
+
+def test_f_assessment_carries_external_llm_context_allowed():
+    out = assess_rag_evidence_candidate(
+        _candidate(external_llm_context_allowed=True, allowed_use="external_context_candidate")
+    )
+    assert out.external_llm_context_allowed is True
+
+
+def test_f_assessment_carries_allowed_use():
+    out = assess_rag_evidence_candidate(
+        _candidate(external_llm_context_allowed=False, allowed_use="local_search_only")
+    )
+    assert out.allowed_use == "local_search_only"
+
+
+def test_f_external_llm_context_allowed_int_rejected():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(
+            _candidate(external_llm_context_allowed=1)
+        )
+    assert exc.value.code == "invalid_external_llm_context_allowed"
+
+
+def test_f_external_llm_context_allowed_none_rejected():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(
+            _candidate(external_llm_context_allowed=None)
+        )
+    assert exc.value.code == "invalid_external_llm_context_allowed"
+
+
+def test_f_allowed_use_unknown_value_rejected():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(
+            _candidate(allowed_use="everything")
+        )
+    assert exc.value.code == "invalid_allowed_use"
+
+
+def test_f_allowed_use_not_str_rejected():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(
+            _candidate(allowed_use=True)
+        )
+    assert exc.value.code == "invalid_allowed_use"
+
+
+def test_f_local_only_use_is_in_exclusion_reason_enum():
+    from app_backend.services.rag_evidence_governance import RagEvidenceExclusionReason
+    assert "local_only_use" in {m.value for m in RagEvidenceExclusionReason}
