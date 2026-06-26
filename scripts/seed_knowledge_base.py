@@ -108,11 +108,24 @@ def _manifest_documents(
             continue
 
         output_relpath = row.get("output_relpath")
-        doc_path = staging_root / output_relpath
+        relpath = Path(output_relpath)
+        if relpath.is_absolute() or ".." in relpath.parts:
+            raise ValueError(f"manifest line {line_no}: unsafe output_relpath: {output_relpath!r}")
+        doc_path = (staging_root / relpath).resolve()
+        if not doc_path.is_relative_to(staging_root.resolve()):
+            raise ValueError(f"manifest line {line_no}: output path escapes staging root")
         if doc_path.suffix not in _EXTENSIONS:
             raise ValueError(f"manifest line {line_no}: unsupported output extension: {output_relpath!r}")
         if not doc_path.exists():
             raise FileNotFoundError(f"manifest line {line_no}: staged file not found: {doc_path}")
+
+        expected_hash = row.get("cleaned_content_sha256")
+        if isinstance(expected_hash, str) and expected_hash:
+            content = doc_path.read_bytes()
+            text_normalized = content.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+            actual_hash = hashlib.sha256(text_normalized.encode("utf-8")).hexdigest()
+            if actual_hash != expected_hash:
+                raise ValueError(f"manifest line {line_no}: content hash mismatch for {output_relpath!r}")
 
         documents.append(
             SeedDocument(

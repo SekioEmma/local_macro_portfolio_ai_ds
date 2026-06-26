@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import sys
 from pathlib import Path
+
+import pytest
 
 
 def _load_seed_module():
@@ -229,3 +232,54 @@ def test_seed_scan_dir_writes_chroma_to_chroma_subdirectory(
     from pathlib import Path
     assert captured["persist_dir"] == Path(tmp_path / "vector_store" / "chroma")
     assert captured.get("upserts", 0) >= 1
+
+
+@pytest.mark.parametrize("bad_relpath", [
+    "../../../etc/passwd.md",
+    "/absolute/path.md",
+    "policy_doc/../../escape.md",
+])
+def test_manifest_rejects_path_traversal(tmp_path, bad_relpath):
+    seed_module = _load_seed_module()
+    staging = tmp_path / "rag_staging"
+    (staging / "policy_doc").mkdir(parents=True)
+    manifest = _write_manifest(
+        staging,
+        [_row(document_id="evil_doc", output_relpath=bad_relpath)],
+    )
+
+    with pytest.raises(ValueError, match="unsafe output_relpath|output path escapes"):
+        seed_module._manifest_documents(manifest)
+
+
+def test_manifest_rejects_content_hash_mismatch(tmp_path):
+    seed_module = _load_seed_module()
+    staging = tmp_path / "rag_staging"
+    (staging / "policy_doc").mkdir(parents=True)
+    doc_path = staging / "policy_doc" / "doc.md"
+    doc_path.write_text("# Real content\nBody text.", encoding="utf-8")
+
+    row = _row(document_id="hash_test", output_relpath="policy_doc/doc.md")
+    row["cleaned_content_sha256"] = "0" * 64
+    manifest = _write_manifest(staging, [row])
+
+    with pytest.raises(ValueError, match="content hash mismatch"):
+        seed_module._manifest_documents(manifest)
+
+
+def test_manifest_accepts_matching_content_hash(tmp_path):
+    seed_module = _load_seed_module()
+    staging = tmp_path / "rag_staging"
+    (staging / "policy_doc").mkdir(parents=True)
+    doc_path = staging / "policy_doc" / "doc.md"
+    content = "# Title\nBody."
+    doc_path.write_text(content, encoding="utf-8")
+    expected = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    row = _row(document_id="hash_ok", output_relpath="policy_doc/doc.md")
+    row["cleaned_content_sha256"] = expected
+    manifest = _write_manifest(staging, [row])
+
+    docs = seed_module._manifest_documents(manifest)
+    assert len(docs) == 1
+    assert docs[0].doc_id == "hash_ok"
