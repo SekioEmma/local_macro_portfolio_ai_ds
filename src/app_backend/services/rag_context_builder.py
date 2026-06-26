@@ -64,7 +64,7 @@ def build_rag_context(
         if not chunk.external_llm_context_allowed:
             excluded += 1
             continue
-        formatted = _format_chunk(chunk)
+        formatted = _format_chunk_with_tier(chunk)
         candidate_len = len(formatted) + (len(_CHUNK_SEPARATOR) if parts else 0)
         if total + candidate_len > max_chars:
             truncated = True
@@ -95,6 +95,25 @@ def build_rag_context(
         truncated=truncated,
         excluded_count=excluded,
     )
+
+
+def _format_chunk_with_tier(chunk: RetrievedChunk) -> str:
+    labels = [_tier_label(chunk)]
+    if chunk.doc_type:
+        labels.append(chunk.doc_type)
+    if not chunk.is_official_source:
+        labels.append("non-official")
+    label = f"[{' | '.join(labels)}]"
+    header_line = f"Title: {chunk.title} {label}".strip()
+    return f"{header_line}\n{chunk.text}"
+
+
+def _tier_label(chunk: RetrievedChunk) -> str:
+    if chunk.evidence_tier == "official_evidence":
+        return "OFFICIAL EVIDENCE"
+    if chunk.evidence_tier == "institutional_view":
+        return "INSTITUTIONAL VIEW"
+    return "SOURCE"
 
 
 def _format_chunk(chunk: RetrievedChunk) -> str:

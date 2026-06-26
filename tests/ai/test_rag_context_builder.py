@@ -19,6 +19,8 @@ def _chunk(
     source_domain: str = "fed.gov",
     rrf_score: float = 0.5,
     external_llm_context_allowed: bool = True,
+    evidence_tier: str = "official_evidence",
+    is_official_source: bool = True,
 ) -> RetrievedChunk:
     return RetrievedChunk(
         doc_id=doc_id,
@@ -29,6 +31,8 @@ def _chunk(
         doc_type=doc_type,
         source_domain=source_domain,
         external_llm_context_allowed=external_llm_context_allowed,
+        evidence_tier=evidence_tier,
+        is_official_source=is_official_source,
     )
 
 
@@ -59,6 +63,24 @@ def test_single_chunk_contains_title():
 def test_single_chunk_contains_doc_type():
     result = build_rag_context([_chunk(doc_type="bls")])
     assert "bls" in result.text
+
+
+def test_official_chunk_is_labeled_as_official_evidence():
+    result = build_rag_context([_chunk(doc_type="official_release")])
+    assert "OFFICIAL EVIDENCE" in result.text
+    assert "non-official" not in result.text
+
+
+def test_institutional_chunk_is_labeled_as_non_official_view():
+    result = build_rag_context([
+        _chunk(
+            doc_type="research_report",
+            evidence_tier="institutional_view",
+            is_official_source=False,
+        )
+    ])
+    assert "INSTITUTIONAL VIEW" in result.text
+    assert "non-official" in result.text
 
 
 # ---- header ----

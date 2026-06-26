@@ -95,6 +95,19 @@ def test_upsert_multiple_chunks(tmp_path):
     assert vs.count() == 3
 
 
+def test_upsert_many_chunks(tmp_path):
+    vs = _store(tmp_path)
+    vs.upsert_many([
+        ("doc1", 0, FAKE_EMB, {"doc_type": "policy_doc"}),
+        ("doc1", 1, FAKE_EMB, {"doc_type": "policy_doc"}),
+        ("doc2", 0, FAKE_EMB, {"doc_type": "research_report"}),
+    ])
+
+    assert vs.count() == 3
+    results = vs.query(FAKE_EMB, top_k=3, doc_type_filter="research_report")
+    assert [result.doc_id for result in results] == ["doc2"]
+
+
 def test_upsert_is_idempotent(tmp_path):
     vs = _store(tmp_path)
     vs.upsert("doc1", 0, FAKE_EMB)

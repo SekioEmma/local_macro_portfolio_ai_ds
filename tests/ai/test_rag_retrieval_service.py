@@ -30,6 +30,8 @@ class _FakeRawChunk:
     doc_type: str
     source_domain: str
     external_llm_context_allowed: bool = True
+    evidence_tier: str = "official_evidence"
+    is_official_source: bool = True
 
 
 class _StubEmbedding:
@@ -182,6 +184,26 @@ def test_retrieve_result_fields():
     assert result.doc_type == "bls"
     assert result.source_domain == "bls.gov"
     assert isinstance(result.rrf_score, float)
+
+
+def test_retrieve_result_carries_evidence_tier():
+    raw = {
+        ("doc1", 0): _FakeRawChunk(
+            "full text",
+            "Bank View",
+            "research_report",
+            "local_user_verified",
+            evidence_tier="institutional_view",
+            is_official_source=False,
+        )
+    }
+    vec = [_FakeVecResult("doc1", 0, 0.9)]
+    svc = _make_svc(vec=vec, raw=raw)
+
+    result = svc.retrieve("rate")[0]
+
+    assert result.evidence_tier == "institutional_view"
+    assert result.is_official_source is False
 
 
 def test_retrieve_skips_missing_raw_chunks():

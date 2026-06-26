@@ -15,6 +15,8 @@ from llm.document_chunker import Chunk, chunk_text
 
 ALLOWED_RUNTIME_DOC_TYPES = frozenset({"policy_doc", "research_report", "official_release"})
 ALLOWED_CONTENT_COHORTS = frozenset({"policy_doc", "research_report", "official_release"})
+ALLOWED_EVIDENCE_TIERS = frozenset({"official_evidence", "institutional_view"})
+OFFICIAL_SOURCE_KINDS = frozenset({"central_bank_policy", "official_release", "official_outlook"})
 READABLE_COHORTS = frozenset({
     "policy_doc",
     "research_report",
@@ -39,6 +41,8 @@ class CuratedDocument:
     doc_type: str
     source_domain: str
     external_llm_context_allowed: bool
+    evidence_tier: str
+    is_official_source: bool
     metadata: dict[str, Any]
     verified_text: str = ""
 
@@ -64,6 +68,7 @@ class CuratedIngestResult:
     chunk_count: int
     written_chunk_count: int
     mode: str
+    pruned_document_count: int = 0
 
 
 def build_ingest_plan(curated_root: Path, manifest_path: Path) -> CuratedIngestPlan:
@@ -120,6 +125,7 @@ def ingest_curated_corpus(
     vector_dir: Path | None = None,
     offline_only: bool = True,
     strict: bool = False,
+    replace_existing: bool = False,
     embedding_service: Any | None = None,
     vector_store: Any | None = None,
     chunk_store: ChunkTextStore | None = None,
@@ -139,7 +145,9 @@ def ingest_curated_corpus(
     vector_root = vector_root.resolve()
 
     chunk_store = chunk_store or ChunkTextStore(vector_root / "chunks.sqlite")
-    _guard_existing_docs(chunk_store, {doc.document_id for doc in plan.accepted})
+    unknown_existing = _unknown_existing_docs(chunk_store, {doc.document_id for doc in plan.accepted})
+    if unknown_existing and not replace_existing:
+        raise CuratedRAGIngestError("existing_unknown_documents_block_write")
 
     vector_enabled = True
     if embedding_service is None:
@@ -157,6 +165,11 @@ def ingest_curated_corpus(
 
         vector_store = VectorStore(vector_root / "chroma")
 
+    for doc_id in sorted(unknown_existing):
+        chunk_store.delete_doc(doc_id)
+        if vector_enabled and vector_store is not None:
+            vector_store.delete(doc_id)
+
     written = 0
     for doc in plan.accepted:
         chunks = chunk_text(doc.verified_text, doc_id=doc.document_id)
@@ -166,18 +179,19 @@ def ingest_curated_corpus(
         if not chunks:
             continue
         embeddings = embedding_service.encode([chunk.text for chunk in chunks]) if embedding_service is not None else []
-        for index, chunk in enumerate(chunks):
-            chunk_store.upsert_chunk(_stored_chunk(doc, chunk))
-            if vector_enabled and vector_store is not None:
-                vector_store.upsert(
-                    doc_id=chunk.doc_id,
-                    chunk_index=chunk.chunk_index,
-                    embedding=embeddings[index],
-                    metadata=_vector_metadata(doc),
-                )
-            written += 1
+        stored_chunks = [_stored_chunk(doc, chunk) for chunk in chunks]
+        chunk_store.upsert_chunks(stored_chunks)
+        if vector_enabled and vector_store is not None:
+            _upsert_vector_chunks(vector_store, doc, chunks, embeddings)
+        written += len(chunks)
     mode = "write" if vector_enabled else "write-bm25-only"
-    result = CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=written, mode=mode)
+    result = CuratedIngestResult(
+        plan=plan,
+        chunk_count=chunk_count,
+        written_chunk_count=written,
+        mode=mode,
+        pruned_document_count=len(unknown_existing),
+    )
     _write_ingest_audit(vector_root, result)
     return result
 
@@ -200,6 +214,7 @@ def summarize_result(result: CuratedIngestResult) -> dict[str, Any]:
         "mode": result.mode,
         "candidate_chunks": result.chunk_count,
         "written_chunks": result.written_chunk_count,
+        "pruned_documents": result.pruned_document_count,
     })
     return payload
 
@@ -319,6 +334,9 @@ def _classify_row(row: dict[str, Any], duplicate_ids: set[str]) -> tuple[str, st
         return "rejected", "allowed_use_not_external_context_candidate"
     if row.get("runtime_doc_type") not in ALLOWED_RUNTIME_DOC_TYPES:
         return "rejected", "invalid_runtime_doc_type"
+    evidence_decision = _validate_evidence_tier(row)
+    if evidence_decision is not None:
+        return "rejected", evidence_decision
 
     canonical_url = row.get("canonical_url")
     source_domain = row.get("source_domain")
@@ -362,7 +380,9 @@ def _document_from_row(curated_root: Path, row: dict[str, Any]) -> CuratedDocume
         title=_title_from_markdown(text, row["document_id"]),
         doc_type=row["runtime_doc_type"],
         source_domain=_source_label(row),
-        external_llm_context_allowed=True,
+        external_llm_context_allowed=bool(row["external_llm_context_allowed"]),
+        evidence_tier=_evidence_tier(row),
+        is_official_source=_is_official_source(row),
         metadata=_safe_metadata(row),
         verified_text=text,
     )
@@ -383,7 +403,9 @@ def _safe_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "title": _metadata_str(row.get("title")),
         "doc_type": row["runtime_doc_type"],
         "source_domain": _source_label(row),
-        "external_llm_context_allowed": True,
+        "external_llm_context_allowed": bool(row.get("external_llm_context_allowed")),
+        "evidence_tier": _evidence_tier(row),
+        "is_official_source": _is_official_source(row),
         "source_kind": _metadata_str(row.get("source_kind")),
         "temporal_status": _metadata_str(row.get("temporal_status")),
         "release_date": _metadata_str(row.get("release_date")),
@@ -418,6 +440,8 @@ def _stored_chunk(doc: CuratedDocument, chunk: Chunk) -> StoredChunk:
         doc_type=doc.doc_type,
         source_domain=doc.source_domain,
         external_llm_context_allowed=doc.external_llm_context_allowed,
+        evidence_tier=doc.evidence_tier,
+        is_official_source=doc.is_official_source,
     )
 
 
@@ -427,14 +451,36 @@ def _vector_metadata(doc: CuratedDocument) -> dict[str, Any]:
     metadata["doc_type"] = doc.doc_type
     metadata["source_domain"] = doc.source_domain
     metadata["external_llm_context_allowed"] = doc.external_llm_context_allowed
+    metadata["evidence_tier"] = doc.evidence_tier
+    metadata["is_official_source"] = doc.is_official_source
     return metadata
 
 
-def _guard_existing_docs(chunk_store: ChunkTextStore, accepted_doc_ids: set[str]) -> None:
+def _upsert_vector_chunks(
+    vector_store: Any,
+    doc: CuratedDocument,
+    chunks: list[Chunk],
+    embeddings: list[list[float]],
+) -> None:
+    metadata = _vector_metadata(doc)
+    if hasattr(vector_store, "upsert_many"):
+        vector_store.upsert_many([
+            (chunk.doc_id, chunk.chunk_index, embeddings[index], metadata)
+            for index, chunk in enumerate(chunks)
+        ])
+        return
+    for index, chunk in enumerate(chunks):
+        vector_store.upsert(
+            doc_id=chunk.doc_id,
+            chunk_index=chunk.chunk_index,
+            embedding=embeddings[index],
+            metadata=metadata,
+        )
+
+
+def _unknown_existing_docs(chunk_store: ChunkTextStore, accepted_doc_ids: set[str]) -> set[str]:
     existing = set(chunk_store.list_doc_ids())
-    unknown = existing - accepted_doc_ids
-    if unknown:
-        raise CuratedRAGIngestError("existing_unknown_documents_block_write")
+    return existing - accepted_doc_ids
 
 
 def _url_host(url: str) -> str:
@@ -447,6 +493,52 @@ def _url_host(url: str) -> str:
 def _normal_host(host: str) -> str:
     parsed = urlparse(host if "://" in host else f"https://{host}")
     return (parsed.hostname or "").lower().strip(".")
+
+
+def _validate_evidence_tier(row: dict[str, Any]) -> str | None:
+    tier = _evidence_tier(row)
+    if tier not in ALLOWED_EVIDENCE_TIERS:
+        return "invalid_evidence_tier"
+    source_kind = row.get("source_kind")
+    runtime_doc_type = row.get("runtime_doc_type")
+    is_official = _is_official_source(row)
+
+    if source_kind == "institutional_research":
+        if tier != "institutional_view":
+            return "institutional_research_not_view_tier"
+        if is_official:
+            return "institutional_research_marked_official"
+        if runtime_doc_type != "research_report":
+            return "institutional_research_invalid_runtime_doc_type"
+        return None
+
+    if tier == "institutional_view":
+        return "institutional_view_requires_institutional_research"
+    if tier == "official_evidence" and source_kind not in OFFICIAL_SOURCE_KINDS:
+        return "official_evidence_requires_official_source_kind"
+    if tier == "official_evidence" and not is_official:
+        return "official_evidence_requires_official_source_flag"
+    return None
+
+
+def _evidence_tier(row: dict[str, Any]) -> str:
+    value = row.get("evidence_tier")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if row.get("source_kind") == "institutional_research":
+        return "institutional_view"
+    if row.get("source_kind") in OFFICIAL_SOURCE_KINDS:
+        return "official_evidence"
+    return "unknown"
+
+
+def _is_official_source(row: dict[str, Any]) -> bool:
+    value = row.get("is_official_source")
+    if isinstance(value, bool):
+        return value
+    if row.get("source_kind") in OFFICIAL_SOURCE_KINDS:
+        return True
+    return False
 
 
 def _cleaned_content_sha256(content: bytes) -> str:

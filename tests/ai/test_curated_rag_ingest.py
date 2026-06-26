@@ -7,7 +7,7 @@ import types
 from pathlib import Path
 
 from app_backend.services.curated_rag_ingest import build_ingest_plan, ingest_curated_corpus
-from llm.chunk_text_store import ChunkTextStore
+from llm.chunk_text_store import ChunkTextStore, StoredChunk
 
 
 class _FakeEmbedding:
@@ -50,6 +50,8 @@ def _base_row(root: Path, *, document_id: str = "fomc_statement_2026_06_17") -> 
         "external_llm_context_allowed": True,
         "allowed_use": "external_context_candidate",
         "runtime_doc_type": "policy_doc",
+        "evidence_tier": "official_evidence",
+        "is_official_source": True,
         "canonical_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm",
         "source_domain": "www.federalreserve.gov",
         "cleaned_content_sha256": digest,
@@ -204,6 +206,8 @@ def test_official_release_manifest_document_can_be_planned(tmp_path):
         "external_llm_context_allowed": True,
         "allowed_use": "external_context_candidate",
         "runtime_doc_type": "official_release",
+        "evidence_tier": "official_evidence",
+        "is_official_source": True,
         "canonical_url": None,
         "source_domain": None,
         "source_relpath": "BLS/cpi.pdf",
@@ -226,6 +230,69 @@ def test_official_release_manifest_document_can_be_planned(tmp_path):
     assert plan.doc_type_counts == {"official_release": 1}
     assert plan.accepted[0].metadata["observation_period"] == "2026-05"
     assert plan.accepted[0].metadata["content_layers"] == "narrative,table"
+
+
+def test_authorized_institutional_view_can_be_planned(tmp_path):
+    relpath = "research_report/memo.md"
+    digest = _write_doc(tmp_path, relpath, "# Institutional Memo\n\nA bank research view.")
+    row = {
+        "document_id": "research_report_macro_view",
+        "output_relpath": relpath,
+        "cohort": "research_report",
+        "extraction_status": "ready",
+        "provenance_status": "verified",
+        "ingest_status": "eligible",
+        "external_llm_context_allowed": True,
+        "allowed_use": "external_context_candidate",
+        "runtime_doc_type": "research_report",
+        "candidate_doc_type": "research_report",
+        "canonical_url": None,
+        "source_domain": None,
+        "source_relpath": "MEMO/memo.pdf",
+        "source_file_sha256": "a" * 64,
+        "cleaned_content_sha256": digest,
+        "source_kind": "institutional_research",
+        "evidence_tier": "institutional_view",
+        "is_official_source": False,
+        "rights_status": "user_authorized_external_context",
+    }
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 1
+    assert plan.accepted[0].metadata["evidence_tier"] == "institutional_view"
+    assert plan.accepted[0].metadata["is_official_source"] is False
+
+
+def test_institutional_research_cannot_be_marked_official(tmp_path):
+    relpath = "research_report/memo.md"
+    digest = _write_doc(tmp_path, relpath, "# Institutional Memo\n\nA bank research view.")
+    row = {
+        "document_id": "research_report_macro_view",
+        "output_relpath": relpath,
+        "cohort": "research_report",
+        "extraction_status": "ready",
+        "provenance_status": "verified",
+        "ingest_status": "eligible",
+        "external_llm_context_allowed": True,
+        "allowed_use": "external_context_candidate",
+        "runtime_doc_type": "research_report",
+        "canonical_url": None,
+        "source_domain": None,
+        "source_relpath": "MEMO/memo.pdf",
+        "source_file_sha256": "a" * 64,
+        "cleaned_content_sha256": digest,
+        "source_kind": "institutional_research",
+        "evidence_tier": "official_evidence",
+        "is_official_source": True,
+    }
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 0
+    assert plan.rejected_reasons["institutional_research_not_view_tier"] == 1
 
 
 def test_manifest_verified_provenance_with_source_markers_is_admitted(tmp_path):
@@ -443,3 +510,36 @@ def test_write_is_idempotent_for_same_manifest(tmp_path):
     assert first.written_chunk_count == second.written_chunk_count == chunk_store.count()
     assert chunk_store.list_doc_ids() == ["fomc_statement_2026_06_17"]
     assert (tmp_path / "vector_store" / "ingest_audits" / "last_ingest_audit.json").exists()
+
+
+def test_write_replace_existing_prunes_unknown_existing_docs(tmp_path):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector = _FakeVectorStore()
+    chunk_store = ChunkTextStore(tmp_path / "vector_store" / "chunks.sqlite")
+    chunk_store.upsert_chunk(
+        StoredChunk(
+            doc_id="old_hash_suffix_doc",
+            chunk_index=0,
+            text="old text",
+            title="Old",
+            doc_type="research_report",
+            source_domain="local",
+        )
+    )
+
+    result = ingest_curated_corpus(
+        curated_root=tmp_path,
+        manifest_path=manifest,
+        vector_dir=tmp_path / "vector_store",
+        write=True,
+        replace_existing=True,
+        embedding_service=_FakeEmbedding(),
+        vector_store=vector,
+        chunk_store=chunk_store,
+    )
+
+    assert result.mode == "write"
+    assert result.pruned_document_count == 1
+    assert chunk_store.list_doc_ids() == ["fomc_statement_2026_06_17"]
+    assert "old_hash_suffix_doc" in vector.deleted

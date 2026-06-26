@@ -18,6 +18,8 @@ class RetrievedChunk:
     doc_type: str
     source_domain: str
     external_llm_context_allowed: bool = True
+    evidence_tier: str = "unknown"
+    is_official_source: bool = False
 
 
 class RAGRetrievalService:
@@ -92,6 +94,8 @@ class RAGRetrievalService:
                 doc_type=raw.doc_type,
                 source_domain=raw.source_domain,
                 external_llm_context_allowed=raw.external_llm_context_allowed,
+                evidence_tier=raw.evidence_tier,
+                is_official_source=raw.is_official_source,
             ))
         return chunks
 

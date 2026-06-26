@@ -65,6 +65,26 @@ class VectorStore:
         meta["chunk_index"] = chunk_index
         col.upsert(ids=[item_id], embeddings=[embedding], metadatas=[meta])
 
+    def upsert_many(self, items: list[tuple[str, int, list[float], dict[str, Any]]]) -> None:
+        if not isinstance(items, list):
+            raise TypeError("items must be a list")
+        if not items:
+            return
+        ids: list[str] = []
+        embeddings: list[list[float]] = []
+        metadatas: list[dict[str, Any]] = []
+        for doc_id, chunk_index, embedding, metadata in items:
+            _validate_doc_id(doc_id)
+            _validate_chunk_index(chunk_index)
+            _validate_embedding(embedding)
+            meta = dict(metadata or {})
+            meta["doc_id"] = doc_id
+            meta["chunk_index"] = chunk_index
+            ids.append(_item_id(doc_id, chunk_index))
+            embeddings.append(embedding)
+            metadatas.append(meta)
+        self._get_collection().upsert(ids=ids, embeddings=embeddings, metadatas=metadatas)
+
     def query(
         self,
         embedding: list[float],

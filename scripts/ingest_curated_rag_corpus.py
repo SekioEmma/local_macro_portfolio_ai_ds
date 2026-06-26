@@ -26,6 +26,11 @@ def main() -> int:
     parser.add_argument("--vector-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--offline-only", action="store_true", default=True)
+    parser.add_argument(
+        "--replace-existing",
+        action="store_true",
+        help="Prune existing vector/chunk documents absent from the accepted full manifest before writing.",
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--write", action="store_true")
@@ -40,6 +45,7 @@ def main() -> int:
             write=args.write,
             offline_only=args.offline_only,
             strict=args.strict,
+            replace_existing=args.replace_existing,
         )
     except (CuratedRAGIngestError, FileNotFoundError) as exc:
         print(json.dumps({"status": "blocked", "reason": str(exc)}, ensure_ascii=False, sort_keys=True))

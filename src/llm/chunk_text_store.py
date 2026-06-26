@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS chunks (
     doc_type                     TEXT NOT NULL,
     source_domain                TEXT NOT NULL,
     external_llm_context_allowed INTEGER NOT NULL DEFAULT 1,
+    evidence_tier                TEXT NOT NULL DEFAULT 'unknown',
+    is_official_source           INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (doc_id, chunk_index)
 );
 """
@@ -22,6 +24,14 @@ CREATE TABLE IF NOT EXISTS chunks (
 _MIGRATION_ADD_LLM_ALLOWED = (
     "ALTER TABLE chunks "
     "ADD COLUMN external_llm_context_allowed INTEGER NOT NULL DEFAULT 1"
+)
+_MIGRATION_ADD_EVIDENCE_TIER = (
+    "ALTER TABLE chunks "
+    "ADD COLUMN evidence_tier TEXT NOT NULL DEFAULT 'unknown'"
+)
+_MIGRATION_ADD_IS_OFFICIAL_SOURCE = (
+    "ALTER TABLE chunks "
+    "ADD COLUMN is_official_source INTEGER NOT NULL DEFAULT 0"
 )
 
 
@@ -34,6 +44,8 @@ class StoredChunk:
     doc_type: str
     source_domain: str
     external_llm_context_allowed: bool = True
+    evidence_tier: str = "unknown"
+    is_official_source: bool = False
 
 
 class ChunkTextStore:
@@ -58,8 +70,8 @@ class ChunkTextStore:
                 """
                 INSERT OR REPLACE INTO chunks
                     (doc_id, chunk_index, text, title, doc_type, source_domain,
-                     external_llm_context_allowed)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                     external_llm_context_allowed, evidence_tier, is_official_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chunk.doc_id,
@@ -69,20 +81,63 @@ class ChunkTextStore:
                     chunk.doc_type,
                     chunk.source_domain,
                     int(chunk.external_llm_context_allowed),
+                    chunk.evidence_tier,
+                    int(chunk.is_official_source),
                 ),
+            )
+
+    def upsert_chunks(self, chunks: list[StoredChunk]) -> None:
+        if not isinstance(chunks, list):
+            raise TypeError("chunks must be a list")
+        for chunk in chunks:
+            self._validate_chunk(chunk)
+        if not chunks:
+            return
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT OR REPLACE INTO chunks
+                    (doc_id, chunk_index, text, title, doc_type, source_domain,
+                     external_llm_context_allowed, evidence_tier, is_official_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        chunk.doc_id,
+                        chunk.chunk_index,
+                        chunk.text,
+                        chunk.title,
+                        chunk.doc_type,
+                        chunk.source_domain,
+                        int(chunk.external_llm_context_allowed),
+                        chunk.evidence_tier,
+                        int(chunk.is_official_source),
+                    )
+                    for chunk in chunks
+                ],
             )
 
     def get_chunk(self, doc_id: str, chunk_index: int) -> StoredChunk | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT doc_id, chunk_index, text, title, doc_type, source_domain, "
-                "external_llm_context_allowed "
+                "external_llm_context_allowed, evidence_tier, is_official_source "
                 "FROM chunks WHERE doc_id = ? AND chunk_index = ?",
                 (doc_id, chunk_index),
             ).fetchone()
         if row is None:
             return None
-        doc_id_, chunk_index_, text, title, doc_type, source_domain, llm_allowed = row
+        (
+            doc_id_,
+            chunk_index_,
+            text,
+            title,
+            doc_type,
+            source_domain,
+            llm_allowed,
+            evidence_tier,
+            is_official_source,
+        ) = row
         return StoredChunk(
             doc_id=doc_id_,
             chunk_index=chunk_index_,
@@ -91,6 +146,8 @@ class ChunkTextStore:
             doc_type=doc_type,
             source_domain=source_domain,
             external_llm_context_allowed=bool(llm_allowed),
+            evidence_tier=evidence_tier,
+            is_official_source=bool(is_official_source),
         )
 
     def delete_doc(self, doc_id: str) -> int:
@@ -112,7 +169,7 @@ class ChunkTextStore:
     def list_chunks(self, *, external_llm_context_allowed: bool | None = None) -> list[StoredChunk]:
         query = (
             "SELECT doc_id, chunk_index, text, title, doc_type, source_domain, "
-            "external_llm_context_allowed FROM chunks"
+            "external_llm_context_allowed, evidence_tier, is_official_source FROM chunks"
         )
         params: tuple[int, ...] = ()
         if external_llm_context_allowed is not None:
@@ -130,6 +187,8 @@ class ChunkTextStore:
                 doc_type=row[4],
                 source_domain=row[5],
                 external_llm_context_allowed=bool(row[6]),
+                evidence_tier=row[7],
+                is_official_source=bool(row[8]),
             )
             for row in rows
         ]
@@ -142,6 +201,14 @@ class ChunkTextStore:
             conn.execute(_MIGRATION_ADD_LLM_ALLOWED)
         except sqlite3.OperationalError:
             pass  # column already exists
+        try:
+            conn.execute(_MIGRATION_ADD_EVIDENCE_TIER)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            conn.execute(_MIGRATION_ADD_IS_OFFICIAL_SOURCE)
+        except sqlite3.OperationalError:
+            pass  # column already exists
         return conn
 
     @staticmethod
@@ -152,3 +219,5 @@ class ChunkTextStore:
             raise ValueError("doc_id must be non-empty")
         if isinstance(chunk.chunk_index, bool) or chunk.chunk_index < 0:
             raise ValueError("chunk_index must be non-negative int")
+        if not chunk.evidence_tier.strip():
+            raise ValueError("evidence_tier must be non-empty")

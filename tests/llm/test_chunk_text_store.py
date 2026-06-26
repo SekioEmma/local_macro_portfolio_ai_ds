@@ -47,6 +47,28 @@ def test_upsert_and_get_round_trip(tmp_path):
     assert result.chunk_index == 0
 
 
+def test_upsert_and_get_preserves_evidence_tier(tmp_path):
+    store = _store(tmp_path)
+    store.upsert_chunk(
+        StoredChunk(
+            doc_id="memo",
+            chunk_index=0,
+            text="research view",
+            title="Memo",
+            doc_type="research_report",
+            source_domain="local_user_verified",
+            evidence_tier="institutional_view",
+            is_official_source=False,
+        )
+    )
+
+    result = store.get_chunk("memo", 0)
+
+    assert result is not None
+    assert result.evidence_tier == "institutional_view"
+    assert result.is_official_source is False
+
+
 def test_get_nonexistent_returns_none(tmp_path):
     store = _store(tmp_path)
     assert store.get_chunk("missing", 0) is None
@@ -66,6 +88,14 @@ def test_upsert_multiple_chunks(tmp_path):
     for i in range(3):
         store.upsert_chunk(_chunk(chunk_index=i, text=f"text {i}"))
     assert store.count() == 3
+
+
+def test_upsert_chunks_bulk_insert(tmp_path):
+    store = _store(tmp_path)
+    store.upsert_chunks([_chunk(chunk_index=i, text=f"text {i}") for i in range(3)])
+
+    assert store.count() == 3
+    assert store.get_chunk("doc1", 2).text == "text 2"
 
 
 # ---- delete ----
