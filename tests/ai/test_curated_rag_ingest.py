@@ -187,6 +187,47 @@ def test_verified_local_provenance_can_be_planned_without_canonical_url(tmp_path
     assert plan.accepted[0].source_domain == "local_user_verified"
 
 
+def test_official_release_manifest_document_can_be_planned(tmp_path):
+    relpath = "official_release/bls_cpi_2026_05.md"
+    digest = _write_doc(
+        tmp_path,
+        relpath,
+        "# BLS Consumer Price Index - 2026-05\n\n## Narrative Layer\n\nCPI rose in May.\n\n## Table Layer\n\n```text\nTable A 0.5 2.1 3.4 4.0\n```\n",
+    )
+    row = {
+        "document_id": "bls_cpi_2026_05",
+        "output_relpath": relpath,
+        "cohort": "official_release",
+        "extraction_status": "ready",
+        "provenance_status": "verified",
+        "ingest_status": "eligible",
+        "external_llm_context_allowed": True,
+        "allowed_use": "external_context_candidate",
+        "runtime_doc_type": "official_release",
+        "canonical_url": None,
+        "source_domain": None,
+        "source_relpath": "BLS/cpi.pdf",
+        "source_file_sha256": "f" * 64,
+        "cleaned_content_sha256": digest,
+        "source_kind": "official_release",
+        "release_date": "2026-06-10",
+        "observation_period": "2026-05",
+        "material_type": "cpi_release",
+        "factual_status": "historical_release",
+        "vintage": "as_released",
+        "table_quality": "review_required",
+        "content_layers": ["narrative", "table"],
+    }
+    manifest = _manifest(tmp_path, [row])
+
+    plan = build_ingest_plan(tmp_path, manifest)
+
+    assert plan.accepted_document_count == 1
+    assert plan.doc_type_counts == {"official_release": 1}
+    assert plan.accepted[0].metadata["observation_period"] == "2026-05"
+    assert plan.accepted[0].metadata["content_layers"] == "narrative,table"
+
+
 def test_manifest_verified_provenance_with_source_markers_is_admitted(tmp_path):
     row = _base_row(tmp_path)
     row["canonical_url"] = None

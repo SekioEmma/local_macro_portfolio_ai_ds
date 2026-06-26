@@ -13,10 +13,16 @@ from llm.chunk_text_store import ChunkTextStore, StoredChunk
 from llm.document_chunker import Chunk, chunk_text
 
 
-ALLOWED_RUNTIME_DOC_TYPES = frozenset({"policy_doc", "research_report"})
-ALLOWED_CONTENT_COHORTS = frozenset({"policy_doc", "research_report"})
-READABLE_COHORTS = frozenset({"policy_doc", "research_report", "pending_governance", "review_required"})
-_COHORT_PRIORITY = {"policy_doc": 0, "research_report": 1, "review_required": 2}
+ALLOWED_RUNTIME_DOC_TYPES = frozenset({"policy_doc", "research_report", "official_release"})
+ALLOWED_CONTENT_COHORTS = frozenset({"policy_doc", "research_report", "official_release"})
+READABLE_COHORTS = frozenset({
+    "policy_doc",
+    "research_report",
+    "official_release",
+    "pending_governance",
+    "review_required",
+})
+_COHORT_PRIORITY = {"policy_doc": 0, "official_release": 1, "research_report": 2, "review_required": 3}
 DEFAULT_VECTOR_ROOT = Path(__file__).resolve().parents[3] / "data" / "vector_store"
 DEFAULT_VECTOR_DIR = DEFAULT_VECTOR_ROOT
 
@@ -381,6 +387,12 @@ def _safe_metadata(row: dict[str, Any]) -> dict[str, Any]:
         "source_kind": _metadata_str(row.get("source_kind")),
         "temporal_status": _metadata_str(row.get("temporal_status")),
         "release_date": _metadata_str(row.get("release_date")),
+        "observation_period": _metadata_str(row.get("observation_period")),
+        "material_type": _metadata_str(row.get("material_type")),
+        "factual_status": _metadata_str(row.get("factual_status")),
+        "vintage": _metadata_str(row.get("vintage")),
+        "table_quality": _metadata_str(row.get("table_quality")),
+        "content_layers": _metadata_list(row.get("content_layers")),
         "fomc_material_type": _metadata_str(row.get("fomc_material_type")),
     }
     return {key: value for key, value in metadata.items() if value not in (None, "")}
@@ -388,6 +400,13 @@ def _safe_metadata(row: dict[str, Any]) -> dict[str, Any]:
 
 def _metadata_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
+
+
+def _metadata_list(value: object) -> str | None:
+    if not isinstance(value, list):
+        return None
+    items = [item for item in value if isinstance(item, str) and item]
+    return ",".join(items) if items else None
 
 
 def _stored_chunk(doc: CuratedDocument, chunk: Chunk) -> StoredChunk:
