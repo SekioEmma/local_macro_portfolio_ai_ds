@@ -190,3 +190,29 @@ def test_offline_only_missing_model_fails_closed(monkeypatch):
     with pytest.raises(OfflineEmbeddingModelNotAvailable, match=OFFLINE_MODEL_ERROR_CODE):
         svc.load()
     monkeypatch.delitem(sys.modules, "sentence_transformers")
+
+
+# ---- dim detection ----
+
+def test_dim_returns_hardcoded_default_before_load():
+    svc = EmbeddingService(_model=_StubModel())
+    assert svc.dim == EMBEDDING_DIM
+
+
+def test_dim_detects_from_model_method_after_load():
+    class _ModelWithDim:
+        def encode(self, sentences, *, normalize_embeddings=True):
+            return [[0.0] * 768 for _ in sentences]
+
+        def get_sentence_embedding_dimension(self) -> int:
+            return 768
+
+    svc = EmbeddingService(_model=_ModelWithDim())
+    svc.load()
+    assert svc.dim == 768
+
+
+def test_dim_falls_back_when_model_has_no_detection():
+    svc = EmbeddingService(_model=_StubModel())
+    svc.load()
+    assert svc.dim == EMBEDDING_DIM

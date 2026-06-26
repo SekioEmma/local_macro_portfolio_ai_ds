@@ -42,6 +42,7 @@ class EmbeddingService:
         self._model_name = model_name
         self._model: EmbeddingModel | None = _model
         self._offline_only = offline_only
+        self._detected_dim: int | None = _detect_dim(_model) if _model is not None else None
 
     # ------------------------------------------------------------------
     # Public API
@@ -51,6 +52,7 @@ class EmbeddingService:
         """Explicitly load the model into memory (idempotent)."""
         if self._model is None:
             self._model = _load_sentence_transformer(self._model_name, offline_only=self._offline_only)
+            self._detected_dim = _detect_dim(self._model)
 
     def encode(self, texts: list[str]) -> list[list[float]]:
         """Return one embedding vector per input text.
@@ -83,12 +85,27 @@ class EmbeddingService:
 
     @property
     def dim(self) -> int:
+        if self._detected_dim is not None:
+            return self._detected_dim
         return EMBEDDING_DIM
 
 
 # ------------------------------------------------------------------
 # Internal helpers
 # ------------------------------------------------------------------
+
+def _detect_dim(model: EmbeddingModel) -> int | None:
+    """Try to read the embedding dimension from the model; return None on failure."""
+    dim = getattr(model, "get_sentence_embedding_dimension", None)
+    if callable(dim):
+        try:
+            value = dim()
+            if isinstance(value, int) and value > 0:
+                return value
+        except Exception:
+            pass
+    return None
+
 
 def _load_sentence_transformer(model_name: str, *, offline_only: bool = False) -> EmbeddingModel:
     try:
