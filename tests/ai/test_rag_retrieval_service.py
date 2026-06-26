@@ -272,3 +272,36 @@ def test_retrieve_can_include_local_only_when_explicitly_requested():
     results = svc.retrieve("rate", include_local_only=True)
 
     assert [r.doc_id for r in results] == ["private"]
+
+
+def test_retrieve_backfills_after_filtering_local_only():
+    """When some top-ranked results are local-only, backfill from lower ranks."""
+    raw = {
+        ("private1", 0): _FakeRawChunk(
+            text="private1", title="P1", doc_type="t", source_domain="a.com",
+            external_llm_context_allowed=False,
+        ),
+        ("private2", 0): _FakeRawChunk(
+            text="private2", title="P2", doc_type="t", source_domain="a.com",
+            external_llm_context_allowed=False,
+        ),
+        ("public1", 0): _chunk("public1"),
+        ("public2", 0): _chunk("public2"),
+        ("public3", 0): _chunk("public3"),
+    }
+    vec = [
+        _FakeVecResult("private1", 0, 0.99),
+        _FakeVecResult("private2", 0, 0.95),
+        _FakeVecResult("public1", 0, 0.90),
+        _FakeVecResult("public2", 0, 0.85),
+        _FakeVecResult("public3", 0, 0.80),
+    ]
+    svc = _make_svc(vec=vec, raw=raw)
+
+    results = svc.retrieve("rate", top_k=3)
+
+    ids = [r.doc_id for r in results]
+    assert "private1" not in ids
+    assert "private2" not in ids
+    assert len(ids) == 3
+    assert ids == ["public1", "public2", "public3"]

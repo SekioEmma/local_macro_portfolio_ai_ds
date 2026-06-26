@@ -63,17 +63,21 @@ class RAGRetrievalService:
         if top_k < 1:
             raise ValueError("top_k must be >= 1")
 
+        fetch_k = top_k * 3
+
         try:
             query_emb = self._emb.encode_one(query)
-            vec_results = self._vs.query(query_emb, top_k=top_k * 2, doc_type_filter=doc_type_filter)
+            vec_results = self._vs.query(query_emb, top_k=fetch_k, doc_type_filter=doc_type_filter)
         except ImportError:
             vec_results = []
-        bm25_results = self._bm25.query(query, top_k=top_k * 2)
+        bm25_results = self._bm25.query(query, top_k=fetch_k)
 
-        fused = _rrf_fuse(vec_results, bm25_results, top_k=top_k)
+        fused = _rrf_fuse(vec_results, bm25_results, top_k=fetch_k)
 
         chunks: list[RetrievedChunk] = []
         for (doc_id, chunk_index), score in fused:
+            if len(chunks) >= top_k:
+                break
             raw = self._raw.get_chunk(doc_id, chunk_index)
             if raw is None:
                 continue
