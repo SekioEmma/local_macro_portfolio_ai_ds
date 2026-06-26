@@ -85,17 +85,16 @@ def assess_rag_evidence_candidate(
     if type(candidate) is not RagEvidenceCandidate:
         raise RagEvidenceGovernanceError("invalid_candidate")
 
-    invalid_candidate = False
+    failed = False
     try:
         return _assess_exact_candidate(candidate)
     except RagEvidenceGovernanceError:
         raise
     except Exception:
-        invalid_candidate = True
+        failed = True
 
-    if invalid_candidate:
+    if failed:
         raise RagEvidenceGovernanceError("invalid_candidate")
-    raise RagEvidenceGovernanceError("invalid_candidate")
 
 
 def _assess_exact_candidate(candidate: RagEvidenceCandidate) -> RagEvidenceAssessment:
