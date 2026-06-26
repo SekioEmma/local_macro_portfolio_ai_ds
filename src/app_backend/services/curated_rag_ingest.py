@@ -34,6 +34,7 @@ class CuratedDocument:
     source_domain: str
     external_llm_context_allowed: bool
     metadata: dict[str, Any]
+    verified_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -120,7 +121,7 @@ def ingest_curated_corpus(
     if vector_dir is not None:
         vector_root = vector_dir
     plan = build_ingest_plan(curated_root, manifest_path)
-    chunk_count = sum(len(chunk_text(doc.path.read_text(encoding="utf-8"), doc_id=doc.document_id)) for doc in plan.accepted)
+    chunk_count = sum(len(chunk_text(doc.verified_text, doc_id=doc.document_id)) for doc in plan.accepted)
 
     if not write:
         return CuratedIngestResult(plan=plan, chunk_count=chunk_count, written_chunk_count=0, mode="dry-run")
@@ -152,8 +153,7 @@ def ingest_curated_corpus(
 
     written = 0
     for doc in plan.accepted:
-        text = doc.path.read_text(encoding="utf-8")
-        chunks = chunk_text(text, doc_id=doc.document_id)
+        chunks = chunk_text(doc.verified_text, doc_id=doc.document_id)
         chunk_store.delete_doc(doc.document_id)
         if vector_enabled and vector_store is not None:
             vector_store.delete(doc.document_id)
@@ -358,6 +358,7 @@ def _document_from_row(curated_root: Path, row: dict[str, Any]) -> CuratedDocume
         source_domain=_source_label(row),
         external_llm_context_allowed=True,
         metadata=_safe_metadata(row),
+        verified_text=text,
     )
 
 
