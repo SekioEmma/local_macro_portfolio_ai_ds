@@ -548,9 +548,18 @@ def make_search_tavily_tool(execute_fn: SearchExecuteFn) -> ToolSpec:
     the explicit user request. The execution service still enforces every
     other gate (sanitizer, runtime policy, allowlist, budget, response
     guard) and fails closed on any failure.
+
+    F1-5: every result is scored by ``MacroNewsRelevanceFilter`` and
+    results below the fixed threshold are dropped from the LLM-facing
+    payload. The threshold is not exposed in the LLM-facing schema so the
+    model cannot lower it.
     """
 
     from app_backend.schemas.search_external import TavilySearchApiRequest
+    from app_backend.services.macro_news_relevance_filter import (
+        DEFAULT_RELEVANCE_THRESHOLD,
+        filter_results,
+    )
 
     def handler(args: dict[str, Any]) -> Any:
         query = args.get("query")
@@ -585,15 +594,39 @@ def make_search_tavily_tool(execute_fn: SearchExecuteFn) -> ToolSpec:
         # Strip provider error / blocking flag detail before handing back
         # to the LLM. The guarded service already redacts upstream, but the
         # tool layer makes the contract explicit.
-        if isinstance(payload, dict):
-            results = payload.get("results") or []
+        if not isinstance(payload, dict):
             return {
-                "results": results,
-                "search_available": bool(payload.get("search_available")),
-                "guard_passed": bool(payload.get("guard_passed")),
-                "result_count": len(results) if isinstance(results, list) else 0,
+                "results": [],
+                "search_available": False,
+                "guard_passed": False,
+                "result_count": 0,
+                "filtered_low_relevance_count": 0,
+                "relevance_threshold": DEFAULT_RELEVANCE_THRESHOLD,
             }
-        return {"results": [], "search_available": False, "guard_passed": False, "result_count": 0}
+
+        raw_results = payload.get("results") or []
+        if not isinstance(raw_results, list):
+            raw_results = []
+        kept, dropped = filter_results(raw_results, threshold=DEFAULT_RELEVANCE_THRESHOLD)
+        scored = [
+            {
+                "url": item.url,
+                "title": item.title,
+                "snippet": item.snippet,
+                "domain": item.domain,
+                "relevance_score": item.score,
+                **({"published_at": item.published_at} if item.published_at else {}),
+            }
+            for item in kept
+        ]
+        return {
+            "results": scored,
+            "search_available": bool(payload.get("search_available")),
+            "guard_passed": bool(payload.get("guard_passed")),
+            "result_count": len(scored),
+            "filtered_low_relevance_count": dropped,
+            "relevance_threshold": DEFAULT_RELEVANCE_THRESHOLD,
+        }
 
     return ToolSpec(
         name="search_tavily",

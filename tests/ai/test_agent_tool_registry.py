@@ -1185,3 +1185,100 @@ def test_dispatch_non_serializable_still_rejected():
     result = registry.dispatch("t", {})
     assert result.status == "error"
     assert result.error_code == "non_serializable_result"
+
+
+# ---------------------------------------------------------------------------
+# F1-5 MacroNewsRelevanceFilter integration into search_tavily
+# ---------------------------------------------------------------------------
+
+
+def test_search_tavily_filters_low_relevance_results_from_llm_payload():
+    high_signal = SearchResult(
+        url="https://federalreserve.gov/x",
+        title="FOMC statement holds rates",
+        snippet="The committee voted to hold rates steady.",
+        domain="federalreserve.gov",
+    )
+    low_signal = SearchResult(
+        url="https://obscure.example/y",
+        title="Random article",
+        snippet="not macro relevant",
+        domain="obscure.example",
+    )
+    mixed = SearchResponse(
+        results=[high_signal, low_signal],
+        search_available=True,
+        guard_passed=True,
+    )
+    spec = make_search_tavily_tool(lambda req: mixed)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("search_tavily", {"query": "FOMC"})
+
+    assert result.status == "ok"
+    titles = [r["title"] for r in result.content["results"]]
+    assert "FOMC statement holds rates" in titles
+    assert "Random article" not in titles
+    assert result.content["filtered_low_relevance_count"] == 1
+    assert result.content["result_count"] == 1
+    assert result.content["relevance_threshold"] >= 30
+
+
+def test_search_tavily_attaches_relevance_score_to_each_result():
+    high = SearchResult(
+        url="https://federalreserve.gov/x",
+        title="FOMC statement",
+        snippet="hold rates",
+        domain="federalreserve.gov",
+    )
+    spec = make_search_tavily_tool(
+        lambda req: SearchResponse(results=[high], search_available=True, guard_passed=True)
+    )
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("search_tavily", {"query": "fed"})
+
+    assert result.content["results"][0]["relevance_score"] >= 30
+    assert "url" in result.content["results"][0]
+    assert "domain" in result.content["results"][0]
+
+
+def test_search_tavily_relevance_threshold_not_exposed_in_openai_schema():
+    """LLM must not be able to lower the threshold via tool args."""
+    spec = make_search_tavily_tool(
+        lambda req: SearchResponse(results=[], search_available=False, guard_passed=False)
+    )
+    schema = spec.to_openai_schema()
+    params = schema["function"]["parameters"]
+    assert "relevance_threshold" not in params["properties"]
+    assert "threshold" not in params["properties"]
+
+
+def test_search_tavily_empty_results_still_reports_filter_metadata():
+    spec = make_search_tavily_tool(
+        lambda req: SearchResponse(results=[], search_available=True, guard_passed=True)
+    )
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("search_tavily", {"query": "fed"})
+
+    assert result.content["result_count"] == 0
+    assert result.content["filtered_low_relevance_count"] == 0
+    assert "relevance_threshold" in result.content
+
+
+def test_search_tavily_guard_blocked_carries_filter_metadata_too():
+    spec = make_search_tavily_tool(
+        lambda req: SearchResponse(results=[], search_available=False, guard_passed=False)
+    )
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("search_tavily", {"query": "fed"})
+
+    assert result.content["search_available"] is False
+    assert result.content["guard_passed"] is False
+    assert result.content["filtered_low_relevance_count"] == 0
