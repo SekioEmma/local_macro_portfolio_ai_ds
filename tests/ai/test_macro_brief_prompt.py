@@ -15,6 +15,7 @@ from app_backend.services.macro_brief_prompt import (
     ANTI_CONSERVATIVE_BIAS_RULES,
     ANTI_HALLUCINATION_RULES,
     MACRO_BRIEF_RESPONSE_FORMAT,
+    REFERENCE_BRIEF_EXAMPLE,
     build_macro_brief_prompt,
 )
 
@@ -104,6 +105,29 @@ def test_system_prompt_stays_under_f3_budget():
     )
 
     assert len(prompt.system_prompt.encode("utf-8")) < 8000
+
+
+def test_system_prompt_contains_reference_brief_example():
+    prompt = build_macro_brief_prompt(
+        user_question="x",
+        current_date=date(2026, 6, 29),
+        tool_names=[FINALIZE_TOOL_NAME],
+    )
+
+    text = prompt.system_prompt
+    assert REFERENCE_BRIEF_EXAMPLE in text
+    assert "format only; do not reuse these synthetic facts" in text
+    assert '"module_key": "equity_trend"' in text
+    assert '"boundary_notice"' in text
+
+
+def test_reference_brief_does_not_contain_private_context_markers():
+    lowered = REFERENCE_BRIEF_EXAMPLE.lower()
+
+    assert "holdings" not in lowered
+    assert "account" not in lowered
+    assert "api_key" not in lowered
+    assert "current_holdings" not in lowered
 
 
 def test_messages_are_provider_style_system_then_user():

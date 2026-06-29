@@ -86,6 +86,52 @@ Status and scenario discipline:
 """.strip()
 
 
+REFERENCE_BRIEF_EXAMPLE = """
+Reference brief example (format only; do not reuse these synthetic facts):
+{
+  "core_conclusion": "示例：宏观环境处于数据敏感的观察状态。",
+  "market_state": [
+    {"symbol": "SPY", "price": 100.0, "change_pct": 0.1, "as_of": "2026-01-02"},
+    {"symbol": "QQQ", "price": 100.0, "change_pct": 0.1, "as_of": "2026-01-02"},
+    {"symbol": "SHY", "price": 100.0, "change_pct": 0.0, "as_of": "2026-01-02"},
+    {"symbol": "GLD", "price": 100.0, "change_pct": -0.1, "as_of": "2026-01-02"}
+  ],
+  "confirmed_facts": [
+    {"id": "f1", "statement": "示例工具返回利率仍在观察区间。", "value": "tool_value", "unit": null, "source_id": "s1", "as_of": "2026-01-02"}
+  ],
+  "judgments": [
+    {"claim": "示例判断必须引用事实。", "evidence_supports": ["f1"], "claim_type": "direct_evidence"}
+  ],
+  "module_table": [
+    {"module_key": "equity_trend", "module_name_zh": "权益趋势", "status": "watch", "note": "示例"},
+    {"module_key": "rate_pressure", "module_name_zh": "利率压力", "status": "pressure", "note": "示例"},
+    {"module_key": "real_yield_pressure", "module_name_zh": "真实利率压力", "status": "watch", "note": "示例"},
+    {"module_key": "inflation_energy", "module_name_zh": "通胀能源", "status": "watch", "note": "示例"},
+    {"module_key": "credit_pressure", "module_name_zh": "信用压力", "status": "benign", "note": "示例"},
+    {"module_key": "geopolitical_risk", "module_name_zh": "地缘风险", "status": "watch", "note": "示例"}
+  ],
+  "risk_assessment": {"current_label": "watch", "summary": "示例", "upgrade_triggers": ["示例上行触发"], "downgrade_triggers": ["示例下行触发"]},
+  "forward_indicators": [
+    {"name": "CPI", "release_date": "2026-01-15", "relevance": "示例"},
+    {"name": "FOMC", "release_date": "2026-01-29", "relevance": "示例"},
+    {"name": "Payrolls", "release_date": "2026-02-06", "relevance": "示例"},
+    {"name": "PCE", "release_date": "2026-02-27", "relevance": "示例"},
+    {"name": "ISM", "release_date": "2026-02-02", "relevance": "示例"}
+  ],
+  "scenarios": {
+    "base": {"trigger_conditions": ["示例 base"], "transmission_path": "示例", "note": null},
+    "bullish": {"trigger_conditions": ["示例 bullish"], "transmission_path": "示例", "note": null},
+    "bearish": {"trigger_conditions": ["示例 bearish"], "transmission_path": "示例", "note": null},
+    "systemic": {"trigger_conditions": ["示例 systemic"], "transmission_path": "示例", "note": null}
+  },
+  "source_list": [
+    {"id": "s1", "url": "https://fred.stlouisfed.org/series/example", "rag_doc_id": null, "accessed_at": "2026-01-02", "title": "Synthetic example"}
+  ],
+  "boundary_notice": "非个股操作 / 非概率胜率 / 非收益预测 / 非动态择时 / 非黑盒最优化"
+}
+""".strip()
+
+
 @dataclass(frozen=True)
 class MacroBriefPrompt:
     """Prompt package consumed by the future agent/provider layer."""
@@ -124,6 +170,7 @@ def build_macro_brief_prompt(
             ABSOLUTE_PROHIBITIONS,
             ANTI_HALLUCINATION_RULES,
             ANTI_CONSERVATIVE_BIAS_RULES,
+            REFERENCE_BRIEF_EXAMPLE,
             (
                 f"Your output must be valid JSON matching the MacroBrief schema. "
                 f"You must call {FINALIZE_TOOL_NAME} to terminate; this is the only exit."
@@ -175,6 +222,7 @@ __all__ = [
     "ANTI_HALLUCINATION_RULES",
     "MACRO_BRIEF_RESPONSE_FORMAT",
     "MacroBriefPrompt",
+    "REFERENCE_BRIEF_EXAMPLE",
     "SECTION_SCHEMA_GUIDE",
     "build_macro_brief_prompt",
 ]
