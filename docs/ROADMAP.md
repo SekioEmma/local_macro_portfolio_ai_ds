@@ -57,11 +57,10 @@ Tag：`era1-frontend-redesign-complete`。
 |---|---|---|---|
 | A | 治理与边界（解冻 Tavily + 收益区间） | 已完成 | ✅ A1 |
 | B | Tavily + 实时报价 + 商品价 + 本地 API routes | 已完成（B1–B7） | — |
-<<<<<<< HEAD
 | C | 搜索分类持久化 + 经济日历 | 已完成（C1–C4e；FOMC exact-time deferred） | — |
 | D | RAG 知识库 | 已完成（D0 governance contracts；D-1~D-7 embedding/vector/BM25/RRF/seed；需安装 sentence-transformers + chromadb + rank-bm25；用户需向 data/knowledge_base/input/ 放置文件） | — |
-| E | 情景化收益区间引擎 | 2 | ✅ E1 |
-| F | Agent + 9 节前端 | 2.5 | — |
+| E | 情景化收益区间引擎 | 已暂停于 framework（不阻塞 F） | ✅ E1 |
+| F | Agent + 9 节前端 | 进行中（F0–F2 完成，F3 开始） | Phase F holdings exception 已批准 |
 | G | 报告归档 + 历史对比 | 1 | — |
 | H | 质量评估闭环 | 1 | — |
 | I | 多 Agent 拆分 | 2 | 条件触发 |

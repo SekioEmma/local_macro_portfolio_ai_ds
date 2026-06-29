@@ -302,21 +302,22 @@
 
 **新增**：`src/app_backend/schemas/macro_brief.py`
 - 10 节强类型 Pydantic v2。
-- 校验：core_conclusion 50–500 字；module_table 恰好 6 行（固定模块名集合）；scenarios 4 键全；forward_indicators 恰好 5；boundary_notice 含 5 关键词；每 block 的 facts ≥ 1，每条 source_url 必填。
+- 校验：module_table 恰好 6 行（固定模块名集合）；market_state 恰好 SPY/QQQ/SHY/GLD 4 卡；scenarios 4 键全；forward_indicators 恰好 5；boundary_notice 含 5 关键词；judgments 必须引用已存在 confirmed_facts；source_list 每项需 `url` 或 `rag_doc_id`。
+- F2-3 已新增 `src/app_backend/services/macro_brief_parser.py`，负责 JSON object/string → MacroBrief，并把 Pydantic errors / cross-section findings 归一为 `MacroBriefValidationError`。
 
 **测试**：`tests/ai/test_macro_brief_schema.py` ≥ 20 用例。
 
 ---
 
-## TASK-F3：MacroBrief prompt + parser
+## TASK-F3：MacroBrief prompt
 
 **新增**：
 - `src/app_backend/services/macro_brief_prompt.py`：system + user prompt 构造器；含 9 节模板（计划 §1）、"已确认事实+判断" 强制结构、5 禁止、JSON schema response_format。
-- `src/app_backend/services/macro_brief_parser.py`：JSON / markdown → MacroBrief；含 4 层校验（pydantic / url 形式 / 数字-来源对齐 / 边界用语关键词）。
+- parser 已在 F2-3 完成；F3 不重复实现 parser。
 
 **测试**：
 - `tests/ai/test_macro_brief_prompt.py` 关键字断言。
-- `tests/ai/test_macro_brief_parser.py` 含 GPT 样例 fixture（通过）+ 旧 DS 样例 fixture（按预期失败报缺节）。
+- `tests/ai/test_macro_brief_parser.py` 保持 F2-3 回归。
 
 **Fixture**：`tests/fixtures/macro_brief/gpt_baseline_2026_06_22.md`、`ds_legacy_sample.md`。
 
@@ -341,7 +342,7 @@
 - 主循环：DeepSeek → tool_calls → dispatch → tool_message → repeat。
 - 终止条件：调用 `finalize_macro_brief` 或 budget 超限或连续 3 步失败。
 - 输出过 `macro_brief_parser`，schema 失败重试 1 次。
-- Budget：max_steps=18 / max_search_calls=8 / max_rag_calls=5 / max_tokens_total=40000。
+- Budget：max_steps=18 / max_search_calls=5 / max_rag_calls=5 / max_tokens_total=40000。
 - 降级策略（计划 §3.A4 6 行表全部实现）。
 
 **测试**：

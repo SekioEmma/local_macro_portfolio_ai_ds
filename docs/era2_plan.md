@@ -219,7 +219,7 @@ I （可选）多 Agent 拆分   ~2 周   触发条件 §10
 | commodity_quote | commodity_quote_service |
 | calendar_lookup | economic_calendar_service |
 | portfolio_overlay | portfolio_overlay_service |
-| scenario_return_band | scenario_return_band_service |
+| quote_dxy | FRED `DTWEXBGS` via injected provider callable |
 | finalize_macro_brief | 终止工具 |
 
 ### F2 MacroBrief schema
@@ -233,6 +233,7 @@ I （可选）多 Agent 拆分   ~2 周   触发条件 §10
 ### F3 Prompt 模板
 
 - `macro_brief_prompt.py`：system prompt 内嵌 10 节模板、"已确认事实+判断" 强制结构、5 个禁止、JSON schema response_format。
+- `macro_brief_parser.py` 已在 F2-3 完成；F3 只新增 prompt 构造与 holdings 注入文本逻辑。
 
 ### F4 DeepSeek function calling
 
@@ -241,7 +242,7 @@ I （可选）多 Agent 拆分   ~2 周   触发条件 §10
 ### F5 Agent runtime
 
 - `agent_runtime.py`：主循环 tool dispatch；最后必须调 `finalize_macro_brief`；输出过 `macro_brief_parser`，失败重试 1 次。
-- Budget：max_steps=18 / max_search_calls=8 / max_rag_calls=5 / max_tokens_total=40000。
+- Budget：max_steps=18 / max_search_calls=5 / max_rag_calls=5 / max_tokens_total=40000。
 - 触发降级策略（见 §3.A4）。
 
 ### F6 Trace

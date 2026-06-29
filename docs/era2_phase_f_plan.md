@@ -1,6 +1,6 @@
 # Phase F — Agent + 9 节前端开发计划
 
-> **状态**：草案，待用户批准（2026-06-29 提出）
+> **状态**：已进入开发（2026-06-29 用户确认）；F0–F2 已完成，F3 开始
 > **前置**：E 阶段暂停于 framework（5 个 commit 已推送，不阻塞 F）
 > **依赖**：现有 `deepseek_real_transport` / `tavily_real_transport` / `RAGRetrievalService` / `dashboard_service` / `realtime_quote_service` / `economic_calendar_service` / `portfolio_engine`
 > **本文档是 CLAUDE.md §Era 2 F-Phase 授权的唯一依据**
@@ -30,7 +30,14 @@
 | 7 | **HY OAS** | 保留手动月度，brief 标注 `as_of_month` |
 | 8 | **多 provider 抽象层** | `LLMProviderAdapter` 接口，DeepSeek/Claude/GPT 三实现；当前只接 DeepSeek |
 
-**重要边界变更**：决策 1 突破 CLAUDE.md 现有红线（"Do NOT send holdings/account/position/transaction data"）。必须在 F1 开始前完成 **CLAUDE.md F-Phase Holdings Exception** 条款。
+**重要边界变更**：决策 1 突破 CLAUDE.md 现有红线（"Do NOT send holdings/account/position/transaction data"）。F0 已完成 **CLAUDE.md F-Phase Holdings Exception** 条款；后续实现必须严格受该例外约束。
+
+### 当前开发状态（2026-06-29）
+
+- F0 治理文档前置：已完成（CLAUDE.md + GOVERNANCE.md Phase F holdings exception）。
+- F1 Tool Registry：已完成到 F1-5，包含 11 工具、`quote_dxy`、dispatch redaction、8KB cap、MacroNewsRelevanceFilter。
+- F2 MacroBrief Schema + Parser：已完成到 F2-3，包含 10 节 Pydantic schema、cross-section validators、`MacroBriefValidationError` parser wrapper。
+- F3 Prompt 模板 + ReAct 引导：当前开发入口。
 
 ---
 
