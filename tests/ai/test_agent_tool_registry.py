@@ -12,14 +12,19 @@ from app_backend.schemas.search_external import (
     TavilySearchApiRequest,
 )
 from app_backend.services.agent_tool_registry import (
+    FINALIZE_TOOL_NAME,
     AgentToolRegistry,
     ToolResult,
     ToolSpec,
     build_f1_network_tools,
+    build_f1_portfolio_tools,
     build_f1_read_only_tools,
     make_commodity_quote_tool,
     make_dashboard_query_tool,
     make_evidence_lookup_tool,
+    make_finalize_macro_brief_tool,
+    make_portfolio_overlay_tool,
+    make_quote_dxy_tool,
     make_quote_etf_tool,
     make_rag_retrieve_tool,
     make_search_tavily_tool,
@@ -699,3 +704,309 @@ def test_f1_network_tools_have_openai_schema():
         assert "function" in schema
         assert "name" in schema["function"]
         assert "parameters" in schema["function"]
+
+
+# ---------------------------------------------------------------------------
+# F1-3 portfolio / DXY / finalize tool tests
+# ---------------------------------------------------------------------------
+
+
+def _full_portfolio_snapshot() -> dict[str, Any]:
+    # Shape mirrors portfolio_engine.generate_portfolio_snapshot output.
+    return {
+        # raw dollar amounts — MUST be dropped by the tool layer
+        "total_assets": 354222.0,
+        "invested_assets": 320000.0,
+        "cash": 34222.0,
+        "total_account_value": 354222.0,
+        "invested_asset_value": 320000.0,
+        "cash_reserve_value": 34222.0,
+        "total_profit_loss": 12345.67,
+        # per-holding detail with cost basis / P/L — MUST be dropped
+        "holdings": [
+            {
+                "asset_name": "SPY",
+                "current_value": 182247.0,
+                "cost_basis": 170000.0,
+                "profit_loss": 12247.0,
+                "updated_at": "2026-06-29",
+            }
+        ],
+        "aggregated_by_asset_class": {"large_cap": {"current_value": 252899.0}},
+        # safe fields — MUST be returned
+        "weights_ex_cash": {"large_cap": 0.703, "bond": 0.185, "gold": 0.101},
+        "target_allocation": {"large_cap": 0.70, "bond": 0.20, "gold": 0.10},
+        "deviation": {"large_cap": 0.003, "bond": -0.015, "gold": 0.001},
+        "deviation_flags": {"large_cap": "ok", "bond": "watch", "gold": "ok"},
+        "holdings_freshness_status": "fresh",
+        "holdings_updated_at_status": "fresh",
+        "holdings_age_days": 0,
+        "holdings_row_count": 4,
+        "holdings_updated_at": "2026-06-29",
+        "holdings_updated_at_values": ["2026-06-29"],
+        # DCA — MUST be dropped
+        "dca_budget_check": {"min": 1000, "max": 5000},
+        "dca_daily_plan": {"daily": 200},
+        "notes": ["descriptive only"],
+    }
+
+
+def test_portfolio_overlay_strips_dollar_amounts_and_holdings():
+    spec = make_portfolio_overlay_tool(_full_portfolio_snapshot)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("portfolio_overlay", {})
+
+    assert result.status == "ok"
+    overlay = result.content
+    # safe fields included
+    assert "weights_ex_cash" in overlay
+    assert "target_allocation" in overlay
+    assert "deviation" in overlay
+    assert "deviation_flags" in overlay
+    assert overlay["holdings_freshness_status"] == "fresh"
+    assert overlay["available"] is True
+    # forbidden fields stripped
+    for forbidden in (
+        "total_assets",
+        "invested_assets",
+        "cash",
+        "total_account_value",
+        "invested_asset_value",
+        "cash_reserve_value",
+        "total_profit_loss",
+        "holdings",
+        "aggregated_by_asset_class",
+        "dca_budget_check",
+        "dca_daily_plan",
+        "holdings_updated_at_values",
+    ):
+        assert forbidden not in overlay, f"{forbidden} must not reach the LLM"
+
+
+def test_portfolio_overlay_serialized_form_has_no_dollar_markers():
+    """Final JSON form must contain no raw dollar amounts at all."""
+    import json
+
+    spec = make_portfolio_overlay_tool(_full_portfolio_snapshot)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+    result = registry.dispatch("portfolio_overlay", {})
+
+    text = json.dumps(result.content)
+    for amount in ("182247", "354222", "12345.67", "170000", "cost_basis", "profit_loss"):
+        assert amount not in text
+
+
+def test_portfolio_overlay_rejects_unexpected_args():
+    spec = make_portfolio_overlay_tool(_full_portfolio_snapshot)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("portfolio_overlay", {"foo": "bar"})
+
+    assert result.status == "error"
+    assert result.error_code == "unexpected_args"
+
+
+def test_portfolio_overlay_unavailable_when_snapshot_returns_non_dict():
+    spec = make_portfolio_overlay_tool(lambda: None)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("portfolio_overlay", {})
+
+    assert result.status == "ok"
+    assert result.content == {"available": False, "reason": "portfolio_snapshot_unavailable"}
+
+
+def test_portfolio_overlay_marks_available_false_when_empty_summary():
+    spec = make_portfolio_overlay_tool(lambda: {"holdings_row_count": 0})
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("portfolio_overlay", {})
+
+    assert result.status == "ok"
+    assert result.content["available"] is False
+
+
+# -- quote_dxy ------------------------------------------------------------
+
+
+def test_quote_dxy_calls_fred_with_dtwexbgs():
+    captured: list[tuple[str, int]] = []
+
+    def fake_fred(series_id: str, limit: int):
+        captured.append((series_id, limit))
+        return {
+            "status": "ok",
+            "data": [{"date": "2026-06-27", "value": 102.45}],
+        }
+
+    spec = make_quote_dxy_tool(fake_fred)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("quote_dxy", {})
+
+    assert result.status == "ok"
+    assert captured == [("DTWEXBGS", 10)]
+    assert result.content == {
+        "status": "ok",
+        "series_id": "DTWEXBGS",
+        "value": 102.45,
+        "observation_date": "2026-06-27",
+        "source": "FRED",
+        "name": "broad trade-weighted USD index",
+    }
+
+
+def test_quote_dxy_returns_unavailable_when_provider_error():
+    spec = make_quote_dxy_tool(lambda s, n: {"status": "error", "error": "no api key"})
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("quote_dxy", {})
+
+    assert result.status == "ok"
+    assert result.content["status"] == "unavailable"
+    assert result.content["reason_code"] == "provider_unavailable"
+
+
+def test_quote_dxy_returns_unavailable_when_empty_data():
+    spec = make_quote_dxy_tool(lambda s, n: {"status": "ok", "data": []})
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("quote_dxy", {})
+
+    assert result.status == "ok"
+    assert result.content["status"] == "unavailable"
+    assert result.content["reason_code"] == "no_observations"
+
+
+def test_quote_dxy_returns_unavailable_when_malformed():
+    spec = make_quote_dxy_tool(lambda s, n: "not a dict")
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("quote_dxy", {})
+
+    assert result.status == "ok"
+    assert result.content["status"] == "unavailable"
+    assert result.content["reason_code"] == "malformed_provider_response"
+
+
+def test_quote_dxy_wraps_provider_exception_as_tool_error():
+    def boom(series_id, limit):
+        raise RuntimeError("network unreachable")
+
+    spec = make_quote_dxy_tool(boom)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("quote_dxy", {})
+
+    assert result.status == "error"
+    assert result.error_code == "fred_provider_error"
+    assert "network unreachable" not in (result.error_message or "")  # type name only
+
+
+def test_quote_dxy_rejects_unexpected_args():
+    spec = make_quote_dxy_tool(lambda s, n: {"status": "ok", "data": []})
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("quote_dxy", {"date": "today"})
+
+    assert result.status == "error"
+    assert result.error_code == "unexpected_args"
+
+
+# -- finalize_macro_brief -------------------------------------------------
+
+
+def test_finalize_macro_brief_returns_brief_payload():
+    spec = make_finalize_macro_brief_tool()
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    brief = {"core_conclusion": "balanced", "module_table": [], "scenarios": {}}
+    result = registry.dispatch("finalize_macro_brief", {"brief": brief})
+
+    assert result.status == "ok"
+    assert result.content == {"finalized": True, "brief": brief}
+
+
+def test_finalize_macro_brief_name_constant():
+    assert FINALIZE_TOOL_NAME == "finalize_macro_brief"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {},
+        {"brief": "not a dict"},
+        {"brief": None},
+        {"brief": ["list", "instead"]},
+    ],
+)
+def test_finalize_macro_brief_rejects_non_object_brief(args):
+    spec = make_finalize_macro_brief_tool()
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("finalize_macro_brief", args)
+
+    assert result.status == "error"
+    assert result.error_code == "invalid_brief"
+
+
+# -- bundle ---------------------------------------------------------------
+
+
+def test_build_f1_portfolio_tools_registers_all_three():
+    bundle = build_f1_portfolio_tools(
+        portfolio_snapshot_fn=lambda: _full_portfolio_snapshot(),
+        fred_series_fn=lambda s, n: {"status": "ok", "data": []},
+    )
+    registry = AgentToolRegistry()
+    bundle.register_all(registry)
+
+    assert sorted(registry.names()) == [
+        "finalize_macro_brief",
+        "portfolio_overlay",
+        "quote_dxy",
+    ]
+
+
+def test_all_f1_bundles_combined_have_11_tools():
+    """F1 ships exactly 11 tools (5 read-only + 3 network + 3 portfolio/dxy/finalize)."""
+    read_only = build_f1_read_only_tools(
+        summary_fn=lambda: {},
+        evidence_fn=lambda: {"modules": []},
+        quote_fn=lambda symbols: [],
+        curve_fn=lambda: {},
+        next_releases_fn=lambda window: [],
+        events_by_name_fn=lambda name, limit: [],
+    )
+    network = build_f1_network_tools(
+        search_execute_fn=lambda req: SearchResponse(results=[], search_available=False, guard_passed=False),
+        rag_retrieve_fn=lambda q, **kw: [],
+        commodity_quote_fn=lambda b: {"benchmark": b, "status": "unavailable",
+                                      "reason_code": "search_unavailable"},
+    )
+    portfolio = build_f1_portfolio_tools(
+        portfolio_snapshot_fn=lambda: {},
+        fred_series_fn=lambda s, n: {"status": "ok", "data": []},
+    )
+
+    registry = AgentToolRegistry()
+    read_only.register_all(registry)
+    network.register_all(registry)
+    portfolio.register_all(registry)
+
+    assert len(registry.names()) == 11
+    assert FINALIZE_TOOL_NAME in registry.names()

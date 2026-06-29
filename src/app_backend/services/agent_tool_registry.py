@@ -700,18 +700,252 @@ def build_f1_network_tools(
     )
 
 
+# ---------------------------------------------------------------------------
+# F1-3 tool handlers (portfolio / DXY / finalize)
+#
+# `portfolio_overlay` strictly never exposes raw dollar amounts, per-holding
+# details, account names, transaction history, or cost basis to the LLM via
+# the tool channel. The Phase F Holdings Injection Exception in CLAUDE.md
+# governs a SEPARATE channel (the system prompt) which is handled in F3 and
+# is the only authorized place where real amounts may reach the model.
+#
+# `quote_dxy` reads FRED DTWEXBGS through an injected fred_series callable
+# so the tool layer never imports a network client and tests use fakes.
+#
+# `finalize_macro_brief` is a terminator: the agent runtime detects this
+# tool name and exits the loop. At F1 the handler only normalizes the
+# brief into a dict; F2 will add full schema validation.
+# ---------------------------------------------------------------------------
+
+# Function signatures kept fully forward so this module never imports the
+# heavy downstream services at module load.
+PortfolioSnapshotFn = Callable[[], Any]  # () -> dict-like full snapshot
+FredSeriesFn = Callable[[str, int], Any]  # (series_id, limit) -> dict
+
+# Fields lifted from portfolio_engine.generate_portfolio_snapshot output that
+# are safe to expose to the LLM. Any other field — and especially raw dollar
+# amounts, per-holding details, total_profit_loss, dca_*, account names — is
+# dropped before the tool result is returned.
+_PORTFOLIO_SAFE_FIELDS: tuple[str, ...] = (
+    "weights_ex_cash",
+    "target_allocation",
+    "deviation",
+    "deviation_flags",
+    "holdings_freshness_status",
+    "holdings_age_days",
+    "holdings_updated_at_status",
+    "holdings_row_count",
+)
+
+
+def make_portfolio_overlay_tool(snapshot_fn: PortfolioSnapshotFn) -> ToolSpec:
+    """Wrap portfolio_engine snapshot as a sanitized overlay tool.
+
+    Returns ONLY the deviation summary: weights, target allocation,
+    deviation per asset class, and freshness status. Dollar amounts,
+    per-holding lots, account names, cost basis, P/L, and the DCA plan
+    are dropped before reaching the LLM. The Phase F Holdings Injection
+    Exception (system-prompt channel) is unrelated and handled in F3.
+    """
+
+    def handler(args: dict[str, Any]) -> Any:
+        if args:
+            raise _ToolValidationError(
+                "unexpected_args", "portfolio_overlay takes no parameters"
+            )
+        raw = snapshot_fn()
+        snapshot = _to_jsonable(raw)
+        if not isinstance(snapshot, dict):
+            return {"available": False, "reason": "portfolio_snapshot_unavailable"}
+        return _redact_portfolio_snapshot(snapshot)
+
+    return ToolSpec(
+        name="portfolio_overlay",
+        description=(
+            "Return a sanitized portfolio overlay summary: current asset-class "
+            "weights, target allocation, per-class deviation, deviation flags, "
+            "and holdings freshness. No dollar amounts, no per-position lots, "
+            "no account names, no cost basis. Use this to decide whether the "
+            "asset-class mix is on or off target."
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
+
+
+def _redact_portfolio_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    overlay: dict[str, Any] = {
+        key: snapshot[key] for key in _PORTFOLIO_SAFE_FIELDS if key in snapshot
+    }
+    overlay["available"] = bool(overlay.get("weights_ex_cash") or overlay.get("target_allocation"))
+    return overlay
+
+
+def make_quote_dxy_tool(fred_series_fn: FredSeriesFn) -> ToolSpec:
+    """Wrap FRED DTWEXBGS as a DXY-equivalent quote tool.
+
+    DTWEXBGS is the broad trade-weighted USD index (daily). Returns the
+    most recent valid observation; falls back to 'unavailable' when the
+    provider call fails or returns malformed data. The fred_series_fn
+    callable is injected so tests never make a real network call.
+    """
+
+    def handler(args: dict[str, Any]) -> Any:
+        if args:
+            raise _ToolValidationError("unexpected_args", "quote_dxy takes no parameters")
+        try:
+            payload = fred_series_fn("DTWEXBGS", 10)
+        except Exception as exc:  # noqa: BLE001 — handler maps to error result
+            raise _ToolValidationError(
+                "fred_provider_error",
+                f"DXY (DTWEXBGS) provider call failed: {type(exc).__name__}",
+            ) from exc
+        return _shape_dxy_quote(payload)
+
+    return ToolSpec(
+        name="quote_dxy",
+        description=(
+            "Return the latest broad trade-weighted US dollar index "
+            "(FRED series DTWEXBGS, daily). Use as a DXY proxy for "
+            "macro USD strength analysis. No network call if the FRED "
+            "provider is unavailable; returns status='unavailable' "
+            "fail-closed."
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
+
+
+def _shape_dxy_quote(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {"status": "unavailable", "reason_code": "malformed_provider_response"}
+    if payload.get("status") != "ok":
+        return {
+            "status": "unavailable",
+            "reason_code": "provider_unavailable",
+            "series_id": "DTWEXBGS",
+        }
+    data = payload.get("data")
+    if not isinstance(data, list) or not data:
+        return {
+            "status": "unavailable",
+            "reason_code": "no_observations",
+            "series_id": "DTWEXBGS",
+        }
+    latest = data[0]
+    if not isinstance(latest, dict):
+        return {
+            "status": "unavailable",
+            "reason_code": "malformed_provider_response",
+            "series_id": "DTWEXBGS",
+        }
+    return {
+        "status": "ok",
+        "series_id": "DTWEXBGS",
+        "value": latest.get("value"),
+        "observation_date": latest.get("date"),
+        "source": "FRED",
+        "name": "broad trade-weighted USD index",
+    }
+
+
+def make_finalize_macro_brief_tool() -> ToolSpec:
+    """Terminator tool used by the agent runtime to exit the dispatch loop.
+
+    The handler does not validate the brief against the full MacroBrief
+    Pydantic schema — that is F2's job; F5 will catch the tool name and
+    drive the brief through the parser. F1 only enforces that the brief
+    argument is a JSON object.
+    """
+
+    def handler(args: dict[str, Any]) -> Any:
+        brief = args.get("brief")
+        if not isinstance(brief, dict):
+            raise _ToolValidationError(
+                "invalid_brief", "brief must be a JSON object (10-section MacroBrief)"
+            )
+        return {"finalized": True, "brief": brief}
+
+    return ToolSpec(
+        name="finalize_macro_brief",
+        description=(
+            "Submit the final 10-section MacroBrief. Calling this tool is "
+            "the ONLY way to terminate the agent. Do not call this until "
+            "you have collected enough evidence through other tools to fill "
+            "every section."
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "brief": {
+                    "type": "object",
+                    "description": "The full MacroBrief JSON object (10 sections).",
+                },
+            },
+            "required": ["brief"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
+
+
+FINALIZE_TOOL_NAME = "finalize_macro_brief"
+
+
+@dataclass
+class F1PortfolioTools:
+    """Bundle of F1-3 portfolio / DXY / finalize tool specs."""
+
+    portfolio_overlay: ToolSpec
+    quote_dxy: ToolSpec
+    finalize_macro_brief: ToolSpec
+
+    def register_all(self, registry: AgentToolRegistry) -> None:
+        registry.register(self.portfolio_overlay)
+        registry.register(self.quote_dxy)
+        registry.register(self.finalize_macro_brief)
+
+
+def build_f1_portfolio_tools(
+    *,
+    portfolio_snapshot_fn: PortfolioSnapshotFn,
+    fred_series_fn: FredSeriesFn,
+) -> F1PortfolioTools:
+    return F1PortfolioTools(
+        portfolio_overlay=make_portfolio_overlay_tool(portfolio_snapshot_fn),
+        quote_dxy=make_quote_dxy_tool(fred_series_fn),
+        finalize_macro_brief=make_finalize_macro_brief_tool(),
+    )
+
+
 __all__ = [
     "AgentToolRegistry",
     "F1NetworkTools",
+    "F1PortfolioTools",
     "F1ReadOnlyTools",
+    "FINALIZE_TOOL_NAME",
     "ToolResult",
     "ToolSpec",
     "build_f1_network_tools",
+    "build_f1_portfolio_tools",
     "build_f1_read_only_tools",
     "make_calendar_lookup_tool",
     "make_commodity_quote_tool",
     "make_dashboard_query_tool",
     "make_evidence_lookup_tool",
+    "make_finalize_macro_brief_tool",
+    "make_portfolio_overlay_tool",
+    "make_quote_dxy_tool",
     "make_quote_etf_tool",
     "make_rag_retrieve_tool",
     "make_search_tavily_tool",
