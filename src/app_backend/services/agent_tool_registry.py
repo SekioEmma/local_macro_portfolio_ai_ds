@@ -429,15 +429,291 @@ def build_f1_read_only_tools(
     )
 
 
+# ---------------------------------------------------------------------------
+# F1-2 tool handlers (guarded network / retrieval)
+#
+# Every network-touching handler accepts an injected callable so tests use
+# fakes. The agent's act of invoking these tools is itself the explicit
+# user-approved request (parent `/api/agent/run` was user-triggered), so
+# `confirm_external_search` is fixed True for search_tavily and
+# `include_local_only` is fixed False for rag_retrieve. Neither flag is
+# exposed in the LLM-facing parameter schema; the LLM cannot weaken or
+# relax the guarded request shape.
+# ---------------------------------------------------------------------------
+
+# Forward-only function signatures so this module never imports the heavy
+# downstream services at module load.
+SearchExecuteFn = Callable[[Any], Any]  # TavilySearchApiRequest -> SearchResponse
+RagRetrieveFn = Callable[..., Any]  # query, top_k, doc_type_filter, include_local_only -> list
+CommodityQuoteFn = Callable[[str], Any]  # benchmark -> CommodityQuoteSnapshot
+
+_COMMODITY_BENCHMARKS = frozenset({"brent", "wti"})
+
+
+def make_search_tavily_tool(execute_fn: SearchExecuteFn) -> ToolSpec:
+    """Wrap TavilySearchExecutionService.execute as an agent tool.
+
+    Forces `confirm_external_search=True` because the agent run is itself
+    the explicit user request. The execution service still enforces every
+    other gate (sanitizer, runtime policy, allowlist, budget, response
+    guard) and fails closed on any failure.
+    """
+
+    from app_backend.schemas.search_external import TavilySearchApiRequest
+
+    def handler(args: dict[str, Any]) -> Any:
+        query = args.get("query")
+        if not isinstance(query, str) or not query.strip():
+            raise _ToolValidationError("invalid_query", "query must be a non-empty string")
+        if len(query) > 500:
+            raise _ToolValidationError("invalid_query", "query must be ≤ 500 chars")
+
+        max_results = args.get("max_results", 5)
+        if isinstance(max_results, bool) or not isinstance(max_results, int):
+            raise _ToolValidationError("invalid_max_results", "max_results must be int")
+        if not 1 <= max_results <= 20:
+            raise _ToolValidationError("invalid_max_results", "max_results must be 1..20")
+
+        domain_filter = args.get("domain_filter") or []
+        if not isinstance(domain_filter, list) or not all(
+            isinstance(d, str) and d.strip() for d in domain_filter
+        ):
+            raise _ToolValidationError(
+                "invalid_domain_filter",
+                "domain_filter must be a list of non-empty strings (or omitted)",
+            )
+
+        request = TavilySearchApiRequest(
+            query=query,
+            max_results=max_results,
+            domain_filter=list(domain_filter),
+            confirm_external_search=True,
+        )
+        response = execute_fn(request)
+        payload = _to_jsonable(response)
+        # Strip provider error / blocking flag detail before handing back
+        # to the LLM. The guarded service already redacts upstream, but the
+        # tool layer makes the contract explicit.
+        if isinstance(payload, dict):
+            results = payload.get("results") or []
+            return {
+                "results": results,
+                "search_available": bool(payload.get("search_available")),
+                "guard_passed": bool(payload.get("guard_passed")),
+                "result_count": len(results) if isinstance(results, list) else 0,
+            }
+        return {"results": [], "search_available": False, "guard_passed": False, "result_count": 0}
+
+    return ToolSpec(
+        name="search_tavily",
+        description=(
+            "Search the curated external macro-news corpus via Tavily "
+            "(reuters.com, bloomberg.com, federalreserve.gov, bls.gov, "
+            "bea.gov, fred.stlouisfed.org, wsj.com, ft.com, imf.org, "
+            "worldbank.org, bis.org). Fail-closed by default. Use only "
+            "when local sources (dashboard, evidence, rag_retrieve) cannot "
+            "answer the question."
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "description": "Search query in plain English",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "default": 5,
+                    "description": "Maximum number of results to return",
+                },
+                "domain_filter": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional narrowing to specific allowlisted domains. "
+                        "Out-of-allowlist domains fail-closed."
+                    ),
+                },
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
+
+
+def make_rag_retrieve_tool(retrieve_fn: RagRetrieveFn) -> ToolSpec:
+    """Wrap RAGRetrievalService.retrieve as an agent tool.
+
+    Forces `include_local_only=False` so the LLM never sees local-only
+    documents. Returns chunk text along with title / doc_type / domain so
+    the LLM can build a source attribution.
+    """
+
+    def handler(args: dict[str, Any]) -> Any:
+        query = args.get("query")
+        if not isinstance(query, str) or not query.strip():
+            raise _ToolValidationError("invalid_query", "query must be a non-empty string")
+        if len(query) > 500:
+            raise _ToolValidationError("invalid_query", "query must be ≤ 500 chars")
+
+        top_k = args.get("top_k", 5)
+        if isinstance(top_k, bool) or not isinstance(top_k, int):
+            raise _ToolValidationError("invalid_top_k", "top_k must be int")
+        if not 1 <= top_k <= 20:
+            raise _ToolValidationError("invalid_top_k", "top_k must be 1..20")
+
+        doc_type = args.get("doc_type")
+        if doc_type is not None and not isinstance(doc_type, str):
+            raise _ToolValidationError("invalid_doc_type", "doc_type must be str or null")
+
+        chunks = retrieve_fn(
+            query,
+            top_k=top_k,
+            doc_type_filter=doc_type or None,
+            include_local_only=False,
+        )
+        rendered: list[dict[str, Any]] = []
+        for chunk in chunks or []:
+            item = _to_jsonable(chunk)
+            if isinstance(item, dict):
+                # Drop the local-only flag from the LLM-facing payload — it
+                # is always False here (handler enforced) and contributes
+                # nothing to the model.
+                item.pop("external_llm_context_allowed", None)
+                rendered.append(item)
+        return {"chunks": rendered, "chunk_count": len(rendered)}
+
+    return ToolSpec(
+        name="rag_retrieve",
+        description=(
+            "Retrieve relevant text passages from the local knowledge base "
+            "(curated Federal Reserve / BLS / BEA / institutional research). "
+            "Uses hybrid vector + keyword retrieval. Prefer this over "
+            "search_tavily for historical context, FOMC statements, and "
+            "official publications."
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "description": "Search query in plain English",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "default": 5,
+                    "description": "Maximum number of chunks to return",
+                },
+                "doc_type": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Optional doc_type filter (e.g. 'policy_doc', "
+                        "'research_report'). Omit for any."
+                    ),
+                },
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
+
+
+def make_commodity_quote_tool(quote_fn: CommodityQuoteFn) -> ToolSpec:
+    """Wrap CommodityQuoteService.quote (Brent / WTI only).
+
+    The commodity service itself routes through the same guarded search
+    execution and the fixed three-domain allowlist (reuters / bloomberg /
+    oilprice). Tool layer pre-validates benchmark so a typo fails fast
+    with a stable error_code rather than burning a search call.
+    """
+
+    def handler(args: dict[str, Any]) -> Any:
+        benchmark = args.get("benchmark")
+        if not isinstance(benchmark, str) or not benchmark.strip():
+            raise _ToolValidationError("invalid_benchmark", "benchmark must be a string")
+        normalized = benchmark.strip().lower()
+        if normalized not in _COMMODITY_BENCHMARKS:
+            raise _ToolValidationError(
+                "invalid_benchmark",
+                f"benchmark must be one of {sorted(_COMMODITY_BENCHMARKS)}",
+            )
+        return _to_jsonable(quote_fn(normalized))
+
+    return ToolSpec(
+        name="commodity_quote",
+        description=(
+            "Return a guarded snapshot of the latest Brent or WTI crude oil "
+            "price per barrel, sourced from reuters.com / bloomberg.com / "
+            "oilprice.com. Returns 'unavailable' fail-closed when search is "
+            "disabled, budget exhausted, or no strict match found."
+        ),
+        parameters_schema={
+            "type": "object",
+            "properties": {
+                "benchmark": {
+                    "type": "string",
+                    "enum": ["brent", "wti"],
+                    "description": "Which crude benchmark to quote",
+                },
+            },
+            "required": ["benchmark"],
+            "additionalProperties": False,
+        },
+        handler=handler,
+    )
+
+
+@dataclass
+class F1NetworkTools:
+    """Bundle of F1-2 guarded network / retrieval tool specs."""
+
+    search_tavily: ToolSpec
+    rag_retrieve: ToolSpec
+    commodity_quote: ToolSpec
+
+    def register_all(self, registry: AgentToolRegistry) -> None:
+        registry.register(self.search_tavily)
+        registry.register(self.rag_retrieve)
+        registry.register(self.commodity_quote)
+
+
+def build_f1_network_tools(
+    *,
+    search_execute_fn: SearchExecuteFn,
+    rag_retrieve_fn: RagRetrieveFn,
+    commodity_quote_fn: CommodityQuoteFn,
+) -> F1NetworkTools:
+    return F1NetworkTools(
+        search_tavily=make_search_tavily_tool(search_execute_fn),
+        rag_retrieve=make_rag_retrieve_tool(rag_retrieve_fn),
+        commodity_quote=make_commodity_quote_tool(commodity_quote_fn),
+    )
+
+
 __all__ = [
     "AgentToolRegistry",
+    "F1NetworkTools",
     "F1ReadOnlyTools",
     "ToolResult",
     "ToolSpec",
+    "build_f1_network_tools",
     "build_f1_read_only_tools",
     "make_calendar_lookup_tool",
+    "make_commodity_quote_tool",
     "make_dashboard_query_tool",
     "make_evidence_lookup_tool",
     "make_quote_etf_tool",
+    "make_rag_retrieve_tool",
+    "make_search_tavily_tool",
     "make_treasury_curve_tool",
 ]
