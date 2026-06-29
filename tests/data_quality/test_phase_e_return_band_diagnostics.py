@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-from datetime import date
 from pathlib import Path
 
 from data_quality import phase_e_return_band_diagnostics as diagnostics
