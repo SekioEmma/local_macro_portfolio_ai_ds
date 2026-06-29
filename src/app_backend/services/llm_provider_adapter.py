@@ -11,9 +11,10 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 from app_backend.schemas.ai_external import (
-    DeepSeekProviderMessage,
+    DeepSeekTransportMessage,
     DeepSeekTransportRequest,
     DeepSeekTransportResponse,
+    DeepSeekTransportToolCall,
 )
 from app_backend.services.deepseek_transport_contract import DeepSeekTransport
 
@@ -90,28 +91,40 @@ class DeepSeekProviderAdapter:
         response_format: dict[str, Any] | None = None,
         max_tokens: int = 4000,
     ) -> ChatResponse:
-        del model, tools, tool_choice, response_format, max_tokens
+        del model
         request = DeepSeekTransportRequest(
             request_id="phase_f_agent_chat",
             provider="deepseek",
             mode="network",
-            messages=[_to_deepseek_message(message) for message in messages],
+            messages=[
+                _to_deepseek_message(message).model_dump(
+                    mode="json",
+                    exclude_none=True,
+                )
+                for message in messages
+            ],
             boundary_notices=[
                 "Phase F MacroBrief agent call.",
                 "Human review is required.",
             ],
             validator_required=True,
+            tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
+            max_tokens=max_tokens,
         )
         response = self._transport.send(request)
         return _chat_response_from_transport(response)
 
 
-def _to_deepseek_message(message: ChatMessage) -> DeepSeekProviderMessage:
-    if message.role == "system":
-        return DeepSeekProviderMessage(role="system", content=message.content)
+def _to_deepseek_message(message: ChatMessage) -> DeepSeekTransportMessage:
     if message.role == "tool":
-        return DeepSeekProviderMessage(role="context", content=message.content)
-    return DeepSeekProviderMessage(role="summary", content=message.content)
+        return DeepSeekTransportMessage(
+            role="tool",
+            content=message.content,
+            tool_call_id=message.tool_call_id,
+        )
+    return DeepSeekTransportMessage(role=message.role, content=message.content)
 
 
 def _chat_response_from_transport(response: DeepSeekTransportResponse) -> ChatResponse:
@@ -122,10 +135,18 @@ def _chat_response_from_transport(response: DeepSeekTransportResponse) -> ChatRe
         finish_reason = "stop"
     return ChatResponse(
         content=response.content_text,
-        tool_calls=[],
-        usage=TokenUsage(),
+        tool_calls=[_tool_call_from_transport(call) for call in response.tool_calls],
+        usage=TokenUsage(
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            total_tokens=response.usage.total_tokens,
+        ),
         finish_reason=finish_reason,
     )
+
+
+def _tool_call_from_transport(call: DeepSeekTransportToolCall) -> ToolCall:
+    return ToolCall(id=call.id, name=call.name, arguments=dict(call.arguments))
 
 
 __all__ = [

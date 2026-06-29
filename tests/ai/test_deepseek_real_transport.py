@@ -230,6 +230,125 @@ def test_mocked_http_success_maps_to_transport_response():
     assert "test-key" not in response.model_dump_json()
 
 
+def test_real_transport_serializes_tools_and_response_format():
+    seen_body: dict | None = None
+
+    request = _transport_request()
+    request = request.model_copy(
+        update={
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "finalize_macro_brief",
+                        "parameters": {"type": "object"},
+                    },
+                }
+            ],
+            "tool_choice": "auto",
+            "response_format": {"type": "json_object"},
+            "max_tokens": 4096,
+        }
+    )
+
+    def _opener(http_request: urllib.request.Request, timeout: float):  # noqa: ANN001
+        nonlocal seen_body
+        seen_body = json.loads(http_request.data.decode("utf-8"))
+        return _Response(
+            200,
+            {
+                "choices": [
+                    {
+                        "message": {"content": "ok"},
+                        "finish_reason": "stop",
+                    }
+                ]
+            },
+        )
+
+    DeepSeekRealTransport(api_key="test-key", opener=_opener).send(request)
+
+    assert seen_body is not None
+    assert seen_body["tools"][0]["function"]["name"] == "finalize_macro_brief"
+    assert seen_body["tool_choice"] == "auto"
+    assert seen_body["response_format"] == {"type": "json_object"}
+    assert seen_body["max_tokens"] == 4096
+
+
+def test_real_transport_parses_tool_calls_and_usage():
+    response = DeepSeekRealTransport(
+        api_key="test-key",
+        opener=lambda request, timeout: _Response(
+            200,
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "dashboard_query",
+                                        "arguments": "{\"module_key\":\"rate_pressure\"}",
+                                    },
+                                }
+                            ],
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 12,
+                    "completion_tokens": 8,
+                    "total_tokens": 20,
+                },
+            },
+        ),
+    ).send(_transport_request())
+
+    assert response.content_text == ""
+    assert response.finish_reason == "tool_calls"
+    assert response.tool_calls[0].id == "call_1"
+    assert response.tool_calls[0].name == "dashboard_query"
+    assert response.tool_calls[0].arguments == {"module_key": "rate_pressure"}
+    assert response.usage.input_tokens == 12
+    assert response.usage.output_tokens == 8
+    assert response.usage.total_tokens == 20
+
+
+def test_real_transport_tool_call_bad_arguments_fails_closed():
+    with pytest.raises(DeepSeekTransportError) as exc:
+        DeepSeekRealTransport(
+            api_key="test-key",
+            opener=lambda request, timeout: _Response(
+                200,
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "tool_calls": [
+                                    {
+                                        "id": "call_1",
+                                        "function": {
+                                            "name": "dashboard_query",
+                                            "arguments": "{not-json",
+                                        },
+                                    }
+                                ]
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ]
+                },
+            ),
+        ).send(_transport_request())
+
+    assert exc.value.kind == "malformed"
+    assert exc.value.detail == "provider_tool_call_arguments_not_json"
+
+
 def test_mocked_timeout_fails_closed():
     def _timeout(request: urllib.request.Request, timeout: float):  # noqa: ANN001
         raise socket.timeout("provider took too long")

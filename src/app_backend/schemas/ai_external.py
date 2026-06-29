@@ -13,9 +13,10 @@ Privacy / boundary policy:
 """
 from __future__ import annotations
 
+from typing import Any
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app_backend.schemas.ai_memo import AIMemoValidatorResult
 
@@ -167,6 +168,30 @@ class DeepSeekProviderMessage(BaseModel):
     content: str
 
 
+class DeepSeekTransportMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Literal["system", "context", "summary", "user", "assistant", "tool"]
+    content: str
+    tool_call_id: str | None = None
+
+
+class DeepSeekTransportToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+class DeepSeekTransportUsage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
 class DeepSeekProviderPayload(BaseModel):
     """Stage 9.3-B-1 sanitized provider payload.
 
@@ -217,9 +242,26 @@ class DeepSeekTransportRequest(BaseModel):
     request_id: str
     provider: AdapterProvider
     mode: AdapterMode
-    messages: list[DeepSeekProviderMessage]
+    messages: list[DeepSeekTransportMessage]
     boundary_notices: list[str]
     validator_required: bool = True
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: str | None = None
+    response_format: dict[str, Any] | None = None
+    max_tokens: int | None = None
+
+    @field_validator("messages", mode="before")
+    @classmethod
+    def _coerce_provider_messages(cls, value: Any) -> Any:
+        if not isinstance(value, list):
+            return value
+        coerced: list[Any] = []
+        for item in value:
+            if hasattr(item, "model_dump"):
+                coerced.append(item.model_dump(mode="json", exclude_none=True))
+            else:
+                coerced.append(item)
+        return coerced
 
 
 class DeepSeekTransportResponse(BaseModel):
@@ -237,7 +279,9 @@ class DeepSeekTransportResponse(BaseModel):
     provider: AdapterProvider
     mode: AdapterMode
     content_text: str
-    finish_reason: Literal["stop", "length", "content_filter"] = "stop"
+    finish_reason: Literal["stop", "tool_calls", "length", "content_filter"] = "stop"
+    tool_calls: list[DeepSeekTransportToolCall] = Field(default_factory=list)
+    usage: DeepSeekTransportUsage = Field(default_factory=DeepSeekTransportUsage)
 
 
 def default_external_ai_runtime_policy() -> ExternalAIRuntimePolicy:
@@ -264,6 +308,9 @@ __all__ = [
     "default_external_ai_runtime_policy",
     "DeepSeekProviderMessage",
     "DeepSeekProviderPayload",
+    "DeepSeekTransportMessage",
     "DeepSeekTransportRequest",
     "DeepSeekTransportResponse",
+    "DeepSeekTransportToolCall",
+    "DeepSeekTransportUsage",
 ]

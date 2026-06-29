@@ -20,8 +20,11 @@ from typing import Any, Callable
 
 from app_backend.schemas.ai_external import (
     DeepSeekProviderMessage,
+    DeepSeekTransportMessage,
     DeepSeekTransportRequest,
     DeepSeekTransportResponse,
+    DeepSeekTransportToolCall,
+    DeepSeekTransportUsage,
 )
 from app_backend.services.deepseek_transport_contract import DeepSeekTransportError
 
@@ -143,9 +146,14 @@ class DeepSeekRealTransport:
             "model": _DEEPSEEK_MODEL_NAME,
             "messages": [_to_provider_message(message) for message in request.messages],
             "temperature": 0.2,
-            "max_tokens": self._max_tokens,
+            "max_tokens": request.max_tokens or self._max_tokens,
             "stream": False,
         }
+        if request.tools is not None:
+            body["tools"] = request.tools
+            body["tool_choice"] = request.tool_choice or "auto"
+        if request.response_format is not None:
+            body["response_format"] = request.response_format
         data = json.dumps(body, ensure_ascii=True).encode("utf-8")
         return urllib.request.Request(
             _DEEPSEEK_CHAT_COMPLETIONS_URL,
@@ -166,9 +174,17 @@ def _urlopen_with_timeout(
     return urllib.request.urlopen(request, timeout=timeout_seconds)
 
 
-def _to_provider_message(message: DeepSeekProviderMessage) -> dict[str, str]:
-    role = "system" if message.role == "system" else "user"
-    return {"role": role, "content": message.content}
+def _to_provider_message(
+    message: DeepSeekProviderMessage | DeepSeekTransportMessage,
+) -> dict[str, str]:
+    if message.role in {"context", "summary"}:
+        role = "user"
+    else:
+        role = message.role
+    payload = {"role": role, "content": message.content}
+    if role == "tool" and message.tool_call_id:
+        payload["tool_call_id"] = message.tool_call_id
+    return payload
 
 
 def _parse_provider_response(
@@ -196,13 +212,16 @@ def _parse_provider_response(
             detail="provider_refusal",
         )
 
-    content, finish_reason = _extract_content(payload)
+    content, finish_reason, tool_calls = _extract_message_payload(payload)
+    usage = _extract_usage(payload)
     return DeepSeekTransportResponse(
         request_id=request.request_id,
         provider=request.provider,
         mode=request.mode,
         content_text=content,
         finish_reason=finish_reason,
+        tool_calls=tool_calls,
+        usage=usage,
     )
 
 
@@ -219,7 +238,9 @@ def _provider_refused(payload: dict[str, Any]) -> bool:
     return isinstance(message, dict) and bool(message.get("refusal"))
 
 
-def _extract_content(payload: dict[str, Any]) -> tuple[str, str]:
+def _extract_message_payload(
+    payload: dict[str, Any],
+) -> tuple[str, str, list[DeepSeekTransportToolCall]]:
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise DeepSeekTransportError(
@@ -242,16 +263,100 @@ def _extract_content(payload: dict[str, Any]) -> tuple[str, str]:
         )
 
     content = message.get("content")
-    if not isinstance(content, str) or not content.strip():
+    tool_calls = _extract_tool_calls(message)
+    if not tool_calls and (not isinstance(content, str) or not content.strip()):
         raise DeepSeekTransportError(
             kind="malformed",
             detail="provider_response_missing_content",
         )
 
     finish_reason = first.get("finish_reason")
-    if finish_reason not in {"stop", "length", "content_filter"}:
-        finish_reason = "stop"
-    return content, finish_reason
+    if finish_reason not in {"stop", "tool_calls", "length", "content_filter"}:
+        finish_reason = "tool_calls" if tool_calls else "stop"
+    return content if isinstance(content, str) else "", finish_reason, tool_calls
+
+
+def _extract_tool_calls(message: dict[str, Any]) -> list[DeepSeekTransportToolCall]:
+    raw_calls = message.get("tool_calls")
+    if raw_calls is None:
+        return []
+    if not isinstance(raw_calls, list):
+        raise DeepSeekTransportError(
+            kind="malformed",
+            detail="provider_tool_calls_not_list",
+        )
+
+    parsed: list[DeepSeekTransportToolCall] = []
+    for raw_call in raw_calls:
+        if not isinstance(raw_call, dict):
+            raise DeepSeekTransportError(
+                kind="malformed",
+                detail="provider_tool_call_not_object",
+            )
+        function = raw_call.get("function")
+        if not isinstance(function, dict):
+            raise DeepSeekTransportError(
+                kind="malformed",
+                detail="provider_tool_call_missing_function",
+            )
+        call_id = raw_call.get("id")
+        name = function.get("name")
+        arguments = function.get("arguments", "{}")
+        if not isinstance(call_id, str) or not call_id.strip():
+            raise DeepSeekTransportError(
+                kind="malformed",
+                detail="provider_tool_call_missing_id",
+            )
+        if not isinstance(name, str) or not name.strip():
+            raise DeepSeekTransportError(
+                kind="malformed",
+                detail="provider_tool_call_missing_name",
+            )
+        if isinstance(arguments, str):
+            try:
+                decoded_arguments = json.loads(arguments)
+            except json.JSONDecodeError as exc:
+                raise DeepSeekTransportError(
+                    kind="malformed",
+                    detail="provider_tool_call_arguments_not_json",
+                ) from exc
+        else:
+            decoded_arguments = arguments
+        if not isinstance(decoded_arguments, dict):
+            raise DeepSeekTransportError(
+                kind="malformed",
+                detail="provider_tool_call_arguments_not_object",
+            )
+        parsed.append(
+            DeepSeekTransportToolCall(
+                id=call_id,
+                name=name,
+                arguments=decoded_arguments,
+            )
+        )
+    return parsed
+
+
+def _extract_usage(payload: dict[str, Any]) -> DeepSeekTransportUsage:
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        return DeepSeekTransportUsage()
+    input_tokens = _coerce_nonnegative_int(usage.get("prompt_tokens"))
+    output_tokens = _coerce_nonnegative_int(usage.get("completion_tokens"))
+    total_tokens = _coerce_nonnegative_int(usage.get("total_tokens"))
+    if total_tokens == 0:
+        total_tokens = input_tokens + output_tokens
+    return DeepSeekTransportUsage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        total_tokens=total_tokens,
+    )
+
+
+def _coerce_nonnegative_int(value: Any) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 0
+    return max(value, 0)
 
 
 __all__ = [

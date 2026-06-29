@@ -81,7 +81,10 @@ def build_transport_request_from_provider_payload(
         request_id=payload.request_id,
         provider=payload.provider,
         mode=payload.mode,
-        messages=list(payload.messages),
+        messages=[
+            message.model_dump(mode="json", exclude_none=True)
+            for message in payload.messages
+        ],
         boundary_notices=list(payload.boundary_notices),
         validator_required=payload.validator_required,
     )
