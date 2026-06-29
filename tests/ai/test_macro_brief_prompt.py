@@ -14,8 +14,10 @@ from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME
 from app_backend.services.macro_brief_prompt import (
     ANTI_CONSERVATIVE_BIAS_RULES,
     ANTI_HALLUCINATION_RULES,
+    HOLDINGS_NOT_INCLUDED_NOTICE,
     MACRO_BRIEF_RESPONSE_FORMAT,
     REFERENCE_BRIEF_EXAMPLE,
+    REACT_GUIDANCE,
     build_macro_brief_prompt,
 )
 
@@ -128,6 +130,82 @@ def test_reference_brief_does_not_contain_private_context_markers():
     assert "account" not in lowered
     assert "api_key" not in lowered
     assert "current_holdings" not in lowered
+
+
+def test_system_prompt_contains_react_guidance():
+    prompt = build_macro_brief_prompt(
+        user_question="x",
+        current_date=date(2026, 6, 29),
+        tool_names=["search_tavily", "rag_retrieve", FINALIZE_TOOL_NAME],
+    )
+
+    text = prompt.system_prompt
+    assert REACT_GUIDANCE in text
+    assert "宁可搜，不要猜" in text
+    assert "Prefer local tools first" in text
+    assert "call finalize_macro_brief" in text
+
+
+def test_holdings_context_is_not_injected_by_default():
+    prompt = build_macro_brief_prompt(
+        user_question="x",
+        current_date=date(2026, 6, 29),
+        tool_names=[FINALIZE_TOOL_NAME],
+        holdings_snapshot={"SPY": {"shares": 250, "market_value_usd": 182247}},
+    )
+
+    assert HOLDINGS_NOT_INCLUDED_NOTICE in prompt.system_prompt
+    assert "182247" not in prompt.system_prompt
+    assert "market_value_usd" not in prompt.system_prompt
+
+
+def test_holdings_context_injected_only_when_explicitly_enabled():
+    prompt = build_macro_brief_prompt(
+        user_question="x",
+        current_date=date(2026, 6, 29),
+        tool_names=[FINALIZE_TOOL_NAME],
+        include_holdings=True,
+        holdings_snapshot={
+            "positions": [
+                {"ticker": "SPY", "shares": 250, "market_value_usd": 182247},
+                {"ticker": "QQQ", "shares": 100, "market_value_usd": 70652},
+            ],
+            "asset_class_breakdown": {"SPY": 0.514, "QQQ": 0.199},
+        },
+    )
+
+    assert "explicitly approved for this run only" in prompt.system_prompt
+    assert '"market_value_usd": 182247' in prompt.system_prompt
+    assert '"ticker": "SPY"' in prompt.system_prompt
+
+
+def test_holdings_context_requires_snapshot_when_enabled():
+    with pytest.raises(ValueError, match="holdings_snapshot is required"):
+        build_macro_brief_prompt(
+            user_question="x",
+            current_date=date(2026, 6, 29),
+            tool_names=[FINALIZE_TOOL_NAME],
+            include_holdings=True,
+        )
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        {"transaction_history": []},
+        {"positions": [{"ticker": "SPY", "cost_basis": 100.0}]},
+        {"raw_provider_account_response": {"x": "y"}},
+    ],
+)
+def test_holdings_context_rejects_forbidden_fields(snapshot):
+    with pytest.raises(ValueError, match="forbidden holdings field"):
+        build_macro_brief_prompt(
+            user_question="x",
+            current_date=date(2026, 6, 29),
+            tool_names=[FINALIZE_TOOL_NAME],
+            include_holdings=True,
+            holdings_snapshot=snapshot,
+        )
 
 
 def test_messages_are_provider_style_system_then_user():

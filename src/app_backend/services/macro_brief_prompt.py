@@ -6,6 +6,8 @@ provider adapter in F5.
 """
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -132,6 +134,37 @@ Reference brief example (format only; do not reuse these synthetic facts):
 """.strip()
 
 
+REACT_GUIDANCE = f"""
+ReAct operating rules:
+1. When information is insufficient, call search_tavily or rag_retrieve;
+   宁可搜，不要猜.
+2. Prefer local tools first: dashboard_query, evidence_lookup, quote_etf,
+   treasury_curve, quote_dxy, calendar_lookup, portfolio_overlay, and
+   rag_retrieve before external search.
+3. Use search_tavily only for current public information not answered by
+   local data or RAG.
+4. Facts must come before judgments. Every judgment must cite
+   confirmed_facts ids.
+5. When the brief is complete, call {FINALIZE_TOOL_NAME}; do not finish
+   with plain text.
+""".strip()
+
+
+HOLDINGS_NOT_INCLUDED_NOTICE = (
+    "User holdings context: not included for this run. Do not infer "
+    "account, position, transaction, or amount details."
+)
+
+_FORBIDDEN_HOLDINGS_KEYS = (
+    "transaction",
+    "order_book",
+    "cost_basis",
+    "p&l",
+    "profit_loss",
+    "raw_provider",
+)
+
+
 @dataclass(frozen=True)
 class MacroBriefPrompt:
     """Prompt package consumed by the future agent/provider layer."""
@@ -153,11 +186,17 @@ def build_macro_brief_prompt(
     current_date: date,
     tool_names: list[str],
     instrument_context: str | None = None,
+    include_holdings: bool = False,
+    holdings_snapshot: Mapping[str, Any] | None = None,
 ) -> MacroBriefPrompt:
     """Build the F3-1 MacroBrief prompt package."""
     question = _normalize_user_question(user_question)
     tools = _format_tool_names(tool_names)
     context = _format_instrument_context(instrument_context)
+    holdings_context = _format_holdings_context(
+        include_holdings=include_holdings,
+        holdings_snapshot=holdings_snapshot,
+    )
 
     system_prompt = "\n\n".join(
         part
@@ -166,11 +205,13 @@ def build_macro_brief_prompt(
             f"Today's date is {current_date.isoformat()}; treat it as now for all analysis and tool-call date ranges.",
             f"You have access to these tools: {tools}.",
             context,
+            holdings_context,
             SECTION_SCHEMA_GUIDE,
             ABSOLUTE_PROHIBITIONS,
             ANTI_HALLUCINATION_RULES,
             ANTI_CONSERVATIVE_BIAS_RULES,
             REFERENCE_BRIEF_EXAMPLE,
+            REACT_GUIDANCE,
             (
                 f"Your output must be valid JSON matching the MacroBrief schema. "
                 f"You must call {FINALIZE_TOOL_NAME} to terminate; this is the only exit."
@@ -216,13 +257,45 @@ def _format_instrument_context(instrument_context: str | None) -> str:
     return "Instrument context:\n" + instrument_context.strip()
 
 
+def _format_holdings_context(
+    *,
+    include_holdings: bool,
+    holdings_snapshot: Mapping[str, Any] | None,
+) -> str:
+    if not include_holdings:
+        return HOLDINGS_NOT_INCLUDED_NOTICE
+    if not isinstance(holdings_snapshot, Mapping) or not holdings_snapshot:
+        raise ValueError("holdings_snapshot is required when include_holdings is true")
+    _reject_forbidden_holdings_keys(holdings_snapshot)
+    serialized = json.dumps(holdings_snapshot, ensure_ascii=False, sort_keys=True)
+    return (
+        "User holdings context (explicitly approved for this run only; "
+        "server-side injection channel):\n"
+        f"{serialized}"
+    )
+
+
+def _reject_forbidden_holdings_keys(value: Any) -> None:
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            lowered = str(key).lower()
+            if any(forbidden in lowered for forbidden in _FORBIDDEN_HOLDINGS_KEYS):
+                raise ValueError(f"forbidden holdings field: {key}")
+            _reject_forbidden_holdings_keys(item)
+    elif isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
+        for item in value:
+            _reject_forbidden_holdings_keys(item)
+
+
 __all__ = [
     "ABSOLUTE_PROHIBITIONS",
     "ANTI_CONSERVATIVE_BIAS_RULES",
     "ANTI_HALLUCINATION_RULES",
+    "HOLDINGS_NOT_INCLUDED_NOTICE",
     "MACRO_BRIEF_RESPONSE_FORMAT",
     "MacroBriefPrompt",
     "REFERENCE_BRIEF_EXAMPLE",
+    "REACT_GUIDANCE",
     "SECTION_SCHEMA_GUIDE",
     "build_macro_brief_prompt",
 ]
