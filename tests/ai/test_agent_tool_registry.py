@@ -13,6 +13,7 @@ from app_backend.schemas.search_external import (
 )
 from app_backend.services.agent_tool_registry import (
     FINALIZE_TOOL_NAME,
+    TOOL_RESULT_MAX_CHARS,
     AgentToolRegistry,
     ToolResult,
     ToolSpec,
@@ -1010,3 +1011,177 @@ def test_all_f1_bundles_combined_have_11_tools():
 
     assert len(registry.names()) == 11
     assert FINALIZE_TOOL_NAME in registry.names()
+
+
+# ---------------------------------------------------------------------------
+# F1-4 dispatch-level redaction + size cap
+# ---------------------------------------------------------------------------
+
+
+def _registry_with(handler, name: str = "t") -> AgentToolRegistry:
+    registry = AgentToolRegistry()
+    registry.register(
+        ToolSpec(
+            name=name,
+            description="leak test",
+            parameters_schema={"type": "object", "properties": {}, "required": []},
+            handler=handler,
+        )
+    )
+    return registry
+
+
+@pytest.mark.parametrize(
+    "raw, must_contain, must_not_contain",
+    [
+        # Tavily key (used by transport)
+        (
+            {"note": "Authorization: Bearer tvly-Abc1234567890XYZ"},
+            ["REDACTED"],
+            ["tvly-Abc1234567890XYZ"],
+        ),
+        # OpenAI-style key
+        (
+            {"leak": "sk-1234567890abcdefGHIJ"},
+            ["[REDACTED_API_KEY]"],
+            ["sk-1234567890abcdefGHIJ"],
+        ),
+        # Bearer token alone
+        (
+            {"h": "Bearer eyJhbGciOiJIUzI1NiJ9"},
+            ["Bearer [REDACTED]"],
+            ["eyJhbGciOiJIUzI1NiJ9"],
+        ),
+        # SHA-256 hex (governance content_sha256)
+        (
+            {"hash": "a" * 64},
+            ["[REDACTED_SHA256]"],
+            ["a" * 64],
+        ),
+        # Unix path
+        (
+            {"path": "/Users/alice/holdings.csv"},
+            ["[REDACTED_PATH]"],
+            ["/Users/alice/holdings.csv"],
+        ),
+        # Linux home path
+        (
+            {"path": "/home/sekio/secrets.env"},
+            ["[REDACTED_PATH]"],
+            ["/home/sekio/secrets.env"],
+        ),
+        # Windows path
+        (
+            {"path": "C:\\Users\\bob\\data.txt"},
+            ["[REDACTED_PATH]"],
+            ["bob\\data.txt"],
+        ),
+        # /mnt/data
+        (
+            {"x": "see /mnt/data/x.parquet for raw"},
+            ["[REDACTED_PATH]"],
+            ["/mnt/data/x.parquet"],
+        ),
+    ],
+)
+def test_dispatch_redacts_secrets_in_content(raw, must_contain, must_not_contain):
+    import json as _json
+
+    registry = _registry_with(lambda args: raw)
+    result = registry.dispatch("t", {})
+
+    serialized = _json.dumps(result.content)
+    for marker in must_contain:
+        assert marker in serialized
+    for leak in must_not_contain:
+        assert leak not in serialized
+
+
+def test_dispatch_redacts_in_nested_structures():
+    import json as _json
+
+    nested = {
+        "outer": {
+            "list": [
+                {"key": "tvly-abc1234567890"},
+                "Authorization: Bearer secret-token-xyz-12345",
+            ],
+            "tuple_field": ("api_key=hidden123XYZ987abc", "ok"),
+        }
+    }
+    registry = _registry_with(lambda args: nested)
+    result = registry.dispatch("t", {})
+
+    serialized = _json.dumps(result.content)
+    assert "tvly-abc1234567890" not in serialized
+    assert "secret-token-xyz-12345" not in serialized
+    assert "hidden123XYZ987abc" not in serialized
+
+
+def test_dispatch_url_fields_exempt_from_path_redactor_but_keys_still_stripped():
+    """A real source_url contains /something/ which would normally trigger
+    the path redactor. URL-like keys are exempt for that pattern, but
+    api_key= / bearer / sha256 patterns still apply even inside URLs."""
+    raw = {
+        "source_url": "https://reuters.com/markets/yields",
+        "leaky_url": "https://example.com?api_key=hidden123abcXYZ987",
+    }
+    registry = _registry_with(lambda args: raw)
+    result = registry.dispatch("t", {})
+
+    assert result.content["source_url"] == "https://reuters.com/markets/yields"
+    assert "hidden123abcXYZ987" not in result.content["leaky_url"]
+
+
+def test_dispatch_error_message_is_redacted():
+    def boom(_args):
+        raise RuntimeError("connect failed using tvly-Secret1234567890")
+
+    registry = _registry_with(boom)
+    result = registry.dispatch("t", {})
+
+    assert result.status == "error"
+    assert "tvly-Secret1234567890" not in (result.error_message or "")
+    assert "REDACTED" in (result.error_message or "")
+
+
+def test_dispatch_size_cap_replaces_oversized_content_with_marker():
+    big = {"blob": "x" * (TOOL_RESULT_MAX_CHARS + 1000)}
+    registry = _registry_with(lambda args: big)
+    result = registry.dispatch("t", {})
+
+    assert result.status == "ok"
+    assert isinstance(result.content, dict)
+    assert result.content.get("truncated") is True
+    assert result.content["original_size_chars"] > TOOL_RESULT_MAX_CHARS
+    assert result.content["max_chars"] == TOOL_RESULT_MAX_CHARS
+    assert isinstance(result.content["preview"], str)
+    assert len(result.content["preview"]) <= 2000
+
+
+def test_dispatch_small_content_unaffected_by_size_cap():
+    small = {"value": "y" * 100}
+    registry = _registry_with(lambda args: small)
+    result = registry.dispatch("t", {})
+
+    assert result.status == "ok"
+    assert result.content == small
+
+
+def test_dispatch_size_cap_after_redaction_keeps_preview_safe():
+    """Redaction runs BEFORE the cap, so even the preview slice in a
+    truncation marker must never contain raw secrets."""
+    payload = {"head": "tvly-veryLongSecret1234567890" + ("z" * 9000)}
+    registry = _registry_with(lambda args: payload)
+    result = registry.dispatch("t", {})
+
+    assert result.content.get("truncated") is True
+    assert "tvly-veryLongSecret1234567890" not in result.content["preview"]
+
+
+def test_dispatch_non_serializable_still_rejected():
+    """The F1-4 path must not weaken the original non-JSON guard."""
+    registry = _registry_with(lambda args: {"x": {1, 2, 3}})
+    result = registry.dispatch("t", {})
+    assert result.status == "error"
+    assert result.error_code == "non_serializable_result"

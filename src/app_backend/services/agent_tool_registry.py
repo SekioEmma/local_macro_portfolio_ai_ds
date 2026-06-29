@@ -9,9 +9,11 @@ This module:
 - defines `ToolSpec`, `ToolResult`, `AgentToolRegistry`
 - registers F1-1's 5 read-only tools: dashboard_query, evidence_lookup,
   quote_etf, treasury_curve, calendar_lookup
-- F1-2/F1-3 add the remaining tools (search_tavily, rag_retrieve,
-  commodity_quote, portfolio_overlay, quote_dxy, finalize_macro_brief)
-- F1-4 adds result redaction + size cap
+- F1-2 adds search_tavily, rag_retrieve, commodity_quote
+- F1-3 adds portfolio_overlay, quote_dxy, finalize_macro_brief
+- F1-4 applies centralized redaction + 8 KB size cap inside dispatch so
+  no handler can bypass them; the same redaction is applied to error
+  messages before they reach the LLM.
 
 It does NOT:
 - call any LLM
@@ -21,9 +23,96 @@ It does NOT:
 """
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+
+# ---------------------------------------------------------------------------
+# F1-4 redaction + size cap (applied in AgentToolRegistry.dispatch)
+# ---------------------------------------------------------------------------
+
+# 8 KB cap on the serialized JSON payload (chars ~ bytes for ASCII / few
+# multi-byte chars). Matches the plan's 8000-char per-tool-call budget.
+TOOL_RESULT_MAX_CHARS = 8192
+_TRUNCATION_PREVIEW_CHARS = 2000
+
+# Patterns that must never reach the LLM:
+#  - common API key prefixes / shapes
+#  - HTTP Authorization / Bearer tokens
+#  - SHA-256-like (64 hex chars) — used for content hashes in governance
+#  - local filesystem paths (Windows / *nix / mnt)
+_REDACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Token-shape secrets — bounded length so the regex does NOT greedily
+    # eat trailing payload bytes that happen to share the character class.
+    (re.compile(r"(?i)\btvly-[A-Za-z0-9_-]{8,128}"), "[REDACTED_TAVILY_KEY]"),
+    (re.compile(r"(?i)\bsk-[A-Za-z0-9_-]{16,128}"), "[REDACTED_API_KEY]"),
+    (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-/+=]{8,512}"), "Bearer [REDACTED]"),
+    (
+        re.compile(r"(?i)\bAuthorization\s*:\s*[A-Za-z0-9._\-/+=\s]{8,512}"),
+        "Authorization: [REDACTED]",
+    ),
+    (
+        re.compile(r"(?i)\bapi[_-]?key\s*[:=]\s*[A-Za-z0-9._\-/+=]{8,256}"),
+        "api_key=[REDACTED]",
+    ),
+    (re.compile(r"\b[0-9a-f]{64}\b"), "[REDACTED_SHA256]"),
+    (re.compile(r"\b[A-Z]:[\\/][^\s\"'<>]+"), "[REDACTED_PATH]"),
+    (re.compile(r"/Users/[^\s\"'<>]+"), "[REDACTED_PATH]"),
+    (re.compile(r"/home/[^\s\"'<>]+"), "[REDACTED_PATH]"),
+    (re.compile(r"/mnt/data[^\s\"'<>]*"), "[REDACTED_PATH]"),
+)
+
+# Source/url fields that legitimately contain URLs (and may include path
+# segments that look like /home/<segment>). These keys' string values are
+# exempt from the local-path redactor — but ALL other redactions still apply.
+_URL_LIKE_KEYS = frozenset({"url", "source_url", "canonical_url", "endpoint", "href"})
+
+
+def _redact_string(value: str, *, is_url_field: bool = False) -> str:
+    out = value
+    for pattern, replacement in _REDACTION_PATTERNS:
+        # Path redactor exemption for url-like fields. Other patterns still
+        # apply — a URL containing an api_key= still gets the key stripped.
+        if is_url_field and replacement == "[REDACTED_PATH]":
+            continue
+        out = pattern.sub(replacement, out)
+    return out
+
+
+def _redact(value: Any, *, parent_key: str | None = None) -> Any:
+    if isinstance(value, str):
+        return _redact_string(value, is_url_field=parent_key in _URL_LIKE_KEYS)
+    if isinstance(value, dict):
+        return {k: _redact(v, parent_key=str(k)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact(item, parent_key=parent_key) for item in value]
+    if isinstance(value, tuple):
+        return [_redact(item, parent_key=parent_key) for item in value]
+    return value
+
+
+def _enforce_size_cap(content: Any, max_chars: int = TOOL_RESULT_MAX_CHARS) -> Any:
+    """Cap the serialized JSON payload size.
+
+    If the JSON exceeds ``max_chars`` chars, the content is replaced with a
+    structured truncation marker. We never silently truncate a JSON string
+    mid-encoding (which would produce invalid JSON downstream).
+    """
+    try:
+        serialized = json.dumps(content, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return content
+    if len(serialized) <= max_chars:
+        return content
+    return {
+        "truncated": True,
+        "original_size_chars": len(serialized),
+        "max_chars": max_chars,
+        "preview": serialized[:_TRUNCATION_PREVIEW_CHARS],
+    }
 
 
 @dataclass(frozen=True)
@@ -90,40 +179,42 @@ class AgentToolRegistry:
     def dispatch(self, name: str, args: dict[str, Any] | None = None) -> ToolResult:
         spec = self._specs.get(name)
         if spec is None:
-            return ToolResult(
-                status="error",
-                error_code="unknown_tool",
-                error_message=f"tool not registered: {name}",
-            )
+            return _redacted_error("unknown_tool", f"tool not registered: {name}")
         if args is None:
             args = {}
         if not isinstance(args, dict):
-            return ToolResult(
-                status="error",
-                error_code="invalid_args_type",
-                error_message=f"args must be dict, got {type(args).__name__}",
+            return _redacted_error(
+                "invalid_args_type", f"args must be dict, got {type(args).__name__}"
             )
         try:
             result = spec.handler(args)
         except _ToolValidationError as exc:
-            return ToolResult(
-                status="error",
-                error_code=exc.code,
-                error_message=str(exc),
-            )
+            return _redacted_error(exc.code, str(exc))
         except Exception as exc:  # noqa: BLE001 — handler exceptions become tool errors
-            return ToolResult(
-                status="error",
-                error_code="handler_exception",
-                error_message=f"{type(exc).__name__}: {exc}",
-            )
+            return _redacted_error("handler_exception", f"{type(exc).__name__}: {exc}")
+
         if not _is_json_serializable(result):
-            return ToolResult(
-                status="error",
-                error_code="non_serializable_result",
-                error_message=f"handler returned non-JSON value of type {type(result).__name__}",
+            return _redacted_error(
+                "non_serializable_result",
+                f"handler returned non-JSON value of type {type(result).__name__}",
             )
-        return ToolResult(status="ok", content=result)
+
+        # F1-4: redact secrets / paths / sha256 before sizing — redaction
+        # may grow the payload (replacements like `[REDACTED_PATH]` are
+        # short, so growth is bounded), but it must happen BEFORE the cap
+        # so the LLM never sees a truncated preview that still contains
+        # raw secrets in the first 2000 chars.
+        redacted = _redact(result)
+        capped = _enforce_size_cap(redacted)
+        return ToolResult(status="ok", content=capped)
+
+
+def _redacted_error(code: str, message: str) -> "ToolResult":
+    return ToolResult(
+        status="error",
+        error_code=code,
+        error_message=_redact_string(message),
+    )
 
 
 class _ToolValidationError(Exception):
@@ -934,6 +1025,7 @@ __all__ = [
     "F1PortfolioTools",
     "F1ReadOnlyTools",
     "FINALIZE_TOOL_NAME",
+    "TOOL_RESULT_MAX_CHARS",
     "ToolResult",
     "ToolSpec",
     "build_f1_network_tools",
