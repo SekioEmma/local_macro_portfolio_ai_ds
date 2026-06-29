@@ -59,6 +59,33 @@ Absolute prohibitions:
 """.strip()
 
 
+ANTI_HALLUCINATION_RULES = """
+Evidence and anti-hallucination rules:
+1. Every numerical claim must originate from a tool call result.
+2. Every numerical claim must be referenced by source_id in source_list.
+3. If two tool outputs conflict, write both facts and flag the discrepancy
+   in judgments. Do not silently reconcile.
+4. Do not cite percentages, dates, prices, yields, spreads, or index levels
+   unless they appear in a tool output.
+5. Do not claim historical transmission patterns unless rag_retrieve
+   returned evidence with specific dates.
+6. For any post-2025 data, never guess from training knowledge.
+""".strip()
+
+
+ANTI_CONSERVATIVE_BIAS_RULES = """
+Status and scenario discipline:
+1. For every module_table row, choose the clearest status supported by
+   evidence.
+2. Reserve watch for genuinely mixed evidence; do not use watch as a safe
+   middle by default.
+3. Reserve crisis for documented systemic events only.
+4. The base scenario should reflect the most evidence-supported path, not
+   the middle between bullish and bearish.
+5. Each scenario must have distinct, non-trivial trigger_conditions.
+""".strip()
+
+
 @dataclass(frozen=True)
 class MacroBriefPrompt:
     """Prompt package consumed by the future agent/provider layer."""
@@ -95,6 +122,8 @@ def build_macro_brief_prompt(
             context,
             SECTION_SCHEMA_GUIDE,
             ABSOLUTE_PROHIBITIONS,
+            ANTI_HALLUCINATION_RULES,
+            ANTI_CONSERVATIVE_BIAS_RULES,
             (
                 f"Your output must be valid JSON matching the MacroBrief schema. "
                 f"You must call {FINALIZE_TOOL_NAME} to terminate; this is the only exit."
@@ -142,6 +171,8 @@ def _format_instrument_context(instrument_context: str | None) -> str:
 
 __all__ = [
     "ABSOLUTE_PROHIBITIONS",
+    "ANTI_CONSERVATIVE_BIAS_RULES",
+    "ANTI_HALLUCINATION_RULES",
     "MACRO_BRIEF_RESPONSE_FORMAT",
     "MacroBriefPrompt",
     "SECTION_SCHEMA_GUIDE",
