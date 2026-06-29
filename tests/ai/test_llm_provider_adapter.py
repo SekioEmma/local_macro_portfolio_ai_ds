@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app_backend.schemas.ai_external import (
     DeepSeekTransportRequest,
     DeepSeekTransportResponse,
@@ -9,7 +11,9 @@ from app_backend.schemas.ai_external import (
 from app_backend.services.llm_provider_adapter import (
     ChatMessage,
     ChatResponse,
+    ClaudeProviderAdapter,
     DeepSeekProviderAdapter,
+    GPTProviderAdapter,
     TokenUsage,
 )
 
@@ -106,3 +110,12 @@ def test_deepseek_provider_adapter_maps_transport_tool_calls():
     assert response.tool_calls[0].id == "call_1"
     assert response.tool_calls[0].name == "dashboard_query"
     assert response.tool_calls[0].arguments == {"module_key": "rate_pressure"}
+
+
+def test_claude_and_gpt_adapters_are_unwired_skeletons():
+    for adapter in (ClaudeProviderAdapter(), GPTProviderAdapter()):
+        with pytest.raises(NotImplementedError, match="not wired in Phase F"):
+            adapter.chat(
+                model="future-model",
+                messages=[ChatMessage(role="user", content="x")],
+            )

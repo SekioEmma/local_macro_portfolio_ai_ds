@@ -149,12 +149,39 @@ def _tool_call_from_transport(call: DeepSeekTransportToolCall) -> ToolCall:
     return ToolCall(id=call.id, name=call.name, arguments=dict(call.arguments))
 
 
+class _NotImplementedProviderAdapter:
+    name: ProviderName
+
+    def chat(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
+        response_format: dict[str, Any] | None = None,
+        max_tokens: int = 4000,
+    ) -> ChatResponse:
+        del model, messages, tools, tool_choice, response_format, max_tokens
+        raise NotImplementedError(f"{self.name} provider is not wired in Phase F")
+
+
+class ClaudeProviderAdapter(_NotImplementedProviderAdapter):
+    name: Literal["claude"] = "claude"
+
+
+class GPTProviderAdapter(_NotImplementedProviderAdapter):
+    name: Literal["gpt"] = "gpt"
+
+
 __all__ = [
     "ChatMessage",
     "ChatMessageRole",
     "ChatResponse",
+    "ClaudeProviderAdapter",
     "DeepSeekProviderAdapter",
     "FinishReason",
+    "GPTProviderAdapter",
     "LLMProviderAdapter",
     "ProviderName",
     "TokenUsage",
