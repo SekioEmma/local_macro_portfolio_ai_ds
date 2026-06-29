@@ -70,6 +70,20 @@ docs/
 - 仅 BLS 和 BEA；不抓 Fed；不推断 FOMC statement 发布时间。
 - 不新增 API、前端、scheduler、background、自动刷新、RAG、embedding、vector store 或 Agent。
 
+**Phase F MacroBrief Agent + Holdings 例外**：
+
+- 仅 `src/app_backend/services/agent_runtime.py` 可在用户显式 toggle `include_holdings=true` 时把真实持仓快照（ticker / 股数 / 美元金额 / 账户名 / 资产类别比例）注入 DeepSeek system prompt。其他所有 AI / RAG / search / preview / context 路径继续禁止接触 holdings / account / position 数据。
+- transaction history（交易历史）、order book（订单簿）、cost basis（成本）、P&L（盈亏）、raw provider account response 在任何路径上仍然禁止离开本地。
+- 持仓注入必须 server-side 完成。raw holdings 不得进入 SSE 流、前端 console、前端 state、网络响应正文。
+- 每个 agent session 必须在 `outputs/agent_traces/<session_id>.jsonl` 记录 `holdings_included` 与 `holdings_snapshot_sha256`。raw snapshot 本身不记录。
+- agent endpoint 仅 `POST /api/agent/run` 与只读的 `GET /api/agent/trace/<session_id>`。`/api/chat`、`/api/ai/deepseek`、`/api/ai/external`、`/api/ai/tavily` 继续禁止。
+- agent 仅复用已审计的 `deepseek_real_transport.py`（`deepseek-v4-pro` 加 `tools`/`tool_choice` 扩展）和 `tavily_real_transport.py`（经 `TavilySearchExecutionService` + `confirm_external_search=true`）。不新增 transport、不新增 httpx import。
+- agent 仍走现有 `ExternalAIRuntimePolicy`（22 gates 派生自实状态，fail-closed）+ `SearchRuntimePolicy` + `guard_response`，不弱化 `external_model_called=True` 时的 blocking。
+- agent 工具结果回灌 LLM 前必须 redact API key / 本地路径 / 内部 sha256 / raw provider payload / env 值；单工具结果 8KB 上限。
+- agent budget：`max_steps=18`（或 two-phase 模式 `research_max_steps=12` + `writing_max_steps=2`），`max_search_calls=5`，`max_rag_calls=5`，`max_tokens_total=40000`。超限强制进入 writing-finalize 步骤并记录 trace。
+- `data/macro_brief_archive.sqlite`（Phase G 规划）保持禁止人工读取 / 复制 / 提交；Phase F 不创建该 archive。
+- 所有 D10-D19 / Stage 8 / AI Context Manifest / 其他既有 Era 2 禁止项不变。
+
 **禁 import**（除明确允许的 transport 边界文件）：
 - `httpx` / `requests` / `aiohttp`
 - 直接读 `os.environ` / `os.getenv`
@@ -95,6 +109,17 @@ docs/
 - 必须含 base/bull/bear/systemic 4 档
 - 必须含 boundary_notice，包含五个否定关键词：非概率、非操作、非个股推荐、非择时、非胜率
 - 个股可点名 + 描述风险敷口；禁止操作动词
+
+**Phase F MacroBrief 输出契约**（Era 2 F 阶段解禁，单 agent 多工具）：
+
+- 10 节固定 schema，Pydantic 校验失败 → 自动重试 1 次 → 二次失败返回 partial brief + warning
+- § 5 `module_table` 恰好 6 行：权益趋势 / 利率压力 / 真实利率压力 / 通胀能源 / 信用压力 / 地缘风险
+- § 7 `forward_indicators` 恰好 5 条，每条含 `release_date` (ISO date)
+- § 8 `scenarios` 恰好 4 键：`base` / `bullish` / `bearish` / `systemic`，每键含 `trigger_conditions` + `transmission_path`
+- § 9 `source_list` 强制：brief 内每个数字必须能找到对应 `source_id`（URL 或 RAG doc_id）
+- § 10 `boundary_notice` 必须文本中包含 5 关键词：非个股操作 / 非概率胜率 / 非收益预测 / 非动态择时 / 非黑盒最优化
+- 工具结果与 LLM 输出之间的数字一致性必须保留（不得"调和"冲突，必须 flag）
+- 每个 brief session 必须有可查 trace，trace 不含 raw prompt / raw response / raw holdings 金额 / API key / raw search query
 
 ## 4. 任务级 L1–L4 体系
 

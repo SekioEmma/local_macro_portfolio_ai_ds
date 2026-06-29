@@ -156,12 +156,32 @@ scripts/                  # Ingest, audit, benchmark scripts
 - C4b adds no API route, frontend, scheduler, background task, automatic refresh, RAG, embedding, vector store, or Agent.
 - All other privacy, network, AI, persistence, D10-D19 / Stage 8, and AI Context Manifest prohibitions remain in force.
 
+### Era 2 Phase F MacroBrief Agent + Holdings Injection Exception
+
+- The Phase F MacroBrief agent runtime (`agent_runtime.py`) is a multi-step, function-calling LLM loop that orchestrates 11 read-only tools and produces a 10-section structured brief. It is the only multi-turn LLM path approved in this codebase; the AI-2 single-turn `/api/ai/research-deepseek` path remains unchanged.
+- The sanctioned agent endpoint is `POST /api/agent/run` (SSE streaming). `GET /api/agent/trace/<session_id>` is the read-only trace inspection endpoint. The forbidden routes (`/api/chat`, `/api/ai/deepseek`, `/api/ai/external`, `/api/ai/tavily`) remain forbidden; Phase F does not unlock them.
+- The agent may call the existing approved transports only: `deepseek_real_transport.py` (for `deepseek-v4-pro` chat completions with `tools` / `tool_choice` extensions) and `tavily_real_transport.py` (via `TavilySearchExecutionService`). No new network import, no new transport file, no `httpx`/`requests`/`aiohttp` outside these boundaries.
+- The agent must reuse the existing `ExternalAIRuntimePolicy` (22 gates, fail-closed) and `SearchRuntimePolicy`; runtime policy gates remain derived from real state, never hardcoded. The agent must reuse `guard_response` and not weaken its blocking when `external_model_called=True`.
+- **Holdings injection** is permitted into the DeepSeek system prompt **only when ALL of the following hold**:
+  1. The user has explicitly set `include_holdings=true` in the `/api/agent/run` request body (frontend exposes a toggle, defaulted OFF, not persisted across logout).
+  2. The injected holdings snapshot may include: ticker, share count, dollar amount, account name, and asset-class breakdown. **Transaction history, order book, cost basis, P&L, and raw provider account responses remain forbidden**.
+  3. `agent_trace_service.py` records `holdings_included=true` and a `holdings_snapshot_sha256` (sha256 of the canonical-JSON snapshot) in the session trace. The raw snapshot itself is NOT logged.
+  4. The injection happens server-side inside `agent_runtime.py`; raw holdings never enter the SSE stream, browser console, network response body visible to the user, or any frontend state.
+- The holdings injection exception applies **only** to `agent_runtime.py` when invoked through `POST /api/agent/run`. All other AI endpoints (`/api/ai/research-deepseek`, `/api/ai/preview-*`, `/api/ai/context-preview`, `/api/ai/research-preview`, `/api/ai/prompt-preview`) remain forbidden from receiving holdings, account, or position data.
+- Tool result data flowing back to the LLM must be redacted: no API keys, no local file paths, no SHA-256 hashes of internal artifacts, no raw provider payloads, no env values. Each tool handler enforces an 8KB result cap; oversized results are summarized.
+- Search and RAG calls from the agent must pass the existing sanitizer, allowlist, budget, and response guard. The agent's `search_tavily` tool requires `confirm_external_search=true` to be set on each underlying `TavilySearchExecutionService.execute` call.
+- Agent budget caps are enforced: `max_steps=18` (or `research_max_steps=12` + `writing_max_steps=2` in two-phase mode), `max_search_calls=5`, `max_rag_calls=5`, `max_tokens_total=40000`. Exceeding any cap forces the agent into a writing-finalize step and records the breach in trace.
+- `outputs/agent_traces/<session_id>.jsonl` is the only persistence path for agent runs. It records tool calls, durations, token usage, costs, and citation URLs. It must NOT record raw prompts, raw LLM responses, raw holdings amounts, raw search queries, or API keys. The path remains under the existing `outputs/` forbidden-direct-read rule.
+- `data/agent_brief_archive.sqlite` (Phase G, future) remains forbidden for manual read/copy/commit; Phase F itself does not create this archive.
+- All other privacy, network, AI, persistence, D10-D19 / Stage 8, AI Context Manifest, and existing Era 2 prohibitions remain in force.
+
 ## Key Design Invariants
 
 - `ExternalAIRuntimePolicy` has 10 required-true gates + 12 required-false dangerous permissions. Default: fail-closed.
 - AI-2 single-turn runtime policy gates are **derived from real state, never hardcoded**: operational gates (`external_ai_enabled` / `provider_network_enabled` / `user_controlled_switch_enabled`) follow the user-controlled switch (provider key presence); provenance gates follow manifest budget readiness. Missing key → guard fails closed → structured blocked response (no raw 500). See `ai_deepseek_research_service._build_runtime_policy`.
 - `ExternalAIAdapterConfig` defaults stay `enabled=False`, `mode="disabled"`, `allow_network=False`. The AI-2 path opts in explicitly via `deepseek_adapter.network_config()`.
-- AI **preview** endpoints (`/api/ai/preview-*`, `/api/ai/context-preview`, `/api/ai/research-preview`, `/api/ai/prompt-preview`) are local/deterministic only — no LLM calls. The only model-calling endpoint is `/api/ai/research-deepseek` (AI-2 single-turn).
+- AI **preview** endpoints (`/api/ai/preview-*`, `/api/ai/context-preview`, `/api/ai/research-preview`, `/api/ai/prompt-preview`) are local/deterministic only — no LLM calls. Model-calling endpoints are: `/api/ai/research-deepseek` (AI-2 single-turn) and `/api/agent/run` (Phase F multi-step agent, see CLAUDE.md §Era 2 Phase F).
+- Phase F MacroBrief output schema has 10 sections with strict Pydantic validators: § 5 module_table = exactly 6 rows, § 7 forward_indicators = exactly 5 entries (each with `release_date`), § 8 scenarios = exactly 4 keys (`base` / `bullish` / `bearish` / `systemic`), § 10 boundary_notice must contain 5 prohibitions keywords (非个股操作 / 非概率胜率 / 非收益预测 / 非动态择时 / 非黑盒最优化). Validation failure triggers one automatic retry; second failure returns partial brief with warning.
 - Dashboard pipeline order is fixed: D13→D14→D10→D11→D17→D18→D15→D19→D16→Stage8
 - Evidence table cache uses file-stat-based cache keys (mtime+size)
 
