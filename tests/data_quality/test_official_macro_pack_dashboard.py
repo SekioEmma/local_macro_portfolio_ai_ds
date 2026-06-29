@@ -178,9 +178,12 @@ def test_missing_official_macro_rows_are_blocked_with_reason(monkeypatch, tmp_pa
 
 
 def test_labor_compact_missing_uses_official_history_fallback(monkeypatch, tmp_path):
+    from datetime import date, timedelta
+
     block_network_calls(monkeypatch)
     db_path = tmp_path / "market_history.sqlite3"
-    _insert_history(db_path, "continuing_claims", "2026-06-07", 1700000, source_series="CCSA")
+    recent_obs = (date.today() - timedelta(days=10)).isoformat()
+    _insert_history(db_path, "continuing_claims", recent_obs, 1700000, source_series="CCSA")
     _write_market(
         tmp_path,
         {
@@ -205,8 +208,8 @@ def test_labor_compact_missing_uses_official_history_fallback(monkeypatch, tmp_p
     assert row["source"] == "FRED"
     assert row["source_badge"] == "official"
     assert row["source_series"] == "CCSA"
-    assert row["observation_date"] == "2026-06-07"
-    assert row["generated_at"] == "2026-06-07T00:00:00+00:00"
+    assert row["observation_date"] == recent_obs
+    assert row["generated_at"] == f"{recent_obs}T00:00:00+00:00"
     assert row["freshness_status"] == "historical"
     assert "continuing unemployment claims" in row["interpretation_hint"]
     assert row["ai_context_allowed"] is True
