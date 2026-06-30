@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from datetime import date
+from time import monotonic
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -82,6 +83,7 @@ class AgentRuntimeEvent(BaseModel):
 
 
 RuntimeEventCallback = Callable[[AgentRuntimeEvent], None]
+MonotonicClock = Callable[[], float]
 
 
 class AgentRuntimeConfig(BaseModel):
@@ -98,6 +100,9 @@ class AgentRuntimeConfig(BaseModel):
     research_max_steps: int = Field(default=12, gt=0)
     writing_max_steps: int = Field(default=3, gt=0)
     force_writing_phase: bool = False
+    max_wall_clock_seconds: float = Field(default=180.0, gt=0)
+    max_provider_call_seconds: float = Field(default=120.0, gt=0)
+    max_tool_call_seconds: float = Field(default=30.0, gt=0)
 
 
 class AgentBudget(BaseModel):
@@ -197,10 +202,13 @@ def run_agent(
     event_callback: RuntimeEventCallback | None = None,
     evidence_ledger: RunEvidenceLedger | None = None,
     cancellation_requested: CancellationRequested | None = None,
+    monotonic_clock: MonotonicClock | None = None,
 ) -> AgentSessionResult:
     """Run the internal MacroBrief agent loop against injected dependencies."""
     cfg = config or AgentRuntimeConfig()
     run_budget = budget or AgentBudget()
+    clock = monotonic_clock or monotonic
+    run_started_at = clock()
     warnings: list[AgentRuntimeWarning] = []
     events: list[AgentRuntimeEvent] = []
     validation_failures = 0
@@ -234,6 +242,24 @@ def run_agent(
 
     while run_budget.has_step():
         step = run_budget.steps_used + 1
+        if _wall_clock_exceeded(
+            started_at=run_started_at,
+            clock=clock,
+            config=cfg,
+        ):
+            return _finish_with_trace(
+                _timeout_result(
+                    session_id=session_id,
+                    warnings=warnings,
+                    events=events,
+                    event_callback=event_callback,
+                    steps=run_budget.steps_used,
+                    step=step,
+                    kind="wall_clock",
+                    message="Agent exceeded max_wall_clock_seconds before the next provider call.",
+                ),
+                trace_service,
+            )
         if _is_cancellation_requested(cancellation_requested):
             return _finish_with_trace(
                 _cancelled_result(
@@ -262,6 +288,7 @@ def run_agent(
                 ),
                 event_callback,
             )
+            provider_started_at = clock()
             response = provider.chat(
                 model=cfg.model_name,
                 messages=messages,
@@ -270,6 +297,7 @@ def run_agent(
                 response_format=prompt.response_format,
                 max_tokens=cfg.max_tokens_per_call,
             )
+            provider_elapsed_seconds = clock() - provider_started_at
         except Exception as exc:  # noqa: BLE001 - provider failures degrade to incomplete
             warnings.append(
                 AgentRuntimeWarning(
@@ -297,12 +325,45 @@ def run_agent(
                 trace_service,
             )
         run_budget.record_step()
+        if provider_elapsed_seconds > cfg.max_provider_call_seconds:
+            return _finish_with_trace(
+                _timeout_result(
+                    session_id=session_id,
+                    warnings=warnings,
+                    events=events,
+                    event_callback=event_callback,
+                    steps=run_budget.steps_used,
+                    step=step,
+                    kind="provider_call",
+                    message="Provider call exceeded max_provider_call_seconds.",
+                    elapsed_seconds=provider_elapsed_seconds,
+                ),
+                trace_service,
+            )
         if current_phase == "writing":
             writing_steps_used += 1
         else:
             research_steps_used += 1
         run_budget.record_tokens(response.usage)
         _record_completion_event(events, step, response, event_callback)
+        if _wall_clock_exceeded(
+            started_at=run_started_at,
+            clock=clock,
+            config=cfg,
+        ):
+            return _finish_with_trace(
+                _timeout_result(
+                    session_id=session_id,
+                    warnings=warnings,
+                    events=events,
+                    event_callback=event_callback,
+                    steps=run_budget.steps_used,
+                    step=step,
+                    kind="wall_clock",
+                    message="Agent exceeded max_wall_clock_seconds after provider return.",
+                ),
+                trace_service,
+            )
         if _is_cancellation_requested(cancellation_requested):
             return _finish_with_trace(
                 _cancelled_result(
@@ -363,6 +424,24 @@ def run_agent(
 
         consecutive_no_tool_calls = 0
         for tool_call in response.tool_calls:
+            if _wall_clock_exceeded(
+                started_at=run_started_at,
+                clock=clock,
+                config=cfg,
+            ):
+                return _finish_with_trace(
+                    _timeout_result(
+                        session_id=session_id,
+                        warnings=warnings,
+                        events=events,
+                        event_callback=event_callback,
+                        steps=run_budget.steps_used,
+                        step=step,
+                        kind="wall_clock",
+                        message="Agent exceeded max_wall_clock_seconds before the next tool call.",
+                    ),
+                    trace_service,
+                )
             if _is_cancellation_requested(cancellation_requested):
                 return _finish_with_trace(
                     _cancelled_result(
@@ -423,6 +502,7 @@ def run_agent(
                 tool_failure_counts=tool_failure_counts,
                 disabled_tools=disabled_tools,
                 evidence_ledger=current_evidence_ledger,
+                clock=clock,
             )
             if _has_budget_warning(warnings):
                 phase = _switch_to_writing_phase(
@@ -520,6 +600,49 @@ def _cancelled_result(
     return AgentSessionResult(
         session_id=session_id,
         final_status="cancelled",
+        warnings=warnings,
+        events=events,
+        steps=steps,
+    )
+
+
+def _wall_clock_exceeded(
+    *,
+    started_at: float,
+    clock: MonotonicClock,
+    config: AgentRuntimeConfig,
+) -> bool:
+    return clock() - started_at > config.max_wall_clock_seconds
+
+
+def _timeout_result(
+    *,
+    session_id: str,
+    warnings: list[AgentRuntimeWarning],
+    events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
+    steps: int,
+    step: int | None,
+    kind: str,
+    message: str,
+    elapsed_seconds: float | None = None,
+) -> AgentSessionResult:
+    _append_timeout_warning(warnings, kind, message)
+    payload: dict[str, Any] = {"kind": kind, "status": "timeout"}
+    if elapsed_seconds is not None:
+        payload["elapsed_seconds"] = round(elapsed_seconds, 3)
+    _append_event(
+        events,
+        AgentRuntimeEvent(
+            type="runtime_timeout",
+            step=step,
+            data=payload,
+        ),
+        event_callback,
+    )
+    return AgentSessionResult(
+        session_id=session_id,
+        final_status="incomplete",
         warnings=warnings,
         events=events,
         steps=steps,
@@ -684,6 +807,7 @@ def _dispatch_tool_call(
     tool_failure_counts: dict[str, int],
     disabled_tools: set[str],
     evidence_ledger: RunEvidenceLedger | None,
+    clock: MonotonicClock,
 ) -> RunEvidenceLedger | None:
     if tool_call.name in disabled_tools:
         _append_disabled_tool_message(
@@ -715,7 +839,36 @@ def _dispatch_tool_call(
         _append_finalize_convergence_message(messages)
         return evidence_ledger
 
+    tool_started_at = clock()
     result = tool_registry.dispatch(tool_call.name, tool_call.arguments)
+    tool_elapsed_seconds = clock() - tool_started_at
+    if tool_elapsed_seconds > config.max_tool_call_seconds:
+        _append_timeout_warning(
+            warnings,
+            "tool_call",
+            f"{tool_call.name} exceeded max_tool_call_seconds.",
+        )
+        _append_event(
+            events,
+            AgentRuntimeEvent(
+                type="tool_timeout",
+                step=step,
+                data={
+                    "tool_name": tool_call.name,
+                    "elapsed_seconds": round(tool_elapsed_seconds, 3),
+                    "max_tool_call_seconds": config.max_tool_call_seconds,
+                },
+            ),
+            event_callback,
+        )
+        _append_tool_timeout_message(
+            tool_call=tool_call,
+            messages=messages,
+            events=events,
+            event_callback=event_callback,
+            step=step,
+        )
+        return evidence_ledger
     message_result = result
     evidence_ids: list[str] = []
     if evidence_ledger is not None:
@@ -884,12 +1037,52 @@ def _append_budget_exceeded_tool_message(
     _append_tool_message(messages, tool_call, result)
 
 
+def _append_tool_timeout_message(
+    *,
+    tool_call: ToolCall,
+    messages: list[ChatMessage],
+    events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
+    step: int,
+) -> None:
+    result = ToolResult(
+        status="error",
+        error_code="tool_timeout",
+        error_message=f"{tool_call.name} exceeded max_tool_call_seconds; continue with available evidence.",
+    )
+    _append_event(
+        events,
+        AgentRuntimeEvent(
+            type="tool_result",
+            step=step,
+            data={
+                "tool_name": tool_call.name,
+                "status": result.status,
+                "error_code": result.error_code,
+            },
+        ),
+        event_callback,
+    )
+    _append_tool_message(messages, tool_call, result)
+
+
 def _append_budget_warning(
     warnings: list[AgentRuntimeWarning],
     kind: str,
     message: str,
 ) -> None:
     code = f"{BUDGET_WARNING_PREFIX}:{kind}"
+    if any(warning.code == code for warning in warnings):
+        return
+    warnings.append(AgentRuntimeWarning(code=code, message=message))
+
+
+def _append_timeout_warning(
+    warnings: list[AgentRuntimeWarning],
+    kind: str,
+    message: str,
+) -> None:
+    code = f"timeout:{kind}"
     if any(warning.code == code for warning in warnings):
         return
     warnings.append(AgentRuntimeWarning(code=code, message=message))

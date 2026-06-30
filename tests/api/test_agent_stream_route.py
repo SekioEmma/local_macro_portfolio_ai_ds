@@ -7,9 +7,12 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app_backend.schemas.agent_api import AgentRunRequest
 from app_backend.main import app, get_agent_run_registry, get_agent_run_service
 from app_backend.services.agent_api_service import AgentRunService
 from app_backend.services.agent_run_registry import AgentRunRegistry
+from app_backend.services.agent_runtime import AgentRuntimeEvent
+from app_backend.services.agent_stream_service import AgentStreamService
 from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME, ToolSpec
 from app_backend.services.agent_trace_service import AgentTraceService
 from app_backend.services.llm_provider_adapter import ChatResponse, ToolCall
@@ -230,3 +233,40 @@ def test_agent_stream_and_cancel_routes_registered():
     assert "/api/agent/run/stream" in paths
     assert "/api/agent/run/{session_id}/cancel" in paths
     assert FINALIZE_TOOL_NAME == "finalize_macro_brief"
+
+
+def test_agent_stream_service_enforces_queue_size_limit():
+    class FloodService:
+        def run(self, request, *, event_callback=None, cancellation_requested=None):  # noqa: ANN001, ANN201
+            del request, cancellation_requested
+            assert event_callback is not None
+            for index in range(2000):
+                event_callback(
+                    AgentRuntimeEvent(
+                        type="provider_call_started",
+                        step=index,
+                        data={"phase": "research"},
+                    )
+                )
+            return _MinimalResponse()
+
+    class _MinimalResponse:
+        def model_dump(self, *, mode: str):  # noqa: ANN201
+            del mode
+            return {
+                "final_status": "ok",
+                "steps": 0,
+                "trace_session_id": "queue-overflow",
+                "brief": None,
+            }
+
+    stream = AgentStreamService(FloodService(), max_queue_size=1).stream(
+        AgentRunRequest(
+            session_id="queue-overflow",
+            user_question="Build a macro brief.",
+        )
+    )
+    events = _events_from_sse("".join(stream))
+
+    assert events[-1]["type"] == "error"
+    assert events[-1]["payload"]["detail"] == "agent_stream_queue_overflow"

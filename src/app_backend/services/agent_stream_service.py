@@ -37,23 +37,49 @@ class AgentStreamService:
         agent_run_service: AgentRunService,
         *,
         run_registry: AgentRunRegistry | None = None,
+        max_queue_size: int = 256,
     ) -> None:
         self._agent_run_service = agent_run_service
         self._run_registry = run_registry
+        self._max_queue_size = max(1, max_queue_size)
 
     def stream(self, request: AgentRunRequest) -> Iterator[str]:
         session_id = request.session_id or uuid.uuid4().hex
         stream_request = request.model_copy(update={"session_id": session_id})
-        event_queue: queue.Queue[AgentRuntimeEvent | _ResultItem | _ErrorItem] = queue.Queue()
+        event_queue: queue.Queue[AgentRuntimeEvent | _ResultItem | _ErrorItem] = queue.Queue(
+            maxsize=self._max_queue_size,
+        )
+        queue_overflowed = threading.Event()
         if self._run_registry is not None:
             self._run_registry.clear(session_id)
 
+        def _put_item(item: AgentRuntimeEvent | _ResultItem | _ErrorItem) -> None:
+            if queue_overflowed.is_set():
+                return
+            try:
+                event_queue.put_nowait(item)
+            except queue.Full:
+                queue_overflowed.set()
+                try:
+                    event_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                try:
+                    event_queue.put_nowait(
+                        _ErrorItem(
+                            error_type="AgentStreamQueueOverflow",
+                            detail="agent_stream_queue_overflow",
+                        )
+                    )
+                except queue.Full:
+                    pass
+
         def _callback(event: AgentRuntimeEvent) -> None:
-            event_queue.put(event)
+            _put_item(event)
 
         def _run() -> None:
             try:
-                event_queue.put(
+                _put_item(
                     AgentRuntimeEvent(type="run_started", step=0, data={})
                 )
                 result = self._agent_run_service.run(
@@ -65,9 +91,9 @@ class AgentStreamService:
                         else None
                     ),
                 )
-                event_queue.put(_ResultItem(response=result.model_dump(mode="json")))
+                _put_item(_ResultItem(response=result.model_dump(mode="json")))
             except Exception as exc:  # noqa: BLE001 - converted into sanitized SSE error
-                event_queue.put(_ErrorItem(error_type=type(exc).__name__, detail=str(exc)))
+                _put_item(_ErrorItem(error_type=type(exc).__name__, detail=str(exc)))
             finally:
                 if self._run_registry is not None:
                     self._run_registry.clear(session_id)

@@ -48,6 +48,17 @@ class MockProvider:
         return self.responses.pop(0)
 
 
+class FakeClock:
+    def __init__(self, *values: float) -> None:
+        self._values = list(values)
+        self._last = values[-1] if values else 0.0
+
+    def __call__(self) -> float:
+        if self._values:
+            self._last = self._values.pop(0)
+        return self._last
+
+
 class EvidenceAwareProvider:
     name = "deepseek"
 
@@ -382,6 +393,91 @@ def test_run_agent_cancelled_after_provider_call_skips_tool_dispatch():
     assert len(provider.calls) == 1
     assert dispatches == []
     assert not any(event.type == "tool_result" for event in result.events)
+
+
+def test_run_agent_wall_clock_timeout_before_provider_call_makes_no_provider_request():
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+
+    result = run_agent(
+        session_id="wall-timeout-before-provider",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(max_wall_clock_seconds=1),
+        monotonic_clock=FakeClock(0, 2),
+    )
+
+    assert result.final_status == "incomplete"
+    assert result.steps == 0
+    assert provider.calls == []
+    assert any(warning.code == "timeout:wall_clock" for warning in result.warnings)
+    assert result.events[-1].type == "runtime_timeout"
+    assert result.events[-1].data["kind"] == "wall_clock"
+
+
+def test_run_agent_provider_timeout_returns_incomplete_after_provider_call():
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+
+    result = run_agent(
+        session_id="provider-timeout",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(max_provider_call_seconds=1),
+        monotonic_clock=FakeClock(0, 0, 0, 2),
+    )
+
+    assert result.final_status == "incomplete"
+    assert result.steps == 1
+    assert len(provider.calls) == 1
+    assert any(warning.code == "timeout:provider_call" for warning in result.warnings)
+    assert result.events[-1].type == "runtime_timeout"
+    assert result.events[-1].data["kind"] == "provider_call"
+
+
+def test_run_agent_tool_timeout_appends_sanitized_tool_message_and_continues():
+    dispatches: list[dict[str, Any]] = []
+    provider = MockProvider(
+        [
+            ChatResponse(
+                tool_calls=[
+                    ToolCall(
+                        id="call-1",
+                        name="dashboard_query",
+                        arguments={"series": "DGS10"},
+                    )
+                ],
+                finish_reason="tool_calls",
+            ),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="tool-timeout",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(on_dashboard=dispatches),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(max_tool_call_seconds=1),
+        monotonic_clock=FakeClock(0, 0, 0, 0, 0, 0, 0, 2),
+    )
+
+    assert result.final_status == "ok"
+    assert dispatches == [{"series": "DGS10"}]
+    assert any(warning.code == "timeout:tool_call" for warning in result.warnings)
+    assert any(event.type == "tool_timeout" for event in result.events)
+    timeout_result = next(
+        event
+        for event in result.events
+        if event.type == "tool_result" and event.data.get("error_code") == "tool_timeout"
+    )
+    assert timeout_result.data["status"] == "error"
 
 
 def test_run_agent_plain_text_adds_finalize_convergence_message():

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -18,6 +18,7 @@ from app_backend.services.agent_information_plan import (
     information_plan_trace_event,
 )
 from app_backend.services.agent_runtime import (
+    AgentRuntimeConfig,
     AgentRuntimeEvent,
     AgentSessionResult,
     CancellationRequested,
@@ -107,6 +108,7 @@ class AgentRunService:
     holdings_consent_service: HoldingsConsentService | None = None
     holdings_context_service: HoldingsExternalContextService | None = None
     enable_evidence_ledger: bool = True
+    runtime_config: AgentRuntimeConfig = field(default_factory=AgentRuntimeConfig)
 
     def run(
         self,
@@ -154,6 +156,7 @@ class AgentRunService:
             tool_names=tool_names,
             include_holdings=request.include_holdings,
             holdings_snapshot=holdings_snapshot,
+            config=self.runtime_config,
             trace_service=trace_service,
             event_callback=event_callback,
             evidence_ledger=(
@@ -212,9 +215,12 @@ def build_default_agent_run_service(
     holdings_context_service: HoldingsExternalContextService | None = None,
 ) -> AgentRunService:
     resolved_search_service = search_service or build_default_tavily_search_execution_service()
+    runtime_config = AgentRuntimeConfig()
     return AgentRunService(
         provider_factory=lambda: DeepSeekProviderAdapter(
-            transport=DeepSeekRealTransport()
+            transport=DeepSeekRealTransport(
+                timeout_seconds=runtime_config.max_provider_call_seconds,
+            )
         ),
         registry_factory=lambda confirm_external_search: _build_agent_tool_registry(
             confirm_external_search=confirm_external_search,
@@ -222,6 +228,7 @@ def build_default_agent_run_service(
         ),
         holdings_consent_service=holdings_consent_service,
         holdings_context_service=holdings_context_service,
+        runtime_config=runtime_config,
     )
 
 
