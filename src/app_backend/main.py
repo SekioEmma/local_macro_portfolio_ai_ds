@@ -363,8 +363,9 @@ def post_agent_run(
 def post_agent_run_stream(
     request: AgentRunRequest,
     service: AgentRunService = Depends(get_agent_run_service),
+    registry: AgentRunRegistry = Depends(get_agent_run_registry),
 ) -> StreamingResponse:
-    stream_service = AgentStreamService(service)
+    stream_service = AgentStreamService(service, run_registry=registry)
     return StreamingResponse(
         stream_service.stream(request),
         media_type="text/event-stream",

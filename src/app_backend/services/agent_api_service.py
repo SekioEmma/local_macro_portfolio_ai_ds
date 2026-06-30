@@ -20,6 +20,7 @@ from app_backend.services.agent_information_plan import (
 from app_backend.services.agent_runtime import (
     AgentRuntimeEvent,
     AgentSessionResult,
+    CancellationRequested,
     RuntimeEventCallback,
     run_agent,
 )
@@ -112,6 +113,7 @@ class AgentRunService:
         request: AgentRunRequest,
         *,
         event_callback: RuntimeEventCallback | None = None,
+        cancellation_requested: CancellationRequested | None = None,
     ) -> AgentRunResponse:
         session_id = request.session_id or uuid.uuid4().hex
         tool_names = _tool_names_for_request(request)
@@ -159,6 +161,7 @@ class AgentRunService:
                 if self.enable_evidence_ledger
                 else None
             ),
+            cancellation_requested=cancellation_requested,
         )
         return _response_from_result(
             request=request,

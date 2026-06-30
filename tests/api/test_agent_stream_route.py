@@ -138,6 +138,71 @@ def test_agent_stream_route_converts_input_errors_to_sse_error(tmp_path):
     assert not provider.calls
 
 
+def test_agent_stream_route_propagates_cancel_before_tool_dispatch(tmp_path):
+    registry = AgentRunRegistry()
+    session_id = "agent-stream-cancel"
+    dispatches: list[dict[str, Any]] = []
+
+    class CancellingProvider:
+        name = "deepseek"
+
+        def __init__(self) -> None:
+            self.calls: list[dict[str, Any]] = []
+
+        def chat(self, **kwargs):  # noqa: ANN003, ANN201
+            self.calls.append(kwargs)
+            registry.request_cancel(session_id)
+            return ChatResponse(
+                tool_calls=[
+                    ToolCall(
+                        id="call-1",
+                        name="dashboard_query",
+                        arguments={"series": "DGS10"},
+                    )
+                ],
+                finish_reason="tool_calls",
+            )
+
+    provider = CancellingProvider()
+
+    def registry_factory(_confirm_external_search: bool):
+        local_registry = make_registry(on_dashboard=dispatches)
+        return local_registry
+
+    service = AgentRunService(
+        provider_factory=lambda: provider,
+        registry_factory=registry_factory,
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        current_date_provider=lambda: date(2026, 6, 30),
+        enable_evidence_ledger=False,
+    )
+    app.dependency_overrides[get_agent_run_service] = lambda: service
+    app.dependency_overrides[get_agent_run_registry] = lambda: registry
+
+    try:
+        response = _client().post(
+            "/api/agent/run/stream",
+            json={
+                "session_id": session_id,
+                "user_question": "Build a cancellable macro brief.",
+            },
+            headers={"accept": "text/event-stream"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    events = _events_from_sse(response.text)
+    event_types = [event["type"] for event in events]
+    assert "cancelled" in event_types
+    assert "tool_result" not in event_types
+    assert "brief_section" not in event_types
+    assert events[-1]["type"] == "complete"
+    assert events[-1]["payload"]["final_status"] == "cancelled"
+    assert dispatches == []
+    assert registry.is_cancelled(session_id) is False
+
+
 def test_agent_cancel_route_is_idempotent():
     registry = AgentRunRegistry()
     app.dependency_overrides[get_agent_run_registry] = lambda: registry

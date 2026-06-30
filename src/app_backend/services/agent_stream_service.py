@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app_backend.schemas.agent_api import AgentRunRequest
 from app_backend.services.agent_api_service import AgentRunService
+from app_backend.services.agent_run_registry import AgentRunRegistry
 from app_backend.services.agent_runtime import AgentRuntimeEvent
 from app_backend.services.agent_trace_service import sanitize_trace_payload
 
@@ -31,13 +32,21 @@ class AgentSseEvent(BaseModel):
 class AgentStreamService:
     """Run the synchronous agent service behind a sanitized SSE stream."""
 
-    def __init__(self, agent_run_service: AgentRunService) -> None:
+    def __init__(
+        self,
+        agent_run_service: AgentRunService,
+        *,
+        run_registry: AgentRunRegistry | None = None,
+    ) -> None:
         self._agent_run_service = agent_run_service
+        self._run_registry = run_registry
 
     def stream(self, request: AgentRunRequest) -> Iterator[str]:
         session_id = request.session_id or uuid.uuid4().hex
         stream_request = request.model_copy(update={"session_id": session_id})
         event_queue: queue.Queue[AgentRuntimeEvent | _ResultItem | _ErrorItem] = queue.Queue()
+        if self._run_registry is not None:
+            self._run_registry.clear(session_id)
 
         def _callback(event: AgentRuntimeEvent) -> None:
             event_queue.put(event)
@@ -50,10 +59,18 @@ class AgentStreamService:
                 result = self._agent_run_service.run(
                     stream_request,
                     event_callback=_callback,
+                    cancellation_requested=(
+                        (lambda: self._run_registry.is_cancelled(session_id))
+                        if self._run_registry is not None
+                        else None
+                    ),
                 )
                 event_queue.put(_ResultItem(response=result.model_dump(mode="json")))
             except Exception as exc:  # noqa: BLE001 - converted into sanitized SSE error
                 event_queue.put(_ErrorItem(error_type=type(exc).__name__, detail=str(exc)))
+            finally:
+                if self._run_registry is not None:
+                    self._run_registry.clear(session_id)
 
         worker = threading.Thread(target=_run, name=f"agent-stream-{session_id}", daemon=True)
         worker.start()
@@ -142,6 +159,8 @@ def _runtime_event_payload(event: AgentRuntimeEvent) -> tuple[str, dict[str, Any
         return "brief_validated", {"step": event.step, **event.data}
     if event.type == "macro_brief_validation":
         return "warning", {"step": event.step, "kind": "macro_brief_validation", **event.data}
+    if event.type == "run_cancelled":
+        return "cancelled", {"step": event.step, **event.data}
     if event.type in {
         "run_started",
         "provider_call_started",

@@ -30,7 +30,7 @@ Future SSE must mirror the same sanitized event contract and must not introduce 
 
 ## Migration
 
-Current implementation has sanitized trace, debug replay, date-partitioned trace paths, `index.jsonl`, per-session summary files, append-only event hash chains, graceful `trace_overflow` summary preservation, a backend `POST /api/agent/run/stream` SSE endpoint, runtime event callback bridging, and a process-local cancel registry seam. Frontend progress/cancel UI and deep cancellation propagation into in-flight provider/tool calls remain pending.
+Current implementation has sanitized trace, debug replay, date-partitioned trace paths, `index.jsonl`, per-session summary files, append-only event hash chains, graceful `trace_overflow` summary preservation, a backend `POST /api/agent/run/stream` SSE endpoint, runtime event callback bridging, process-local cancel registry, and runtime cancellation checks before each new provider/tool/finalize call. In-flight blocking provider/tool calls are allowed to return or time out before the next cancellation check. Frontend progress/cancel UI remains pending.
 
 ## Validation
 
@@ -38,4 +38,5 @@ Current implementation has sanitized trace, debug replay, date-partitioned trace
 - `tests/api/test_agent_trace_route.py`
 - `tests/api/test_agent_stream_route.py`
 - Trace tests verify `schema_version`, `event_sequence`, `previous_event_hash`, `event_hash`, overflow summary behavior, and absence of raw question / holdings details.
+- Stream/runtime tests verify explicit cancellation returns `final_status=cancelled`, emits a sanitized cancelled SSE event, and prevents subsequent tool dispatch.
 - Future frontend SSE implementation must include privacy and lifecycle tests before acceptance.

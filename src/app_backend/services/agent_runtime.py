@@ -44,8 +44,9 @@ from app_backend.services.run_evidence_ledger import RunEvidenceLedger
 from app_backend.services.temporal_alignment_service import build_temporal_envelope
 
 
-FinalStatus = Literal["ok", "incomplete", "validation_failed"]
+FinalStatus = Literal["ok", "incomplete", "validation_failed", "cancelled"]
 AgentPhase = Literal["research", "writing"]
+CancellationRequested = Callable[[], bool]
 
 AGENT_MODEL_NAME = "deepseek-v4-pro"
 SEARCH_TOOL_NAME = "search_tavily"
@@ -56,6 +57,7 @@ BUDGET_WARNING_PREFIX = "budget_exceeded"
 VALIDATION_RETRY_WARNING = "validation_retry"
 VALIDATION_FAILED_WARNING = "validation_failed"
 TOOL_DISABLED_WARNING_PREFIX = "tool_disabled"
+AGENT_CANCELLED_WARNING = "agent_cancelled"
 
 _FINALIZE_CONVERGENCE_MESSAGE = (
     "You must continue with tool calls. If the MacroBrief is ready, call "
@@ -194,6 +196,7 @@ def run_agent(
     trace_service: AgentTraceService | None = None,
     event_callback: RuntimeEventCallback | None = None,
     evidence_ledger: RunEvidenceLedger | None = None,
+    cancellation_requested: CancellationRequested | None = None,
 ) -> AgentSessionResult:
     """Run the internal MacroBrief agent loop against injected dependencies."""
     cfg = config or AgentRuntimeConfig()
@@ -231,6 +234,18 @@ def run_agent(
 
     while run_budget.has_step():
         step = run_budget.steps_used + 1
+        if _is_cancellation_requested(cancellation_requested):
+            return _finish_with_trace(
+                _cancelled_result(
+                    session_id=session_id,
+                    warnings=warnings,
+                    events=events,
+                    event_callback=event_callback,
+                    steps=run_budget.steps_used,
+                    step=step,
+                ),
+                trace_service,
+            )
         current_phase = phase
         tool_schema = _tool_schema_for_names(
             tool_registry,
@@ -288,6 +303,18 @@ def run_agent(
             research_steps_used += 1
         run_budget.record_tokens(response.usage)
         _record_completion_event(events, step, response, event_callback)
+        if _is_cancellation_requested(cancellation_requested):
+            return _finish_with_trace(
+                _cancelled_result(
+                    session_id=session_id,
+                    warnings=warnings,
+                    events=events,
+                    event_callback=event_callback,
+                    steps=run_budget.steps_used,
+                    step=step,
+                ),
+                trace_service,
+            )
         token_budget_exceeded = _handle_token_budget(
             budget=run_budget,
             warnings=warnings,
@@ -336,6 +363,18 @@ def run_agent(
 
         consecutive_no_tool_calls = 0
         for tool_call in response.tool_calls:
+            if _is_cancellation_requested(cancellation_requested):
+                return _finish_with_trace(
+                    _cancelled_result(
+                        session_id=session_id,
+                        warnings=warnings,
+                        events=events,
+                        event_callback=event_callback,
+                        steps=run_budget.steps_used,
+                        step=step,
+                    ),
+                    trace_service,
+                )
             if tool_call.name == FINALIZE_TOOL_NAME:
                 result, validation_failures = _handle_finalize_attempt(
                     session_id=session_id,
@@ -440,6 +479,51 @@ def _finish_with_trace(
             warnings=result.warnings,
         )
     return result
+
+
+def _is_cancellation_requested(
+    cancellation_requested: CancellationRequested | None,
+) -> bool:
+    if cancellation_requested is None:
+        return False
+    try:
+        return bool(cancellation_requested())
+    except Exception:
+        return False
+
+
+def _cancelled_result(
+    *,
+    session_id: str,
+    warnings: list[AgentRuntimeWarning],
+    events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
+    steps: int,
+    step: int | None,
+) -> AgentSessionResult:
+    if not any(warning.code == AGENT_CANCELLED_WARNING for warning in warnings):
+        warnings.append(
+            AgentRuntimeWarning(
+                code=AGENT_CANCELLED_WARNING,
+                message="Agent run cancelled before the next provider or tool call.",
+            )
+        )
+    _append_event(
+        events,
+        AgentRuntimeEvent(
+            type="run_cancelled",
+            step=step,
+            data={"status": "cancelled"},
+        ),
+        event_callback,
+    )
+    return AgentSessionResult(
+        session_id=session_id,
+        final_status="cancelled",
+        warnings=warnings,
+        events=events,
+        steps=steps,
+    )
 
 
 def _tool_schema_for_names(
@@ -1009,6 +1093,7 @@ __all__ = [
     "AgentRuntimeWarning",
     "AgentSessionResult",
     "BudgetExceeded",
+    "CancellationRequested",
     "RuntimeEventCallback",
     "ToolDisabled",
     "run_agent",

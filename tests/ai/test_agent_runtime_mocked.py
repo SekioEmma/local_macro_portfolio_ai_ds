@@ -324,6 +324,66 @@ def test_run_agent_dispatches_tool_then_finalizes():
     assert any(message.role == "tool" and "DGS10" in message.content for message in second_call_messages)
 
 
+def test_run_agent_cancelled_before_provider_call_makes_no_provider_request():
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+
+    result = run_agent(
+        session_id="cancel-before-provider",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        cancellation_requested=lambda: True,
+    )
+
+    assert result.final_status == "cancelled"
+    assert result.steps == 0
+    assert provider.calls == []
+    assert any(warning.code == "agent_cancelled" for warning in result.warnings)
+    assert result.events[-1].type == "run_cancelled"
+
+
+def test_run_agent_cancelled_after_provider_call_skips_tool_dispatch():
+    dispatches: list[dict[str, Any]] = []
+    checks = 0
+    provider = MockProvider(
+        [
+            ChatResponse(
+                tool_calls=[
+                    ToolCall(
+                        id="call-1",
+                        name="dashboard_query",
+                        arguments={"series": "DGS10"},
+                    )
+                ],
+                finish_reason="tool_calls",
+            )
+        ]
+    )
+
+    def cancel_after_provider() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks > 1
+
+    result = run_agent(
+        session_id="cancel-after-provider",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(on_dashboard=dispatches),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        cancellation_requested=cancel_after_provider,
+    )
+
+    assert result.final_status == "cancelled"
+    assert result.steps == 1
+    assert len(provider.calls) == 1
+    assert dispatches == []
+    assert not any(event.type == "tool_result" for event in result.events)
+
+
 def test_run_agent_plain_text_adds_finalize_convergence_message():
     provider = MockProvider(
         [
