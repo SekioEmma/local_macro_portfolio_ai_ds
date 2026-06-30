@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any
 
 from app_backend.schemas.macro_brief import REQUIRED_BOUNDARY_KEYWORDS, REQUIRED_MODULE_KEYS
-from app_backend.services.agent_runtime import AgentBudget, run_agent
+from app_backend.services.agent_runtime import AgentBudget, AgentRuntimeConfig, run_agent
 from app_backend.services.agent_tool_registry import (
     FINALIZE_TOOL_NAME,
     AgentToolRegistry,
@@ -152,6 +152,10 @@ def finalize_call(call_id: str = "final", payload: dict[str, Any] | None = None)
         name=FINALIZE_TOOL_NAME,
         arguments={"brief": payload or brief_payload()},
     )
+
+
+def tool_names_from_call(call: dict[str, Any]) -> list[str]:
+    return [tool["function"]["name"] for tool in call["tools"]]
 
 
 def test_run_agent_dispatches_tool_then_finalizes():
@@ -317,3 +321,93 @@ def test_validation_retry_message_does_not_leak_input_values():
     ]
     assert retry_messages
     assert "SECRET_INPUT_VALUE" not in retry_messages[0]
+
+
+def test_two_phase_default_switches_after_two_plain_turns_to_finalize_only():
+    provider = MockProvider(
+        [
+            ChatResponse(content="research note"),
+            ChatResponse(content="second note"),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="s7",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+    )
+
+    assert result.final_status == "ok"
+    assert tool_names_from_call(provider.calls[2]) == [FINALIZE_TOOL_NAME]
+    assert any(event.type == "agent_phase" and event.data["reason"] == "no_tool_calls" for event in result.events)
+
+
+def test_two_phase_research_max_steps_switches_to_finalize_only():
+    dispatches: list[dict[str, Any]] = []
+    provider = MockProvider(
+        [
+            ChatResponse(
+                tool_calls=[ToolCall(id="call-1", name="dashboard_query", arguments={"series": "DGS10"})],
+                finish_reason="tool_calls",
+            ),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="s8",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(on_dashboard=dispatches),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(research_max_steps=1),
+    )
+
+    assert result.final_status == "ok"
+    assert dispatches == [{"series": "DGS10"}]
+    assert tool_names_from_call(provider.calls[1]) == [FINALIZE_TOOL_NAME]
+
+
+def test_force_writing_phase_starts_with_finalize_only():
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+
+    result = run_agent(
+        session_id="s9",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(force_writing_phase=True),
+    )
+
+    assert result.final_status == "ok"
+    assert tool_names_from_call(provider.calls[0]) == [FINALIZE_TOOL_NAME]
+
+
+def test_two_phase_can_be_disabled_for_single_loop_behavior():
+    provider = MockProvider(
+        [
+            ChatResponse(content="research note"),
+            ChatResponse(content="second note"),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="s10",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(two_phase_mode=False),
+    )
+
+    assert result.final_status == "ok"
+    assert tool_names_from_call(provider.calls[2]) == ["dashboard_query", FINALIZE_TOOL_NAME]

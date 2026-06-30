@@ -34,6 +34,7 @@ from app_backend.services.macro_brief_prompt import build_macro_brief_prompt
 
 
 FinalStatus = Literal["ok", "incomplete", "validation_failed"]
+AgentPhase = Literal["research", "writing"]
 
 AGENT_MODEL_NAME = "deepseek-v4-pro"
 SEARCH_TOOL_NAME = "search_tavily"
@@ -77,7 +78,7 @@ class AgentRuntimeConfig(BaseModel):
     # F5-4/F5-5 fields are defined now so callers can pin config without
     # changing the service API as later runtime controls are filled in.
     max_tool_failures: int = Field(default=3, gt=0)
-    two_phase_mode: bool = False
+    two_phase_mode: bool = True
     research_max_steps: int = Field(default=12, gt=0)
     writing_max_steps: int = Field(default=2, gt=0)
     force_writing_phase: bool = False
@@ -118,6 +119,10 @@ class AgentBudget(BaseModel):
 
     def token_budget_exceeded(self) -> bool:
         return self.tokens_used > self.max_tokens_total
+
+    def remaining_step_ratio(self) -> float:
+        remaining = max(self.max_steps - self.steps_used, 0)
+        return remaining / self.max_steps
 
 
 class AgentIncomplete(RuntimeError):
@@ -174,6 +179,10 @@ def run_agent(
     validation_failures = 0
     tool_failure_counts: dict[str, int] = {}
     disabled_tools: set[str] = set()
+    phase: AgentPhase = "writing" if cfg.two_phase_mode and cfg.force_writing_phase else "research"
+    research_steps_used = 0
+    writing_steps_used = 0
+    consecutive_no_tool_calls = 0
 
     prompt = build_macro_brief_prompt(
         user_question=user_question,
@@ -189,9 +198,10 @@ def run_agent(
 
     while run_budget.has_step():
         step = run_budget.steps_used + 1
+        current_phase = phase
         tool_schema = _tool_schema_for_names(
             tool_registry,
-            tool_names,
+            _tool_names_for_phase(tool_names, phase),
             disabled_tools=disabled_tools,
         )
         response = provider.chat(
@@ -203,6 +213,10 @@ def run_agent(
             max_tokens=cfg.max_tokens_per_call,
         )
         run_budget.record_step()
+        if current_phase == "writing":
+            writing_steps_used += 1
+        else:
+            research_steps_used += 1
         run_budget.record_tokens(response.usage)
         _record_completion_event(events, step, response)
         token_budget_exceeded = _handle_token_budget(
@@ -210,14 +224,35 @@ def run_agent(
             warnings=warnings,
             messages=messages,
         )
+        if token_budget_exceeded:
+            phase = _switch_to_writing_phase(
+                phase=phase,
+                events=events,
+                step=step,
+                reason="token_budget_exceeded",
+                config=cfg,
+            )
 
         if response.content:
             messages.append(ChatMessage(role="assistant", content=response.content))
 
         if not response.tool_calls:
+            consecutive_no_tool_calls += 1
             _handle_plain_text_turn(messages, warnings, cfg)
+            phase = _maybe_switch_to_writing_phase(
+                phase=phase,
+                budget=run_budget,
+                config=cfg,
+                research_steps_used=research_steps_used,
+                consecutive_no_tool_calls=consecutive_no_tool_calls,
+                events=events,
+                step=step,
+            )
+            if _writing_phase_exhausted(current_phase, writing_steps_used, cfg):
+                break
             continue
 
+        consecutive_no_tool_calls = 0
         for tool_call in response.tool_calls:
             if tool_call.name == FINALIZE_TOOL_NAME:
                 result, validation_failures = _handle_finalize_attempt(
@@ -232,6 +267,14 @@ def run_agent(
                 if result is not None:
                     return result
                 break
+            if current_phase == "writing":
+                _append_writing_phase_tool_message(
+                    tool_call=tool_call,
+                    messages=messages,
+                    events=events,
+                    step=step,
+                )
+                continue
             if token_budget_exceeded:
                 _append_budget_exceeded_tool_message(
                     tool_call=tool_call,
@@ -253,6 +296,26 @@ def run_agent(
                 tool_failure_counts=tool_failure_counts,
                 disabled_tools=disabled_tools,
             )
+            if _has_budget_warning(warnings):
+                phase = _switch_to_writing_phase(
+                    phase=phase,
+                    events=events,
+                    step=step,
+                    reason="budget_exceeded",
+                    config=cfg,
+                )
+
+        phase = _maybe_switch_to_writing_phase(
+            phase=phase,
+            budget=run_budget,
+            config=cfg,
+            research_steps_used=research_steps_used,
+            consecutive_no_tool_calls=consecutive_no_tool_calls,
+            events=events,
+            step=step,
+        )
+        if _writing_phase_exhausted(current_phase, writing_steps_used, cfg):
+            break
 
     _append_budget_warning(warnings, "steps", "Agent exhausted max_steps before finalize.")
     warnings.append(
@@ -284,6 +347,74 @@ def _tool_schema_for_names(
         if schema.get("function", {}).get("name") in allowed
         and schema.get("function", {}).get("name") not in disabled
     ]
+
+
+def _tool_names_for_phase(tool_names: list[str], phase: AgentPhase) -> list[str]:
+    if phase == "writing":
+        return [FINALIZE_TOOL_NAME] if FINALIZE_TOOL_NAME in tool_names else []
+    return tool_names
+
+
+def _maybe_switch_to_writing_phase(
+    *,
+    phase: AgentPhase,
+    budget: AgentBudget,
+    config: AgentRuntimeConfig,
+    research_steps_used: int,
+    consecutive_no_tool_calls: int,
+    events: list[AgentRuntimeEvent],
+    step: int,
+) -> AgentPhase:
+    if not config.two_phase_mode or phase == "writing":
+        return phase
+    reason: str | None = None
+    if budget.remaining_step_ratio() < 0.30:
+        reason = "low_step_budget"
+    elif research_steps_used >= config.research_max_steps:
+        reason = "research_max_steps"
+    elif consecutive_no_tool_calls >= 2:
+        reason = "no_tool_calls"
+    if reason is None:
+        return phase
+    return _switch_to_writing_phase(
+        phase=phase,
+        events=events,
+        step=step,
+        reason=reason,
+        config=config,
+    )
+
+
+def _switch_to_writing_phase(
+    *,
+    phase: AgentPhase,
+    events: list[AgentRuntimeEvent],
+    step: int,
+    reason: str,
+    config: AgentRuntimeConfig,
+) -> AgentPhase:
+    if not config.two_phase_mode or phase == "writing":
+        return phase
+    events.append(
+        AgentRuntimeEvent(
+            type="agent_phase",
+            step=step,
+            data={"phase": "writing", "reason": reason},
+        )
+    )
+    return "writing"
+
+
+def _writing_phase_exhausted(
+    current_phase: AgentPhase,
+    writing_steps_used: int,
+    config: AgentRuntimeConfig,
+) -> bool:
+    return config.two_phase_mode and current_phase == "writing" and writing_steps_used >= config.writing_max_steps
+
+
+def _has_budget_warning(warnings: list[AgentRuntimeWarning]) -> bool:
+    return any(warning.code.startswith(f"{BUDGET_WARNING_PREFIX}:") for warning in warnings)
 
 
 def _record_completion_event(
@@ -450,6 +581,32 @@ def _append_disabled_tool_message(
         status="error",
         error_code="tool_disabled",
         error_message=f"{tool_call.name} has been disabled after repeated errors.",
+    )
+    events.append(
+        AgentRuntimeEvent(
+            type="tool_result",
+            step=step,
+            data={
+                "tool_name": tool_call.name,
+                "status": result.status,
+                "error_code": result.error_code,
+            },
+        )
+    )
+    _append_tool_message(messages, tool_call, result)
+
+
+def _append_writing_phase_tool_message(
+    *,
+    tool_call: ToolCall,
+    messages: list[ChatMessage],
+    events: list[AgentRuntimeEvent],
+    step: int,
+) -> None:
+    result = ToolResult(
+        status="error",
+        error_code="tool_unavailable_in_writing_phase",
+        error_message=f"{tool_call.name} is unavailable in writing phase; call {FINALIZE_TOOL_NAME}.",
     )
     events.append(
         AgentRuntimeEvent(
