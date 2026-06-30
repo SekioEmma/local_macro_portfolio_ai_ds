@@ -4,8 +4,9 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app_backend.schemas.agent_api import (
     AgentApiWarning,
@@ -54,6 +55,8 @@ RuntimeFn = Callable[..., AgentSessionResult]
 ProviderFactory = Callable[[], LLMProviderAdapter]
 RegistryFactory = Callable[[bool], AgentToolRegistry]
 TraceFactory = Callable[[], AgentTraceService]
+CurrentDateProvider = Callable[[], date]
+_NEW_YORK = ZoneInfo("America/New_York")
 
 _LOCAL_TOOL_NAMES = [
     "dashboard_query",
@@ -85,6 +88,7 @@ class AgentRunService:
     registry_factory: RegistryFactory | None = None
     trace_factory: TraceFactory = AgentTraceService
     runtime_fn: RuntimeFn = run_agent
+    current_date_provider: CurrentDateProvider = lambda: datetime.now(_NEW_YORK).date()
 
     def run(self, request: AgentRunRequest) -> AgentRunResponse:
         session_id = request.session_id or uuid.uuid4().hex
@@ -115,7 +119,7 @@ class AgentRunService:
             user_question=request.user_question,
             provider=self.provider_factory(),
             tool_registry=self.registry_factory(request.confirm_external_search),
-            current_date=request.current_date or date.today(),
+            current_date=self.current_date_provider(),
             tool_names=tool_names,
             include_holdings=False,
             trace_service=trace_service,

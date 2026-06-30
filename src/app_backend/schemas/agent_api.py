@@ -1,7 +1,6 @@
 """API schemas for Phase F7 MacroBrief agent endpoints."""
 from __future__ import annotations
 
-from datetime import date
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,7 +21,6 @@ class AgentRunRequest(BaseModel):
 
     user_question: str = Field(min_length=1, max_length=2000)
     session_id: str | None = Field(default=None, min_length=1, max_length=128)
-    current_date: date | None = None
     include_holdings: bool = False
     confirm_external_search: bool = False
     source_visibility_mode: SourceVisibilityMode = "public"

@@ -50,6 +50,7 @@ def _service(tmp_path: Path, provider: MockProvider) -> AgentRunService:
         provider_factory=lambda: provider,
         registry_factory=registry_factory,
         trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        current_date_provider=lambda: date(2026, 6, 30),
     )
 
 
@@ -66,7 +67,6 @@ def test_agent_run_endpoint_returns_rendered_public_brief(tmp_path):
         json={
             "session_id": "agent-session-1",
             "user_question": "Build a macro brief.",
-            "current_date": "2026-06-30",
         },
     )
 
@@ -191,12 +191,28 @@ def test_agent_run_rejects_holdings_until_server_side_snapshot_is_wired(tmp_path
 def test_agent_run_request_schema_defaults_are_public_and_local_first():
     request = AgentRunRequest(
         user_question="Build a macro brief.",
-        current_date=date(2026, 6, 30),
     )
 
     assert request.source_visibility_mode == "public"
     assert request.confirm_external_search is False
     assert request.include_holdings is False
+
+
+def test_agent_run_rejects_client_supplied_current_date(tmp_path):
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+    _install_service(_service(tmp_path, provider))
+
+    response = _client().post(
+        "/api/agent/run",
+        json={
+            "session_id": "agent-session-current-date",
+            "user_question": "Build a macro brief.",
+            "current_date": "1999-01-01",
+        },
+    )
+
+    assert response.status_code == 422
+    assert not provider.calls
 
 
 def test_agent_route_registered_without_forbidden_legacy_routes():
