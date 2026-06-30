@@ -16,7 +16,7 @@ Detailed holdings context is allowed only through:
 
 - `POST /api/agent/holdings-consent`
 - `POST /api/agent/run`
-- future `POST /api/agent/run/stream` after separate SSE implementation
+- `POST /api/agent/run/stream`
 
 The consent endpoint issues a process-local one-time token. It does not return holdings content. `AgentRunRequest.include_holdings=true` must include a valid `holdings_consent_token`. The token expires after 10 minutes and is consumed when a run starts with a server-side holdings snapshot.
 
@@ -35,11 +35,12 @@ The consent endpoint issues a process-local one-time token. It does not return h
 
 ## Migration
 
-Current implementation is a guarded foundation: consent and injection contracts exist, but the default snapshot provider is intentionally unwired.
+Current implementation is a guarded foundation: consent and injection contracts exist for sync and SSE agent runs, but the default snapshot provider is intentionally unwired.
 
 ## Validation
 
 - `tests/ai/test_holdings_consent_service.py`
 - `tests/ai/test_holdings_external_context_service.py`
 - `tests/api/test_agent_run_route.py`
+- `tests/api/test_agent_stream_route.py`
 - `tests/ai/test_agent_trace_service.py`

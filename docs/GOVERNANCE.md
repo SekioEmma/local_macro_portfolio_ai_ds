@@ -73,7 +73,7 @@ docs/
 
 **Phase F MacroBrief Agent + Holdings 例外**（见 `docs/ADR/ADR-0002-phase-f-holdings-external-context.md`）：
 
-- 详细 holdings 仅可通过 `POST /api/agent/holdings-consent` 签发一次性本地 token 后，在 `POST /api/agent/run` 且 `include_holdings=true` + `holdings_consent_token` 校验通过时使用。未来 `POST /api/agent/run/stream` 需按 SSE ADR 单独实现与测试。
+- 详细 holdings 仅可通过 `POST /api/agent/holdings-consent` 签发一次性本地 token 后，在 `POST /api/agent/run` 或 `POST /api/agent/run/stream` 且 `include_holdings=true` + `holdings_consent_token` 校验通过时使用。
 - consent token 默认 10 分钟有效，只能被一个 agent session 消费一次；`holdings-consent` endpoint 不得返回 holdings 正文。
 - 持仓快照必须由 server-side 注入的 snapshot provider 提供；默认 provider 未接线时必须 fail-closed。不得由前端 localStorage、请求正文或 debug endpoint 传入详细 holdings。
 - 当前允许进入 MacroBrief prompt 的详细 holdings 范围仅限经 policy 过滤后的账户/证券/资产类别/数量/价格/市值/权重/偏离/组合风险摘要字段。其他所有 AI / RAG / search / preview / context 路径继续禁止接触 holdings / account / position 数据。
