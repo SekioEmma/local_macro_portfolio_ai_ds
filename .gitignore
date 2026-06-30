@@ -26,6 +26,7 @@ outputs/analyst_memos/*
 outputs/model_eval/*
 outputs/answers/*
 outputs/eval/*
+outputs/agent_traces/*
 !outputs/reports/.gitkeep
 !outputs/analyst_memos/.gitkeep
 

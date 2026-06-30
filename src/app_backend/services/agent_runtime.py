@@ -31,6 +31,7 @@ from app_backend.services.macro_brief_parser import (
     parse_macro_brief,
 )
 from app_backend.services.macro_brief_prompt import build_macro_brief_prompt
+from app_backend.services.agent_trace_service import AgentTraceService, sha256_json
 
 
 FinalStatus = Literal["ok", "incomplete", "validation_failed"]
@@ -170,6 +171,7 @@ def run_agent(
     holdings_snapshot: Mapping[str, Any] | None = None,
     config: AgentRuntimeConfig | None = None,
     budget: AgentBudget | None = None,
+    trace_service: AgentTraceService | None = None,
 ) -> AgentSessionResult:
     """Run the internal MacroBrief agent loop against injected dependencies."""
     cfg = config or AgentRuntimeConfig()
@@ -183,6 +185,14 @@ def run_agent(
     research_steps_used = 0
     writing_steps_used = 0
     consecutive_no_tool_calls = 0
+    if trace_service is not None:
+        trace_service.start_session(
+            session_id=session_id,
+            user_question=user_question,
+            holdings_included=include_holdings,
+            holdings_snapshot_sha256=sha256_json(holdings_snapshot) if include_holdings else None,
+            current_date=current_date.isoformat(),
+        )
 
     prompt = build_macro_brief_prompt(
         user_question=user_question,
@@ -265,7 +275,7 @@ def run_agent(
                     validation_failures=validation_failures,
                 )
                 if result is not None:
-                    return result
+                    return _finish_with_trace(result, trace_service)
                 break
             if current_phase == "writing":
                 _append_writing_phase_tool_message(
@@ -324,13 +334,31 @@ def run_agent(
             message=f"Agent did not call {FINALIZE_TOOL_NAME} within max_steps.",
         )
     )
-    return AgentSessionResult(
+    return _finish_with_trace(AgentSessionResult(
         session_id=session_id,
         final_status="incomplete",
         warnings=warnings,
         events=events,
         steps=run_budget.steps_used,
-    )
+    ), trace_service)
+
+
+def _finish_with_trace(
+    result: AgentSessionResult,
+    trace_service: AgentTraceService | None,
+) -> AgentSessionResult:
+    if trace_service is not None:
+        trace_service.write_runtime_events(
+            session_id=result.session_id,
+            events=result.events,
+        )
+        trace_service.end_session(
+            session_id=result.session_id,
+            final_status=result.final_status,
+            steps=result.steps,
+            warnings=result.warnings,
+        )
+    return result
 
 
 def _tool_schema_for_names(
