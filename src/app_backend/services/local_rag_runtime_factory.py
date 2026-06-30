@@ -5,6 +5,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+from app_backend.services.rag_index_generation import read_index_generation_metadata
 from app_backend.services.rag_retrieval_service import RAGRetrievalService
 from llm.bm25_index import BM25Index
 from llm.chunk_text_store import ChunkTextStore
@@ -24,15 +25,15 @@ class LocalRAGRuntime:
     embedding_service: EmbeddingService
     retrieval_service: RAGRetrievalService
     searchable_chunk_count: int
+    index_generation: dict[str, Any] | None = None
 
 
-# Process-local cache of fully built runtimes keyed by the resolved vector
-# root. Building a runtime reads the full chunk store and re-tokenizes the
+# Process-local cache of fully built runtimes keyed by resolved vector root and
+# index generation id. Building a runtime reads the full chunk store and re-tokenizes the
 # corpus for BM25, which is O(corpus) — hot tool-call paths must not repeat
-# that on every invocation. The cache is intentionally invalidated only by
-# explicit `invalidate_local_rag_runtime_cache()` calls (e.g. after an
-# ingest or in tests); there is no implicit TTL.
-_RUNTIME_CACHE: dict[Path, LocalRAGRuntime] = {}
+# that on every invocation. Generation-aware keys protect long-lived app
+# processes after an ingest; explicit invalidation is still available for tests.
+_RUNTIME_CACHE: dict[tuple[Path, str], LocalRAGRuntime] = {}
 _RUNTIME_CACHE_LOCK = Lock()
 
 
@@ -53,9 +54,11 @@ def build_local_rag_runtime(
     are test-only and never used in the request path.
     """
     resolved = vector_root.resolve()
+    index_generation = read_index_generation_metadata(resolved)
+    cache_key = (resolved, _generation_cache_key(index_generation))
     if use_cache and _bm25_factory is None:
         with _RUNTIME_CACHE_LOCK:
-            cached = _RUNTIME_CACHE.get(resolved)
+            cached = _RUNTIME_CACHE.get(cache_key)
             if cached is not None:
                 return cached
 
@@ -63,11 +66,12 @@ def build_local_rag_runtime(
         resolved,
         bm25_factory=_bm25_factory,
         offline_only=offline_only,
+        index_generation=index_generation,
     )
 
     if use_cache and _bm25_factory is None:
         with _RUNTIME_CACHE_LOCK:
-            _RUNTIME_CACHE[resolved] = runtime
+            _RUNTIME_CACHE[cache_key] = runtime
     return runtime
 
 
@@ -81,7 +85,10 @@ def invalidate_local_rag_runtime_cache(vector_root: Path | None = None) -> None:
         if vector_root is None:
             _RUNTIME_CACHE.clear()
             return
-        _RUNTIME_CACHE.pop(vector_root.resolve(), None)
+        resolved = vector_root.resolve()
+        for key in list(_RUNTIME_CACHE):
+            if key[0] == resolved:
+                _RUNTIME_CACHE.pop(key, None)
 
 
 def _build_runtime_uncached(
@@ -89,6 +96,7 @@ def _build_runtime_uncached(
     *,
     bm25_factory: Any,
     offline_only: bool,
+    index_generation: dict[str, Any] | None,
 ) -> LocalRAGRuntime:
     chunk_store = ChunkTextStore(vector_root / "chunks.sqlite")
     chunks = chunk_store.list_chunks(external_llm_context_allowed=True)
@@ -111,4 +119,12 @@ def _build_runtime_uncached(
         embedding_service=embedding_service,
         retrieval_service=retrieval_service,
         searchable_chunk_count=len(chunks),
+        index_generation=index_generation,
     )
+
+
+def _generation_cache_key(index_generation: dict[str, Any] | None) -> str:
+    if index_generation is None:
+        return "missing"
+    generation_id = index_generation.get("generation_id")
+    return generation_id if isinstance(generation_id, str) and generation_id else "invalid"

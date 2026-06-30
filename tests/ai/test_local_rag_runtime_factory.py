@@ -4,6 +4,10 @@ from app_backend.services.local_rag_runtime_factory import (
     build_local_rag_runtime,
     invalidate_local_rag_runtime_cache,
 )
+from app_backend.services.rag_index_generation import (
+    INDEX_GENERATION_SCHEMA_VERSION,
+    write_index_generation_metadata,
+)
 from llm.chunk_text_store import ChunkTextStore, StoredChunk
 
 
@@ -58,6 +62,27 @@ def test_runtime_factory_caches_per_vector_root(tmp_path):
     second = build_local_rag_runtime(vector_dir)
 
     assert first is second  # same cached instance — no rebuild
+    invalidate_local_rag_runtime_cache(vector_dir)
+
+
+def test_runtime_factory_cache_key_includes_index_generation_id(tmp_path):
+    vector_dir = tmp_path / "vector_store"
+    _seed_one_chunk(vector_dir)
+    invalidate_local_rag_runtime_cache()
+
+    first = build_local_rag_runtime(vector_dir)
+    write_index_generation_metadata(
+        vector_dir,
+        {
+            "schema_version": INDEX_GENERATION_SCHEMA_VERSION,
+            "generation_id": "generation-two",
+        },
+    )
+    second = build_local_rag_runtime(vector_dir)
+
+    assert first is not second
+    assert second.index_generation is not None
+    assert second.index_generation["generation_id"] == "generation-two"
     invalidate_local_rag_runtime_cache(vector_dir)
 
 

@@ -17,6 +17,7 @@ RAG index generation and retrieval must preserve:
 - document id and chunk id provenance;
 - document type metadata;
 - embedding model compatibility metadata;
+- active index generation metadata;
 - BM25, vector, and chunk-store count consistency;
 - doc type filters across retrieval branches and final fusion.
 
@@ -36,5 +37,8 @@ RAG index generation and retrieval must preserve:
 ## Validation
 
 - `tests/ai/test_rag_retrieval_service.py`
+- `tests/ai/test_curated_rag_ingest.py`
+- `tests/ai/test_local_rag_runtime_factory.py`
+- `tests/ai/test_validate_local_rag_script.py`
 - `tests/llm/test_bm25_index.py`
 - `scripts/validate_local_rag.py` for local corpus/index consistency checks when real local RAG validation is requested.

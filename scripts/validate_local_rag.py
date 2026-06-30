@@ -17,6 +17,7 @@ from app_backend.services.curated_rag_ingest import (  # noqa: E402
     summarize_plan,
 )
 from app_backend.services.local_rag_runtime_factory import build_local_rag_runtime  # noqa: E402
+from app_backend.services.rag_index_generation import read_index_generation_metadata  # noqa: E402
 from app_backend.services.rag_context_builder import build_rag_context  # noqa: E402
 from llm.chunk_text_store import ChunkTextStore  # noqa: E402
 from llm.embedding_service import OfflineEmbeddingModelNotAvailable  # noqa: E402
@@ -44,6 +45,7 @@ def main() -> int:
         print(json.dumps({"status": "blocked", "reason": str(exc)}, ensure_ascii=False, sort_keys=True))
         return 2
     vector_root = (args.vector_dir or args.vector_root).resolve()
+    index_generation = read_index_generation_metadata(vector_root)
     chunk_db = vector_root / "chunks.sqlite"
     chunk_count = _chunk_count(chunk_db)
     local_only_chunk_count = _local_only_chunk_count(chunk_db)
@@ -54,10 +56,12 @@ def main() -> int:
     smoke: list[dict[str, Any]] = []
     context_ok = False
     embedding_status = "not_loaded"
+    embedding_model_compatible = False
     if plan.accepted_document_count and chunk_count:
         try:
             runtime = build_local_rag_runtime(vector_root, offline_only=True)
             bm25_size = runtime.bm25_index.size
+            embedding_model_compatible = _embedding_metadata_compatible(index_generation, runtime)
             smoke = _run_smoke(runtime)
             context_ok = any(item["pass_fail"] == "pass" and item["retrieval_mode"] == "context" for item in smoke)
             embedding_status = "offline_model_loaded" if any(
@@ -82,12 +86,15 @@ def main() -> int:
         "stored_chunk_count": chunk_count,
         "chroma_chunk_count": chroma_count,
         "bm25_size": bm25_size,
+        "index_generation": _index_generation_summary(index_generation),
         "consistency": {
             "eligible_manifest_documents": plan.accepted_document_count,
             "chunk_store_matches_chroma": chunk_count == chroma_count,
             "bm25_matches_searchable_chunks": bm25_size == chunk_count if chunk_count else bm25_size == 0,
             "local_only_chunks": local_only_chunk_count,
             "context_non_empty_under_4000_chars": context_ok,
+            "index_generation_present": index_generation is not None if chunk_count else True,
+            "embedding_model_compatible": embedding_model_compatible if chunk_count else True,
         },
         "retrieval_smoke": smoke,
     }
@@ -220,6 +227,39 @@ def _skipped_smoke() -> list[dict[str, Any]]:
     return rows
 
 
+def _index_generation_summary(index_generation: dict[str, Any] | None) -> dict[str, Any]:
+    if index_generation is None:
+        return {"present": False}
+    return {
+        "present": True,
+        "schema_version": index_generation.get("schema_version"),
+        "generation_id": index_generation.get("generation_id"),
+        "mode": index_generation.get("mode"),
+        "vector_enabled": index_generation.get("vector_enabled"),
+        "embedding_model": index_generation.get("embedding_model"),
+        "embedding_dim": index_generation.get("embedding_dim"),
+        "chunk_count": index_generation.get("chunk_count"),
+        "written_chunk_count": index_generation.get("written_chunk_count"),
+        "document_count": index_generation.get("document_count"),
+    }
+
+
+def _embedding_metadata_compatible(index_generation: dict[str, Any] | None, runtime: Any) -> bool:
+    if index_generation is None:
+        return False
+    if not index_generation.get("vector_enabled"):
+        return True
+    expected_model = index_generation.get("embedding_model")
+    expected_dim = index_generation.get("embedding_dim")
+    if isinstance(expected_model, str) and expected_model:
+        if expected_model != runtime.embedding_service.model_name:
+            return False
+    if isinstance(expected_dim, int):
+        if expected_dim != runtime.embedding_service.dim:
+            return False
+    return True
+
+
 def _matches(doc_id: str, expected: str | None) -> bool:
     if expected is None:
         return True
@@ -241,6 +281,8 @@ def _is_valid(payload: dict[str, Any]) -> bool:
         and consistency["bm25_matches_searchable_chunks"]
         and consistency["local_only_chunks"] == 0
         and consistency["context_non_empty_under_4000_chars"]
+        and consistency["index_generation_present"]
+        and consistency["embedding_model_compatible"]
     )
 
 

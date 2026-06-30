@@ -11,6 +11,9 @@ from llm.chunk_text_store import ChunkTextStore, StoredChunk
 
 
 class _FakeEmbedding:
+    model_name = "fake-bge"
+    dim = 2
+
     def encode(self, texts: list[str]) -> list[list[float]]:
         return [[float(len(text)), 1.0] for text in texts]
 
@@ -510,6 +513,34 @@ def test_write_is_idempotent_for_same_manifest(tmp_path):
     assert first.written_chunk_count == second.written_chunk_count == chunk_store.count()
     assert chunk_store.list_doc_ids() == ["fomc_statement_2026_06_17"]
     assert (tmp_path / "vector_store" / "ingest_audits" / "last_ingest_audit.json").exists()
+
+
+def test_write_records_index_generation_metadata_without_raw_text(tmp_path):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+
+    result = ingest_curated_corpus(
+        curated_root=tmp_path,
+        manifest_path=manifest,
+        vector_dir=vector_root,
+        write=True,
+        embedding_service=_FakeEmbedding(),
+        vector_store=_FakeVectorStore(),
+        chunk_store=ChunkTextStore(vector_root / "chunks.sqlite"),
+    )
+
+    payload = json.loads((vector_root / "index_generation.json").read_text(encoding="utf-8"))
+    serialized = json.dumps(payload, ensure_ascii=False)
+
+    assert payload["schema_version"] == 1
+    assert payload["generation_id"]
+    assert payload["document_count"] == 1
+    assert payload["chunk_count"] == result.chunk_count
+    assert payload["written_chunk_count"] == result.written_chunk_count
+    assert payload["embedding_model"] == "fake-bge"
+    assert payload["embedding_dim"] == 2
+    assert "Federal funds target range" not in serialized
 
 
 def test_write_replace_existing_prunes_unknown_existing_docs(tmp_path):

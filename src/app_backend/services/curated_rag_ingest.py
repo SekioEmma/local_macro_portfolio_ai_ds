@@ -12,6 +12,11 @@ from urllib.parse import urlparse
 from llm.chunk_text_store import ChunkTextStore, StoredChunk
 from llm.document_chunker import Chunk, chunk_text
 
+from app_backend.services.rag_index_generation import (
+    build_index_generation_metadata,
+    write_index_generation_metadata,
+)
+
 
 ALLOWED_RUNTIME_DOC_TYPES = frozenset({"policy_doc", "research_report", "official_release"})
 ALLOWED_CONTENT_COHORTS = frozenset({"policy_doc", "research_report", "official_release"})
@@ -44,6 +49,7 @@ class CuratedDocument:
     evidence_tier: str
     is_official_source: bool
     metadata: dict[str, Any]
+    cleaned_content_sha256: str
     verified_text: str = ""
 
 
@@ -193,6 +199,8 @@ def ingest_curated_corpus(
         pruned_document_count=len(unknown_existing),
     )
     _write_ingest_audit(vector_root, result)
+    _write_index_generation(vector_root, result, vector_enabled, embedding_service)
+    _invalidate_runtime_cache(vector_root)
     return result
 
 
@@ -228,6 +236,32 @@ def _write_ingest_audit(vector_root: Path, result: CuratedIngestResult) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def _write_index_generation(
+    vector_root: Path,
+    result: CuratedIngestResult,
+    vector_enabled: bool,
+    embedding_service: Any | None,
+) -> None:
+    payload = build_index_generation_metadata(
+        documents=result.plan.accepted,
+        mode=result.mode,
+        chunk_count=result.chunk_count,
+        written_chunk_count=result.written_chunk_count,
+        pruned_document_count=result.pruned_document_count,
+        vector_enabled=vector_enabled,
+        embedding_service=embedding_service,
+    )
+    write_index_generation_metadata(vector_root, payload)
+
+
+def _invalidate_runtime_cache(vector_root: Path) -> None:
+    from app_backend.services.local_rag_runtime_factory import (
+        invalidate_local_rag_runtime_cache,
+    )
+
+    invalidate_local_rag_runtime_cache(vector_root)
 
 
 def _validate_manifest_location(curated_root: Path, manifest_path: Path) -> None:
@@ -384,6 +418,7 @@ def _document_from_row(curated_root: Path, row: dict[str, Any]) -> CuratedDocume
         evidence_tier=_evidence_tier(row),
         is_official_source=_is_official_source(row),
         metadata=_safe_metadata(row),
+        cleaned_content_sha256=expected_hash,
         verified_text=text,
     )
 
