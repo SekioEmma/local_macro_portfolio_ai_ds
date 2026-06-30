@@ -35,6 +35,14 @@ from app_backend.services.economic_calendar_service import (
 )
 from app_backend.services.llm_provider_adapter import LLMProviderAdapter
 from app_backend.services.llm_provider_adapter import DeepSeekProviderAdapter
+from app_backend.services.holdings_consent_service import (
+    HoldingsConsentError,
+    HoldingsConsentService,
+)
+from app_backend.services.holdings_external_context_service import (
+    HoldingsContextError,
+    HoldingsExternalContextService,
+)
 from app_backend.services.local_rag_runtime_factory import build_local_rag_runtime
 from app_backend.services.macro_brief_renderer import render_macro_brief_markdown
 from app_backend.services.macro_brief_sources import (
@@ -89,6 +97,8 @@ class AgentRunService:
     trace_factory: TraceFactory = AgentTraceService
     runtime_fn: RuntimeFn = run_agent
     current_date_provider: CurrentDateProvider = lambda: datetime.now(_NEW_YORK).date()
+    holdings_consent_service: HoldingsConsentService | None = None
+    holdings_context_service: HoldingsExternalContextService | None = None
 
     def run(self, request: AgentRunRequest) -> AgentRunResponse:
         session_id = request.session_id or uuid.uuid4().hex
@@ -98,8 +108,7 @@ class AgentRunService:
             tool_names=tool_names,
         )
 
-        if request.include_holdings:
-            raise AgentRunInputError("holdings_toggle_backend_not_wired")
+        holdings_snapshot = self._resolve_holdings_snapshot(request, session_id=session_id)
         if self.provider_factory is None or self.registry_factory is None:
             raise AgentRunUnavailable("agent_runtime_dependencies_not_wired")
 
@@ -121,7 +130,8 @@ class AgentRunService:
             tool_registry=self.registry_factory(request.confirm_external_search),
             current_date=self.current_date_provider(),
             tool_names=tool_names,
-            include_holdings=False,
+            include_holdings=request.include_holdings,
+            holdings_snapshot=holdings_snapshot,
             trace_service=trace_service,
         )
         return _response_from_result(
@@ -131,6 +141,36 @@ class AgentRunService:
             trace_session_id=session_id,
         )
 
+    def _resolve_holdings_snapshot(
+        self,
+        request: AgentRunRequest,
+        *,
+        session_id: str,
+    ) -> dict[str, Any] | None:
+        if not request.include_holdings:
+            if request.holdings_consent_token is not None:
+                raise AgentRunInputError("holdings_consent_token_without_include_holdings")
+            return None
+        if self.holdings_consent_service is None:
+            raise AgentRunInputError("holdings_consent_service_not_wired")
+        if self.holdings_context_service is None:
+            raise AgentRunInputError("holdings_snapshot_backend_not_wired")
+        try:
+            self.holdings_consent_service.validate(
+                request.holdings_consent_token,
+                session_id=session_id,
+            )
+            snapshot = self.holdings_context_service.load_snapshot(session_id=session_id)
+            self.holdings_consent_service.consume(
+                request.holdings_consent_token,
+                session_id=session_id,
+            )
+            return snapshot
+        except HoldingsConsentError as exc:
+            raise AgentRunInputError(exc.code) from exc
+        except HoldingsContextError as exc:
+            raise AgentRunInputError(exc.code) from exc
+
 
 def build_unwired_agent_run_service() -> AgentRunService:
     return AgentRunService()
@@ -139,6 +179,8 @@ def build_unwired_agent_run_service() -> AgentRunService:
 def build_default_agent_run_service(
     *,
     search_service: TavilySearchExecutionService | None = None,
+    holdings_consent_service: HoldingsConsentService | None = None,
+    holdings_context_service: HoldingsExternalContextService | None = None,
 ) -> AgentRunService:
     resolved_search_service = search_service or build_default_tavily_search_execution_service()
     return AgentRunService(
@@ -149,6 +191,8 @@ def build_default_agent_run_service(
             confirm_external_search=confirm_external_search,
             search_service=resolved_search_service,
         ),
+        holdings_consent_service=holdings_consent_service,
+        holdings_context_service=holdings_context_service,
     )
 
 

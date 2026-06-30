@@ -7,6 +7,8 @@ from app_backend.schemas.agent_api import (
     AgentRunRequest,
     AgentRunResponse,
     AgentTraceDebugResponse,
+    HoldingsConsentRequest,
+    HoldingsConsentResponse,
 )
 from app_backend.schemas.ai_preview import (
     AIContextPreviewResponse,
@@ -63,6 +65,11 @@ from app_backend.services.agent_api_service import (
 )
 from app_backend.services.agent_trace_service import AgentTraceService
 from app_backend.services.commodity_quote_service import CommodityQuoteService
+from app_backend.services.holdings_consent_service import (
+    HoldingsConsentError,
+    HoldingsConsentService,
+)
+from app_backend.services.holdings_external_context_service import HoldingsExternalContextService
 from app_backend.services.realtime_quote_service import (
     RealtimeQuoteService,
     build_default_realtime_quote_service,
@@ -241,8 +248,12 @@ def post_favorite(request: CreateFavoriteAnswerRequest) -> FavoriteAnswer:
 # ---------------------------------------------------------------------------
 
 _SEARCH_EXECUTION_SERVICE = build_default_tavily_search_execution_service()
+_HOLDINGS_CONSENT_SERVICE = HoldingsConsentService()
+_HOLDINGS_CONTEXT_SERVICE = HoldingsExternalContextService()
 _AGENT_RUN_SERVICE = build_default_agent_run_service(
     search_service=_SEARCH_EXECUTION_SERVICE,
+    holdings_consent_service=_HOLDINGS_CONSENT_SERVICE,
+    holdings_context_service=_HOLDINGS_CONTEXT_SERVICE,
 )
 
 
@@ -256,6 +267,10 @@ def get_tavily_search_execution_service() -> TavilySearchExecutionService:
 
 def get_agent_run_service() -> AgentRunService:
     return _AGENT_RUN_SERVICE
+
+
+def get_holdings_consent_service() -> HoldingsConsentService:
+    return _HOLDINGS_CONSENT_SERVICE
 
 
 def get_agent_trace_service() -> AgentTraceService:
@@ -299,6 +314,25 @@ def post_search_tavily(
         return SearchResponse(
             results=[], search_available=False, guard_passed=False
         )
+
+
+@app.post("/api/agent/holdings-consent", response_model=HoldingsConsentResponse)
+def post_agent_holdings_consent(
+    request: HoldingsConsentRequest,
+    service: HoldingsConsentService = Depends(get_holdings_consent_service),
+) -> HoldingsConsentResponse:
+    if not request.confirm_holdings_external_context:
+        raise HTTPException(status_code=400, detail="holdings_consent_confirmation_required")
+    try:
+        grant = service.issue(session_id=request.session_id)
+        return HoldingsConsentResponse(
+            session_id=grant.session_id,
+            holdings_consent_token=grant.token,
+            expires_at=grant.expires_at,
+            ttl_seconds=int(service.ttl.total_seconds()),
+        )
+    except HoldingsConsentError as exc:
+        raise HTTPException(status_code=400, detail=exc.code) from exc
 
 
 @app.post("/api/agent/run", response_model=AgentRunResponse)

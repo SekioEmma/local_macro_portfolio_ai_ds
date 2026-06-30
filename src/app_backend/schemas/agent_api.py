@@ -22,8 +22,25 @@ class AgentRunRequest(BaseModel):
     user_question: str = Field(min_length=1, max_length=2000)
     session_id: str | None = Field(default=None, min_length=1, max_length=128)
     include_holdings: bool = False
+    holdings_consent_token: str | None = Field(default=None, min_length=16, max_length=256)
     confirm_external_search: bool = False
     source_visibility_mode: SourceVisibilityMode = "public"
+
+
+class HoldingsConsentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str | None = Field(default=None, min_length=1, max_length=128)
+    confirm_holdings_external_context: bool = False
+
+
+class HoldingsConsentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str | None = None
+    holdings_consent_token: str
+    expires_at: str
+    ttl_seconds: int
 
 
 class AgentApiWarning(BaseModel):
@@ -68,4 +85,6 @@ __all__ = [
     "AgentRunRequest",
     "AgentRunResponse",
     "AgentTraceDebugResponse",
+    "HoldingsConsentRequest",
+    "HoldingsConsentResponse",
 ]

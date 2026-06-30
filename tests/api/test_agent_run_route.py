@@ -6,12 +6,14 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app_backend.main import app, get_agent_run_service
+from app_backend.main import app, get_agent_run_service, get_holdings_consent_service
 from app_backend.schemas.agent_api import AgentRunRequest
 from app_backend.services.agent_api_service import AgentRunService
 from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME
 from app_backend.services.agent_tool_registry import ToolSpec
 from app_backend.services.agent_trace_service import AgentTraceService
+from app_backend.services.holdings_consent_service import HoldingsConsentService
+from app_backend.services.holdings_external_context_service import HoldingsExternalContextService
 from app_backend.services.llm_provider_adapter import ChatResponse
 from tests.ai.test_agent_runtime_mocked import MockProvider, finalize_call, make_registry
 
@@ -26,7 +28,13 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
-def _service(tmp_path: Path, provider: MockProvider) -> AgentRunService:
+def _service(
+    tmp_path: Path,
+    provider: MockProvider,
+    *,
+    holdings_consent_service: HoldingsConsentService | None = None,
+    holdings_context_service: HoldingsExternalContextService | None = None,
+) -> AgentRunService:
     def registry_factory(confirm_external_search: bool):
         registry = make_registry()
         if confirm_external_search:
@@ -51,11 +59,17 @@ def _service(tmp_path: Path, provider: MockProvider) -> AgentRunService:
         registry_factory=registry_factory,
         trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
         current_date_provider=lambda: date(2026, 6, 30),
+        holdings_consent_service=holdings_consent_service,
+        holdings_context_service=holdings_context_service,
     )
 
 
 def _install_service(service: AgentRunService) -> None:
     app.dependency_overrides[get_agent_run_service] = lambda: service
+
+
+def _install_consent_service(service: HoldingsConsentService) -> None:
+    app.dependency_overrides[get_holdings_consent_service] = lambda: service
 
 
 def test_agent_run_endpoint_returns_rendered_public_brief(tmp_path):
@@ -172,9 +186,17 @@ def test_default_agent_run_service_wires_registry_without_eager_external_calls()
     assert service.provider_factory().name == "deepseek"
 
 
-def test_agent_run_rejects_holdings_until_server_side_snapshot_is_wired(tmp_path):
+def test_agent_run_rejects_holdings_without_consent_token(tmp_path):
     provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
-    _install_service(_service(tmp_path, provider))
+    consent_service = HoldingsConsentService()
+    _install_service(
+        _service(
+            tmp_path,
+            provider,
+            holdings_consent_service=consent_service,
+            holdings_context_service=HoldingsExternalContextService(lambda _session_id: {"positions": []}),
+        )
+    )
 
     response = _client().post(
         "/api/agent/run",
@@ -185,7 +207,90 @@ def test_agent_run_rejects_holdings_until_server_side_snapshot_is_wired(tmp_path
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "holdings_toggle_backend_not_wired"
+    assert response.json()["detail"] == "holdings_consent_token_required"
+
+
+def test_agent_run_rejects_holdings_when_snapshot_provider_is_unwired(tmp_path):
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+    consent_service = HoldingsConsentService()
+    token = consent_service.issue(session_id="agent-session-holdings-unwired").token
+    _install_service(
+        _service(
+            tmp_path,
+            provider,
+            holdings_consent_service=consent_service,
+            holdings_context_service=HoldingsExternalContextService(),
+        )
+    )
+
+    response = _client().post(
+        "/api/agent/run",
+        json={
+            "session_id": "agent-session-holdings-unwired",
+            "user_question": "Build a macro brief.",
+            "include_holdings": True,
+            "holdings_consent_token": token,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "holdings_snapshot_backend_not_wired"
+    assert consent_service.validate(token, session_id="agent-session-holdings-unwired").token == token
+
+
+def test_agent_run_with_consent_injects_holdings_server_side_without_response_leak(tmp_path):
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+    consent_service = HoldingsConsentService()
+    token = consent_service.issue(session_id="agent-session-holdings").token
+    context_service = HoldingsExternalContextService(
+        lambda _session_id: {
+            "positions": [{"ticker": "SPY", "shares": 10, "market_value_usd": 5000}],
+            "asset_class_breakdown": {"equity": 1.0},
+        }
+    )
+    _install_service(
+        _service(
+            tmp_path,
+            provider,
+            holdings_consent_service=consent_service,
+            holdings_context_service=context_service,
+        )
+    )
+
+    response = _client().post(
+        "/api/agent/run",
+        json={
+            "session_id": "agent-session-holdings",
+            "user_question": "Build a macro brief.",
+            "include_holdings": True,
+            "holdings_consent_token": token,
+        },
+    )
+
+    assert response.status_code == 200
+    system_prompt = provider.calls[0]["messages"][0].content
+    assert "explicitly approved for this run only" in system_prompt
+    assert '"ticker": "SPY"' in system_prompt
+    assert "market_value_usd" not in response.text
+    assert "5000" not in response.text
+    with pytest.raises(Exception):
+        consent_service.validate(token, session_id="agent-session-holdings")
+
+
+def test_agent_run_rejects_consent_token_when_holdings_disabled(tmp_path):
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+    _install_service(_service(tmp_path, provider))
+
+    response = _client().post(
+        "/api/agent/run",
+        json={
+            "user_question": "Build a macro brief.",
+            "holdings_consent_token": "token_1234567890123456",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "holdings_consent_token_without_include_holdings"
 
 
 def test_agent_run_request_schema_defaults_are_public_and_local_first():
@@ -196,6 +301,38 @@ def test_agent_run_request_schema_defaults_are_public_and_local_first():
     assert request.source_visibility_mode == "public"
     assert request.confirm_external_search is False
     assert request.include_holdings is False
+    assert request.holdings_consent_token is None
+
+
+def test_holdings_consent_endpoint_requires_explicit_confirmation():
+    response = _client().post(
+        "/api/agent/holdings-consent",
+        json={"confirm_holdings_external_context": False},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "holdings_consent_confirmation_required"
+
+
+def test_holdings_consent_endpoint_issues_token_without_holdings_body():
+    consent_service = HoldingsConsentService(token_factory=lambda: "token_1234567890123456")
+    _install_consent_service(consent_service)
+
+    response = _client().post(
+        "/api/agent/holdings-consent",
+        json={
+            "session_id": "agent-session-consent",
+            "confirm_holdings_external_context": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["session_id"] == "agent-session-consent"
+    assert body["holdings_consent_token"] == "token_1234567890123456"
+    assert body["ttl_seconds"] == 600
+    assert "positions" not in response.text
+    assert "market_value" not in response.text
 
 
 def test_agent_run_rejects_client_supplied_current_date(tmp_path):
@@ -218,6 +355,7 @@ def test_agent_run_rejects_client_supplied_current_date(tmp_path):
 def test_agent_route_registered_without_forbidden_legacy_routes():
     paths = {route.path for route in app.routes}
 
+    assert "/api/agent/holdings-consent" in paths
     assert "/api/agent/run" in paths
     assert "/api/chat" not in paths
     assert "/api/ai/tavily" not in paths
