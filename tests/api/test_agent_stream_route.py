@@ -43,6 +43,7 @@ def _install_service(tmp_path: Path, provider: MockProvider) -> None:
         registry_factory=registry_factory,
         trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
         current_date_provider=lambda: date(2026, 6, 30),
+        enable_evidence_ledger=False,
     )
     app.dependency_overrides[get_agent_run_service] = lambda: service
 

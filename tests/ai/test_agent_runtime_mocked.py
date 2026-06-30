@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import Any
 
@@ -45,6 +46,61 @@ class MockProvider:
         if not self.responses:
             return ChatResponse(content="no more mocked responses")
         return self.responses.pop(0)
+
+
+class EvidenceAwareProvider:
+    name = "deepseek"
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def chat(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
+        response_format: dict[str, Any] | None = None,
+        max_tokens: int = 4000,
+    ) -> ChatResponse:
+        self.calls.append(
+            {
+                "model": model,
+                "messages": list(messages),
+                "tools": list(tools or []),
+                "tool_choice": tool_choice,
+                "response_format": response_format,
+                "max_tokens": max_tokens,
+            }
+        )
+        if len(self.calls) == 1:
+            return ChatResponse(
+                tool_calls=[
+                    ToolCall(id="curve-call", name="treasury_curve", arguments={})
+                ],
+                finish_reason="tool_calls",
+            )
+        evidence_id = _registered_evidence_id(messages)
+        payload = brief_payload()
+        for fact in payload["confirmed_facts"]:
+            fact["evidence_ids"] = [evidence_id]
+        payload["judgments"][0]["evidence_ids"] = [evidence_id]
+        return ChatResponse(
+            tool_calls=[finalize_call("final-with-auto-evidence", payload)],
+            finish_reason="tool_calls",
+        )
+
+
+def _registered_evidence_id(messages: list[ChatMessage]) -> str:
+    for message in messages:
+        if message.role != "tool":
+            continue
+        payload = json.loads(message.content)
+        ids = payload.get("content", {}).get("registered_evidence_ids") or []
+        if ids:
+            return ids[0]
+    raise AssertionError("registered evidence id not found in tool messages")
 
 
 def brief_payload() -> dict[str, Any]:
@@ -145,6 +201,36 @@ def make_registry(*, on_dashboard: list[dict[str, Any]] | None = None) -> AgentT
                 "additionalProperties": False,
             },
             handler=dashboard_handler,
+        )
+    )
+    registry.register(make_finalize_macro_brief_tool())
+    return registry
+
+
+def make_curve_registry() -> AgentToolRegistry:
+    registry = AgentToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="treasury_curve",
+            description="Mock treasury curve.",
+            parameters_schema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": False,
+            },
+            handler=lambda args: {
+                "points": [
+                    {
+                        "tenor": "10Y",
+                        "source_series": "DGS10",
+                        "value": 4.3,
+                        "observation_date": "2026-06-29",
+                        "status": "ok",
+                    }
+                ],
+                "status": "ok",
+            },
         )
     )
     registry.register(make_finalize_macro_brief_tool())
@@ -472,6 +558,34 @@ def test_finalize_with_evidence_ledger_rebuilds_source_list_server_side():
     ]
     assert result.brief.source_list[0].url == "https://fred.stlouisfed.org/series/DGS10"
     assert result.brief.source_list[1].rag_doc_id == "credit_snapshot"
+
+
+def test_tool_results_register_into_evidence_ledger_before_finalize():
+    provider = EvidenceAwareProvider()
+
+    result = run_agent(
+        session_id="auto-ledger",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_curve_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["treasury_curve", FINALIZE_TOOL_NAME],
+        evidence_ledger=RunEvidenceLedger(run_id="auto-ledger"),
+    )
+
+    assert result.final_status == "ok"
+    assert result.brief is not None
+    evidence_ids = result.brief.confirmed_facts[0].evidence_ids
+    assert evidence_ids
+    tool_messages = [
+        message for message in provider.calls[1]["messages"] if message.role == "tool"
+    ]
+    tool_payload = json.loads(tool_messages[0].content)
+    assert tool_payload["content"]["registered_evidence_ids"] == evidence_ids
+    assert tool_payload["content"]["points"][0]["evidence_id"] == evidence_ids[0]
+    event = next(event for event in result.events if event.type == "tool_result")
+    assert event.data["evidence_ids"] == evidence_ids
+    assert result.brief.source_list[0].url == "https://fred.stlouisfed.org/series/DGS10"
 
 
 def test_validation_retry_message_does_not_leak_input_values():

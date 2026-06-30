@@ -33,12 +33,14 @@ Phase F introduces a run-scoped evidence ledger and temporal envelope:
 
 ## Migration
 
-Current implementation adds schema, prompt, ledger, validator, and temporal envelope foundations. Full runtime enforcement remains a later Phase F integration step.
+Current implementation adds schema, prompt, ledger, validator, temporal envelope foundations, server-side source projection, and automatic tool-result ledger registration when an agent run provides a `RunEvidenceLedger`. `AgentRunService` enables the run ledger by default; focused runtime tests may disable it when exercising legacy fixture behavior.
 
 ## Validation
 
 - `tests/ai/test_macro_brief_schema.py`
 - `tests/ai/test_macro_brief_prompt.py`
 - `tests/ai/test_run_evidence_ledger.py`
+- `tests/ai/test_agent_evidence_ledger_registration.py`
 - `tests/ai/test_claim_evidence_validator.py`
+- `tests/ai/test_agent_runtime_mocked.py`
 - `tests/ai/test_temporal_alignment_service.py`

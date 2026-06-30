@@ -37,6 +37,9 @@ from app_backend.services.macro_brief_evidence_projection import (
 from app_backend.services.macro_brief_prompt import build_macro_brief_prompt
 from app_backend.services.agent_trace_service import AgentTraceService, sha256_json
 from app_backend.services.claim_evidence_validator import validate_macro_brief_claim_evidence
+from app_backend.services.agent_evidence_ledger_registration import (
+    register_tool_result_evidence,
+)
 from app_backend.services.run_evidence_ledger import RunEvidenceLedger
 from app_backend.services.temporal_alignment_service import build_temporal_envelope
 
@@ -200,6 +203,7 @@ def run_agent(
     validation_failures = 0
     tool_failure_counts: dict[str, int] = {}
     disabled_tools: set[str] = set()
+    current_evidence_ledger = evidence_ledger
     phase: AgentPhase = "writing" if cfg.two_phase_mode and cfg.force_writing_phase else "research"
     research_steps_used = 0
     writing_steps_used = 0
@@ -342,7 +346,7 @@ def run_agent(
                     messages=messages,
                     tool_call=tool_call,
                     validation_failures=validation_failures,
-                    evidence_ledger=evidence_ledger,
+                    evidence_ledger=current_evidence_ledger,
                     report_generated_at=f"{current_date.isoformat()}T00:00:00Z",
                 )
                 if result is not None:
@@ -367,7 +371,7 @@ def run_agent(
                     step=step,
                 )
                 continue
-            _dispatch_tool_call(
+            current_evidence_ledger = _dispatch_tool_call(
                 tool_registry=tool_registry,
                 tool_call=tool_call,
                 messages=messages,
@@ -379,6 +383,7 @@ def run_agent(
                 config=cfg,
                 tool_failure_counts=tool_failure_counts,
                 disabled_tools=disabled_tools,
+                evidence_ledger=current_evidence_ledger,
             )
             if _has_budget_warning(warnings):
                 phase = _switch_to_writing_phase(
@@ -594,7 +599,8 @@ def _dispatch_tool_call(
     config: AgentRuntimeConfig,
     tool_failure_counts: dict[str, int],
     disabled_tools: set[str],
-) -> None:
+    evidence_ledger: RunEvidenceLedger | None,
+) -> RunEvidenceLedger | None:
     if tool_call.name in disabled_tools:
         _append_disabled_tool_message(
             tool_call=tool_call,
@@ -603,7 +609,7 @@ def _dispatch_tool_call(
             event_callback=event_callback,
             step=step,
         )
-        return
+        return evidence_ledger
 
     try:
         spec = tool_registry.get(tool_call.name)
@@ -623,9 +629,20 @@ def _dispatch_tool_call(
             step=step,
         )
         _append_finalize_convergence_message(messages)
-        return
+        return evidence_ledger
 
     result = tool_registry.dispatch(tool_call.name, tool_call.arguments)
+    message_result = result
+    evidence_ids: list[str] = []
+    if evidence_ledger is not None:
+        registered = register_tool_result_evidence(
+            evidence_ledger,
+            tool_name=tool_call.name,
+            result=result,
+        )
+        evidence_ledger = registered.ledger
+        message_result = registered.result
+        evidence_ids = registered.evidence_ids
     _record_tool_failure_state(
         result=result,
         tool_call=tool_call,
@@ -646,11 +663,13 @@ def _dispatch_tool_call(
                 "tool_name": tool_call.name,
                 "status": result.status,
                 "error_code": result.error_code,
+                "evidence_ids": evidence_ids,
             },
         ),
         event_callback,
     )
-    _append_tool_message(messages, tool_call, result)
+    _append_tool_message(messages, tool_call, message_result)
+    return evidence_ledger
 
 
 def _record_tool_failure_state(

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app_backend.main import app, get_agent_run_service, get_holdings_consent_service
 from app_backend.schemas.agent_api import AgentRunRequest
 from app_backend.services.agent_api_service import AgentRunService
+from app_backend.services.agent_runtime import AgentSessionResult
 from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME
 from app_backend.services.agent_tool_registry import ToolSpec
 from app_backend.services.agent_trace_service import AgentTraceService
@@ -61,6 +62,7 @@ def _service(
         current_date_provider=lambda: date(2026, 6, 30),
         holdings_consent_service=holdings_consent_service,
         holdings_context_service=holdings_context_service,
+        enable_evidence_ledger=False,
     )
 
 
@@ -70,6 +72,36 @@ def _install_service(service: AgentRunService) -> None:
 
 def _install_consent_service(service: HoldingsConsentService) -> None:
     app.dependency_overrides[get_holdings_consent_service] = lambda: service
+
+
+def test_agent_run_service_enables_evidence_ledger_by_default(tmp_path):
+    captured = {}
+
+    def fake_runtime(**kwargs):
+        captured["evidence_ledger"] = kwargs["evidence_ledger"]
+        return AgentSessionResult(
+            session_id=kwargs["session_id"],
+            final_status="incomplete",
+            steps=0,
+        )
+
+    service = AgentRunService(
+        provider_factory=lambda: MockProvider([]),
+        registry_factory=lambda _confirm_external_search: make_registry(),
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        runtime_fn=fake_runtime,
+        current_date_provider=lambda: date(2026, 6, 30),
+    )
+
+    response = service.run(
+        AgentRunRequest(
+            session_id="ledger-default",
+            user_question="Build a macro brief.",
+        )
+    )
+
+    assert response.session_id == "ledger-default"
+    assert captured["evidence_ledger"].run_id == "ledger-default"
 
 
 def test_agent_run_endpoint_returns_rendered_public_brief(tmp_path):

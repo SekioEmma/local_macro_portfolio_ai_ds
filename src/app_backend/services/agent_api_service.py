@@ -55,6 +55,7 @@ from app_backend.services.macro_brief_sources import (
     filter_macro_brief_sources,
 )
 from app_backend.services.realtime_quote_service import build_default_realtime_quote_service
+from app_backend.services.run_evidence_ledger import RunEvidenceLedger
 from app_backend.services.search_execution_service import (
     TavilySearchExecutionService,
     build_default_tavily_search_execution_service,
@@ -104,6 +105,7 @@ class AgentRunService:
     current_date_provider: CurrentDateProvider = lambda: datetime.now(_NEW_YORK).date()
     holdings_consent_service: HoldingsConsentService | None = None
     holdings_context_service: HoldingsExternalContextService | None = None
+    enable_evidence_ledger: bool = True
 
     def run(
         self,
@@ -152,6 +154,11 @@ class AgentRunService:
             holdings_snapshot=holdings_snapshot,
             trace_service=trace_service,
             event_callback=event_callback,
+            evidence_ledger=(
+                RunEvidenceLedger(run_id=session_id)
+                if self.enable_evidence_ledger
+                else None
+            ),
         )
         return _response_from_result(
             request=request,
