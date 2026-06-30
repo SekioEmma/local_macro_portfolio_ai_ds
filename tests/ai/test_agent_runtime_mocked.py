@@ -881,6 +881,27 @@ def test_validation_retry_message_does_not_leak_input_values():
     assert "SECRET_INPUT_VALUE" not in retry_messages[0]
 
 
+def test_provider_call_caps_max_tokens_by_remaining_budget():
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+
+    result = run_agent(
+        session_id="token-preflight",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(
+            max_tokens_per_call=8192,
+            research_max_tokens_per_call=4000,
+        ),
+        budget=AgentBudget(max_tokens_total=10, tokens_used=7),
+    )
+
+    assert result.final_status == "ok"
+    assert provider.calls[0]["max_tokens"] == 3
+
+
 def test_two_phase_default_switches_after_two_plain_turns_to_finalize_only():
     provider = MockProvider(
         [
@@ -901,6 +922,10 @@ def test_two_phase_default_switches_after_two_plain_turns_to_finalize_only():
 
     assert result.final_status == "ok"
     assert tool_names_from_call(provider.calls[2]) == [FINALIZE_TOOL_NAME]
+    assert any(
+        message.role == "system" and "Research phase is closed." in message.content
+        for message in provider.calls[2]["messages"]
+    )
     assert any(event.type == "agent_phase" and event.data["reason"] == "no_tool_calls" for event in result.events)
 
 
@@ -946,6 +971,54 @@ def test_force_writing_phase_starts_with_finalize_only():
 
     assert result.final_status == "ok"
     assert tool_names_from_call(provider.calls[0]) == [FINALIZE_TOOL_NAME]
+    assert any(
+        message.role == "system" and "Research phase is closed." in message.content
+        for message in provider.calls[0]["messages"]
+    )
+
+
+def test_mixed_finalize_call_is_rejected_without_dispatching_other_tools():
+    dashboard_calls: list[dict[str, Any]] = []
+    provider = MockProvider(
+        [
+            ChatResponse(
+                tool_calls=[
+                    ToolCall(
+                        id="dash-1",
+                        name="dashboard_query",
+                        arguments={"series": "DGS10"},
+                    ),
+                    finalize_call("mixed-final"),
+                ],
+                finish_reason="tool_calls",
+            ),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="mixed-finalize",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(on_dashboard=dashboard_calls),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(two_phase_mode=False),
+    )
+
+    tool_messages = [
+        json.loads(message.content)
+        for message in provider.calls[1]["messages"]
+        if message.role == "tool"
+    ]
+
+    assert result.final_status == "ok"
+    assert dashboard_calls == []
+    assert tool_names_from_call(provider.calls[1]) == [FINALIZE_TOOL_NAME]
+    assert any(warning.code == "invalid_mixed_finalize_call" for warning in result.warnings)
+    assert {message["error_code"] for message in tool_messages} == {
+        "invalid_mixed_finalize_call"
+    }
 
 
 def test_two_phase_can_be_disabled_for_single_loop_behavior():

@@ -60,11 +60,19 @@ VALIDATION_RETRY_WARNING = "validation_retry"
 VALIDATION_FAILED_WARNING = "validation_failed"
 TOOL_DISABLED_WARNING_PREFIX = "tool_disabled"
 AGENT_CANCELLED_WARNING = "agent_cancelled"
+MIXED_FINALIZE_WARNING = "invalid_mixed_finalize_call"
 
 _FINALIZE_CONVERGENCE_MESSAGE = (
     "You must continue with tool calls. If the MacroBrief is ready, call "
     f"{FINALIZE_TOOL_NAME} with the complete brief JSON. Plain text is not "
     "a valid final response."
+)
+_WRITING_PHASE_MESSAGE = (
+    "Research phase is closed.\n"
+    "Do not request more data.\n"
+    "Use only evidence already returned in this run.\n"
+    "Do not infer unavailable values.\n"
+    f"Call {FINALIZE_TOOL_NAME} now."
 )
 
 
@@ -101,6 +109,8 @@ class AgentRuntimeConfig(BaseModel):
     model_name: str = AGENT_MODEL_NAME
     max_tokens_per_call: int = Field(default=8192, gt=0)
     converge_after_plain_text: bool = True
+    research_max_tokens_per_call: int = Field(default=8192, gt=0)
+    writing_max_tokens_per_call: int = Field(default=8192, gt=0)
 
     # F5-4/F5-5 fields are defined now so callers can pin config without
     # changing the service API as later runtime controls are filled in.
@@ -158,6 +168,9 @@ class AgentBudget(BaseModel):
 
     def token_budget_exceeded(self) -> bool:
         return self.tokens_used > self.max_tokens_total
+
+    def remaining_tokens(self) -> int:
+        return max(self.max_tokens_total - self.tokens_used, 0)
 
     def remaining_step_ratio(self) -> float:
         remaining = max(self.max_steps - self.steps_used, 0)
@@ -252,6 +265,8 @@ def run_agent(
         ChatMessage(role=message["role"], content=message["content"])
         for message in prompt.messages()
     ]
+    if phase == "writing":
+        _append_writing_phase_message(messages)
 
     while run_budget.has_step():
         step = run_budget.steps_used + 1
@@ -290,6 +305,11 @@ def run_agent(
             tool_registry,
             _tool_names_for_phase(tool_names, phase),
             disabled_tools=disabled_tools,
+        )
+        provider_max_tokens = _provider_call_max_tokens(
+            config=cfg,
+            budget=run_budget,
+            phase=current_phase,
         )
         attempt = 1
         while True:
@@ -332,7 +352,7 @@ def run_agent(
                     tools=tool_schema,
                     tool_choice="auto",
                     response_format=prompt.response_format,
-                    max_tokens=cfg.max_tokens_per_call,
+                    max_tokens=provider_max_tokens,
                 )
                 provider_elapsed_seconds = clock() - provider_started_at
                 break
@@ -478,6 +498,7 @@ def run_agent(
                 step=step,
                 reason="token_budget_exceeded",
                 config=cfg,
+                messages=messages,
             )
 
         if response.tool_calls:
@@ -506,9 +527,32 @@ def run_agent(
                 events=events,
                 event_callback=event_callback,
                 step=step,
+                messages=messages,
             )
             if _writing_phase_exhausted(current_phase, writing_steps_used, cfg):
                 break
+            continue
+
+        if _has_mixed_finalize_call(response.tool_calls):
+            consecutive_no_tool_calls = 0
+            _append_mixed_finalize_tool_messages(
+                tool_calls=response.tool_calls,
+                messages=messages,
+                events=events,
+                event_callback=event_callback,
+                step=step,
+                warnings=warnings,
+            )
+            phase = _switch_to_writing_phase(
+                phase=phase,
+                events=events,
+                event_callback=event_callback,
+                step=step,
+                reason=MIXED_FINALIZE_WARNING,
+                config=cfg,
+                messages=messages,
+                force=True,
+            )
             continue
 
         consecutive_no_tool_calls = 0
@@ -601,6 +645,7 @@ def run_agent(
                     step=step,
                     reason="budget_exceeded",
                     config=cfg,
+                    messages=messages,
                 )
 
         phase = _maybe_switch_to_writing_phase(
@@ -612,6 +657,7 @@ def run_agent(
             events=events,
             event_callback=event_callback,
             step=step,
+            messages=messages,
         )
         if _writing_phase_exhausted(current_phase, writing_steps_used, cfg):
             break
@@ -705,6 +751,23 @@ def _provider_error_is_retryable(error_kind: str) -> bool:
     return error_kind in _RETRYABLE_PROVIDER_ERROR_KINDS
 
 
+def _provider_call_max_tokens(
+    *,
+    config: AgentRuntimeConfig,
+    budget: AgentBudget,
+    phase: AgentPhase,
+) -> int:
+    phase_cap = (
+        config.writing_max_tokens_per_call
+        if phase == "writing"
+        else config.research_max_tokens_per_call
+    )
+    remaining_tokens = budget.remaining_tokens()
+    if remaining_tokens <= 0:
+        return 1
+    return max(1, min(config.max_tokens_per_call, phase_cap, remaining_tokens))
+
+
 def _provider_retry_backoff_seconds(
     *,
     config: AgentRuntimeConfig,
@@ -790,6 +853,7 @@ def _maybe_switch_to_writing_phase(
     events: list[AgentRuntimeEvent],
     event_callback: RuntimeEventCallback | None,
     step: int,
+    messages: list[ChatMessage],
 ) -> AgentPhase:
     if not config.two_phase_mode or phase == "writing":
         return phase
@@ -809,6 +873,7 @@ def _maybe_switch_to_writing_phase(
         step=step,
         reason=reason,
         config=config,
+        messages=messages,
     )
 
 
@@ -820,9 +885,14 @@ def _switch_to_writing_phase(
     step: int,
     reason: str,
     config: AgentRuntimeConfig,
+    messages: list[ChatMessage],
+    force: bool = False,
 ) -> AgentPhase:
-    if not config.two_phase_mode or phase == "writing":
+    if phase == "writing":
         return phase
+    if not config.two_phase_mode and not force:
+        return phase
+    _append_writing_phase_message(messages)
     _append_event(
         events,
         AgentRuntimeEvent(
@@ -889,6 +959,15 @@ def _append_finalize_convergence_message(messages: list[ChatMessage]) -> None:
     messages.append(ChatMessage(role="user", content=_FINALIZE_CONVERGENCE_MESSAGE))
 
 
+def _append_writing_phase_message(messages: list[ChatMessage]) -> None:
+    if any(
+        message.role == "system" and "Research phase is closed." in message.content
+        for message in messages
+    ):
+        return
+    messages.append(ChatMessage(role="system", content=_WRITING_PHASE_MESSAGE))
+
+
 def _handle_token_budget(
     *,
     budget: AgentBudget,
@@ -900,6 +979,12 @@ def _handle_token_budget(
     _append_budget_warning(warnings, "tokens", "Agent exceeded max_tokens_total.")
     _append_finalize_convergence_message(messages)
     return True
+
+
+def _has_mixed_finalize_call(tool_calls: list[ToolCall]) -> bool:
+    return len(tool_calls) > 1 and any(
+        tool_call.name == FINALIZE_TOOL_NAME for tool_call in tool_calls
+    )
 
 
 def _dispatch_tool_call(
@@ -1055,6 +1140,47 @@ def _record_tool_failure_state(
         ),
         event_callback,
     )
+
+
+def _append_mixed_finalize_tool_messages(
+    *,
+    tool_calls: list[ToolCall],
+    messages: list[ChatMessage],
+    events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
+    step: int,
+    warnings: list[AgentRuntimeWarning],
+) -> None:
+    if not any(warning.code == MIXED_FINALIZE_WARNING for warning in warnings):
+        warnings.append(
+            AgentRuntimeWarning(
+                code=MIXED_FINALIZE_WARNING,
+                message=f"{FINALIZE_TOOL_NAME} must be called without any other tools.",
+            )
+        )
+    for tool_call in tool_calls:
+        result = ToolResult(
+            status="error",
+            error_code=MIXED_FINALIZE_WARNING,
+            error_message=(
+                f"{FINALIZE_TOOL_NAME} must be called alone; call it again "
+                "without other tools."
+            ),
+        )
+        _append_event(
+            events,
+            AgentRuntimeEvent(
+                type="tool_result",
+                step=step,
+                data={
+                    "tool_name": tool_call.name,
+                    "status": result.status,
+                    "error_code": result.error_code,
+                },
+            ),
+            event_callback,
+        )
+        _append_tool_message(messages, tool_call, result)
 
 
 def _append_disabled_tool_message(
