@@ -251,6 +251,11 @@ def test_a_assessment_field_order_is_locked():
         "exclusion_reason",
         "external_llm_context_allowed",
         "allowed_use",
+        "source_kind",
+        "evidence_tier",
+        "is_official_source",
+        "rights_status",
+        "external_context_authorized_by_user",
     ]
 
 
@@ -267,6 +272,11 @@ def test_a_candidate_field_order_is_locked():
         "is_stale",
         "external_llm_context_allowed",
         "allowed_use",
+        "source_kind",
+        "evidence_tier",
+        "is_official_source",
+        "rights_status",
+        "external_context_authorized_by_user",
     ]
 
 
@@ -804,6 +814,11 @@ def test_d_candidate_field_set_locked():
         "is_stale",
         "external_llm_context_allowed",
         "allowed_use",
+        "source_kind",
+        "evidence_tier",
+        "is_official_source",
+        "rights_status",
+        "external_context_authorized_by_user",
     }
     assert names == expected
 
@@ -850,6 +865,11 @@ def test_d_assessment_field_set_locked():
         "exclusion_reason",
         "external_llm_context_allowed",
         "allowed_use",
+        "source_kind",
+        "evidence_tier",
+        "is_official_source",
+        "rights_status",
+        "external_context_authorized_by_user",
     }
     assert names == expected
 
@@ -1158,3 +1178,94 @@ def test_f_allowed_use_not_str_rejected():
 def test_f_local_only_use_is_in_exclusion_reason_enum():
     from app_backend.services.rag_evidence_governance import RagEvidenceExclusionReason
     assert "local_only_use" in {m.value for m in RagEvidenceExclusionReason}
+
+
+def test_f_authorized_institutional_view_is_eligible_for_external_context():
+    out = assess_rag_evidence_candidate(
+        _candidate(
+            doc_type="research_report",
+            source_kind="institutional_research",
+            evidence_tier="institutional_view",
+            is_official_source=False,
+            rights_status="user_authorized_external_context",
+            external_context_authorized_by_user=True,
+        )
+    )
+    assert out.eligibility == "eligible"
+    assert out.evidence_tier == "institutional_view"
+    assert out.is_official_source is False
+
+
+def test_f_institutional_view_without_rights_gate_is_excluded():
+    out = assess_rag_evidence_candidate(
+        _candidate(
+            doc_type="research_report",
+            source_kind="institutional_research",
+            evidence_tier="institutional_view",
+            is_official_source=False,
+            rights_status="private_local_only",
+            external_context_authorized_by_user=False,
+        )
+    )
+    assert out.eligibility == "excluded"
+    assert out.exclusion_reason == "institutional_rights_not_authorized"
+
+
+def test_f_local_only_institutional_view_does_not_require_external_rights():
+    out = assess_rag_evidence_candidate(
+        _candidate(
+            doc_type="research_report",
+            external_llm_context_allowed=False,
+            allowed_use="local_search_only",
+            source_kind="institutional_research",
+            evidence_tier="institutional_view",
+            is_official_source=False,
+            rights_status="private_local_only",
+            external_context_authorized_by_user=False,
+        )
+    )
+    assert out.eligibility == "excluded"
+    assert out.exclusion_reason == "local_only_use"
+
+
+def test_f_institutional_research_cannot_be_marked_official():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(
+            _candidate(
+                doc_type="research_report",
+                source_kind="institutional_research",
+                evidence_tier="official_evidence",
+                is_official_source=True,
+                rights_status="user_authorized_external_context",
+                external_context_authorized_by_user=True,
+            )
+        )
+    assert exc.value.code == "institutional_research_not_view_tier"
+
+
+def test_f_institutional_research_must_be_research_report():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(
+            _candidate(
+                doc_type="policy_doc",
+                source_kind="institutional_research",
+                evidence_tier="institutional_view",
+                is_official_source=False,
+                rights_status="user_authorized_external_context",
+                external_context_authorized_by_user=True,
+            )
+        )
+    assert exc.value.code == "institutional_research_invalid_document_type"
+
+
+def test_f_invalid_rights_gate_fields_are_rejected():
+    with pytest.raises(RagEvidenceGovernanceError) as exc:
+        assess_rag_evidence_candidate(
+            _candidate(
+                source_kind="institutional_research",
+                evidence_tier="institutional_view",
+                is_official_source=False,
+                rights_status="unknown",
+            )
+        )
+    assert exc.value.code == "invalid_rights_status"

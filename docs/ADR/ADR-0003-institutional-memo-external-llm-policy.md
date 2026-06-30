@@ -30,4 +30,5 @@ Institutional memo content may be used only as an `institutional_view` evidence 
 ## Validation
 
 - `tests/ai/test_claim_evidence_validator.py` verifies observed facts cannot rely on institutional views as direct observations.
-- Future memo ingestion must add source-specific tests before enabling runtime use.
+- `tests/ai/test_rag_evidence_governance.py` verifies institutional research is external-context eligible only with `rights_status=user_authorized_external_context`, `external_context_authorized_by_user=True`, `evidence_tier=institutional_view`, and `is_official_source=False`.
+- `tests/ai/test_build_app_rag_staging.py` and `tests/ai/test_curated_rag_ingest.py` verify authorized local institutional memos are staged and ingested only as `research_report` / `institutional_view`, while unauthorized memos remain local-only.

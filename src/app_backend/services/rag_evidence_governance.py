@@ -41,9 +41,19 @@ class RagEvidenceExclusionReason(StrEnum):
     HISTORICAL_DATA_EXCLUDED = "historical_data_excluded"
     ONE_SHOT_NEWS_EXCLUDED = "one_shot_news_excluded"
     LOCAL_ONLY_USE = "local_only_use"
+    INSTITUTIONAL_RIGHTS_NOT_AUTHORIZED = "institutional_rights_not_authorized"
 
 
 _VALID_ALLOWED_USE = frozenset({"external_context_candidate", "local_search_only"})
+_OFFICIAL_SOURCE_KINDS = frozenset({"central_bank_policy", "official_release", "official_outlook"})
+_INSTITUTIONAL_SOURCE_KIND = "institutional_research"
+_VALID_SOURCE_KINDS = _OFFICIAL_SOURCE_KINDS | frozenset({_INSTITUTIONAL_SOURCE_KIND})
+_VALID_EVIDENCE_TIERS = frozenset({"official_evidence", "institutional_view"})
+_VALID_RIGHTS_STATUS = frozenset({
+    "public_official_source",
+    "private_local_only",
+    "user_authorized_external_context",
+})
 
 
 @dataclass(frozen=True)
@@ -60,6 +70,11 @@ class RagEvidenceCandidate:
     is_stale: bool
     external_llm_context_allowed: bool = True
     allowed_use: str = "external_context_candidate"
+    source_kind: str = "central_bank_policy"
+    evidence_tier: str = "official_evidence"
+    is_official_source: bool = True
+    rights_status: str = "public_official_source"
+    external_context_authorized_by_user: bool = False
 
 
 @dataclass(frozen=True)
@@ -76,6 +91,11 @@ class RagEvidenceAssessment:
     exclusion_reason: str | None
     external_llm_context_allowed: bool
     allowed_use: str
+    source_kind: str
+    evidence_tier: str
+    is_official_source: bool
+    rights_status: str
+    external_context_authorized_by_user: bool
 
 
 def assess_rag_evidence_candidate(
@@ -110,9 +130,28 @@ def _assess_exact_candidate(candidate: RagEvidenceCandidate) -> RagEvidenceAsses
         candidate.external_llm_context_allowed
     )
     allowed_use = _validated_allowed_use(candidate.allowed_use)
+    source_kind = _validated_source_kind(candidate.source_kind)
+    evidence_tier = _validated_evidence_tier(candidate.evidence_tier)
+    is_official_source = _validated_is_official_source(candidate.is_official_source)
+    rights_status = _validated_rights_status(candidate.rights_status)
+    external_context_authorized_by_user = _validated_external_context_authorized_by_user(
+        candidate.external_context_authorized_by_user
+    )
+    _validate_source_tier_contract(
+        doc_type=doc_type,
+        source_kind=source_kind,
+        evidence_tier=evidence_tier,
+        is_official_source=is_official_source,
+    )
 
     eligibility, exclusion_reason = _apply_admission_policy(
-        doc_type, is_stale, external_llm_context_allowed
+        doc_type=doc_type,
+        is_stale=is_stale,
+        external_llm_context_allowed=external_llm_context_allowed,
+        allowed_use=allowed_use,
+        source_kind=source_kind,
+        rights_status=rights_status,
+        external_context_authorized_by_user=external_context_authorized_by_user,
     )
     return RagEvidenceAssessment(
         document_id=document_id,
@@ -125,13 +164,23 @@ def _assess_exact_candidate(candidate: RagEvidenceCandidate) -> RagEvidenceAsses
         exclusion_reason=exclusion_reason.value if exclusion_reason else None,
         external_llm_context_allowed=external_llm_context_allowed,
         allowed_use=allowed_use,
+        source_kind=source_kind,
+        evidence_tier=evidence_tier,
+        is_official_source=is_official_source,
+        rights_status=rights_status,
+        external_context_authorized_by_user=external_context_authorized_by_user,
     )
 
 
 def _apply_admission_policy(
+    *,
     doc_type: str,
     is_stale: bool,
     external_llm_context_allowed: bool,
+    allowed_use: str,
+    source_kind: str,
+    rights_status: str,
+    external_context_authorized_by_user: bool,
 ) -> tuple[RagEvidenceEligibility, RagEvidenceExclusionReason | None]:
     if is_stale:
         return (
@@ -148,10 +197,18 @@ def _apply_admission_policy(
             RagEvidenceEligibility.EXCLUDED,
             RagEvidenceExclusionReason.ONE_SHOT_NEWS_EXCLUDED,
         )
-    if not external_llm_context_allowed:
+    if not external_llm_context_allowed or allowed_use != "external_context_candidate":
         return (
             RagEvidenceEligibility.EXCLUDED,
             RagEvidenceExclusionReason.LOCAL_ONLY_USE,
+        )
+    if source_kind == _INSTITUTIONAL_SOURCE_KIND and (
+        rights_status != "user_authorized_external_context"
+        or not external_context_authorized_by_user
+    ):
+        return (
+            RagEvidenceEligibility.EXCLUDED,
+            RagEvidenceExclusionReason.INSTITUTIONAL_RIGHTS_NOT_AUTHORIZED,
         )
     return RagEvidenceEligibility.ELIGIBLE, None
 
@@ -243,6 +300,63 @@ def _validated_allowed_use(value: object) -> str:
     if value not in _VALID_ALLOWED_USE:
         raise RagEvidenceGovernanceError("invalid_allowed_use")
     return value
+
+
+def _validated_source_kind(value: object) -> str:
+    if type(value) is not str:
+        raise RagEvidenceGovernanceError("invalid_source_kind")
+    if value not in _VALID_SOURCE_KINDS:
+        raise RagEvidenceGovernanceError("invalid_source_kind")
+    return value
+
+
+def _validated_evidence_tier(value: object) -> str:
+    if type(value) is not str:
+        raise RagEvidenceGovernanceError("invalid_evidence_tier")
+    if value not in _VALID_EVIDENCE_TIERS:
+        raise RagEvidenceGovernanceError("invalid_evidence_tier")
+    return value
+
+
+def _validated_is_official_source(value: object) -> bool:
+    if type(value) is not bool:
+        raise RagEvidenceGovernanceError("invalid_is_official_source")
+    return value
+
+
+def _validated_rights_status(value: object) -> str:
+    if type(value) is not str:
+        raise RagEvidenceGovernanceError("invalid_rights_status")
+    if value not in _VALID_RIGHTS_STATUS:
+        raise RagEvidenceGovernanceError("invalid_rights_status")
+    return value
+
+
+def _validated_external_context_authorized_by_user(value: object) -> bool:
+    if type(value) is not bool:
+        raise RagEvidenceGovernanceError("invalid_external_context_authorized_by_user")
+    return value
+
+
+def _validate_source_tier_contract(
+    *,
+    doc_type: str,
+    source_kind: str,
+    evidence_tier: str,
+    is_official_source: bool,
+) -> None:
+    if source_kind == _INSTITUTIONAL_SOURCE_KIND:
+        if doc_type != KnowledgeDocumentType.RESEARCH_REPORT.value:
+            raise RagEvidenceGovernanceError("institutional_research_invalid_document_type")
+        if evidence_tier != "institutional_view":
+            raise RagEvidenceGovernanceError("institutional_research_not_view_tier")
+        if is_official_source:
+            raise RagEvidenceGovernanceError("institutional_research_marked_official")
+        return
+    if evidence_tier != "official_evidence":
+        raise RagEvidenceGovernanceError("official_source_not_official_tier")
+    if not is_official_source:
+        raise RagEvidenceGovernanceError("official_source_not_marked_official")
 
 
 __all__ = [
