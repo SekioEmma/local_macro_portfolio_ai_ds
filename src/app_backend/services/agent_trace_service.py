@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 DEFAULT_TRACE_DIR = Path("outputs/agent_traces")
 DEFAULT_MAX_TRACE_BYTES = 100_000
+TRACE_SCHEMA_VERSION = 1
 _SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 _REDACTED = "[REDACTED_TRACE_FIELD]"
 _HASHED_FIELD = "[HASHED_TRACE_FIELD]"
@@ -82,11 +83,15 @@ class TraceSizeExceeded(AgentTraceError):
 class AgentTraceEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    schema_version: int = TRACE_SCHEMA_VERSION
     ts: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     type: str
     session_id: str
     step: int | None = None
     data: dict[str, Any] = Field(default_factory=dict)
+    event_sequence: int | None = None
+    previous_event_hash: str | None = None
+    event_hash: str | None = None
 
 
 class AgentTraceReplay(BaseModel):
@@ -116,7 +121,18 @@ class AgentTraceService:
     def trace_path(self, session_id: str) -> Path:
         if not _SESSION_ID_PATTERN.fullmatch(session_id):
             raise InvalidTraceSessionId(f"invalid trace session id: {session_id!r}")
-        return self.root_dir / f"{session_id}.jsonl"
+        indexed = self._indexed_trace_path(session_id)
+        if indexed is not None:
+            return indexed
+        legacy = self.root_dir / f"{session_id}.jsonl"
+        if legacy.exists():
+            return legacy
+        now = datetime.now(UTC)
+        return self.root_dir / f"{now:%Y}" / f"{now:%m}" / f"{now:%d}" / f"{session_id}.jsonl"
+
+    def summary_path(self, session_id: str) -> Path:
+        path = self.trace_path(session_id)
+        return path.with_name(f"{path.stem}.summary.json")
 
     def start_session(
         self,
@@ -179,16 +195,38 @@ class AgentTraceService:
     def write_event(self, event: AgentTraceEvent) -> None:
         path = self.trace_path(event.session_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        safe_event = event.model_copy(
-            update={"data": sanitize_trace_payload(event.data)}
+        self._ensure_index_entry(event.session_id, path)
+        if _trace_has_overflow(path):
+            if event.type == "session_end":
+                self._write_summary(
+                    session_id=event.session_id,
+                    final_status=str(event.data.get("final_status", "")),
+                    steps=_int_or_none(event.data.get("steps")),
+                    overflowed=True,
+                )
+            return
+
+        safe_event = self._prepare_hashed_event(
+            event.model_copy(update={"data": sanitize_trace_payload(event.data)}),
+            path=path,
         )
-        line = json.dumps(safe_event.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
+        line = _event_line(safe_event)
+        encoded_size = len((line + "\n").encode("utf-8"))
+        current_size = path.stat().st_size if path.exists() else 0
+        if current_size + encoded_size > self.max_session_bytes and event.type != "trace_overflow":
+            self._write_overflow_event(path, event.session_id)
+            self._write_summary(session_id=event.session_id, overflowed=True)
+            return
+
         with path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(line)
             handle.write("\n")
-        if path.stat().st_size > self.max_session_bytes:
-            raise TraceSizeExceeded(
-                f"trace exceeds {self.max_session_bytes} bytes: {path.name}"
+        if event.type == "session_end":
+            self._write_summary(
+                session_id=event.session_id,
+                final_status=str(event.data.get("final_status", "")),
+                steps=_int_or_none(event.data.get("steps")),
+                overflowed=False,
             )
 
     def read_events(self, session_id: str) -> list[AgentTraceEvent]:
@@ -217,9 +255,157 @@ class AgentTraceService:
             return []
         return scan_trace_text_for_sensitive_markers(path.read_text(encoding="utf-8"))
 
+    def _indexed_trace_path(self, session_id: str) -> Path | None:
+        index_path = self.root_dir / "index.jsonl"
+        if not index_path.exists():
+            return None
+        matched: Path | None = None
+        with index_path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if item.get("session_id") != session_id:
+                    continue
+                relpath = item.get("trace_relpath")
+                if isinstance(relpath, str) and relpath:
+                    matched = (self.root_dir / relpath).resolve()
+        if matched is None:
+            return None
+        root = self.root_dir.resolve()
+        try:
+            matched.relative_to(root)
+        except ValueError:
+            return None
+        return matched
+
+    def _ensure_index_entry(self, session_id: str, path: Path) -> None:
+        if path.exists():
+            return
+        index_path = self.root_dir / "index.jsonl"
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "session_id": session_id,
+            "trace_relpath": path.relative_to(self.root_dir).as_posix(),
+            "summary_relpath": self.summary_path(session_id).relative_to(self.root_dir).as_posix(),
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        with index_path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+            handle.write("\n")
+
+    def _prepare_hashed_event(
+        self,
+        event: AgentTraceEvent,
+        *,
+        path: Path,
+    ) -> AgentTraceEvent:
+        sequence, previous_hash = _next_sequence_and_previous_hash(path)
+        event = event.model_copy(
+            update={
+                "schema_version": TRACE_SCHEMA_VERSION,
+                "event_sequence": sequence,
+                "previous_event_hash": previous_hash,
+                "event_hash": None,
+            }
+        )
+        event_hash = sha256_text(_event_line(event))
+        return event.model_copy(update={"event_hash": event_hash})
+
+    def _write_overflow_event(self, path: Path, session_id: str) -> None:
+        overflow = self._prepare_hashed_event(
+            AgentTraceEvent(
+                type="trace_overflow",
+                session_id=session_id,
+                data={
+                    "max_session_bytes": self.max_session_bytes,
+                    "overflowed_at_bytes": path.stat().st_size if path.exists() else 0,
+                },
+            ),
+            path=path,
+        )
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(_event_line(overflow))
+            handle.write("\n")
+
+    def _write_summary(
+        self,
+        *,
+        session_id: str,
+        final_status: str | None = None,
+        steps: int | None = None,
+        overflowed: bool,
+    ) -> None:
+        events = self.read_events(session_id)
+        payload = {
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "session_id": session_id,
+            "event_count": len(events),
+            "first_event_ts": events[0].ts if events else None,
+            "last_event_ts": events[-1].ts if events else None,
+            "last_event_hash": events[-1].event_hash if events else None,
+            "overflowed": overflowed or any(event.type == "trace_overflow" for event in events),
+            "final_status": final_status,
+            "steps": steps,
+        }
+        path = self.summary_path(session_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
 
 def sha256_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _event_line(event: AgentTraceEvent) -> str:
+    return json.dumps(event.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
+
+
+def _next_sequence_and_previous_hash(path: Path) -> tuple[int, str | None]:
+    if not path.exists():
+        return 1, None
+    sequence = 0
+    previous_hash: str | None = None
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            event_sequence = item.get("event_sequence")
+            if isinstance(event_sequence, int):
+                sequence = max(sequence, event_sequence)
+            event_hash = item.get("event_hash")
+            if isinstance(event_hash, str) and event_hash:
+                previous_hash = event_hash
+    return sequence + 1, previous_hash
+
+
+def _trace_has_overflow(path: Path) -> bool:
+    if not path.exists():
+        return False
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if '"type": "trace_overflow"' in line:
+                return True
+    return False
+
+
+def _int_or_none(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
 
 
 def sha256_json(value: Mapping[str, Any] | None) -> str | None:

@@ -11,7 +11,6 @@ from app_backend.services.agent_trace_service import (
     AgentTraceEvent,
     AgentTraceService,
     InvalidTraceSessionId,
-    TraceSizeExceeded,
     sanitize_trace_payload,
     scan_trace_text_for_sensitive_markers,
     sha256_json,
@@ -40,14 +39,23 @@ def test_trace_service_writes_jsonl_without_raw_question(tmp_path):
     )
     service.end_session(session_id="session-1", final_status="ok", steps=1, warnings=[])
 
-    path = tmp_path / "session-1.jsonl"
+    path = service.trace_path("session-1")
     lines = path.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 3
     assert "raw user macro question" not in path.read_text(encoding="utf-8")
     first = json.loads(lines[0])
     assert first["type"] == "session_start"
+    assert first["schema_version"] == 1
+    assert first["event_sequence"] == 1
+    assert first["previous_event_hash"] is None
+    assert first["event_hash"]
     assert first["data"]["user_question_sha256"] == sha256_text("raw user macro question")
     assert first["data"]["current_date"] == "2026-06-30"
+    second = json.loads(lines[1])
+    assert second["event_sequence"] == 2
+    assert second["previous_event_hash"] == first["event_hash"]
+    assert (tmp_path / "index.jsonl").exists()
+    assert service.summary_path("session-1").exists()
 
 
 def test_trace_service_rejects_unsafe_session_id(tmp_path):
@@ -57,17 +65,31 @@ def test_trace_service_rejects_unsafe_session_id(tmp_path):
         service.write_event(AgentTraceEvent(type="session_start", session_id="../escape"))
 
 
-def test_trace_service_enforces_session_size_limit(tmp_path):
-    service = AgentTraceService(root_dir=tmp_path, max_session_bytes=40)
+def test_trace_service_overflow_writes_summary_without_raising(tmp_path):
+    service = AgentTraceService(root_dir=tmp_path, max_session_bytes=400)
 
-    with pytest.raises(TraceSizeExceeded):
-        service.write_event(
-            AgentTraceEvent(
-                type="large",
-                session_id="session-2",
-                data={"payload": "x" * 80},
-            )
+    service.write_event(AgentTraceEvent(type="small", session_id="session-2"))
+    service.write_event(
+        AgentTraceEvent(
+            type="large",
+            session_id="session-2",
+            data={"payload": "x" * 800},
         )
+    )
+    service.write_event(
+        AgentTraceEvent(
+            type="ignored_after_overflow",
+            session_id="session-2",
+            data={"payload": "y" * 10},
+        )
+    )
+
+    events = service.read_events("session-2")
+    assert [event.type for event in events] == ["small", "trace_overflow"]
+    assert events[1].previous_event_hash == events[0].event_hash
+    summary = json.loads(service.summary_path("session-2").read_text(encoding="utf-8"))
+    assert summary["overflowed"] is True
+    assert summary["event_count"] == 2
 
 
 def test_run_agent_can_persist_trace_when_service_is_injected(tmp_path):
@@ -97,7 +119,7 @@ def test_run_agent_can_persist_trace_when_service_is_injected(tmp_path):
     assert event_types[-1] == "session_end"
     assert events[0].data["holdings_included"] is True
     assert events[0].data["holdings_snapshot_sha256"] == sha256_json(holdings_snapshot)
-    trace_text = (tmp_path / "session-3.jsonl").read_text(encoding="utf-8")
+    trace_text = service.trace_path("session-3").read_text(encoding="utf-8")
     assert "Build a macro brief." not in trace_text
     assert "amount" not in trace_text
 
@@ -119,7 +141,7 @@ def test_trace_sanitizes_sensitive_payload_fields(tmp_path):
         )
     )
 
-    trace_text = (tmp_path / "session-4.jsonl").read_text(encoding="utf-8")
+    trace_text = service.trace_path("session-4").read_text(encoding="utf-8")
     assert "raw query about CPI" not in trace_text
     assert "tvly-Secret1234567890" not in trace_text
     assert "full prompt text" not in trace_text
