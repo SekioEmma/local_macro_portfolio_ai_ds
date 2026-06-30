@@ -327,3 +327,57 @@ def test_retrieve_backfills_after_filtering_local_only():
     assert "private2" not in ids
     assert len(ids) == 3
     assert ids == ["public1", "public2", "public3"]
+
+
+def test_retrieve_doc_type_filter_excludes_bm25_wrong_type_before_fusion():
+    raw = {
+        ("policy", 0): _FakeRawChunk(
+            text="policy text",
+            title="Policy",
+            doc_type="policy_doc",
+            source_domain="federalreserve.gov",
+        ),
+        ("memo", 0): _FakeRawChunk(
+            text="memo text",
+            title="Memo",
+            doc_type="research_report",
+            source_domain="local_user_verified",
+        ),
+    }
+    bm25 = [
+        _FakeBM25Result("memo", 0, 10.0),
+        _FakeBM25Result("policy", 0, 1.0),
+    ]
+    svc = _make_svc(bm25=bm25, raw=raw)
+
+    results = svc.retrieve("rate", doc_type_filter="policy_doc")
+
+    assert [r.doc_id for r in results] == ["policy"]
+    assert all(r.doc_type == "policy_doc" for r in results)
+
+
+def test_retrieve_doc_type_filter_validates_fused_raw_chunks():
+    raw = {
+        ("wrong", 0): _FakeRawChunk(
+            text="wrong type",
+            title="Wrong",
+            doc_type="research_report",
+            source_domain="local_user_verified",
+        ),
+        ("right", 0): _FakeRawChunk(
+            text="right type",
+            title="Right",
+            doc_type="policy_doc",
+            source_domain="federalreserve.gov",
+        ),
+    }
+    vec = [
+        _FakeVecResult("wrong", 0, 0.99),
+        _FakeVecResult("right", 0, 0.80),
+    ]
+    svc = _make_svc(vec=vec, raw=raw)
+
+    results = svc.retrieve("rate", doc_type_filter="policy_doc", top_k=2)
+
+    assert [r.doc_id for r in results] == ["right"]
+    assert all(r.doc_type == "policy_doc" for r in results)

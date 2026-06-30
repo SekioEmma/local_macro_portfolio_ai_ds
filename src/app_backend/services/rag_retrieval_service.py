@@ -73,6 +73,17 @@ class RAGRetrievalService:
         except ImportError:
             vec_results = []
         bm25_results = self._bm25.query(query, top_k=fetch_k)
+        if doc_type_filter:
+            bm25_results = [
+                result
+                for result in bm25_results
+                if _raw_chunk_matches_doc_type(
+                    self._raw,
+                    result.doc_id,
+                    result.chunk_index,
+                    doc_type_filter,
+                )
+            ]
 
         fused = _rrf_fuse(vec_results, bm25_results, top_k=fetch_k)
 
@@ -82,6 +93,8 @@ class RAGRetrievalService:
                 break
             raw = self._raw.get_chunk(doc_id, chunk_index)
             if raw is None:
+                continue
+            if doc_type_filter and raw.doc_type != doc_type_filter:
                 continue
             if not include_local_only and not raw.external_llm_context_allowed:
                 continue
@@ -98,6 +111,16 @@ class RAGRetrievalService:
                 is_official_source=raw.is_official_source,
             ))
         return chunks
+
+
+def _raw_chunk_matches_doc_type(
+    raw_text_store: Any,
+    doc_id: str,
+    chunk_index: int,
+    doc_type_filter: str,
+) -> bool:
+    raw = raw_text_store.get_chunk(doc_id, chunk_index)
+    return raw is not None and raw.doc_type == doc_type_filter
 
 
 # ------------------------------------------------------------------
