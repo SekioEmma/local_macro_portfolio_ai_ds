@@ -3,7 +3,11 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from app_backend.schemas.agent_api import AgentRunRequest, AgentRunResponse
+from app_backend.schemas.agent_api import (
+    AgentRunRequest,
+    AgentRunResponse,
+    AgentTraceDebugResponse,
+)
 from app_backend.schemas.ai_preview import (
     AIContextPreviewResponse,
     AIDeepSeekResearchRequest,
@@ -57,6 +61,7 @@ from app_backend.services.agent_api_service import (
     AgentRunUnavailable,
     build_unwired_agent_run_service,
 )
+from app_backend.services.agent_trace_service import AgentTraceService
 from app_backend.services.commodity_quote_service import CommodityQuoteService
 from app_backend.services.realtime_quote_service import (
     RealtimeQuoteService,
@@ -251,6 +256,10 @@ def get_agent_run_service() -> AgentRunService:
     return _AGENT_RUN_SERVICE
 
 
+def get_agent_trace_service() -> AgentTraceService:
+    return AgentTraceService()
+
+
 def _build_commodity_search_callable(
     search_service: TavilySearchExecutionService,
 ):
@@ -303,6 +312,24 @@ def post_agent_run(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail="agent_run_unavailable") from exc
+
+
+@app.get("/api/agent/trace/{session_id}", response_model=AgentTraceDebugResponse)
+def get_agent_trace(
+    session_id: str,
+    service: AgentTraceService = Depends(get_agent_trace_service),
+) -> AgentTraceDebugResponse:
+    try:
+        replay = service.replay(session_id)
+        return AgentTraceDebugResponse(
+            session_id=session_id,
+            event_count=len(replay.events),
+            sensitive_findings=service.scan_for_sensitive_markers(session_id),
+            message_history=replay.message_history,
+            events=[event.model_dump(mode="json") for event in replay.events],
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="agent_trace_unavailable") from exc
 
 
 @app.get("/api/quote/etf", response_model=list[QuoteSnapshot])
