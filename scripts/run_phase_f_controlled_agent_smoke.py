@@ -103,7 +103,7 @@ def run_controlled_smoke(
     trace_dir: Path | None = None,
     confirm_external_search: bool = False,
 ) -> dict[str, Any]:
-    provider = ControlledFixtureProvider()
+    provider = ControlledFixtureProvider() if mode == "fixture" else None
     resolved_trace_dir = trace_dir
     temp_dir: tempfile.TemporaryDirectory[str] | None = None
     if resolved_trace_dir is None:
@@ -124,14 +124,15 @@ def run_controlled_smoke(
                 source_visibility_mode="public",
             )
         )
-        checks = _evaluate_response(response, provider_call_count=len(provider.calls))
+        provider_call_count = len(provider.calls) if provider is not None else None
+        checks = _evaluate_response(response, provider_call_count=provider_call_count)
         return {
             "mode": mode,
             "session_id": response.session_id,
             "trace_session_id": response.trace_session_id,
             "final_status": response.final_status,
             "steps": response.steps,
-            "provider_call_count": len(provider.calls),
+            "provider_call_count": provider_call_count,
             "warning_codes": [warning.code for warning in response.warnings],
             "check_status": "passed" if not checks else "failed",
             "failed_checks": checks,
@@ -146,10 +147,12 @@ def run_controlled_smoke(
 def _service_for_mode(
     *,
     mode: Mode,
-    provider: ControlledFixtureProvider,
+    provider: ControlledFixtureProvider | None,
     trace_dir: Path,
 ) -> AgentRunService:
     if mode == "fixture":
+        if provider is None:
+            raise ValueError("fixture mode requires a controlled fixture provider")
         return AgentRunService(
             provider_factory=lambda: provider,
             registry_factory=lambda _confirm_external_search: _controlled_registry(),
@@ -304,7 +307,7 @@ def _controlled_brief_payload(evidence_id: str) -> dict[str, Any]:
     }
 
 
-def _evaluate_response(response: AgentRunResponse, *, provider_call_count: int) -> list[str]:
+def _evaluate_response(response: AgentRunResponse, *, provider_call_count: int | None) -> list[str]:
     failures: list[str] = []
     if response.final_status != "ok":
         failures.append("final_status_not_ok")
@@ -316,7 +319,7 @@ def _evaluate_response(response: AgentRunResponse, *, provider_call_count: int) 
         failures.append("source_visibility_not_public")
     if response.steps < 2:
         failures.append("agent_steps_below_controlled_minimum")
-    if provider_call_count < 2:
+    if provider_call_count is not None and provider_call_count < 2:
         failures.append("provider_calls_below_controlled_minimum")
     serialized = response.model_dump_json()
     for marker in FORBIDDEN_RESPONSE_MARKERS:

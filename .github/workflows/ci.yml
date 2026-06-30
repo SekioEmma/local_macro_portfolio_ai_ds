@@ -40,6 +40,11 @@ jobs:
           PYTHONPATH: src
         run: python -m pytest tests/ -x -q
 
+      - name: Phase F controlled agent smoke
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python scripts/run_phase_f_controlled_agent_smoke.py
+
       - name: Type-check frontend
         working-directory: app_frontend
         run: npx tsc --noEmit

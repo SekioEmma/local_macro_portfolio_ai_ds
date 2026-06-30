@@ -52,6 +52,7 @@ Tag：`era1-frontend-redesign-complete`。
 - Phase F holdings stream checkpoint：`POST /api/agent/run/stream` 已复用一次性 holdings consent token 与 server-side snapshot injection，并验证 SSE response 不泄露详细 holdings 正文；默认 snapshot provider 仍保持 fail-closed。
 - Phase F runtime timeout checkpoint：agent runtime 已加入 wall-clock / provider-call / tool-call timeout budget；默认 DeepSeek transport 复用 provider-call timeout；SSE bridge 已加入 bounded queue 与 sanitized queue-overflow error，避免慢客户端或事件洪峰造成无界内存增长；provider typed retry 已按 timeout / connection_failed / rate_limited / server_error 分类重试，并对 client_error / malformed_response / provider_refusal / missing_key fail-closed；provider call 已按剩余 token 与 phase cap 做 preflight；writing phase 已追加专用系统指令；mixed finalize call 已 fail-closed 且不执行同轮其他工具。
 - Phase F RAG generation checkpoint：curated RAG ingest 已写入 `index_generation.json`（generation_id、source hash、chunk/document counts、embedding model/dim）；local RAG runtime cache 已纳入 generation_id；`scripts/validate_local_rag.py` 已将 generation metadata 与 embedding compatibility 纳入一致性 gate。
+- Phase F quality checkpoint：已新增 `scripts/run_phase_f_controlled_agent_smoke.py` fixture-mode 受控 agent run（无外部 API、无 holdings、无 `.env`、无 `outputs`），并以 [`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md) 作为 release gate；Phase F 仍保持 `remediation_and_optimization`，尚未 `user_accepted` / `production_ready`。
 
 ### 进行中
 

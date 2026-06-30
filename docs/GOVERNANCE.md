@@ -126,6 +126,7 @@ docs/
 - § 10 `boundary_notice` 必须文本中包含 5 关键词：非个股操作 / 非概率胜率 / 非收益预测 / 非动态择时 / 非黑盒最优化
 - 工具结果与 LLM 输出之间的数字一致性必须保留（不得"调和"冲突，必须 flag）
 - 每个 brief session 必须有可查 trace，trace 不含 raw prompt / raw response / raw holdings 金额 / API key / raw search query
+- Phase F release 只有在 [`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md) 的自动 gate 与人工 checklist 通过后，才可从 `remediation_and_optimization` 提升到 `user_accepted`；在此之前 MacroBrief 必须明确保持“研究辅助输出 / 非自动投资决策 / 需要用户审阅”的产品口径。
 
 ## 4. 任务级 L1–L4 体系
 
