@@ -56,6 +56,8 @@ ClaimType = Literal[
     "watchlist",
 ]
 
+ClaimStatus = Literal["observed", "reported", "unavailable"]
+
 # Optional metadata on numeric thresholds inside `risk_assessment` triggers
 # and `forward_indicators[*].relevance`. F3 prompt will require LLMs to tag
 # any numeric threshold; F2 keeps it optional.
@@ -126,6 +128,8 @@ class ConfirmedFact(BaseModel):
     value: str | float | int | None = None
     unit: str | None = None
     source_id: str = Field(min_length=1, max_length=64)
+    evidence_ids: list[str]
+    claim_status: ClaimStatus = "observed"
     as_of: str | None = None
 
 
@@ -136,7 +140,9 @@ class Judgment(BaseModel):
 
     claim: str = Field(min_length=1, max_length=2000)
     evidence_supports: list[str] = Field(min_length=1)
+    evidence_ids: list[str] = Field(default_factory=list)
     claim_type: ClaimType | None = None
+    temporal_scope: str | None = Field(default=None, max_length=120)
 
 
 class ModuleRow(BaseModel):
@@ -255,6 +261,14 @@ class MacroBrief(BaseModel):
 
     # §1 core_conclusion
     core_conclusion: str = Field(min_length=1, max_length=4000)
+    report_generated_at: str | None = Field(default=None, max_length=40)
+    market_data_cutoff: str | None = Field(default=None, max_length=40)
+    policy_data_cutoff: str | None = Field(default=None, max_length=40)
+    macro_data_cutoff: str | None = Field(default=None, max_length=40)
+    public_news_cutoff: str | None = Field(default=None, max_length=40)
+    max_market_data_age_trading_days: int | None = Field(default=None, ge=0)
+    asynchronous_inputs: bool = False
+    temporal_alignment_note: str | None = Field(default=None, max_length=1000)
     # §2 market_state
     market_state: list[ETFStateCard]
     # §3 confirmed_facts
@@ -407,6 +421,10 @@ def _check_facts_and_sources(
         if fact.id in fact_ids:
             findings.append(f"confirmed_facts.duplicate_id:{fact.id}")
         fact_ids.add(fact.id)
+        if not fact.evidence_ids:
+            findings.append(f"confirmed_facts[{fact.id}].missing_evidence_ids")
+        if fact.claim_status == "unavailable" and fact.value is not None:
+            findings.append(f"confirmed_facts[{fact.id}].unavailable_fact_has_value")
         if fact.source_id not in source_ids:
             findings.append(
                 f"confirmed_facts[{fact.id}].unknown_source_id:{fact.source_id}"
@@ -431,6 +449,7 @@ def _check_judgment_evidence(
 
 __all__ = [
     "ClaimType",
+    "ClaimStatus",
     "ConfirmedFact",
     "ETFStateCard",
     "ETFSymbol",

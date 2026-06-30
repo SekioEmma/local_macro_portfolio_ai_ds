@@ -60,6 +60,7 @@ def brief_payload() -> dict[str, Any]:
                 "value": 4.3,
                 "unit": "%",
                 "source_id": "s1",
+                "evidence_ids": ["ev_dgs10"],
                 "as_of": "2026-06-27",
             },
             {
@@ -68,6 +69,7 @@ def brief_payload() -> dict[str, Any]:
                 "value": 3.1,
                 "unit": "%",
                 "source_id": "s2",
+                "evidence_ids": ["ev_credit"],
                 "as_of": "2026-06-27",
             },
         ],
@@ -75,6 +77,8 @@ def brief_payload() -> dict[str, Any]:
             {
                 "claim": "Rate pressure is still the main transmission channel.",
                 "evidence_supports": ["f1"],
+                "evidence_ids": ["ev_dgs10"],
+                "temporal_scope": "current_run",
             }
         ],
         "module_table": [

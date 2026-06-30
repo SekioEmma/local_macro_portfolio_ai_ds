@@ -31,8 +31,11 @@ MacroBrief JSON schema summary:
 2. market_state: exactly {len(REQUIRED_ETF_SYMBOLS)} cards for {", ".join(REQUIRED_ETF_SYMBOLS)}.
    Each card requires symbol, price, change_pct, as_of.
 3. confirmed_facts: list of fact objects with id, statement, value, unit,
-   source_id, as_of.
-4. judgments: list of judgment objects with claim and evidence_supports.
+   source_id, evidence_ids, claim_status, as_of.
+   evidence_ids must reference run evidence records. claim_status is one of
+   observed, reported, unavailable.
+4. judgments: list of judgment objects with claim, evidence_supports,
+   evidence_ids, and temporal_scope.
    Every evidence_supports id must exist in confirmed_facts.
 5. module_table: exactly {len(REQUIRED_MODULE_KEYS)} rows for:
    {", ".join(REQUIRED_MODULE_KEYS)}.
@@ -64,14 +67,18 @@ Absolute prohibitions:
 ANTI_HALLUCINATION_RULES = """
 Evidence and anti-hallucination rules:
 1. Every numerical claim must originate from a tool call result.
-2. Every numerical claim must be referenced by source_id in source_list.
-3. If two tool outputs conflict, write both facts and flag the discrepancy
+2. Every numerical claim must be referenced by source_id in source_list and
+   by evidence_ids in the current run evidence ledger.
+3. Mark facts from official or directly observed tool outputs as observed.
+   Mark facts from public reporting or institutional interpretation as
+   reported. Use unavailable only when the value is absent.
+4. If two tool outputs conflict, write both facts and flag the discrepancy
    in judgments. Do not silently reconcile.
-4. Do not cite percentages, dates, prices, yields, spreads, or index levels
+5. Do not cite percentages, dates, prices, yields, spreads, or index levels
    unless they appear in a tool output.
-5. Do not claim historical transmission patterns unless rag_retrieve
+6. Do not claim historical transmission patterns unless rag_retrieve
    returned evidence with specific dates.
-6. For any post-2025 data, never guess from training knowledge.
+7. For any post-2025 data, never guess from training knowledge.
 """.strip()
 
 
@@ -99,10 +106,10 @@ Reference brief example (format only; do not reuse these synthetic facts):
     {"symbol": "GLD", "price": 100.0, "change_pct": -0.1, "as_of": "2026-01-02"}
   ],
   "confirmed_facts": [
-    {"id": "f1", "statement": "示例工具返回利率仍在观察区间。", "value": "tool_value", "unit": null, "source_id": "s1", "as_of": "2026-01-02"}
+    {"id": "f1", "statement": "示例工具返回利率仍在观察区间。", "value": "tool_value", "unit": null, "source_id": "s1", "evidence_ids": ["ev_example"], "claim_status": "observed", "as_of": "2026-01-02"}
   ],
   "judgments": [
-    {"claim": "示例判断必须引用事实。", "evidence_supports": ["f1"], "claim_type": "direct_evidence"}
+    {"claim": "示例判断必须引用事实。", "evidence_supports": ["f1"], "evidence_ids": ["ev_example"], "claim_type": "direct_evidence", "temporal_scope": "current_run"}
   ],
   "module_table": [
     {"module_key": "equity_trend", "module_name_zh": "权益趋势", "status": "watch", "note": "示例"},

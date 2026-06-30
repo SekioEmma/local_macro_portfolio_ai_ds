@@ -68,6 +68,7 @@ def test_system_prompt_contains_anti_hallucination_rules():
     assert ANTI_HALLUCINATION_RULES in text
     assert "Every numerical claim must originate from a tool call result" in text
     assert "source_id in source_list" in text
+    assert "evidence_ids in the current run evidence ledger" in text
     assert "Do not silently reconcile" in text
     assert "For any post-2025 data, never guess" in text
 
@@ -119,6 +120,8 @@ def test_system_prompt_contains_reference_brief_example():
     text = prompt.system_prompt
     assert REFERENCE_BRIEF_EXAMPLE in text
     assert "format only; do not reuse these synthetic facts" in text
+    assert '"evidence_ids": ["ev_example"]' in text
+    assert '"claim_status": "observed"' in text
     assert '"module_key": "equity_trend"' in text
     assert '"boundary_notice"' in text
 

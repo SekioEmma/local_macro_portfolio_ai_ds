@@ -31,12 +31,17 @@ def _etf_card(symbol: str = "SPY") -> ETFStateCard:
 def _fact(idx: str = "f1") -> ConfirmedFact:
     return ConfirmedFact(
         id=idx, statement="dgs10 was 4.30", value=4.30, unit="%",
-        source_id=f"s_{idx}", as_of="2026-06-27",
+        source_id=f"s_{idx}", evidence_ids=[f"ev_{idx}"], as_of="2026-06-27",
     )
 
 
 def _judgment(supports: list[str] | None = None) -> Judgment:
-    return Judgment(claim="rates remain elevated", evidence_supports=supports or ["f1"])
+    return Judgment(
+        claim="rates remain elevated",
+        evidence_supports=supports or ["f1"],
+        evidence_ids=["ev_f1"],
+        temporal_scope="current_run",
+    )
 
 
 def _module_row(module_key: str = "rate_pressure") -> ModuleRow:
@@ -253,7 +258,14 @@ def _full_brief() -> dict:
             for s in ("SPY", "QQQ", "SHY", "GLD")
         ],
         "confirmed_facts": [_fact("f1").model_dump(), _fact("f2").model_dump()],
-        "judgments": [{"claim": "x", "evidence_supports": ["f1"]}],
+        "judgments": [
+            {
+                "claim": "x",
+                "evidence_supports": ["f1"],
+                "evidence_ids": ["ev_f1"],
+                "temporal_scope": "current_run",
+            }
+        ],
         "module_table": [
             {"module_key": k, "module_name_zh": k, "status": "watch", "note": None}
             for k in REQUIRED_MODULE_KEYS
@@ -439,6 +451,25 @@ def test_confirmed_fact_unknown_source_id_reported():
     assert any(
         "confirmed_facts[f1].unknown_source_id:ghost_source" in f for f in findings
     )
+
+
+def test_confirmed_fact_missing_evidence_ids_reported():
+    facts = [_fact("f1").model_dump()]
+    facts[0]["evidence_ids"] = []
+    with pytest.raises(ValidationError) as exc:
+        MacroBrief.model_validate(_build_brief(confirmed_facts=facts))
+    findings = _findings_from(exc.value)
+    assert any("confirmed_facts[f1].missing_evidence_ids" in f for f in findings)
+
+
+def test_unavailable_confirmed_fact_cannot_carry_value():
+    facts = [_fact("f1").model_dump()]
+    facts[0]["claim_status"] = "unavailable"
+    facts[0]["value"] = 4.3
+    with pytest.raises(ValidationError) as exc:
+        MacroBrief.model_validate(_build_brief(confirmed_facts=facts))
+    findings = _findings_from(exc.value)
+    assert any("confirmed_facts[f1].unavailable_fact_has_value" in f for f in findings)
 
 
 def test_source_must_have_url_or_rag_doc_id():
