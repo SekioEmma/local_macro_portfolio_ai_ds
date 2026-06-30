@@ -1065,6 +1065,7 @@ def _dispatch_tool_call(
         return evidence_ledger
     message_result = result
     evidence_ids: list[str] = []
+    evidence_tiers: list[str] = []
     if evidence_ledger is not None:
         registered = register_tool_result_evidence(
             evidence_ledger,
@@ -1074,6 +1075,7 @@ def _dispatch_tool_call(
         evidence_ledger = registered.ledger
         message_result = registered.result
         evidence_ids = registered.evidence_ids
+        evidence_tiers = registered.evidence_tiers
     _record_tool_failure_state(
         result=result,
         tool_call=tool_call,
@@ -1095,12 +1097,20 @@ def _dispatch_tool_call(
                 "status": result.status,
                 "error_code": result.error_code,
                 "evidence_ids": evidence_ids,
+                "evidence_tier_counts": _counts_by_value(evidence_tiers),
             },
         ),
         event_callback,
     )
     _append_tool_message(messages, tool_call, message_result)
     return evidence_ledger
+
+
+def _counts_by_value(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
 
 
 def _record_tool_failure_state(

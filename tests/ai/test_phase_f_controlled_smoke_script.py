@@ -15,6 +15,15 @@ def test_controlled_smoke_fixture_passes_without_external_search_or_holdings(tmp
     assert result["steps"] >= 2
     assert result["external_search_confirmed"] is False
     assert result["include_holdings"] is False
+    record = result["validation_record"]
+    assert record["run_id"] == smoke.CONTROLLED_SESSION_ID
+    assert record["current_date"] == "2026-06-30"
+    assert record["cutoffs"]["market_data_cutoff"] == "2026-06-29"
+    assert record["tool_call_sequence"] == ["treasury_curve", "finalize_macro_brief"]
+    assert record["evidence_count"] == 1
+    assert record["evidence_counts"]["local_data_foundation"] == 1
+    assert record["asynchronous_inputs"] is False
+    assert record["budget_usage"]["warning_count"] == 0
 
 
 def test_controlled_smoke_cli_outputs_machine_readable_json(tmp_path, capsys):
@@ -25,3 +34,4 @@ def test_controlled_smoke_cli_outputs_machine_readable_json(tmp_path, capsys):
     assert payload["check_status"] == "passed"
     assert payload["session_id"] == smoke.CONTROLLED_SESSION_ID
     assert payload["warning_codes"] == []
+    assert payload["validation_record"]["final_status"] == "ok"

@@ -19,6 +19,7 @@ class ToolEvidenceRegistration:
     ledger: RunEvidenceLedger
     result: ToolResult
     evidence_ids: list[str]
+    evidence_tiers: list[str]
 
 
 def register_tool_result_evidence(
@@ -29,20 +30,22 @@ def register_tool_result_evidence(
 ) -> ToolEvidenceRegistration:
     """Register evidence from a sanitized successful tool result."""
     if result.status != "ok":
-        return ToolEvidenceRegistration(ledger=ledger, result=result, evidence_ids=[])
+        return ToolEvidenceRegistration(ledger=ledger, result=result, evidence_ids=[], evidence_tiers=[])
     records, content = _records_from_content(
         run_id=ledger.run_id,
         tool_name=tool_name,
         content=result.content,
     )
     if not records:
-        return ToolEvidenceRegistration(ledger=ledger, result=result, evidence_ids=[])
+        return ToolEvidenceRegistration(ledger=ledger, result=result, evidence_ids=[], evidence_tiers=[])
 
     updated = ledger
     existing = set(updated.by_id())
     evidence_ids: list[str] = []
+    evidence_tiers: list[str] = []
     for record in records:
         evidence_ids.append(record.evidence_id)
+        evidence_tiers.append(record.evidence_tier)
         if record.evidence_id in existing:
             continue
         try:
@@ -56,6 +59,7 @@ def register_tool_result_evidence(
         ledger=updated,
         result=ToolResult(status=result.status, content=augmented),
         evidence_ids=evidence_ids,
+        evidence_tiers=evidence_tiers,
     )
 
 

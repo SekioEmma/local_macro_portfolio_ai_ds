@@ -30,6 +30,18 @@ final_status=ok
 warning_codes=[]
 include_holdings=false
 external_search_confirmed=false
+validation_record.run_id=<session id>
+validation_record.current_date=<NY/server date>
+validation_record.cutoffs.market_data_cutoff=<date or null>
+validation_record.tool_call_sequence=[...]
+validation_record.evidence_counts.official=<count>
+validation_record.evidence_counts.public=<count>
+validation_record.evidence_counts.institutional=<count>
+validation_record.evidence_counts.local_data_foundation=<count>
+validation_record.unavailable_modules=[...]
+validation_record.asynchronous_inputs=<bool>
+validation_record.budget_usage.steps=<count>
+validation_record.elapsed_seconds=<seconds>
 ```
 
 CI must also run `python scripts/run_phase_f_controlled_agent_smoke.py` so the fixture-mode critical path is covered without external API calls, holdings context, `.env`, raw data, or `outputs`.

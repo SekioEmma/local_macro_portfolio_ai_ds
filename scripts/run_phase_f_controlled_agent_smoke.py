@@ -5,9 +5,11 @@ import argparse
 import json
 import sys
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SRC_ROOT = _REPO_ROOT / "src"
@@ -30,6 +32,7 @@ from app_backend.services.llm_provider_adapter import ChatMessage, ChatResponse,
 
 
 Mode = Literal["fixture", "live"]
+_NEW_YORK = ZoneInfo("America/New_York")
 CONTROLLED_SESSION_ID = "phase-f-controlled-smoke"
 CONTROLLED_QUESTION = "Build a controlled Phase F MacroBrief for release verification."
 FORBIDDEN_RESPONSE_MARKERS = (
@@ -77,8 +80,8 @@ class ControlledFixtureProvider:
             return ChatResponse(
                 tool_calls=[
                     ToolCall(
-                        id="phase-f-dashboard-call",
-                        name="dashboard_query",
+                        id="phase-f-treasury-curve-call",
+                        name="treasury_curve",
                         arguments={},
                     )
                 ],
@@ -115,6 +118,8 @@ def run_controlled_smoke(
             provider=provider,
             trace_dir=resolved_trace_dir,
         )
+        runtime_events = []
+        started_at = perf_counter()
         response = service.run(
             AgentRunRequest(
                 session_id=CONTROLLED_SESSION_ID,
@@ -122,10 +127,20 @@ def run_controlled_smoke(
                 confirm_external_search=confirm_external_search if mode == "live" else False,
                 include_holdings=False,
                 source_visibility_mode="public",
-            )
+            ),
+            event_callback=runtime_events.append,
         )
+        elapsed_seconds = perf_counter() - started_at
         provider_call_count = len(provider.calls) if provider is not None else None
         checks = _evaluate_response(response, provider_call_count=provider_call_count)
+        validation_record = _build_validation_record(
+            response=response,
+            runtime_events=runtime_events,
+            mode=mode,
+            provider_call_count=provider_call_count,
+            confirm_external_search=confirm_external_search if mode == "live" else False,
+            elapsed_seconds=elapsed_seconds,
+        )
         return {
             "mode": mode,
             "session_id": response.session_id,
@@ -138,6 +153,7 @@ def run_controlled_smoke(
             "failed_checks": checks,
             "external_search_confirmed": confirm_external_search if mode == "live" else False,
             "include_holdings": False,
+            "validation_record": validation_record,
         }
     finally:
         if temp_dir is not None:
@@ -174,8 +190,8 @@ def _controlled_registry() -> AgentToolRegistry:
     registry = AgentToolRegistry()
     registry.register(
         ToolSpec(
-            name="dashboard_query",
-            description="Return a deterministic local dashboard summary for Phase F release smoke.",
+            name="treasury_curve",
+            description="Return a deterministic local Treasury curve point for Phase F release smoke.",
             parameters_schema={
                 "type": "object",
                 "properties": {},
@@ -183,11 +199,17 @@ def _controlled_registry() -> AgentToolRegistry:
                 "additionalProperties": False,
             },
             handler=lambda _args: {
-                "series": "DGS10",
-                "value": 4.3,
-                "unit": "%",
-                "as_of": "2026-06-29",
-                "overall_status": "controlled_fixture",
+                "points": [
+                    {
+                        "tenor": "10Y",
+                        "source_series": "DGS10",
+                        "value": 4.3,
+                        "observation_date": "2026-06-29",
+                        "status": "ok",
+                    }
+                ],
+                "status": "ok",
+                "mode": "controlled_fixture",
             },
         )
     )
@@ -330,6 +352,124 @@ def _evaluate_response(response: AgentRunResponse, *, provider_call_count: int |
         if marker not in rendered:
             failures.append(f"required_status_marker_missing:{marker}")
     return failures
+
+
+def _build_validation_record(
+    *,
+    response: AgentRunResponse,
+    runtime_events: list[Any],
+    mode: Mode,
+    provider_call_count: int | None,
+    confirm_external_search: bool,
+    elapsed_seconds: float,
+) -> dict[str, Any]:
+    brief = response.brief or {}
+    tool_call_sequence = _tool_call_sequence(runtime_events)
+    return {
+        "run_id": response.session_id,
+        "current_date": _current_date_for_mode(mode),
+        "cutoffs": _cutoffs_from_brief(brief),
+        "tool_call_sequence": tool_call_sequence,
+        "evidence_count": _evidence_counts_from_events(runtime_events)["total"],
+        "evidence_counts": _evidence_counts_from_events(runtime_events),
+        "unavailable_modules": _unavailable_modules(brief),
+        "asynchronous_inputs": brief.get("asynchronous_inputs") if brief else None,
+        "final_status": response.final_status,
+        "budget_usage": {
+            "steps": response.steps,
+            "provider_calls": provider_call_count,
+            "tool_calls": len(tool_call_sequence),
+            "warning_count": len(response.warnings),
+            "include_holdings": False,
+            "external_search_confirmed": confirm_external_search,
+        },
+        "elapsed_seconds": round(elapsed_seconds, 3),
+    }
+
+
+def _current_date_for_mode(mode: Mode) -> str:
+    if mode == "fixture":
+        return "2026-06-30"
+    return datetime.now(_NEW_YORK).date().isoformat()
+
+
+def _cutoffs_from_brief(brief: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "report_generated_at": brief.get("report_generated_at"),
+        "market_data_cutoff": brief.get("market_data_cutoff"),
+        "policy_data_cutoff": brief.get("policy_data_cutoff"),
+        "macro_data_cutoff": brief.get("macro_data_cutoff"),
+        "public_news_cutoff": brief.get("public_news_cutoff"),
+        "max_market_data_age_trading_days": brief.get("max_market_data_age_trading_days"),
+    }
+
+
+def _tool_call_sequence(runtime_events: list[Any]) -> list[str]:
+    sequence: list[str] = []
+    for event in runtime_events:
+        if getattr(event, "type", None) != "llm_completion":
+            continue
+        tool_calls = event.data.get("tool_calls") if isinstance(event.data, dict) else None
+        if isinstance(tool_calls, list):
+            sequence.extend(item for item in tool_calls if isinstance(item, str))
+    return sequence
+
+
+def _evidence_counts_from_events(runtime_events: list[Any]) -> dict[str, int]:
+    counts = {
+        "total": 0,
+        "official": 0,
+        "public": 0,
+        "institutional": 0,
+        "local_data_foundation": 0,
+        "licensed_manual_data": 0,
+        "unavailable": 0,
+        "unknown": 0,
+    }
+    for event in runtime_events:
+        if getattr(event, "type", None) != "tool_result" or not isinstance(event.data, dict):
+            continue
+        evidence_ids = event.data.get("evidence_ids")
+        evidence_id_count = len(evidence_ids) if isinstance(evidence_ids, list) else 0
+        tier_counts = event.data.get("evidence_tier_counts")
+        if not isinstance(tier_counts, dict):
+            counts["unknown"] += evidence_id_count
+            counts["total"] += evidence_id_count
+            continue
+        tier_total = 0
+        for tier, raw_count in tier_counts.items():
+            if not isinstance(raw_count, int):
+                continue
+            key = _evidence_count_key(str(tier))
+            counts[key] += raw_count
+            tier_total += raw_count
+        counts["total"] += tier_total
+    return counts
+
+
+def _evidence_count_key(tier: str) -> str:
+    if tier == "official_evidence":
+        return "official"
+    if tier == "public_reporting":
+        return "public"
+    if tier == "institutional_view":
+        return "institutional"
+    if tier in {"local_data_foundation", "licensed_manual_data", "unavailable"}:
+        return tier
+    return "unknown"
+
+
+def _unavailable_modules(brief: dict[str, Any]) -> list[str]:
+    unavailable: list[str] = []
+    for fact in brief.get("confirmed_facts") or []:
+        if isinstance(fact, dict) and fact.get("claim_status") == "unavailable":
+            unavailable.append(f"fact:{fact.get('id') or 'unknown'}")
+    for card in brief.get("market_state") or []:
+        if not isinstance(card, dict):
+            continue
+        if card.get("price") is None or card.get("change_pct") is None:
+            unavailable.append(f"market_state:{card.get('symbol') or 'unknown'}")
+    return unavailable
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:

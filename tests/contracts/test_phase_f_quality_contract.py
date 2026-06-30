@@ -17,6 +17,21 @@ def test_phase_f_critical_path_controlled_agent_smoke_passes(tmp_path):
     assert result["warning_codes"] == []
     assert result["include_holdings"] is False
     assert result["external_search_confirmed"] is False
+    record = result["validation_record"]
+    assert record["tool_call_sequence"] == ["treasury_curve", "finalize_macro_brief"]
+    assert record["cutoffs"]["market_data_cutoff"] == "2026-06-29"
+    assert record["evidence_counts"] == {
+        "total": 1,
+        "official": 0,
+        "public": 0,
+        "institutional": 0,
+        "local_data_foundation": 1,
+        "licensed_manual_data": 0,
+        "unavailable": 0,
+        "unknown": 0,
+    }
+    assert record["unavailable_modules"] == []
+    assert record["asynchronous_inputs"] is False
 
 
 def test_phase_f_release_gate_is_documented_and_wired_to_ci():
