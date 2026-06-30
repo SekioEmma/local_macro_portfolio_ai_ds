@@ -12,14 +12,19 @@ from app_backend.services.agent_tool_registry import (
     ToolSpec,
     make_finalize_macro_brief_tool,
 )
-from app_backend.services.llm_provider_adapter import ChatMessage, ChatResponse, ToolCall
+from app_backend.services.llm_provider_adapter import (
+    ChatMessage,
+    ChatResponse,
+    ProviderChatError,
+    ToolCall,
+)
 from app_backend.services.run_evidence_ledger import EvidenceRecord, RunEvidenceLedger
 
 
 class MockProvider:
     name = "deepseek"
 
-    def __init__(self, responses: list[ChatResponse]) -> None:
+    def __init__(self, responses: list[ChatResponse | Exception]) -> None:
         self.responses = responses
         self.calls: list[dict[str, Any]] = []
 
@@ -45,7 +50,10 @@ class MockProvider:
         )
         if not self.responses:
             return ChatResponse(content="no more mocked responses")
-        return self.responses.pop(0)
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
 
 class FakeClock:
@@ -540,6 +548,106 @@ def test_run_agent_degrades_provider_error_to_incomplete_result():
     assert result.final_status == "incomplete"
     assert any(warning.code == "provider_error" for warning in result.warnings)
     assert any(event.type == "provider_error" for event in result.events)
+
+
+def test_run_agent_retries_retryable_provider_errors_then_succeeds():
+    provider = MockProvider(
+        [
+            ProviderChatError("timeout"),
+            ProviderChatError("server_error"),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="provider-retry",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(provider_retry_backoff_seconds=0),
+        sleep_fn=lambda _: None,
+    )
+
+    retry_events = [event for event in result.events if event.type == "provider_retry"]
+
+    assert result.final_status == "ok"
+    assert len(provider.calls) == 3
+    assert [event.data["error_kind"] for event in retry_events] == ["timeout", "server_error"]
+    assert retry_events[0].data["next_attempt"] == 2
+    assert not any(event.type == "provider_error" for event in result.events)
+
+
+def test_run_agent_provider_retry_stops_when_wall_clock_deadline_expires():
+    provider = MockProvider(
+        [
+            ProviderChatError("timeout"),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="provider-retry-deadline",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        config=AgentRuntimeConfig(
+            max_wall_clock_seconds=5,
+            provider_retry_backoff_seconds=0,
+        ),
+        monotonic_clock=FakeClock(0, 0, 0, 1, 10),
+        sleep_fn=lambda _: None,
+    )
+
+    assert result.final_status == "incomplete"
+    assert len(provider.calls) == 1
+    assert any(event.type == "provider_retry" for event in result.events)
+    assert result.events[-1].type == "runtime_timeout"
+    assert result.events[-1].data["kind"] == "wall_clock"
+
+
+def test_run_agent_does_not_retry_client_provider_error():
+    provider = MockProvider([ProviderChatError("client_error")])
+
+    result = run_agent(
+        session_id="provider-client-error",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        sleep_fn=lambda _: None,
+    )
+
+    assert result.final_status == "incomplete"
+    assert len(provider.calls) == 1
+    assert not any(event.type == "provider_retry" for event in result.events)
+    provider_error = next(event for event in result.events if event.type == "provider_error")
+    assert provider_error.data["error_kind"] == "client_error"
+    assert provider_error.data["retryable"] is False
+
+
+def test_run_agent_missing_provider_key_returns_unavailable_without_retry():
+    provider = MockProvider([ProviderChatError("missing_key")])
+
+    result = run_agent(
+        session_id="provider-missing-key",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        sleep_fn=lambda _: None,
+    )
+
+    assert result.final_status == "unavailable"
+    assert len(provider.calls) == 1
+    provider_error = next(event for event in result.events if event.type == "provider_error")
+    assert provider_error.data["error_kind"] == "missing_key"
+    assert not any(event.type == "provider_retry" for event in result.events)
 
 
 def test_finalize_validation_failure_retries_once_then_succeeds():

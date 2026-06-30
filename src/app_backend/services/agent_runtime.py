@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from datetime import date
-from time import monotonic
+from time import monotonic, sleep
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,6 +25,7 @@ from app_backend.services.llm_provider_adapter import (
     ChatMessage,
     ChatResponse,
     LLMProviderAdapter,
+    ProviderChatError,
     TokenUsage,
     ToolCall,
 )
@@ -45,7 +46,7 @@ from app_backend.services.run_evidence_ledger import RunEvidenceLedger
 from app_backend.services.temporal_alignment_service import build_temporal_envelope
 
 
-FinalStatus = Literal["ok", "incomplete", "validation_failed", "cancelled"]
+FinalStatus = Literal["ok", "incomplete", "validation_failed", "cancelled", "unavailable"]
 AgentPhase = Literal["research", "writing"]
 CancellationRequested = Callable[[], bool]
 
@@ -84,6 +85,14 @@ class AgentRuntimeEvent(BaseModel):
 
 RuntimeEventCallback = Callable[[AgentRuntimeEvent], None]
 MonotonicClock = Callable[[], float]
+SleepFn = Callable[[float], None]
+
+_RETRYABLE_PROVIDER_ERROR_KINDS = {
+    "timeout",
+    "connection_failed",
+    "rate_limited",
+    "server_error",
+}
 
 
 class AgentRuntimeConfig(BaseModel):
@@ -103,6 +112,8 @@ class AgentRuntimeConfig(BaseModel):
     max_wall_clock_seconds: float = Field(default=180.0, gt=0)
     max_provider_call_seconds: float = Field(default=120.0, gt=0)
     max_tool_call_seconds: float = Field(default=30.0, gt=0)
+    provider_max_retries: int = Field(default=2, ge=0)
+    provider_retry_backoff_seconds: float = Field(default=0.25, ge=0)
 
 
 class AgentBudget(BaseModel):
@@ -203,11 +214,13 @@ def run_agent(
     evidence_ledger: RunEvidenceLedger | None = None,
     cancellation_requested: CancellationRequested | None = None,
     monotonic_clock: MonotonicClock | None = None,
+    sleep_fn: SleepFn | None = None,
 ) -> AgentSessionResult:
     """Run the internal MacroBrief agent loop against injected dependencies."""
     cfg = config or AgentRuntimeConfig()
     run_budget = budget or AgentBudget()
     clock = monotonic_clock or monotonic
+    sleeper = sleep_fn or sleep
     run_started_at = clock()
     warnings: list[AgentRuntimeWarning] = []
     events: list[AgentRuntimeEvent] = []
@@ -278,52 +291,128 @@ def run_agent(
             _tool_names_for_phase(tool_names, phase),
             disabled_tools=disabled_tools,
         )
-        try:
-            _append_event(
-                events,
-                AgentRuntimeEvent(
-                    type="provider_call_started",
-                    step=step,
-                    data={"phase": current_phase, "tool_count": len(tool_schema)},
-                ),
-                event_callback,
-            )
-            provider_started_at = clock()
-            response = provider.chat(
-                model=cfg.model_name,
-                messages=messages,
-                tools=tool_schema,
-                tool_choice="auto",
-                response_format=prompt.response_format,
-                max_tokens=cfg.max_tokens_per_call,
-            )
-            provider_elapsed_seconds = clock() - provider_started_at
-        except Exception as exc:  # noqa: BLE001 - provider failures degrade to incomplete
-            warnings.append(
-                AgentRuntimeWarning(
-                    code="provider_error",
-                    message=f"{type(exc).__name__}: provider chat failed.",
+        attempt = 1
+        while True:
+            if attempt > 1 and _wall_clock_exceeded(
+                started_at=run_started_at,
+                clock=clock,
+                config=cfg,
+            ):
+                return _finish_with_trace(
+                    _timeout_result(
+                        session_id=session_id,
+                        warnings=warnings,
+                        events=events,
+                        event_callback=event_callback,
+                        steps=run_budget.steps_used,
+                        step=step,
+                        kind="wall_clock",
+                        message="Agent exceeded max_wall_clock_seconds before provider retry.",
+                    ),
+                    trace_service,
                 )
-            )
-            _append_event(
-                events,
-                AgentRuntimeEvent(
-                    type="provider_error",
-                    step=step,
-                    data={"error_type": type(exc).__name__},
-                ),
-                event_callback,
-            )
-            return _finish_with_trace(
-                AgentSessionResult(
-                    session_id=session_id,
-                    final_status="incomplete",
-                    warnings=warnings,
-                    events=events,
-                    steps=run_budget.steps_used,
-                ),
-                trace_service,
-            )
+            try:
+                _append_event(
+                    events,
+                    AgentRuntimeEvent(
+                        type="provider_call_started",
+                        step=step,
+                        data={
+                            "phase": current_phase,
+                            "tool_count": len(tool_schema),
+                            "attempt": attempt,
+                        },
+                    ),
+                    event_callback,
+                )
+                provider_started_at = clock()
+                response = provider.chat(
+                    model=cfg.model_name,
+                    messages=messages,
+                    tools=tool_schema,
+                    tool_choice="auto",
+                    response_format=prompt.response_format,
+                    max_tokens=cfg.max_tokens_per_call,
+                )
+                provider_elapsed_seconds = clock() - provider_started_at
+                break
+            except Exception as exc:  # noqa: BLE001 - provider failures degrade to incomplete
+                error_kind = _provider_error_kind(exc)
+                retryable = _provider_error_is_retryable(error_kind)
+                if _wall_clock_exceeded(
+                    started_at=run_started_at,
+                    clock=clock,
+                    config=cfg,
+                ):
+                    return _finish_with_trace(
+                        _timeout_result(
+                            session_id=session_id,
+                            warnings=warnings,
+                            events=events,
+                            event_callback=event_callback,
+                            steps=run_budget.steps_used,
+                            step=step,
+                            kind="wall_clock",
+                            message="Agent exceeded max_wall_clock_seconds during provider retry handling.",
+                        ),
+                        trace_service,
+                    )
+                if retryable and attempt <= cfg.provider_max_retries:
+                    backoff_seconds = _provider_retry_backoff_seconds(
+                        config=cfg,
+                        retry_number=attempt,
+                    )
+                    _append_event(
+                        events,
+                        AgentRuntimeEvent(
+                            type="provider_retry",
+                            step=step,
+                            data={
+                                "error_kind": error_kind,
+                                "attempt": attempt,
+                                "next_attempt": attempt + 1,
+                                "max_retries": cfg.provider_max_retries,
+                                "backoff_seconds": backoff_seconds,
+                            },
+                        ),
+                        event_callback,
+                    )
+                    if backoff_seconds > 0:
+                        sleeper(backoff_seconds)
+                    attempt += 1
+                    continue
+                warnings.append(
+                    AgentRuntimeWarning(
+                        code="provider_error",
+                        message=f"{error_kind}: provider chat failed.",
+                    )
+                )
+                _append_event(
+                    events,
+                    AgentRuntimeEvent(
+                        type="provider_error",
+                        step=step,
+                        data={
+                            "error_type": type(exc).__name__,
+                            "error_kind": error_kind,
+                            "attempts": attempt,
+                            "retryable": retryable,
+                        },
+                    ),
+                    event_callback,
+                )
+                return _finish_with_trace(
+                    AgentSessionResult(
+                        session_id=session_id,
+                        final_status=(
+                            "unavailable" if error_kind == "missing_key" else "incomplete"
+                        ),
+                        warnings=warnings,
+                        events=events,
+                        steps=run_budget.steps_used,
+                    ),
+                    trace_service,
+                )
         run_budget.record_step()
         if provider_elapsed_seconds > cfg.max_provider_call_seconds:
             return _finish_with_trace(
@@ -604,6 +693,26 @@ def _cancelled_result(
         events=events,
         steps=steps,
     )
+
+
+def _provider_error_kind(exc: Exception) -> str:
+    if isinstance(exc, ProviderChatError):
+        return exc.kind
+    return "unknown"
+
+
+def _provider_error_is_retryable(error_kind: str) -> bool:
+    return error_kind in _RETRYABLE_PROVIDER_ERROR_KINDS
+
+
+def _provider_retry_backoff_seconds(
+    *,
+    config: AgentRuntimeConfig,
+    retry_number: int,
+) -> float:
+    if config.provider_retry_backoff_seconds <= 0:
+        return 0.0
+    return config.provider_retry_backoff_seconds * (2 ** max(retry_number - 1, 0))
 
 
 def _wall_clock_exceeded(

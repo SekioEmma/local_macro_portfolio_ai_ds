@@ -16,12 +16,33 @@ from app_backend.schemas.ai_external import (
     DeepSeekTransportResponse,
     DeepSeekTransportToolCall,
 )
-from app_backend.services.deepseek_transport_contract import DeepSeekTransport
+from app_backend.services.deepseek_transport_contract import (
+    DeepSeekTransport,
+    DeepSeekTransportError,
+)
 
 
 ProviderName = Literal["deepseek", "claude", "gpt"]
 ChatMessageRole = Literal["system", "user", "assistant", "tool"]
 FinishReason = Literal["stop", "tool_calls", "length", "content_filter"]
+ProviderErrorKind = Literal[
+    "timeout",
+    "connection_failed",
+    "rate_limited",
+    "server_error",
+    "client_error",
+    "malformed_response",
+    "provider_refusal",
+    "missing_key",
+]
+
+
+class ProviderChatError(RuntimeError):
+    """Categorical, sanitized provider error for the agent runtime."""
+
+    def __init__(self, kind: ProviderErrorKind) -> None:
+        super().__init__(kind)
+        self.kind = kind
 
 
 class ChatMessage(BaseModel):
@@ -114,7 +135,10 @@ class DeepSeekProviderAdapter:
             response_format=response_format,
             max_tokens=max_tokens,
         )
-        response = self._transport.send(request)
+        try:
+            response = self._transport.send(request)
+        except DeepSeekTransportError as exc:
+            raise ProviderChatError(_provider_error_kind_from_transport(exc)) from exc
         return _chat_response_from_transport(response)
 
 
@@ -154,6 +178,40 @@ def _tool_call_from_transport(call: DeepSeekTransportToolCall) -> ToolCall:
     return ToolCall(id=call.id, name=call.name, arguments=dict(call.arguments))
 
 
+def _provider_error_kind_from_transport(error: DeepSeekTransportError) -> ProviderErrorKind:
+    if error.kind == "timeout":
+        return "timeout"
+    if error.kind == "missing_key":
+        return "missing_key"
+    if error.kind == "provider_refusal":
+        return "provider_refusal"
+    if error.kind == "malformed":
+        return "malformed_response"
+    if error.kind == "http_error":
+        return _provider_error_kind_from_http_detail(error.detail)
+    return "server_error"
+
+
+def _provider_error_kind_from_http_detail(detail: str) -> ProviderErrorKind:
+    if detail == "provider_connection_failed":
+        return "connection_failed"
+    prefix = "provider_http_status_"
+    if not detail.startswith(prefix):
+        return "server_error"
+    status_text = detail.removeprefix(prefix)
+    try:
+        status = int(status_text)
+    except ValueError:
+        return "server_error"
+    if status == 429:
+        return "rate_limited"
+    if 400 <= status < 500:
+        return "client_error"
+    if status >= 500:
+        return "server_error"
+    return "server_error"
+
+
 class _NotImplementedProviderAdapter:
     name: ProviderName
 
@@ -188,6 +246,8 @@ __all__ = [
     "FinishReason",
     "GPTProviderAdapter",
     "LLMProviderAdapter",
+    "ProviderChatError",
+    "ProviderErrorKind",
     "ProviderName",
     "TokenUsage",
     "ToolCall",

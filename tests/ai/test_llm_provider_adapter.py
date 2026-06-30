@@ -14,8 +14,10 @@ from app_backend.services.llm_provider_adapter import (
     ClaudeProviderAdapter,
     DeepSeekProviderAdapter,
     GPTProviderAdapter,
+    ProviderChatError,
     TokenUsage,
 )
+from app_backend.services.deepseek_transport_contract import DeepSeekTransportError
 
 
 class SpyTransport:
@@ -36,6 +38,15 @@ class SpyTransport:
                 total_tokens=30,
             ),
         )
+
+
+class ErrorTransport:
+    def __init__(self, error: DeepSeekTransportError) -> None:
+        self.error = error
+
+    def send(self, request: DeepSeekTransportRequest) -> DeepSeekTransportResponse:
+        del request
+        raise self.error
 
 
 def test_deepseek_provider_adapter_maps_chat_to_transport_request():
@@ -139,6 +150,33 @@ def test_deepseek_provider_adapter_maps_transport_tool_calls():
     assert response.tool_calls[0].id == "call_1"
     assert response.tool_calls[0].name == "dashboard_query"
     assert response.tool_calls[0].arguments == {"module_key": "rate_pressure"}
+
+
+@pytest.mark.parametrize(
+    "error,expected_kind",
+    [
+        (DeepSeekTransportError("timeout"), "timeout"),
+        (DeepSeekTransportError("http_error", "provider_connection_failed"), "connection_failed"),
+        (DeepSeekTransportError("http_error", "provider_http_status_429"), "rate_limited"),
+        (DeepSeekTransportError("http_error", "provider_http_status_503"), "server_error"),
+        (DeepSeekTransportError("http_error", "provider_http_status_400"), "client_error"),
+        (DeepSeekTransportError("malformed"), "malformed_response"),
+        (DeepSeekTransportError("provider_refusal"), "provider_refusal"),
+        (DeepSeekTransportError("missing_key"), "missing_key"),
+    ],
+)
+def test_deepseek_provider_adapter_maps_transport_errors_to_provider_kinds(
+    error: DeepSeekTransportError,
+    expected_kind: str,
+):
+    with pytest.raises(ProviderChatError) as exc:
+        DeepSeekProviderAdapter(transport=ErrorTransport(error)).chat(
+            model="deepseek-v4-pro",
+            messages=[ChatMessage(role="user", content="x")],
+        )
+
+    assert exc.value.kind == expected_kind
+    assert "provider_http_status" not in str(exc.value)
 
 
 def test_claude_and_gpt_adapters_are_unwired_skeletons():

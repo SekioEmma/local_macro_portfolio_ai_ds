@@ -34,6 +34,8 @@ Current implementation has sanitized trace, debug replay, date-partitioned trace
 
 Runtime and stream safeguards now include wall-clock, provider-call, and tool-call timeout budgets, plus a bounded SSE queue that emits a sanitized overflow error instead of retaining unbounded pending events.
 
+Provider retry trace events may persist only typed retry metadata such as `error_kind`, attempt count, maximum retries, and backoff seconds; they must not persist raw exception text, prompt content, provider request bodies, or provider response bodies.
+
 ## Validation
 
 - `tests/ai/test_agent_trace_service.py`
@@ -41,5 +43,5 @@ Runtime and stream safeguards now include wall-clock, provider-call, and tool-ca
 - `tests/api/test_agent_trace_route.py`
 - `tests/api/test_agent_stream_route.py`
 - Trace tests verify `schema_version`, `event_sequence`, `previous_event_hash`, `event_hash`, overflow summary behavior, and absence of raw question / holdings details.
-- Stream/runtime tests verify explicit cancellation returns `final_status=cancelled`, emits a sanitized cancelled SSE event, prevents subsequent tool dispatch, enforces runtime timeouts, and reports SSE queue overflow as a sanitized error.
+- Stream/runtime tests verify explicit cancellation returns `final_status=cancelled`, emits a sanitized cancelled SSE event, prevents subsequent tool dispatch, enforces runtime timeouts, records typed provider retry metadata, and reports SSE queue overflow as a sanitized error.
 - Frontend tests verify POST-SSE parsing, sanitized SSE error handling, cancel route calls, validated section rendering, and active-session cancellation.
