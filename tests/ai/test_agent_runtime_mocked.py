@@ -426,6 +426,54 @@ def test_finalize_with_evidence_ledger_adds_temporal_envelope_to_brief():
     assert result.brief.macro_data_cutoff == "2026-06-26"
 
 
+def test_finalize_with_evidence_ledger_rebuilds_source_list_server_side():
+    payload = brief_payload()
+    payload["confirmed_facts"][0]["source_id"] = "fake_llm_source"
+    payload["confirmed_facts"][1]["source_id"] = "another_fake_source"
+    payload["source_list"] = [
+        {
+            "id": "fake_llm_source",
+            "url": "https://example.com/llm-invented",
+            "accessed_at": "1999-01-01",
+        }
+    ]
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call(payload=payload)], finish_reason="tool_calls")])
+
+    result = run_agent(
+        session_id="server-side-source-list",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        evidence_ledger=_ledger(
+            _evidence_record(
+                "ev_dgs10",
+                tool_name="treasury_curve",
+                observation_date="2026-06-27",
+            ).model_copy(update={"canonical_url": "https://fred.stlouisfed.org/series/DGS10"}),
+            _evidence_record(
+                "ev_credit",
+                tool_name="rag_retrieve",
+                observation_date="2026-06-26",
+            ).model_copy(update={"rag_doc_id": "credit_snapshot"}),
+        ),
+    )
+
+    assert result.final_status == "ok"
+    assert result.brief is not None
+    assert [fact.source_id for fact in result.brief.confirmed_facts] == [
+        "src_ev_dgs10",
+        "src_ev_credit",
+    ]
+    assert [source.id for source in result.brief.source_list] == [
+        "src_ev_dgs10",
+        "src_ev_credit",
+    ]
+    assert result.brief.source_list[0].url == "https://fred.stlouisfed.org/series/DGS10"
+    assert result.brief.source_list[1].rag_doc_id == "credit_snapshot"
+
+
 def test_validation_retry_message_does_not_leak_input_values():
     invalid_payload = brief_payload()
     invalid_payload["market_state"][0]["symbol"] = "SECRET_INPUT_VALUE"

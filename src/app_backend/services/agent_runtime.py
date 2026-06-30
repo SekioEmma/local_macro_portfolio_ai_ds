@@ -31,6 +31,9 @@ from app_backend.services.macro_brief_parser import (
     MacroBriefValidationError,
     parse_macro_brief,
 )
+from app_backend.services.macro_brief_evidence_projection import (
+    project_macro_brief_sources_from_ledger,
+)
 from app_backend.services.macro_brief_prompt import build_macro_brief_prompt
 from app_backend.services.agent_trace_service import AgentTraceService, sha256_json
 from app_backend.services.claim_evidence_validator import validate_macro_brief_claim_evidence
@@ -832,8 +835,13 @@ def _handle_finalize_attempt(
     report_generated_at: str,
 ) -> tuple[AgentSessionResult | None, int]:
     brief_payload = tool_call.arguments.get("brief")
+    projected_payload = (
+        project_macro_brief_sources_from_ledger(brief_payload, evidence_ledger)
+        if evidence_ledger is not None and isinstance(brief_payload, Mapping)
+        else brief_payload
+    )
     try:
-        brief = parse_macro_brief(brief_payload)
+        brief = parse_macro_brief(projected_payload)
     except MacroBriefValidationError as exc:
         findings = exc.to_dict()
         return _handle_finalize_validation_failure(
