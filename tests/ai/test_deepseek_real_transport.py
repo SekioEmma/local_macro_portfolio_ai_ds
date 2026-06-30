@@ -318,35 +318,33 @@ def test_real_transport_parses_tool_calls_and_usage():
     assert response.usage.total_tokens == 20
 
 
-def test_real_transport_tool_call_bad_arguments_fails_closed():
-    with pytest.raises(DeepSeekTransportError) as exc:
-        DeepSeekRealTransport(
-            api_key="test-key",
-            opener=lambda request, timeout: _Response(
-                200,
-                {
-                    "choices": [
-                        {
-                            "message": {
-                                "tool_calls": [
-                                    {
-                                        "id": "call_1",
-                                        "function": {
-                                            "name": "dashboard_query",
-                                            "arguments": "{not-json",
-                                        },
-                                    }
-                                ]
-                            },
-                            "finish_reason": "tool_calls",
-                        }
-                    ]
-                },
-            ),
-        ).send(_transport_request())
+def test_real_transport_tool_call_bad_arguments_degrades_to_empty_args():
+    response = DeepSeekRealTransport(
+        api_key="test-key",
+        opener=lambda request, timeout: _Response(
+            200,
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "function": {
+                                        "name": "dashboard_query",
+                                        "arguments": "{not-json",
+                                    },
+                                }
+                            ]
+                        },
+                        "finish_reason": "tool_calls",
+                    }
+                ]
+            },
+        ),
+    ).send(_transport_request())
 
-    assert exc.value.kind == "malformed"
-    assert exc.value.detail == "provider_tool_call_arguments_not_json"
+    assert response.tool_calls[0].arguments == {}
 
 
 def test_mocked_timeout_fails_closed():

@@ -66,9 +66,10 @@ def _market_state(brief: MacroBrief) -> str:
         "| --- | ---: | ---: | --- |",
     ]
     for card in brief.market_state:
-        lines.append(
-            f"| {card.symbol} | {card.price:.2f} | {card.change_pct:+.2f}% | {card.as_of} |"
-        )
+        price = "unavailable" if card.price is None else f"{card.price:.2f}"
+        change = "unavailable" if card.change_pct is None else f"{card.change_pct:+.2f}%"
+        as_of = "unavailable" if card.as_of is None else card.as_of
+        lines.append(f"| {card.symbol} | {price} | {change} | {as_of} |")
     return "\n".join(lines)
 
 

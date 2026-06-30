@@ -174,6 +174,7 @@ class DeepSeekTransportMessage(BaseModel):
     role: Literal["system", "context", "summary", "user", "assistant", "tool"]
     content: str
     tool_call_id: str | None = None
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DeepSeekTransportToolCall(BaseModel):

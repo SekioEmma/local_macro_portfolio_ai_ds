@@ -53,7 +53,7 @@ class MacroBriefValidationError(ValueError):
 
 
 def parse_macro_brief(payload: JsonPayload) -> MacroBrief:
-    data = _load_json_object(payload)
+    data = _normalize_macro_brief_payload(_load_json_object(payload))
     try:
         return MacroBrief.model_validate(data)
     except ValidationError as exc:
@@ -92,6 +92,96 @@ def _load_json_object(payload: JsonPayload) -> JsonObject:
     if not isinstance(decoded, Mapping):
         raise MacroBriefValidationError(errors=["json.expected_object"])
     return decoded
+
+
+def _normalize_macro_brief_payload(payload: JsonObject) -> dict[str, Any]:
+    data = dict(payload)
+    market_state = data.get("market_state")
+    if isinstance(market_state, list):
+        data["market_state"] = [
+            _normalize_market_state_card(card) for card in market_state
+        ]
+    judgments = data.get("judgments")
+    if isinstance(judgments, list):
+        data["judgments"] = [_normalize_judgment(judgment) for judgment in judgments]
+    source_list = data.get("source_list")
+    if isinstance(source_list, list):
+        data["source_list"] = [
+            source for source in source_list if _source_has_locator(source)
+        ]
+    return data
+
+
+def _normalize_market_state_card(value: Any) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    card = dict(value)
+    for key in ("price", "change_pct"):
+        card[key] = _normalize_optional_float(card.get(key))
+    card["as_of"] = _normalize_optional_text(card.get("as_of"))
+    return card
+
+
+def _normalize_judgment(value: Any) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    judgment = dict(value)
+    claim_type = judgment.get("claim_type")
+    if isinstance(claim_type, str):
+        normalized = " ".join(claim_type.replace("_", " ").split()).casefold()
+        mapping = {
+            "direct": "direct_evidence",
+            "direct evidence": "direct_evidence",
+            "cross evidence": "cross_evidence_inference",
+            "cross evidence inference": "cross_evidence_inference",
+            "cross-evidence inference": "cross_evidence_inference",
+            "inference": "cross_evidence_inference",
+            "inferred": "cross_evidence_inference",
+            "interpretation": "interpretive",
+            "interpretive judgment": "interpretive",
+            "watch": "watchlist",
+            "watch list": "watchlist",
+        }
+        judgment["claim_type"] = mapping.get(normalized, "interpretive")
+    return judgment
+
+
+def _source_has_locator(value: Any) -> bool:
+    if not isinstance(value, Mapping):
+        return True
+    url = value.get("url")
+    rag_doc_id = value.get("rag_doc_id")
+    title = value.get("title")
+    return bool(
+        (isinstance(url, str) and url.strip())
+        or (isinstance(rag_doc_id, str) and rag_doc_id.strip())
+        or (isinstance(title, str) and title.strip())
+    )
+
+
+def _normalize_optional_float(value: Any) -> Any:
+    if value is None or isinstance(value, int | float):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or text.casefold() in {"n/a", "na", "none", "null", "unavailable"}:
+            return None
+        try:
+            return float(text.rstrip("%"))
+        except ValueError:
+            return value
+    return value
+
+
+def _normalize_optional_text(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or text.casefold() in {"n/a", "na", "none", "null", "unavailable"}:
+            return None
+        return text
+    return value
 
 
 def _split_validation_errors(exc: ValidationError) -> tuple[list[str], list[str], list[str]]:

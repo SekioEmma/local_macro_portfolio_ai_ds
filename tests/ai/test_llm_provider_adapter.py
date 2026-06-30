@@ -47,6 +47,20 @@ def test_deepseek_provider_adapter_maps_chat_to_transport_request():
         messages=[
             ChatMessage(role="system", content="system rules"),
             ChatMessage(role="user", content="user question"),
+            ChatMessage(
+                role="assistant",
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {
+                            "name": "dashboard_query",
+                            "arguments": "{\"series\":\"DGS10\"}",
+                        },
+                    }
+                ],
+            ),
             ChatMessage(role="tool", content='{"status":"ok"}', tool_call_id="call_1"),
         ],
         tools=[{"type": "function", "function": {"name": "finalize_macro_brief"}}],
@@ -64,7 +78,22 @@ def test_deepseek_provider_adapter_maps_chat_to_transport_request():
     call = transport.calls[0]
     assert call.provider == "deepseek"
     assert call.mode == "network"
-    assert [message.role for message in call.messages] == ["system", "user", "tool"]
+    assert [message.role for message in call.messages] == [
+        "system",
+        "user",
+        "assistant",
+        "tool",
+    ]
+    assert call.messages[-2].tool_calls == [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "dashboard_query",
+                "arguments": "{\"series\":\"DGS10\"}",
+            },
+        }
+    ]
     assert call.messages[-1].content == '{"status":"ok"}'
     assert call.messages[-1].tool_call_id == "call_1"
     assert call.tools == [{"type": "function", "function": {"name": "finalize_macro_brief"}}]

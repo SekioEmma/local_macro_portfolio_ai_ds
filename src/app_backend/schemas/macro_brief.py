@@ -108,9 +108,9 @@ class ETFStateCard(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     symbol: ETFSymbol
-    price: float
-    change_pct: float
-    as_of: str = Field(min_length=4, max_length=40)
+    price: float | None = None
+    change_pct: float | None = None
+    as_of: str | None = Field(default=None, min_length=4, max_length=40)
 
 
 class ConfirmedFact(BaseModel):
@@ -190,7 +190,7 @@ class ScenarioBlock(BaseModel):
 
 
 class SourceItem(BaseModel):
-    """§9 source_list — each source has either a url or a rag_doc_id.
+    """§9 source_list — each source has a url, rag_doc_id, or local title.
 
     The 'either/or' constraint is enforced by ``MacroBrief`` in F2-2.
     """
@@ -398,7 +398,8 @@ def _check_facts_and_sources(
         source_ids.add(source.id)
         has_url = bool(source.url and source.url.strip())
         has_rag = bool(source.rag_doc_id and source.rag_doc_id.strip())
-        if not (has_url or has_rag):
+        has_title = bool(source.title and source.title.strip())
+        if not (has_url or has_rag or has_title):
             findings.append(f"source_list[{source.id}].missing_url_or_rag_doc_id")
     # Fact id uniqueness
     fact_ids: set[str] = set()

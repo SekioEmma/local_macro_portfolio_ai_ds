@@ -30,6 +30,7 @@ class ChatMessage(BaseModel):
     role: ChatMessageRole
     content: str
     tool_call_id: str | None = None
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ToolCall(BaseModel):
@@ -124,7 +125,11 @@ def _to_deepseek_message(message: ChatMessage) -> DeepSeekTransportMessage:
             content=message.content,
             tool_call_id=message.tool_call_id,
         )
-    return DeepSeekTransportMessage(role=message.role, content=message.content)
+    return DeepSeekTransportMessage(
+        role=message.role,
+        content=message.content,
+        tool_calls=message.tool_calls,
+    )
 
 
 def _chat_response_from_transport(response: DeepSeekTransportResponse) -> ChatResponse:

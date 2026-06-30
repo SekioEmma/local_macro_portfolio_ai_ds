@@ -184,6 +184,8 @@ def _to_provider_message(
     payload = {"role": role, "content": message.content}
     if role == "tool" and message.tool_call_id:
         payload["tool_call_id"] = message.tool_call_id
+    if role == "assistant" and getattr(message, "tool_calls", None):
+        payload["tool_calls"] = list(message.tool_calls)
     return payload
 
 
@@ -315,18 +317,12 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[DeepSeekTransportToolCa
         if isinstance(arguments, str):
             try:
                 decoded_arguments = json.loads(arguments)
-            except json.JSONDecodeError as exc:
-                raise DeepSeekTransportError(
-                    kind="malformed",
-                    detail="provider_tool_call_arguments_not_json",
-                ) from exc
+            except json.JSONDecodeError:
+                decoded_arguments = {}
         else:
             decoded_arguments = arguments
         if not isinstance(decoded_arguments, dict):
-            raise DeepSeekTransportError(
-                kind="malformed",
-                detail="provider_tool_call_arguments_not_object",
-            )
+            decoded_arguments = {}
         parsed.append(
             DeepSeekTransportToolCall(
                 id=call_id,

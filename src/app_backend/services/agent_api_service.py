@@ -17,14 +17,37 @@ from app_backend.services.agent_information_plan import (
     information_plan_trace_event,
 )
 from app_backend.services.agent_runtime import AgentSessionResult, run_agent
-from app_backend.services.agent_tool_registry import AgentToolRegistry
+from app_backend.services.agent_tool_registry import (
+    AgentToolRegistry,
+    build_f1_read_only_tools,
+    make_commodity_quote_tool,
+    make_finalize_macro_brief_tool,
+    make_quote_dxy_tool,
+    make_rag_retrieve_tool,
+    make_search_tavily_tool,
+)
 from app_backend.services.agent_trace_service import AgentTraceEvent, AgentTraceService
+from app_backend.services.commodity_quote_service import CommodityQuoteService
+from app_backend.services.deepseek_real_transport import DeepSeekRealTransport
+from app_backend.services.economic_calendar_service import (
+    build_default_economic_calendar_service,
+)
 from app_backend.services.llm_provider_adapter import LLMProviderAdapter
+from app_backend.services.llm_provider_adapter import DeepSeekProviderAdapter
+from app_backend.services.local_rag_runtime_factory import build_local_rag_runtime
 from app_backend.services.macro_brief_renderer import render_macro_brief_markdown
 from app_backend.services.macro_brief_sources import (
     build_macro_brief_source_references,
     filter_macro_brief_sources,
 )
+from app_backend.services.realtime_quote_service import build_default_realtime_quote_service
+from app_backend.services.search_execution_service import (
+    TavilySearchExecutionService,
+    build_default_tavily_search_execution_service,
+)
+from app_backend.schemas.search_external import SearchRequest, SearchResponse, TavilySearchApiRequest
+from app_backend.services import dashboard_service
+from data_providers import fred_provider
 
 
 RuntimeFn = Callable[..., AgentSessionResult]
@@ -109,6 +132,77 @@ def build_unwired_agent_run_service() -> AgentRunService:
     return AgentRunService()
 
 
+def build_default_agent_run_service(
+    *,
+    search_service: TavilySearchExecutionService | None = None,
+) -> AgentRunService:
+    resolved_search_service = search_service or build_default_tavily_search_execution_service()
+    return AgentRunService(
+        provider_factory=lambda: DeepSeekProviderAdapter(
+            transport=DeepSeekRealTransport()
+        ),
+        registry_factory=lambda confirm_external_search: _build_agent_tool_registry(
+            confirm_external_search=confirm_external_search,
+            search_service=resolved_search_service,
+        ),
+    )
+
+
+def _build_agent_tool_registry(
+    *,
+    confirm_external_search: bool,
+    search_service: TavilySearchExecutionService,
+) -> AgentToolRegistry:
+    registry = AgentToolRegistry()
+    quote_service = build_default_realtime_quote_service()
+    calendar_service = build_default_economic_calendar_service()
+    build_f1_read_only_tools(
+        summary_fn=dashboard_service.build_dashboard_summary,
+        evidence_fn=dashboard_service.build_dashboard_evidence_table,
+        quote_fn=quote_service.quote_etf,
+        curve_fn=quote_service.treasury_curve,
+        next_releases_fn=calendar_service.next_releases,
+        events_by_name_fn=calendar_service.events_by_name,
+    ).register_all(registry)
+    registry.register(
+        make_rag_retrieve_tool(
+            lambda query, top_k=5, doc_type_filter=None, include_local_only=False: (
+                build_local_rag_runtime().retrieval_service.retrieve(
+                    query,
+                    top_k=top_k,
+                    doc_type_filter=doc_type_filter,
+                    include_local_only=include_local_only,
+                )
+            )
+        )
+    )
+    if confirm_external_search:
+        registry.register(make_search_tavily_tool(search_service.execute))
+        commodity_service = CommodityQuoteService(
+            search_callable=_build_commodity_search_callable(search_service)
+        )
+        registry.register(make_commodity_quote_tool(commodity_service.quote))
+        registry.register(make_quote_dxy_tool(fred_provider.get_fred_series))
+    registry.register(make_finalize_macro_brief_tool())
+    return registry
+
+
+def _build_commodity_search_callable(
+    search_service: TavilySearchExecutionService,
+):
+    def _search(request: SearchRequest) -> SearchResponse:
+        return search_service.execute(
+            TavilySearchApiRequest(
+                query=request.query,
+                max_results=request.max_results,
+                domain_filter=list(request.domain_filter),
+                confirm_external_search=True,
+            )
+        )
+
+    return _search
+
+
 def _tool_names_for_request(request: AgentRunRequest) -> list[str]:
     names = list(_LOCAL_TOOL_NAMES)
     if request.confirm_external_search:
@@ -170,5 +264,6 @@ __all__ = [
     "AgentRunInputError",
     "AgentRunService",
     "AgentRunUnavailable",
+    "build_default_agent_run_service",
     "build_unwired_agent_run_service",
 ]

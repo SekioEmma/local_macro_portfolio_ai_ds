@@ -189,7 +189,21 @@ def test_run_agent_dispatches_tool_then_finalizes():
     assert result.brief is not None
     assert result.steps == 2
     assert dispatches == [{"series": "DGS10"}]
-    assert any(message.role == "tool" and "DGS10" in message.content for message in provider.calls[1]["messages"])
+    second_call_messages = provider.calls[1]["messages"]
+    assistant_tool_call = next(
+        message for message in second_call_messages if message.role == "assistant"
+    )
+    assert assistant_tool_call.tool_calls == [
+        {
+            "id": "call-1",
+            "type": "function",
+            "function": {
+                "name": "dashboard_query",
+                "arguments": '{"series": "DGS10"}',
+            },
+        }
+    ]
+    assert any(message.role == "tool" and "DGS10" in message.content for message in second_call_messages)
 
 
 def test_run_agent_plain_text_adds_finalize_convergence_message():
@@ -233,6 +247,27 @@ def test_run_agent_returns_incomplete_when_finalize_never_arrives():
     assert any(warning.code == "agent_incomplete" for warning in result.warnings)
 
 
+def test_run_agent_degrades_provider_error_to_incomplete_result():
+    class FailingProvider:
+        name = "deepseek"
+
+        def chat(self, **kwargs):  # noqa: ANN003, ANN201
+            raise RuntimeError("provider exploded")
+
+    result = run_agent(
+        session_id="provider-error",
+        user_question="Build a macro brief.",
+        provider=FailingProvider(),
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+    )
+
+    assert result.final_status == "incomplete"
+    assert any(warning.code == "provider_error" for warning in result.warnings)
+    assert any(event.type == "provider_error" for event in result.events)
+
+
 def test_finalize_validation_failure_retries_once_then_succeeds():
     invalid_payload = brief_payload()
     del invalid_payload["source_list"]
@@ -254,6 +289,12 @@ def test_finalize_validation_failure_retries_once_then_succeeds():
 
     assert result.final_status == "ok"
     assert any(warning.code == "validation_retry" for warning in result.warnings)
+    assert any(
+        message.role == "tool"
+        and message.tool_call_id == "bad-final"
+        and "macro_brief_validation_failed" in message.content
+        for message in provider.calls[1]["messages"]
+    )
     correction_messages = [
         message.content
         for message in provider.calls[1]["messages"]

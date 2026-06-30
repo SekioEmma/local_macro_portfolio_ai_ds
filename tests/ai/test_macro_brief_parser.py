@@ -97,6 +97,31 @@ def test_parse_macro_brief_accepts_mapping_payload():
     assert brief.market_state[0].symbol == "SPY"
 
 
+def test_parse_macro_brief_normalizes_unavailable_market_state_and_claim_type():
+    payload = _brief_payload()
+    payload["market_state"][0]["price"] = "N/A"
+    payload["market_state"][0]["change_pct"] = "unavailable"
+    payload["market_state"][0]["as_of"] = "N/A"
+    payload["market_state"][1]["change_pct"] = "+0.25%"
+    payload["judgments"][0]["claim_type"] = "model_commentary"
+    payload["source_list"].append(
+        {"id": "empty-source", "accessed_at": "2026-06-29"}
+    )
+    payload["source_list"].append(
+        {"id": "local-tool-source", "title": "Macro Dashboard", "accessed_at": "2026-06-29"}
+    )
+
+    brief = parse_macro_brief(payload)
+
+    assert brief.market_state[0].price is None
+    assert brief.market_state[0].change_pct is None
+    assert brief.market_state[0].as_of is None
+    assert brief.market_state[1].change_pct == 0.25
+    assert brief.judgments[0].claim_type == "interpretive"
+    assert all(source.id != "empty-source" for source in brief.source_list)
+    assert any(source.id == "local-tool-source" for source in brief.source_list)
+
+
 def test_parse_macro_brief_accepts_json_string_payload():
     brief = parse_macro_brief(json.dumps(_brief_payload()))
 

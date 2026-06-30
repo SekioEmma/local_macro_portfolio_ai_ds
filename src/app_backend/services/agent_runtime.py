@@ -73,7 +73,7 @@ class AgentRuntimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     model_name: str = AGENT_MODEL_NAME
-    max_tokens_per_call: int = Field(default=4000, gt=0)
+    max_tokens_per_call: int = Field(default=8192, gt=0)
     converge_after_plain_text: bool = True
 
     # F5-4/F5-5 fields are defined now so callers can pin config without
@@ -81,7 +81,7 @@ class AgentRuntimeConfig(BaseModel):
     max_tool_failures: int = Field(default=3, gt=0)
     two_phase_mode: bool = True
     research_max_steps: int = Field(default=12, gt=0)
-    writing_max_steps: int = Field(default=2, gt=0)
+    writing_max_steps: int = Field(default=3, gt=0)
     force_writing_phase: bool = False
 
 
@@ -214,14 +214,39 @@ def run_agent(
             _tool_names_for_phase(tool_names, phase),
             disabled_tools=disabled_tools,
         )
-        response = provider.chat(
-            model=cfg.model_name,
-            messages=messages,
-            tools=tool_schema,
-            tool_choice="auto",
-            response_format=prompt.response_format,
-            max_tokens=cfg.max_tokens_per_call,
-        )
+        try:
+            response = provider.chat(
+                model=cfg.model_name,
+                messages=messages,
+                tools=tool_schema,
+                tool_choice="auto",
+                response_format=prompt.response_format,
+                max_tokens=cfg.max_tokens_per_call,
+            )
+        except Exception as exc:  # noqa: BLE001 - provider failures degrade to incomplete
+            warnings.append(
+                AgentRuntimeWarning(
+                    code="provider_error",
+                    message=f"{type(exc).__name__}: provider chat failed.",
+                )
+            )
+            events.append(
+                AgentRuntimeEvent(
+                    type="provider_error",
+                    step=step,
+                    data={"error_type": type(exc).__name__},
+                )
+            )
+            return _finish_with_trace(
+                AgentSessionResult(
+                    session_id=session_id,
+                    final_status="incomplete",
+                    warnings=warnings,
+                    events=events,
+                    steps=run_budget.steps_used,
+                ),
+                trace_service,
+            )
         run_budget.record_step()
         if current_phase == "writing":
             writing_steps_used += 1
@@ -243,7 +268,18 @@ def run_agent(
                 config=cfg,
             )
 
-        if response.content:
+        if response.tool_calls:
+            messages.append(
+                ChatMessage(
+                    role="assistant",
+                    content=response.content or "",
+                    tool_calls=[
+                        _tool_call_message_payload(tool_call)
+                        for tool_call in response.tool_calls
+                    ],
+                )
+            )
+        elif response.content:
             messages.append(ChatMessage(role="assistant", content=response.content))
 
         if not response.tool_calls:
@@ -703,6 +739,21 @@ def _append_tool_message(
     )
 
 
+def _tool_call_message_payload(tool_call: ToolCall) -> dict[str, Any]:
+    return {
+        "id": tool_call.id,
+        "type": "function",
+        "function": {
+            "name": tool_call.name,
+            "arguments": json.dumps(
+                tool_call.arguments,
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
+        },
+    }
+
+
 def _handle_finalize_attempt(
     *,
     session_id: str,
@@ -726,6 +777,15 @@ def _handle_finalize_attempt(
             )
         )
         if validation_failures == 0:
+            _append_tool_message(
+                messages,
+                tool_call,
+                ToolResult(
+                    status="error",
+                    error_code="macro_brief_validation_failed",
+                    error_message="MacroBrief validation failed; repair and call finalize again.",
+                ),
+            )
             warnings.append(
                 AgentRuntimeWarning(
                     code=VALIDATION_RETRY_WARNING,

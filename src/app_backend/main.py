@@ -59,24 +59,10 @@ from app_backend.services.agent_api_service import (
     AgentRunInputError,
     AgentRunService,
     AgentRunUnavailable,
-)
-from app_backend.services.agent_tool_registry import (
-    AgentToolRegistry,
-    build_f1_read_only_tools,
-    make_commodity_quote_tool,
-    make_finalize_macro_brief_tool,
-    make_quote_dxy_tool,
-    make_rag_retrieve_tool,
-    make_search_tavily_tool,
+    build_default_agent_run_service,
 )
 from app_backend.services.agent_trace_service import AgentTraceService
 from app_backend.services.commodity_quote_service import CommodityQuoteService
-from app_backend.services.deepseek_real_transport import DeepSeekRealTransport
-from app_backend.services.economic_calendar_service import (
-    build_default_economic_calendar_service,
-)
-from app_backend.services.llm_provider_adapter import DeepSeekProviderAdapter
-from app_backend.services.local_rag_runtime_factory import build_local_rag_runtime
 from app_backend.services.realtime_quote_service import (
     RealtimeQuoteService,
     build_default_realtime_quote_service,
@@ -86,7 +72,6 @@ from app_backend.services.search_execution_service import (
     build_default_tavily_search_execution_service,
 )
 from app_backend.services.status_service import build_status
-from data_providers import fred_provider
 
 
 ALLOWED_CORS_ORIGINS = ("http://127.0.0.1:5173", "http://localhost:5173")
@@ -256,14 +241,8 @@ def post_favorite(request: CreateFavoriteAnswerRequest) -> FavoriteAnswer:
 # ---------------------------------------------------------------------------
 
 _SEARCH_EXECUTION_SERVICE = build_default_tavily_search_execution_service()
-_AGENT_RUN_SERVICE = AgentRunService(
-    provider_factory=lambda: DeepSeekProviderAdapter(
-        transport=DeepSeekRealTransport()
-    ),
-    registry_factory=lambda confirm_external_search: _build_agent_tool_registry(
-        confirm_external_search=confirm_external_search,
-        search_service=_SEARCH_EXECUTION_SERVICE,
-    ),
+_AGENT_RUN_SERVICE = build_default_agent_run_service(
+    search_service=_SEARCH_EXECUTION_SERVICE,
 )
 
 
@@ -305,45 +284,6 @@ def _build_commodity_search_callable(
         )
 
     return _search
-
-
-def _build_agent_tool_registry(
-    *,
-    confirm_external_search: bool,
-    search_service: TavilySearchExecutionService,
-) -> AgentToolRegistry:
-    registry = AgentToolRegistry()
-    quote_service = build_default_realtime_quote_service()
-    calendar_service = build_default_economic_calendar_service()
-    build_f1_read_only_tools(
-        summary_fn=dashboard_service.build_dashboard_summary,
-        evidence_fn=dashboard_service.build_dashboard_evidence_table,
-        quote_fn=quote_service.quote_etf,
-        curve_fn=quote_service.treasury_curve,
-        next_releases_fn=calendar_service.next_releases,
-        events_by_name_fn=calendar_service.events_by_name,
-    ).register_all(registry)
-    registry.register(
-        make_rag_retrieve_tool(
-            lambda query, top_k=5, doc_type_filter=None, include_local_only=False: (
-                build_local_rag_runtime().retrieval_service.retrieve(
-                    query,
-                    top_k=top_k,
-                    doc_type_filter=doc_type_filter,
-                    include_local_only=include_local_only,
-                )
-            )
-        )
-    )
-    if confirm_external_search:
-        registry.register(make_search_tavily_tool(search_service.execute))
-        commodity_service = CommodityQuoteService(
-            search_callable=_build_commodity_search_callable(search_service)
-        )
-        registry.register(make_commodity_quote_tool(commodity_service.quote))
-        registry.register(make_quote_dxy_tool(fred_provider.get_fred_series))
-    registry.register(make_finalize_macro_brief_tool())
-    return registry
 
 
 @app.post("/api/search/tavily", response_model=SearchResponse)

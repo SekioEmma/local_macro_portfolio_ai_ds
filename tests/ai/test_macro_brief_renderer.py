@@ -29,6 +29,18 @@ def test_debug_renderer_includes_internal_source_provenance():
     assert "facts=f1" in result.markdown
 
 
+def test_renderer_shows_unavailable_market_state_without_fabricating_numbers():
+    payload = brief_payload()
+    payload["market_state"][0]["price"] = None
+    payload["market_state"][0]["change_pct"] = None
+    payload["market_state"][0]["as_of"] = None
+    brief = parse_macro_brief(payload)
+
+    result = render_macro_brief_markdown(brief, visibility_mode="public")
+
+    assert "| SPY | unavailable | unavailable | unavailable |" in result.markdown
+
+
 def test_renderer_does_not_create_new_numeric_claims():
     brief = parse_macro_brief(brief_payload())
 
