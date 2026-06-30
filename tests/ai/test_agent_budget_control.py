@@ -14,6 +14,7 @@ def _tool_names() -> list[str]:
         "dashboard_query",
         "search_tavily",
         "rag_retrieve",
+        "quote_dxy",
         FINALIZE_TOOL_NAME,
     ]
 
@@ -50,6 +51,19 @@ def _budget_registry(
             description="Mock RAG.",
             parameters_schema={"type": "object", "properties": {}, "required": [], "additionalProperties": True},
             handler=rag_handler,
+        )
+    )
+    return registry
+
+
+def _registry_with_quote(quote_calls: list[dict[str, Any]]):
+    registry = _budget_registry()
+    registry.register(
+        ToolSpec(
+            name="quote_dxy",
+            description="Mock DXY quote.",
+            parameters_schema={"type": "object", "properties": {}, "required": [], "additionalProperties": True},
+            handler=lambda args: quote_calls.append(args) or {"status": "ok", "value": 100.0},
         )
     )
     return registry
@@ -181,3 +195,57 @@ def test_non_search_tool_does_not_consume_search_budget():
     assert result.final_status == "ok"
     assert dashboard_calls == [{"series": "DGS10"}]
     assert budget.search_calls_used == 0
+
+
+def test_external_quote_budget_is_separate_from_search_budget():
+    quote_calls: list[dict[str, Any]] = []
+    provider = MockProvider(
+        [
+            ChatResponse(
+                tool_calls=[ToolCall(id="quote-1", name="quote_dxy", arguments={})],
+                finish_reason="tool_calls",
+            ),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="budget-external-quote",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=_registry_with_quote(quote_calls),
+        current_date=date(2026, 6, 30),
+        tool_names=_tool_names(),
+        budget=AgentBudget(max_search_calls=0, max_external_quote_calls=1),
+    )
+
+    assert result.final_status == "ok"
+    assert quote_calls == [{}]
+    assert result.warnings == []
+
+
+def test_external_quote_budget_exceeded_skips_dispatch():
+    quote_calls: list[dict[str, Any]] = []
+    provider = MockProvider(
+        [
+            ChatResponse(
+                tool_calls=[ToolCall(id="quote-1", name="quote_dxy", arguments={})],
+                finish_reason="tool_calls",
+            ),
+            ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="budget-external-quote-exceeded",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=_registry_with_quote(quote_calls),
+        current_date=date(2026, 6, 30),
+        tool_names=_tool_names(),
+        budget=AgentBudget(max_external_quote_calls=0),
+    )
+
+    assert result.final_status == "ok"
+    assert quote_calls == []
+    assert any(warning.code == "budget_exceeded:external_quote" for warning in result.warnings)

@@ -26,8 +26,8 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import Any, Literal
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +38,14 @@ from typing import Any
 # multi-byte chars). Matches the plan's 8000-char per-tool-call budget.
 TOOL_RESULT_MAX_CHARS = 8192
 _TRUNCATION_PREVIEW_CHARS = 2000
+ToolBudgetClass = Literal[
+    "local_read",
+    "rag_retrieval",
+    "external_search",
+    "external_quote",
+    "provider_call",
+    "finalize",
+]
 
 # Patterns that must never reach the LLM:
 #  - common API key prefixes / shapes
@@ -121,6 +129,7 @@ class ToolSpec:
     description: str
     parameters_schema: dict[str, Any]
     handler: Callable[[dict[str, Any]], Any]
+    budget_class: ToolBudgetClass | None = None
 
     def to_openai_schema(self) -> dict[str, Any]:
         return {
@@ -165,6 +174,8 @@ class AgentToolRegistry:
     def register(self, spec: ToolSpec) -> None:
         if spec.name in self._specs:
             raise ValueError(f"tool already registered: {spec.name}")
+        if spec.budget_class is None:
+            spec = replace(spec, budget_class=_infer_budget_class(spec.name))
         self._specs[spec.name] = spec
 
     def names(self) -> list[str]:
@@ -215,6 +226,18 @@ def _redacted_error(code: str, message: str) -> "ToolResult":
         error_code=code,
         error_message=_redact_string(message),
     )
+
+
+def _infer_budget_class(tool_name: str) -> ToolBudgetClass:
+    if tool_name == "rag_retrieve":
+        return "rag_retrieval"
+    if tool_name in {"search_tavily", "commodity_quote"}:
+        return "external_search"
+    if tool_name in {"quote_etf", "treasury_curve", "quote_dxy"}:
+        return "external_quote"
+    if tool_name == FINALIZE_TOOL_NAME:
+        return "finalize"
+    return "local_read"
 
 
 class _ToolValidationError(Exception):

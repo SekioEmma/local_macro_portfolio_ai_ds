@@ -17,6 +17,7 @@ from app_backend.schemas.macro_brief import MacroBrief
 from app_backend.services.agent_tool_registry import (
     FINALIZE_TOOL_NAME,
     AgentToolRegistry,
+    ToolBudgetClass,
     ToolResult,
 )
 from app_backend.services.llm_provider_adapter import (
@@ -94,11 +95,13 @@ class AgentBudget(BaseModel):
     max_steps: int = Field(default=18, gt=0)
     max_search_calls: int = Field(default=5, ge=0)
     max_rag_calls: int = Field(default=5, ge=0)
+    max_external_quote_calls: int = Field(default=5, ge=0)
     max_tokens_total: int = Field(default=40000, ge=0)
 
     steps_used: int = Field(default=0, ge=0)
     search_calls_used: int = Field(default=0, ge=0)
     rag_calls_used: int = Field(default=0, ge=0)
+    external_quote_calls_used: int = Field(default=0, ge=0)
     tokens_used: int = Field(default=0, ge=0)
 
     def has_step(self) -> bool:
@@ -110,16 +113,21 @@ class AgentBudget(BaseModel):
     def record_tokens(self, usage: TokenUsage) -> None:
         self.tokens_used += usage.total_tokens
 
-    def record_tool_call(self, tool_name: str) -> None:
-        if tool_name == SEARCH_TOOL_NAME:
+    def record_tool_call(self, budget_class: ToolBudgetClass | None) -> None:
+        if budget_class == "external_search":
             if self.search_calls_used >= self.max_search_calls:
                 raise BudgetExceeded("search")
             self.search_calls_used += 1
             return
-        if tool_name == RAG_TOOL_NAME:
+        if budget_class == "rag_retrieval":
             if self.rag_calls_used >= self.max_rag_calls:
                 raise BudgetExceeded("rag")
             self.rag_calls_used += 1
+            return
+        if budget_class == "external_quote":
+            if self.external_quote_calls_used >= self.max_external_quote_calls:
+                raise BudgetExceeded("external_quote")
+            self.external_quote_calls_used += 1
 
     def token_budget_exceeded(self) -> bool:
         return self.tokens_used > self.max_tokens_total
@@ -589,7 +597,8 @@ def _dispatch_tool_call(
         return
 
     try:
-        budget.record_tool_call(tool_call.name)
+        spec = tool_registry.get(tool_call.name)
+        budget.record_tool_call(spec.budget_class if spec is not None else None)
     except BudgetExceeded as exc:
         _append_budget_warning(
             warnings,
