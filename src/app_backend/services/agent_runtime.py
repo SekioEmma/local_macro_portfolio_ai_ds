@@ -43,6 +43,7 @@ INCOMPLETE_WARNING = "agent_incomplete"
 BUDGET_WARNING_PREFIX = "budget_exceeded"
 VALIDATION_RETRY_WARNING = "validation_retry"
 VALIDATION_FAILED_WARNING = "validation_failed"
+TOOL_DISABLED_WARNING_PREFIX = "tool_disabled"
 
 _FINALIZE_CONVERGENCE_MESSAGE = (
     "You must continue with tool calls. If the MacroBrief is ready, call "
@@ -171,6 +172,8 @@ def run_agent(
     warnings: list[AgentRuntimeWarning] = []
     events: list[AgentRuntimeEvent] = []
     validation_failures = 0
+    tool_failure_counts: dict[str, int] = {}
+    disabled_tools: set[str] = set()
 
     prompt = build_macro_brief_prompt(
         user_question=user_question,
@@ -183,10 +186,14 @@ def run_agent(
         ChatMessage(role=message["role"], content=message["content"])
         for message in prompt.messages()
     ]
-    tool_schema = _tool_schema_for_names(tool_registry, tool_names)
 
     while run_budget.has_step():
         step = run_budget.steps_used + 1
+        tool_schema = _tool_schema_for_names(
+            tool_registry,
+            tool_names,
+            disabled_tools=disabled_tools,
+        )
         response = provider.chat(
             model=cfg.model_name,
             messages=messages,
@@ -242,6 +249,9 @@ def run_agent(
                 step=step,
                 budget=run_budget,
                 warnings=warnings,
+                config=cfg,
+                tool_failure_counts=tool_failure_counts,
+                disabled_tools=disabled_tools,
             )
 
     _append_budget_warning(warnings, "steps", "Agent exhausted max_steps before finalize.")
@@ -263,12 +273,16 @@ def run_agent(
 def _tool_schema_for_names(
     tool_registry: AgentToolRegistry,
     tool_names: list[str],
+    *,
+    disabled_tools: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     allowed = set(tool_names)
+    disabled = disabled_tools or set()
     return [
         schema
         for schema in tool_registry.openai_schema()
         if schema.get("function", {}).get("name") in allowed
+        and schema.get("function", {}).get("name") not in disabled
     ]
 
 
@@ -333,7 +347,19 @@ def _dispatch_tool_call(
     step: int,
     budget: AgentBudget,
     warnings: list[AgentRuntimeWarning],
+    config: AgentRuntimeConfig,
+    tool_failure_counts: dict[str, int],
+    disabled_tools: set[str],
 ) -> None:
+    if tool_call.name in disabled_tools:
+        _append_disabled_tool_message(
+            tool_call=tool_call,
+            messages=messages,
+            events=events,
+            step=step,
+        )
+        return
+
     try:
         budget.record_tool_call(tool_call.name)
     except BudgetExceeded as exc:
@@ -353,6 +379,78 @@ def _dispatch_tool_call(
         return
 
     result = tool_registry.dispatch(tool_call.name, tool_call.arguments)
+    _record_tool_failure_state(
+        result=result,
+        tool_call=tool_call,
+        config=config,
+        warnings=warnings,
+        events=events,
+        step=step,
+        tool_failure_counts=tool_failure_counts,
+        disabled_tools=disabled_tools,
+    )
+    events.append(
+        AgentRuntimeEvent(
+            type="tool_result",
+            step=step,
+            data={
+                "tool_name": tool_call.name,
+                "status": result.status,
+                "error_code": result.error_code,
+            },
+        )
+    )
+    _append_tool_message(messages, tool_call, result)
+
+
+def _record_tool_failure_state(
+    *,
+    result: ToolResult,
+    tool_call: ToolCall,
+    config: AgentRuntimeConfig,
+    warnings: list[AgentRuntimeWarning],
+    events: list[AgentRuntimeEvent],
+    step: int,
+    tool_failure_counts: dict[str, int],
+    disabled_tools: set[str],
+) -> None:
+    if result.status == "ok":
+        tool_failure_counts[tool_call.name] = 0
+        return
+
+    failure_count = tool_failure_counts.get(tool_call.name, 0) + 1
+    tool_failure_counts[tool_call.name] = failure_count
+    if failure_count < config.max_tool_failures or tool_call.name in disabled_tools:
+        return
+
+    disabled_tools.add(tool_call.name)
+    warnings.append(
+        AgentRuntimeWarning(
+            code=f"{TOOL_DISABLED_WARNING_PREFIX}:{tool_call.name}",
+            message=f"{tool_call.name} disabled after {failure_count} consecutive errors.",
+        )
+    )
+    events.append(
+        AgentRuntimeEvent(
+            type="tool_disabled",
+            step=step,
+            data={"tool_name": tool_call.name, "failure_count": failure_count},
+        )
+    )
+
+
+def _append_disabled_tool_message(
+    *,
+    tool_call: ToolCall,
+    messages: list[ChatMessage],
+    events: list[AgentRuntimeEvent],
+    step: int,
+) -> None:
+    result = ToolResult(
+        status="error",
+        error_code="tool_disabled",
+        error_message=f"{tool_call.name} has been disabled after repeated errors.",
+    )
     events.append(
         AgentRuntimeEvent(
             type="tool_result",
