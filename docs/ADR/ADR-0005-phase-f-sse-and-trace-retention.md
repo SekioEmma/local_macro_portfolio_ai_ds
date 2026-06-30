@@ -14,7 +14,7 @@ Agent runs need observable lifecycle events and replayable traces, while preserv
 
 Phase F trace records may persist sanitized lifecycle events, tool summaries, final status, warning codes, `holdings_included`, and `holdings_snapshot_sha256`. They must not persist raw prompts, raw provider responses, raw search queries, detailed holdings, API keys, local paths, or raw provider payloads.
 
-Future SSE must mirror the same sanitized event contract and must not introduce a broader data surface than trace.
+SSE must mirror the same sanitized event contract and must not introduce a broader data surface than trace.
 
 ## Allowed Scope
 
@@ -30,7 +30,7 @@ Future SSE must mirror the same sanitized event contract and must not introduce 
 
 ## Migration
 
-Current implementation has sanitized trace, debug replay, date-partitioned trace paths, `index.jsonl`, per-session summary files, append-only event hash chains, graceful `trace_overflow` summary preservation, a backend `POST /api/agent/run/stream` SSE endpoint, runtime event callback bridging, process-local cancel registry, and runtime cancellation checks before each new provider/tool/finalize call. In-flight blocking provider/tool calls are allowed to return or time out before the next cancellation check. Frontend progress/cancel UI remains pending.
+Current implementation has sanitized trace, debug replay, date-partitioned trace paths, `index.jsonl`, per-session summary files, append-only event hash chains, graceful `trace_overflow` summary preservation, a backend `POST /api/agent/run/stream` SSE endpoint, runtime event callback bridging, process-local cancel registry, runtime cancellation checks before each new provider/tool/finalize call, and a frontend `fetch + ReadableStream` POST-SSE UI for progress, explicit cancel, and validated `brief_section` rendering. In-flight blocking provider/tool calls are allowed to return or time out before the next cancellation check.
 
 ## Validation
 
@@ -39,4 +39,4 @@ Current implementation has sanitized trace, debug replay, date-partitioned trace
 - `tests/api/test_agent_stream_route.py`
 - Trace tests verify `schema_version`, `event_sequence`, `previous_event_hash`, `event_hash`, overflow summary behavior, and absence of raw question / holdings details.
 - Stream/runtime tests verify explicit cancellation returns `final_status=cancelled`, emits a sanitized cancelled SSE event, and prevents subsequent tool dispatch.
-- Future frontend SSE implementation must include privacy and lifecycle tests before acceptance.
+- Frontend tests verify POST-SSE parsing, sanitized SSE error handling, cancel route calls, validated section rendering, and active-session cancellation.

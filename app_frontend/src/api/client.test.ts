@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchStatus, fetchDeepSeekResearch } from "./client";
+import type { AgentSseEvent } from "../types";
+import {
+  cancelAgentRun,
+  fetchDeepSeekResearch,
+  fetchStatus,
+  streamAgentRun
+} from "./client";
 
 /**
  * Smoke tests for the request helper exposed via fetchStatus / fetchDeepSeekResearch.
@@ -133,4 +139,135 @@ describe("api client requestJson branches", () => {
     // When timedOut is false the branch returns "请求已取消。".
     expect(result.error).toBe("请求已取消。");
   });
+
+  it("reads Agent POST-SSE events and returns the complete payload", async () => {
+    const events = [
+      agentEvent("run_started", {}, 1),
+      agentEvent(
+        "brief_section",
+        { section: "core_conclusion", content: "Macro balance holds." },
+        2
+      ),
+      agentEvent(
+        "complete",
+        { final_status: "ok", trace_session_id: "trace-1", steps: 3 },
+        3
+      )
+    ];
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse(events));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const seen: AgentSseEvent[] = [];
+    const result = await streamAgentRun(
+      { user_question: "Build a macro brief.", session_id: "agent-test" },
+      (event) => seen.push(event)
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/agent/run/stream"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          user_question: "Build a macro brief.",
+          session_id: "agent-test"
+        })
+      })
+    );
+    expect(seen.map((event) => event.type)).toEqual([
+      "run_started",
+      "brief_section",
+      "complete"
+    ]);
+    expect(result.error).toBeNull();
+    expect(result.data).toEqual({
+      session_id: "agent-test",
+      final_status: "ok",
+      trace_session_id: "trace-1",
+      steps: 3
+    });
+  });
+
+  it("returns a sanitized error when the Agent SSE stream emits error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          sseResponse([
+            agentEvent("error", { error_type: "AgentRunInputError", detail: "boom" })
+          ])
+        )
+    );
+
+    const seen: AgentSseEvent[] = [];
+    const result = await streamAgentRun(
+      { user_question: "Build a macro brief.", session_id: "agent-error" },
+      (event) => seen.push(event)
+    );
+
+    expect(seen[0].type).toBe("error");
+    expect(result.data).toBeNull();
+    expect(result.error).toBe("boom");
+  });
+
+  it("posts to the Agent cancel route with an encoded session id", async () => {
+    const payload = {
+      session_id: "agent/session",
+      cancelled: true,
+      already_cancelled: false
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await cancelAgentRun("agent/session");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/agent/run/agent%2Fsession/cancel"),
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(result).toEqual({ data: payload, error: null });
+  });
 });
+
+function agentEvent(
+  type: string,
+  payload: Record<string, unknown> = {},
+  sequence = 1,
+  sessionId = "agent-test"
+): AgentSseEvent {
+  return {
+    event_id: `${sessionId}:${sequence}`,
+    session_id: sessionId,
+    sequence,
+    timestamp: "2026-06-30T00:00:00+00:00",
+    type,
+    payload
+  };
+}
+
+function sseResponse(events: AgentSseEvent[]) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const event of events) {
+        controller.enqueue(
+          encoder.encode(
+            `id: ${event.event_id}\nevent: ${event.type}\ndata: ${JSON.stringify(
+              event
+            )}\n\n`
+          )
+        );
+      }
+      controller.close();
+    }
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" }
+  });
+}

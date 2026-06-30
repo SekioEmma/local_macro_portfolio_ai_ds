@@ -409,6 +409,68 @@ export type AIDeepSeekResearchResponse = {
   not_saved_by_default: boolean;
 };
 
+export type AgentSourceVisibilityMode = "public" | "debug";
+
+export type AgentRunRequest = {
+  user_question: string;
+  session_id?: string | null;
+  include_holdings?: boolean;
+  holdings_consent_token?: string | null;
+  confirm_external_search?: boolean;
+  source_visibility_mode?: AgentSourceVisibilityMode;
+};
+
+export type AgentFinalStatus =
+  | "ok"
+  | "incomplete"
+  | "validation_failed"
+  | "cancelled"
+  | "unavailable";
+
+export type AgentSseEventType =
+  | "run_started"
+  | "information_plan"
+  | "phase_changed"
+  | "provider_call_started"
+  | "provider_call_finished"
+  | "tool_call_started"
+  | "tool_result"
+  | "evidence_registered"
+  | "warning"
+  | "brief_validated"
+  | "brief_section"
+  | "complete"
+  | "cancelled"
+  | "error";
+
+export type AgentSseEvent = {
+  event_id: string;
+  session_id: string;
+  sequence: number;
+  timestamp: string;
+  type: AgentSseEventType | string;
+  payload: Record<string, unknown>;
+};
+
+export type AgentBriefSection = {
+  section: string;
+  content: unknown;
+  sequence: number;
+};
+
+export type AgentStreamResult = {
+  session_id: string | null;
+  final_status: AgentFinalStatus | string | null;
+  trace_session_id: string | null;
+  steps: number | null;
+};
+
+export type AgentCancelResponse = {
+  session_id: string;
+  cancelled: boolean;
+  already_cancelled: boolean;
+};
+
 // Local app-state API responses.
 export type StorageStatusResponse = {
   storage_mode: string;

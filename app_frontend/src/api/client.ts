@@ -1,5 +1,9 @@
 import type {
   ApiResult,
+  AgentCancelResponse,
+  AgentRunRequest,
+  AgentSseEvent,
+  AgentStreamResult,
   AIContextManifestResponse,
   AIDeepSeekResearchResponse,
   AIAnswerMode,
@@ -100,6 +104,189 @@ export function fetchDeepSeekResearch(
     timeoutMs: 180_000,
     signal
   });
+}
+
+export async function streamAgentRun(
+  request: AgentRunRequest,
+  onEvent: (event: AgentSseEvent) => void,
+  signal?: AbortSignal
+): Promise<ApiResult<AgentStreamResult>> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/agent/run/stream`, {
+      method: "POST",
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(request),
+      signal
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { data: null, error: "请求已取消。" };
+    }
+    return {
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Agent 流式运行失败，请确认本地后端已启动。"
+    };
+  }
+
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    return {
+      data: null,
+      error: detail || `请求失败：HTTP ${response.status}`
+    };
+  }
+
+  if (!response.body) {
+    return {
+      data: null,
+      error: "当前浏览器不支持流式响应读取，请升级浏览器或使用同步接口。"
+    };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: AgentStreamResult = {
+    session_id: request.session_id || null,
+    final_status: null,
+    trace_session_id: null,
+    steps: null
+  };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || "";
+      for (const block of blocks) {
+        const event = parseAgentSseBlock(block);
+        if (!event) continue;
+        result = updateAgentStreamResult(result, event);
+        onEvent(event);
+        if (event.type === "error") {
+          return {
+            data: null,
+            error:
+              stringFromPayload(event.payload, "detail") ||
+              stringFromPayload(event.payload, "error_type") ||
+              "Agent 流式运行失败。"
+          };
+        }
+      }
+      if (done) break;
+    }
+
+    const trailingEvent = parseAgentSseBlock(buffer);
+    if (trailingEvent) {
+      result = updateAgentStreamResult(result, trailingEvent);
+      onEvent(trailingEvent);
+      if (trailingEvent.type === "error") {
+        return {
+          data: null,
+          error:
+            stringFromPayload(trailingEvent.payload, "detail") ||
+            stringFromPayload(trailingEvent.payload, "error_type") ||
+            "Agent 流式运行失败。"
+        };
+      }
+    }
+
+    return { data: result, error: null };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { data: null, error: "请求已取消。" };
+    }
+    return {
+      data: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Agent 流式运行失败，请确认本地后端已启动。"
+    };
+  }
+}
+
+export function cancelAgentRun(
+  sessionId: string
+): Promise<ApiResult<AgentCancelResponse>> {
+  return requestJson<AgentCancelResponse>(
+    `/api/agent/run/${encodeURIComponent(sessionId)}/cancel`,
+    { method: "POST" }
+  );
+}
+
+function parseAgentSseBlock(block: string): AgentSseEvent | null {
+  const dataLines = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => line.slice("data: ".length));
+  if (!dataLines.length) return null;
+  try {
+    const parsed = JSON.parse(dataLines.join("\n")) as unknown;
+    if (!isAgentSseEvent(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function isAgentSseEvent(value: unknown): value is AgentSseEvent {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<AgentSseEvent>;
+  return (
+    typeof candidate.event_id === "string" &&
+    typeof candidate.session_id === "string" &&
+    typeof candidate.sequence === "number" &&
+    typeof candidate.timestamp === "string" &&
+    typeof candidate.type === "string" &&
+    Boolean(candidate.payload) &&
+    typeof candidate.payload === "object" &&
+    !Array.isArray(candidate.payload)
+  );
+}
+
+function updateAgentStreamResult(
+  result: AgentStreamResult,
+  event: AgentSseEvent
+): AgentStreamResult {
+  const next: AgentStreamResult = {
+    ...result,
+    session_id: event.session_id || result.session_id
+  };
+  if (event.type !== "complete") return next;
+  return {
+    ...next,
+    final_status:
+      stringFromPayload(event.payload, "final_status") || result.final_status,
+    trace_session_id:
+      stringFromPayload(event.payload, "trace_session_id") ||
+      result.trace_session_id,
+    steps: numberFromPayload(event.payload, "steps") ?? result.steps
+  };
+}
+
+function stringFromPayload(
+  payload: Record<string, unknown>,
+  key: string
+): string | null {
+  const value = payload[key];
+  return typeof value === "string" ? value : null;
+}
+
+function numberFromPayload(
+  payload: Record<string, unknown>,
+  key: string
+): number | null {
+  const value = payload[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 export function fetchStorageStatus(): Promise<ApiResult<StorageStatusResponse>> {
