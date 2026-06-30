@@ -41,6 +41,8 @@ RAG_TOOL_NAME = "rag_retrieve"
 PLAIN_TEXT_WARNING = "plain_text_without_tool_calls"
 INCOMPLETE_WARNING = "agent_incomplete"
 BUDGET_WARNING_PREFIX = "budget_exceeded"
+VALIDATION_RETRY_WARNING = "validation_retry"
+VALIDATION_FAILED_WARNING = "validation_failed"
 
 _FINALIZE_CONVERGENCE_MESSAGE = (
     "You must continue with tool calls. If the MacroBrief is ready, call "
@@ -168,6 +170,7 @@ def run_agent(
     run_budget = budget or AgentBudget()
     warnings: list[AgentRuntimeWarning] = []
     events: list[AgentRuntimeEvent] = []
+    validation_failures = 0
 
     prompt = build_macro_brief_prompt(
         user_question=user_question,
@@ -210,13 +213,18 @@ def run_agent(
 
         for tool_call in response.tool_calls:
             if tool_call.name == FINALIZE_TOOL_NAME:
-                return _finalize_result(
+                result, validation_failures = _handle_finalize_attempt(
                     session_id=session_id,
                     budget=run_budget,
                     warnings=warnings,
                     events=events,
+                    messages=messages,
                     tool_call=tool_call,
+                    validation_failures=validation_failures,
                 )
+                if result is not None:
+                    return result
+                break
             if token_budget_exceeded:
                 _append_budget_exceeded_tool_message(
                     tool_call=tool_call,
@@ -412,27 +420,75 @@ def _append_tool_message(
     )
 
 
-def _finalize_result(
+def _handle_finalize_attempt(
     *,
     session_id: str,
     budget: AgentBudget,
     warnings: list[AgentRuntimeWarning],
     events: list[AgentRuntimeEvent],
+    messages: list[ChatMessage],
     tool_call: ToolCall,
-) -> AgentSessionResult:
+    validation_failures: int,
+) -> tuple[AgentSessionResult | None, int]:
     brief_payload = tool_call.arguments.get("brief")
     try:
         brief = parse_macro_brief(brief_payload)
     except MacroBriefValidationError as exc:
+        findings = exc.to_dict()
+        events.append(
+            AgentRuntimeEvent(
+                type="macro_brief_validation",
+                step=budget.steps_used,
+                data={"status": "failed", "findings": findings},
+            )
+        )
+        if validation_failures == 0:
+            warnings.append(
+                AgentRuntimeWarning(
+                    code=VALIDATION_RETRY_WARNING,
+                    message="MacroBrief validation failed once; runtime requested a corrected finalize call.",
+                )
+            )
+            messages.append(
+                ChatMessage(
+                    role="user",
+                    content=json.dumps(
+                        {
+                            "macro_brief_validation_error": findings,
+                            "instruction": (
+                                f"Repair the MacroBrief and call {FINALIZE_TOOL_NAME} again. "
+                                "Do not answer in plain text."
+                            ),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                )
+            )
+            return None, validation_failures + 1
+
+        warnings.append(
+            AgentRuntimeWarning(
+                code=VALIDATION_FAILED_WARNING,
+                message="MacroBrief validation failed twice; returning partial brief.",
+            )
+        )
         return AgentSessionResult(
             session_id=session_id,
             final_status="validation_failed",
             partial_brief=brief_payload if isinstance(brief_payload, dict) else None,
-            validation_findings=exc.to_dict(),
+            validation_findings=findings,
             warnings=warnings,
             events=events,
             steps=budget.steps_used,
+        ), validation_failures + 1
+    events.append(
+        AgentRuntimeEvent(
+            type="macro_brief_validation",
+            step=budget.steps_used,
+            data={"status": "ok"},
         )
+    )
     return AgentSessionResult(
         session_id=session_id,
         final_status="ok",
@@ -440,7 +496,7 @@ def _finalize_result(
         warnings=warnings,
         events=events,
         steps=budget.steps_used,
-    )
+    ), validation_failures
 
 
 __all__ = [

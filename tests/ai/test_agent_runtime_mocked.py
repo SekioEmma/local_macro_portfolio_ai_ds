@@ -227,3 +227,93 @@ def test_run_agent_returns_incomplete_when_finalize_never_arrives():
     assert result.brief is None
     assert result.steps == 2
     assert any(warning.code == "agent_incomplete" for warning in result.warnings)
+
+
+def test_finalize_validation_failure_retries_once_then_succeeds():
+    invalid_payload = brief_payload()
+    del invalid_payload["source_list"]
+    provider = MockProvider(
+        [
+            ChatResponse(tool_calls=[finalize_call("bad-final", invalid_payload)], finish_reason="tool_calls"),
+            ChatResponse(tool_calls=[finalize_call("good-final")], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="s4",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+    )
+
+    assert result.final_status == "ok"
+    assert any(warning.code == "validation_retry" for warning in result.warnings)
+    correction_messages = [
+        message.content
+        for message in provider.calls[1]["messages"]
+        if message.role == "user" and "macro_brief_validation_error" in message.content
+    ]
+    assert correction_messages
+    assert "source_list" in correction_messages[0]
+    assert FINALIZE_TOOL_NAME in correction_messages[0]
+
+
+def test_finalize_validation_failure_twice_returns_partial_brief():
+    first_invalid = brief_payload()
+    del first_invalid["source_list"]
+    second_invalid = brief_payload()
+    second_invalid["forward_indicators"] = second_invalid["forward_indicators"][:2]
+
+    provider = MockProvider(
+        [
+            ChatResponse(tool_calls=[finalize_call("bad-final-1", first_invalid)], finish_reason="tool_calls"),
+            ChatResponse(tool_calls=[finalize_call("bad-final-2", second_invalid)], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="s5",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+    )
+
+    assert result.final_status == "validation_failed"
+    assert result.brief is None
+    assert result.partial_brief == second_invalid
+    assert result.validation_findings is not None
+    assert any("forward_indicators" in finding for finding in result.validation_findings["findings"])
+    assert any(warning.code == "validation_failed" for warning in result.warnings)
+
+
+def test_validation_retry_message_does_not_leak_input_values():
+    invalid_payload = brief_payload()
+    invalid_payload["market_state"][0]["symbol"] = "SECRET_INPUT_VALUE"
+    provider = MockProvider(
+        [
+            ChatResponse(tool_calls=[finalize_call("bad-final", invalid_payload)], finish_reason="tool_calls"),
+            ChatResponse(tool_calls=[finalize_call("good-final")], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="s6",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+    )
+
+    assert result.final_status == "ok"
+    retry_messages = [
+        message.content
+        for message in provider.calls[1]["messages"]
+        if message.role == "user" and "macro_brief_validation_error" in message.content
+    ]
+    assert retry_messages
+    assert "SECRET_INPUT_VALUE" not in retry_messages[0]
