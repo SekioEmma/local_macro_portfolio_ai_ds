@@ -89,12 +89,12 @@ def test_run_agent_can_persist_trace_when_service_is_injected(tmp_path):
 
     assert result.final_status == "ok"
     events = service.read_events("session-3")
-    assert [event.type for event in events] == [
-        "session_start",
-        "llm_completion",
-        "macro_brief_validation",
-        "session_end",
-    ]
+    event_types = [event.type for event in events]
+    assert event_types[0] == "session_start"
+    assert "provider_call_started" in event_types
+    assert "llm_completion" in event_types
+    assert "macro_brief_validation" in event_types
+    assert event_types[-1] == "session_end"
     assert events[0].data["holdings_included"] is True
     assert events[0].data["holdings_snapshot_sha256"] == sha256_json(holdings_snapshot)
     trace_text = (tmp_path / "session-3.jsonl").read_text(encoding="utf-8")

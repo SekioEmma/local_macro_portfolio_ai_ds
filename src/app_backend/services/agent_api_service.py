@@ -17,7 +17,12 @@ from app_backend.services.agent_information_plan import (
     build_agent_information_plan,
     information_plan_trace_event,
 )
-from app_backend.services.agent_runtime import AgentSessionResult, run_agent
+from app_backend.services.agent_runtime import (
+    AgentRuntimeEvent,
+    AgentSessionResult,
+    RuntimeEventCallback,
+    run_agent,
+)
 from app_backend.services.agent_tool_registry import (
     AgentToolRegistry,
     build_f1_read_only_tools,
@@ -100,7 +105,12 @@ class AgentRunService:
     holdings_consent_service: HoldingsConsentService | None = None
     holdings_context_service: HoldingsExternalContextService | None = None
 
-    def run(self, request: AgentRunRequest) -> AgentRunResponse:
+    def run(
+        self,
+        request: AgentRunRequest,
+        *,
+        event_callback: RuntimeEventCallback | None = None,
+    ) -> AgentRunResponse:
         session_id = request.session_id or uuid.uuid4().hex
         tool_names = _tool_names_for_request(request)
         plan = build_agent_information_plan(
@@ -114,6 +124,14 @@ class AgentRunService:
 
         trace_service = self.trace_factory()
         plan_event = information_plan_trace_event(plan)
+        if event_callback is not None:
+            event_callback(
+                AgentRuntimeEvent(
+                    type=plan_event.type,
+                    step=plan_event.step,
+                    data=plan_event.data,
+                )
+            )
         trace_service.write_event(
             AgentTraceEvent(
                 type=plan_event.type,
@@ -133,6 +151,7 @@ class AgentRunService:
             include_holdings=request.include_holdings,
             holdings_snapshot=holdings_snapshot,
             trace_service=trace_service,
+            event_callback=event_callback,
         )
         return _response_from_result(
             request=request,

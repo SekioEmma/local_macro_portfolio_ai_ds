@@ -79,7 +79,16 @@ class AgentTraceDebugResponse(BaseModel):
     events: list[dict[str, Any]]
 
 
+class AgentCancelResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str
+    cancelled: bool
+    already_cancelled: bool = False
+
+
 __all__ = [
+    "AgentCancelResponse",
     "AgentApiStatus",
     "AgentApiWarning",
     "AgentRunRequest",

@@ -7,7 +7,7 @@ tool, and optional holdings context are all injected by callers.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import date
 from typing import Any, Literal
 
@@ -67,6 +67,9 @@ class AgentRuntimeEvent(BaseModel):
     type: str
     step: int | None = None
     data: dict[str, Any] = Field(default_factory=dict)
+
+
+RuntimeEventCallback = Callable[[AgentRuntimeEvent], None]
 
 
 class AgentRuntimeConfig(BaseModel):
@@ -172,6 +175,7 @@ def run_agent(
     config: AgentRuntimeConfig | None = None,
     budget: AgentBudget | None = None,
     trace_service: AgentTraceService | None = None,
+    event_callback: RuntimeEventCallback | None = None,
 ) -> AgentSessionResult:
     """Run the internal MacroBrief agent loop against injected dependencies."""
     cfg = config or AgentRuntimeConfig()
@@ -215,6 +219,15 @@ def run_agent(
             disabled_tools=disabled_tools,
         )
         try:
+            _append_event(
+                events,
+                AgentRuntimeEvent(
+                    type="provider_call_started",
+                    step=step,
+                    data={"phase": current_phase, "tool_count": len(tool_schema)},
+                ),
+                event_callback,
+            )
             response = provider.chat(
                 model=cfg.model_name,
                 messages=messages,
@@ -230,12 +243,14 @@ def run_agent(
                     message=f"{type(exc).__name__}: provider chat failed.",
                 )
             )
-            events.append(
+            _append_event(
+                events,
                 AgentRuntimeEvent(
                     type="provider_error",
                     step=step,
                     data={"error_type": type(exc).__name__},
-                )
+                ),
+                event_callback,
             )
             return _finish_with_trace(
                 AgentSessionResult(
@@ -253,7 +268,7 @@ def run_agent(
         else:
             research_steps_used += 1
         run_budget.record_tokens(response.usage)
-        _record_completion_event(events, step, response)
+        _record_completion_event(events, step, response, event_callback)
         token_budget_exceeded = _handle_token_budget(
             budget=run_budget,
             warnings=warnings,
@@ -263,6 +278,7 @@ def run_agent(
             phase = _switch_to_writing_phase(
                 phase=phase,
                 events=events,
+                event_callback=event_callback,
                 step=step,
                 reason="token_budget_exceeded",
                 config=cfg,
@@ -292,6 +308,7 @@ def run_agent(
                 research_steps_used=research_steps_used,
                 consecutive_no_tool_calls=consecutive_no_tool_calls,
                 events=events,
+                event_callback=event_callback,
                 step=step,
             )
             if _writing_phase_exhausted(current_phase, writing_steps_used, cfg):
@@ -306,6 +323,7 @@ def run_agent(
                     budget=run_budget,
                     warnings=warnings,
                     events=events,
+                    event_callback=event_callback,
                     messages=messages,
                     tool_call=tool_call,
                     validation_failures=validation_failures,
@@ -318,6 +336,7 @@ def run_agent(
                     tool_call=tool_call,
                     messages=messages,
                     events=events,
+                    event_callback=event_callback,
                     step=step,
                 )
                 continue
@@ -327,6 +346,7 @@ def run_agent(
                     kind="tokens",
                     messages=messages,
                     events=events,
+                    event_callback=event_callback,
                     step=step,
                 )
                 continue
@@ -335,6 +355,7 @@ def run_agent(
                 tool_call=tool_call,
                 messages=messages,
                 events=events,
+                event_callback=event_callback,
                 step=step,
                 budget=run_budget,
                 warnings=warnings,
@@ -346,6 +367,7 @@ def run_agent(
                 phase = _switch_to_writing_phase(
                     phase=phase,
                     events=events,
+                    event_callback=event_callback,
                     step=step,
                     reason="budget_exceeded",
                     config=cfg,
@@ -358,6 +380,7 @@ def run_agent(
             research_steps_used=research_steps_used,
             consecutive_no_tool_calls=consecutive_no_tool_calls,
             events=events,
+            event_callback=event_callback,
             step=step,
         )
         if _writing_phase_exhausted(current_phase, writing_steps_used, cfg):
@@ -427,6 +450,7 @@ def _maybe_switch_to_writing_phase(
     research_steps_used: int,
     consecutive_no_tool_calls: int,
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     step: int,
 ) -> AgentPhase:
     if not config.two_phase_mode or phase == "writing":
@@ -443,6 +467,7 @@ def _maybe_switch_to_writing_phase(
     return _switch_to_writing_phase(
         phase=phase,
         events=events,
+        event_callback=event_callback,
         step=step,
         reason=reason,
         config=config,
@@ -453,18 +478,21 @@ def _switch_to_writing_phase(
     *,
     phase: AgentPhase,
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     step: int,
     reason: str,
     config: AgentRuntimeConfig,
 ) -> AgentPhase:
     if not config.two_phase_mode or phase == "writing":
         return phase
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="agent_phase",
             step=step,
             data={"phase": "writing", "reason": reason},
-        )
+        ),
+        event_callback,
     )
     return "writing"
 
@@ -485,8 +513,10 @@ def _record_completion_event(
     events: list[AgentRuntimeEvent],
     step: int,
     response: ChatResponse,
+    event_callback: RuntimeEventCallback | None,
 ) -> None:
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="llm_completion",
             step=step,
@@ -495,7 +525,8 @@ def _record_completion_event(
                 "tool_calls": [tool_call.name for tool_call in response.tool_calls],
                 "tokens": response.usage.total_tokens,
             },
-        )
+        ),
+        event_callback,
     )
 
 
@@ -539,6 +570,7 @@ def _dispatch_tool_call(
     tool_call: ToolCall,
     messages: list[ChatMessage],
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     step: int,
     budget: AgentBudget,
     warnings: list[AgentRuntimeWarning],
@@ -551,6 +583,7 @@ def _dispatch_tool_call(
             tool_call=tool_call,
             messages=messages,
             events=events,
+            event_callback=event_callback,
             step=step,
         )
         return
@@ -568,6 +601,7 @@ def _dispatch_tool_call(
             kind=exc.kind,
             messages=messages,
             events=events,
+            event_callback=event_callback,
             step=step,
         )
         _append_finalize_convergence_message(messages)
@@ -580,11 +614,13 @@ def _dispatch_tool_call(
         config=config,
         warnings=warnings,
         events=events,
+        event_callback=event_callback,
         step=step,
         tool_failure_counts=tool_failure_counts,
         disabled_tools=disabled_tools,
     )
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="tool_result",
             step=step,
@@ -593,7 +629,8 @@ def _dispatch_tool_call(
                 "status": result.status,
                 "error_code": result.error_code,
             },
-        )
+        ),
+        event_callback,
     )
     _append_tool_message(messages, tool_call, result)
 
@@ -605,6 +642,7 @@ def _record_tool_failure_state(
     config: AgentRuntimeConfig,
     warnings: list[AgentRuntimeWarning],
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     step: int,
     tool_failure_counts: dict[str, int],
     disabled_tools: set[str],
@@ -625,12 +663,14 @@ def _record_tool_failure_state(
             message=f"{tool_call.name} disabled after {failure_count} consecutive errors.",
         )
     )
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="tool_disabled",
             step=step,
             data={"tool_name": tool_call.name, "failure_count": failure_count},
-        )
+        ),
+        event_callback,
     )
 
 
@@ -639,6 +679,7 @@ def _append_disabled_tool_message(
     tool_call: ToolCall,
     messages: list[ChatMessage],
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     step: int,
 ) -> None:
     result = ToolResult(
@@ -646,7 +687,8 @@ def _append_disabled_tool_message(
         error_code="tool_disabled",
         error_message=f"{tool_call.name} has been disabled after repeated errors.",
     )
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="tool_result",
             step=step,
@@ -655,7 +697,8 @@ def _append_disabled_tool_message(
                 "status": result.status,
                 "error_code": result.error_code,
             },
-        )
+        ),
+        event_callback,
     )
     _append_tool_message(messages, tool_call, result)
 
@@ -665,6 +708,7 @@ def _append_writing_phase_tool_message(
     tool_call: ToolCall,
     messages: list[ChatMessage],
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     step: int,
 ) -> None:
     result = ToolResult(
@@ -672,7 +716,8 @@ def _append_writing_phase_tool_message(
         error_code="tool_unavailable_in_writing_phase",
         error_message=f"{tool_call.name} is unavailable in writing phase; call {FINALIZE_TOOL_NAME}.",
     )
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="tool_result",
             step=step,
@@ -681,7 +726,8 @@ def _append_writing_phase_tool_message(
                 "status": result.status,
                 "error_code": result.error_code,
             },
-        )
+        ),
+        event_callback,
     )
     _append_tool_message(messages, tool_call, result)
 
@@ -692,6 +738,7 @@ def _append_budget_exceeded_tool_message(
     kind: str,
     messages: list[ChatMessage],
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     step: int,
 ) -> None:
     result = ToolResult(
@@ -699,7 +746,8 @@ def _append_budget_exceeded_tool_message(
         error_code="budget_exceeded",
         error_message=f"{kind} budget exceeded; continue to finalize with available evidence.",
     )
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="tool_result",
             step=step,
@@ -709,7 +757,8 @@ def _append_budget_exceeded_tool_message(
                 "error_code": result.error_code,
                 "budget_kind": kind,
             },
-        )
+        ),
+        event_callback,
     )
     _append_tool_message(messages, tool_call, result)
 
@@ -760,6 +809,7 @@ def _handle_finalize_attempt(
     budget: AgentBudget,
     warnings: list[AgentRuntimeWarning],
     events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
     messages: list[ChatMessage],
     tool_call: ToolCall,
     validation_failures: int,
@@ -769,12 +819,14 @@ def _handle_finalize_attempt(
         brief = parse_macro_brief(brief_payload)
     except MacroBriefValidationError as exc:
         findings = exc.to_dict()
-        events.append(
+        _append_event(
+            events,
             AgentRuntimeEvent(
                 type="macro_brief_validation",
                 step=budget.steps_used,
                 data={"status": "failed", "findings": findings},
-            )
+            ),
+            event_callback,
         )
         if validation_failures == 0:
             _append_tool_message(
@@ -825,12 +877,14 @@ def _handle_finalize_attempt(
             events=events,
             steps=budget.steps_used,
         ), validation_failures + 1
-    events.append(
+    _append_event(
+        events,
         AgentRuntimeEvent(
             type="macro_brief_validation",
             step=budget.steps_used,
             data={"status": "ok"},
-        )
+        ),
+        event_callback,
     )
     return AgentSessionResult(
         session_id=session_id,
@@ -842,6 +896,16 @@ def _handle_finalize_attempt(
     ), validation_failures
 
 
+def _append_event(
+    events: list[AgentRuntimeEvent],
+    event: AgentRuntimeEvent,
+    event_callback: RuntimeEventCallback | None,
+) -> None:
+    events.append(event)
+    if event_callback is not None:
+        event_callback(event)
+
+
 __all__ = [
     "AgentBudget",
     "AgentIncomplete",
@@ -850,6 +914,7 @@ __all__ = [
     "AgentRuntimeWarning",
     "AgentSessionResult",
     "BudgetExceeded",
+    "RuntimeEventCallback",
     "ToolDisabled",
     "run_agent",
 ]

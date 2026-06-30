@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from app_backend.schemas.agent_api import (
+    AgentCancelResponse,
     AgentRunRequest,
     AgentRunResponse,
     AgentTraceDebugResponse,
@@ -63,6 +65,8 @@ from app_backend.services.agent_api_service import (
     AgentRunUnavailable,
     build_default_agent_run_service,
 )
+from app_backend.services.agent_run_registry import AgentRunRegistry
+from app_backend.services.agent_stream_service import AgentStreamService
 from app_backend.services.agent_trace_service import AgentTraceService
 from app_backend.services.commodity_quote_service import CommodityQuoteService
 from app_backend.services.holdings_consent_service import (
@@ -250,6 +254,7 @@ def post_favorite(request: CreateFavoriteAnswerRequest) -> FavoriteAnswer:
 _SEARCH_EXECUTION_SERVICE = build_default_tavily_search_execution_service()
 _HOLDINGS_CONSENT_SERVICE = HoldingsConsentService()
 _HOLDINGS_CONTEXT_SERVICE = HoldingsExternalContextService()
+_AGENT_RUN_REGISTRY = AgentRunRegistry()
 _AGENT_RUN_SERVICE = build_default_agent_run_service(
     search_service=_SEARCH_EXECUTION_SERVICE,
     holdings_consent_service=_HOLDINGS_CONSENT_SERVICE,
@@ -267,6 +272,10 @@ def get_tavily_search_execution_service() -> TavilySearchExecutionService:
 
 def get_agent_run_service() -> AgentRunService:
     return _AGENT_RUN_SERVICE
+
+
+def get_agent_run_registry() -> AgentRunRegistry:
+    return _AGENT_RUN_REGISTRY
 
 
 def get_holdings_consent_service() -> HoldingsConsentService:
@@ -348,6 +357,32 @@ def post_agent_run(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=503, detail="agent_run_unavailable") from exc
+
+
+@app.post("/api/agent/run/stream")
+def post_agent_run_stream(
+    request: AgentRunRequest,
+    service: AgentRunService = Depends(get_agent_run_service),
+) -> StreamingResponse:
+    stream_service = AgentStreamService(service)
+    return StreamingResponse(
+        stream_service.stream(request),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/agent/run/{session_id}/cancel", response_model=AgentCancelResponse)
+def post_agent_run_cancel(
+    session_id: str,
+    registry: AgentRunRegistry = Depends(get_agent_run_registry),
+) -> AgentCancelResponse:
+    newly_cancelled = registry.request_cancel(session_id)
+    return AgentCancelResponse(
+        session_id=session_id,
+        cancelled=True,
+        already_cancelled=not newly_cancelled,
+    )
 
 
 @app.get("/api/agent/trace/{session_id}", response_model=AgentTraceDebugResponse)
