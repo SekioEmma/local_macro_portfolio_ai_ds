@@ -36,8 +36,11 @@ from app_backend.services.macro_brief_prompt import build_macro_brief_prompt
 FinalStatus = Literal["ok", "incomplete", "validation_failed"]
 
 AGENT_MODEL_NAME = "deepseek-v4-pro"
+SEARCH_TOOL_NAME = "search_tavily"
+RAG_TOOL_NAME = "rag_retrieve"
 PLAIN_TEXT_WARNING = "plain_text_without_tool_calls"
 INCOMPLETE_WARNING = "agent_incomplete"
+BUDGET_WARNING_PREFIX = "budget_exceeded"
 
 _FINALIZE_CONVERGENCE_MESSAGE = (
     "You must continue with tool calls. If the MacroBrief is ready, call "
@@ -98,6 +101,20 @@ class AgentBudget(BaseModel):
 
     def record_tokens(self, usage: TokenUsage) -> None:
         self.tokens_used += usage.total_tokens
+
+    def record_tool_call(self, tool_name: str) -> None:
+        if tool_name == SEARCH_TOOL_NAME:
+            if self.search_calls_used >= self.max_search_calls:
+                raise BudgetExceeded("search")
+            self.search_calls_used += 1
+            return
+        if tool_name == RAG_TOOL_NAME:
+            if self.rag_calls_used >= self.max_rag_calls:
+                raise BudgetExceeded("rag")
+            self.rag_calls_used += 1
+
+    def token_budget_exceeded(self) -> bool:
+        return self.tokens_used > self.max_tokens_total
 
 
 class AgentIncomplete(RuntimeError):
@@ -178,6 +195,11 @@ def run_agent(
         run_budget.record_step()
         run_budget.record_tokens(response.usage)
         _record_completion_event(events, step, response)
+        token_budget_exceeded = _handle_token_budget(
+            budget=run_budget,
+            warnings=warnings,
+            messages=messages,
+        )
 
         if response.content:
             messages.append(ChatMessage(role="assistant", content=response.content))
@@ -195,14 +217,26 @@ def run_agent(
                     events=events,
                     tool_call=tool_call,
                 )
+            if token_budget_exceeded:
+                _append_budget_exceeded_tool_message(
+                    tool_call=tool_call,
+                    kind="tokens",
+                    messages=messages,
+                    events=events,
+                    step=step,
+                )
+                continue
             _dispatch_tool_call(
                 tool_registry=tool_registry,
                 tool_call=tool_call,
                 messages=messages,
                 events=events,
                 step=step,
+                budget=run_budget,
+                warnings=warnings,
             )
 
+    _append_budget_warning(warnings, "steps", "Agent exhausted max_steps before finalize.")
     warnings.append(
         AgentRuntimeWarning(
             code=INCOMPLETE_WARNING,
@@ -255,6 +289,7 @@ def _handle_plain_text_turn(
 ) -> None:
     if not config.converge_after_plain_text:
         return
+    _append_finalize_convergence_message(messages)
     if not any(warning.code == PLAIN_TEXT_WARNING for warning in warnings):
         warnings.append(
             AgentRuntimeWarning(
@@ -262,7 +297,23 @@ def _handle_plain_text_turn(
                 message="Provider returned text without tool calls; runtime requested finalize.",
             )
         )
+
+
+def _append_finalize_convergence_message(messages: list[ChatMessage]) -> None:
     messages.append(ChatMessage(role="user", content=_FINALIZE_CONVERGENCE_MESSAGE))
+
+
+def _handle_token_budget(
+    *,
+    budget: AgentBudget,
+    warnings: list[AgentRuntimeWarning],
+    messages: list[ChatMessage],
+) -> bool:
+    if not budget.token_budget_exceeded():
+        return False
+    _append_budget_warning(warnings, "tokens", "Agent exceeded max_tokens_total.")
+    _append_finalize_convergence_message(messages)
+    return True
 
 
 def _dispatch_tool_call(
@@ -272,7 +323,27 @@ def _dispatch_tool_call(
     messages: list[ChatMessage],
     events: list[AgentRuntimeEvent],
     step: int,
+    budget: AgentBudget,
+    warnings: list[AgentRuntimeWarning],
 ) -> None:
+    try:
+        budget.record_tool_call(tool_call.name)
+    except BudgetExceeded as exc:
+        _append_budget_warning(
+            warnings,
+            exc.kind,
+            f"{tool_call.name} exceeded the {exc.kind} call budget.",
+        )
+        _append_budget_exceeded_tool_message(
+            tool_call=tool_call,
+            kind=exc.kind,
+            messages=messages,
+            events=events,
+            step=step,
+        )
+        _append_finalize_convergence_message(messages)
+        return
+
     result = tool_registry.dispatch(tool_call.name, tool_call.arguments)
     events.append(
         AgentRuntimeEvent(
@@ -286,6 +357,45 @@ def _dispatch_tool_call(
         )
     )
     _append_tool_message(messages, tool_call, result)
+
+
+def _append_budget_exceeded_tool_message(
+    *,
+    tool_call: ToolCall,
+    kind: str,
+    messages: list[ChatMessage],
+    events: list[AgentRuntimeEvent],
+    step: int,
+) -> None:
+    result = ToolResult(
+        status="error",
+        error_code="budget_exceeded",
+        error_message=f"{kind} budget exceeded; continue to finalize with available evidence.",
+    )
+    events.append(
+        AgentRuntimeEvent(
+            type="tool_result",
+            step=step,
+            data={
+                "tool_name": tool_call.name,
+                "status": result.status,
+                "error_code": result.error_code,
+                "budget_kind": kind,
+            },
+        )
+    )
+    _append_tool_message(messages, tool_call, result)
+
+
+def _append_budget_warning(
+    warnings: list[AgentRuntimeWarning],
+    kind: str,
+    message: str,
+) -> None:
+    code = f"{BUDGET_WARNING_PREFIX}:{kind}"
+    if any(warning.code == code for warning in warnings):
+        return
+    warnings.append(AgentRuntimeWarning(code=code, message=message))
 
 
 def _append_tool_message(
