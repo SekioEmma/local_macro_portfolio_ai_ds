@@ -12,6 +12,8 @@ from app_backend.services.agent_trace_service import (
     AgentTraceService,
     InvalidTraceSessionId,
     TraceSizeExceeded,
+    sanitize_trace_payload,
+    scan_trace_text_for_sensitive_markers,
     sha256_json,
     sha256_text,
 )
@@ -98,3 +100,88 @@ def test_run_agent_can_persist_trace_when_service_is_injected(tmp_path):
     trace_text = (tmp_path / "session-3.jsonl").read_text(encoding="utf-8")
     assert "Build a macro brief." not in trace_text
     assert "amount" not in trace_text
+
+
+def test_trace_sanitizes_sensitive_payload_fields(tmp_path):
+    service = AgentTraceService(root_dir=tmp_path)
+
+    service.write_event(
+        AgentTraceEvent(
+            type="tool_call",
+            session_id="session-4",
+            data={
+                "tool": "search_tavily",
+                "query": "raw query about CPI",
+                "api_key": "tvly-Secret1234567890",
+                "raw_prompt": "full prompt text",
+                "path": "C:\\Users\\someone\\secret.txt",
+            },
+        )
+    )
+
+    trace_text = (tmp_path / "session-4.jsonl").read_text(encoding="utf-8")
+    assert "raw query about CPI" not in trace_text
+    assert "tvly-Secret1234567890" not in trace_text
+    assert "full prompt text" not in trace_text
+    assert "C:\\Users\\someone\\secret.txt" not in trace_text
+    assert "query_sha256" in trace_text
+    assert "redacted_field_2" in trace_text
+    assert service.scan_for_sensitive_markers("session-4") == []
+
+
+def test_sanitize_trace_payload_hashes_args_without_raw_query():
+    payload = sanitize_trace_payload(
+        {
+            "args": {"query": "private search query", "limit": 3},
+            "nested": {"search_query": "another query"},
+        }
+    )
+
+    assert "args_sha256" in payload
+    assert "private search query" not in str(payload)
+    assert payload["nested"]["search_query_sha256"] == sha256_text("another query")
+
+
+def test_trace_scan_detects_contaminated_text():
+    findings = scan_trace_text_for_sensitive_markers(
+        '{"raw_prompt":"x","secret":"sk-abcdefghijklmnopqrstuvwxyz123456"}'
+    )
+
+    assert "raw_prompt" in findings
+    assert any(finding.startswith("pattern:") for finding in findings)
+
+
+def test_trace_replay_returns_debug_summary_without_raw_content(tmp_path):
+    service = AgentTraceService(root_dir=tmp_path)
+    service.start_session(
+        session_id="session-5",
+        user_question="private user question",
+        holdings_included=False,
+    )
+    service.write_event(
+        AgentTraceEvent(
+            type="llm_completion",
+            session_id="session-5",
+            step=1,
+            data={"finish_reason": "tool_calls", "tokens": 12},
+        )
+    )
+    service.write_event(
+        AgentTraceEvent(
+            type="tool_result",
+            session_id="session-5",
+            step=1,
+            data={"tool_name": "dashboard_query", "status": "ok"},
+        )
+    )
+
+    replay = service.replay("session-5")
+
+    assert [message["role"] for message in replay.message_history] == [
+        "system",
+        "assistant",
+        "tool",
+    ]
+    joined = "\n".join(message["content"] for message in replay.message_history)
+    assert "private user question" not in joined
+    assert "question_sha256=" in joined
