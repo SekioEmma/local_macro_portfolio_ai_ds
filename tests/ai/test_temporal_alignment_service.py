@@ -86,3 +86,29 @@ def test_temporal_envelope_handles_empty_ledger():
     assert envelope.policy_data_cutoff is None
     assert envelope.macro_data_cutoff is None
     assert envelope.public_news_cutoff is None
+
+
+def test_temporal_envelope_flags_market_data_trading_day_mismatch():
+    ledger = _ledger(
+        _record(
+            "ev_market_old",
+            tool_name="quote_etf",
+            source_kind="official_primary",
+            observation_date="2026-06-24",
+        ),
+        _record(
+            "ev_market_new",
+            tool_name="treasury_curve",
+            source_kind="official_primary",
+            observation_date="2026-06-29",
+        ),
+    )
+
+    envelope = build_temporal_envelope(
+        ledger,
+        report_generated_at="2026-06-30T14:00:00+00:00",
+    )
+
+    assert envelope.max_market_data_age_trading_days == 3
+    assert envelope.asynchronous_inputs is True
+    assert "时间错配" in (envelope.temporal_alignment_note or "")

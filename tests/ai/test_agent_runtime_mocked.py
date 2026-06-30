@@ -12,6 +12,7 @@ from app_backend.services.agent_tool_registry import (
     make_finalize_macro_brief_tool,
 )
 from app_backend.services.llm_provider_adapter import ChatMessage, ChatResponse, ToolCall
+from app_backend.services.run_evidence_ledger import EvidenceRecord, RunEvidenceLedger
 
 
 class MockProvider:
@@ -160,6 +161,33 @@ def finalize_call(call_id: str = "final", payload: dict[str, Any] | None = None)
 
 def tool_names_from_call(call: dict[str, Any]) -> list[str]:
     return [tool["function"]["name"] for tool in call["tools"]]
+
+
+def _evidence_record(
+    evidence_id: str,
+    *,
+    tool_name: str = "treasury_curve",
+    observation_date: str = "2026-06-27",
+) -> EvidenceRecord:
+    return EvidenceRecord(
+        evidence_id=evidence_id,
+        run_id="ledger-run",
+        tool_name=tool_name,
+        source_kind="official_primary",
+        evidence_tier="official_evidence",
+        title=f"Evidence {evidence_id}",
+        observation_date=observation_date,
+        release_date=observation_date,
+        accessed_at="2026-06-30T12:00:00+00:00",
+        temporal_status="observed",
+    )
+
+
+def _ledger(*records: EvidenceRecord) -> RunEvidenceLedger:
+    ledger = RunEvidenceLedger(run_id="ledger-run")
+    for record in records:
+        ledger = ledger.add(record)
+    return ledger
 
 
 def test_run_agent_dispatches_tool_then_finalizes():
@@ -337,6 +365,65 @@ def test_finalize_validation_failure_twice_returns_partial_brief():
     assert result.validation_findings is not None
     assert any("forward_indicators" in finding for finding in result.validation_findings["findings"])
     assert any(warning.code == "validation_failed" for warning in result.warnings)
+
+
+def test_finalize_claim_evidence_gate_retries_when_ledger_ids_are_unknown():
+    fixed_payload = brief_payload()
+    fixed_payload["confirmed_facts"][1]["evidence_ids"] = ["ev_known_credit"]
+    fixed_payload["judgments"][0]["evidence_ids"] = ["ev_dgs10"]
+    provider = MockProvider(
+        [
+            ChatResponse(tool_calls=[finalize_call("bad-evidence")], finish_reason="tool_calls"),
+            ChatResponse(tool_calls=[finalize_call("good-evidence", fixed_payload)], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="evidence-gate",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        evidence_ledger=_ledger(
+            _evidence_record("ev_dgs10"),
+            _evidence_record("ev_known_credit", tool_name="rag_retrieve"),
+        ),
+    )
+
+    assert result.final_status == "ok"
+    assert any(warning.code == "validation_retry" for warning in result.warnings)
+    correction_messages = [
+        message.content
+        for message in provider.calls[1]["messages"]
+        if message.role == "user" and "macro_brief_validation_error" in message.content
+    ]
+    assert correction_messages
+    assert "confirmed_facts[f2].unknown_evidence_ids:ev_credit" in correction_messages[0]
+
+
+def test_finalize_with_evidence_ledger_adds_temporal_envelope_to_brief():
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+
+    result = run_agent(
+        session_id="temporal-envelope",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        evidence_ledger=_ledger(
+            _evidence_record("ev_dgs10", tool_name="treasury_curve", observation_date="2026-06-27"),
+            _evidence_record("ev_credit", tool_name="rag_retrieve", observation_date="2026-06-26"),
+        ),
+    )
+
+    assert result.final_status == "ok"
+    assert result.brief is not None
+    assert result.brief.report_generated_at == "2026-06-30T00:00:00Z"
+    assert result.brief.market_data_cutoff == "2026-06-27"
+    assert result.brief.policy_data_cutoff == "2026-06-26"
+    assert result.brief.macro_data_cutoff == "2026-06-26"
 
 
 def test_validation_retry_message_does_not_leak_input_values():

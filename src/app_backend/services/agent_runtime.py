@@ -33,6 +33,9 @@ from app_backend.services.macro_brief_parser import (
 )
 from app_backend.services.macro_brief_prompt import build_macro_brief_prompt
 from app_backend.services.agent_trace_service import AgentTraceService, sha256_json
+from app_backend.services.claim_evidence_validator import validate_macro_brief_claim_evidence
+from app_backend.services.run_evidence_ledger import RunEvidenceLedger
+from app_backend.services.temporal_alignment_service import build_temporal_envelope
 
 
 FinalStatus = Literal["ok", "incomplete", "validation_failed"]
@@ -184,6 +187,7 @@ def run_agent(
     budget: AgentBudget | None = None,
     trace_service: AgentTraceService | None = None,
     event_callback: RuntimeEventCallback | None = None,
+    evidence_ledger: RunEvidenceLedger | None = None,
 ) -> AgentSessionResult:
     """Run the internal MacroBrief agent loop against injected dependencies."""
     cfg = config or AgentRuntimeConfig()
@@ -335,6 +339,8 @@ def run_agent(
                     messages=messages,
                     tool_call=tool_call,
                     validation_failures=validation_failures,
+                    evidence_ledger=evidence_ledger,
+                    report_generated_at=f"{current_date.isoformat()}T00:00:00Z",
                 )
                 if result is not None:
                     return _finish_with_trace(result, trace_service)
@@ -822,70 +828,50 @@ def _handle_finalize_attempt(
     messages: list[ChatMessage],
     tool_call: ToolCall,
     validation_failures: int,
+    evidence_ledger: RunEvidenceLedger | None,
+    report_generated_at: str,
 ) -> tuple[AgentSessionResult | None, int]:
     brief_payload = tool_call.arguments.get("brief")
     try:
         brief = parse_macro_brief(brief_payload)
     except MacroBriefValidationError as exc:
         findings = exc.to_dict()
-        _append_event(
-            events,
-            AgentRuntimeEvent(
-                type="macro_brief_validation",
-                step=budget.steps_used,
-                data={"status": "failed", "findings": findings},
-            ),
-            event_callback,
-        )
-        if validation_failures == 0:
-            _append_tool_message(
-                messages,
-                tool_call,
-                ToolResult(
-                    status="error",
-                    error_code="macro_brief_validation_failed",
-                    error_message="MacroBrief validation failed; repair and call finalize again.",
-                ),
-            )
-            warnings.append(
-                AgentRuntimeWarning(
-                    code=VALIDATION_RETRY_WARNING,
-                    message="MacroBrief validation failed once; runtime requested a corrected finalize call.",
-                )
-            )
-            messages.append(
-                ChatMessage(
-                    role="user",
-                    content=json.dumps(
-                        {
-                            "macro_brief_validation_error": findings,
-                            "instruction": (
-                                f"Repair the MacroBrief and call {FINALIZE_TOOL_NAME} again. "
-                                "Do not answer in plain text."
-                            ),
-                        },
-                        ensure_ascii=False,
-                        sort_keys=True,
-                    ),
-                )
-            )
-            return None, validation_failures + 1
-
-        warnings.append(
-            AgentRuntimeWarning(
-                code=VALIDATION_FAILED_WARNING,
-                message="MacroBrief validation failed twice; returning partial brief.",
-            )
-        )
-        return AgentSessionResult(
+        return _handle_finalize_validation_failure(
             session_id=session_id,
-            final_status="validation_failed",
-            partial_brief=brief_payload if isinstance(brief_payload, dict) else None,
-            validation_findings=findings,
+            budget=budget,
             warnings=warnings,
             events=events,
-            steps=budget.steps_used,
-        ), validation_failures + 1
+            event_callback=event_callback,
+            messages=messages,
+            tool_call=tool_call,
+            validation_failures=validation_failures,
+            brief_payload=brief_payload,
+            findings=findings,
+        )
+    if evidence_ledger is not None:
+        evidence_findings = validate_macro_brief_claim_evidence(brief, evidence_ledger)
+        if evidence_findings:
+            return _handle_finalize_validation_failure(
+                session_id=session_id,
+                budget=budget,
+                warnings=warnings,
+                events=events,
+                event_callback=event_callback,
+                messages=messages,
+                tool_call=tool_call,
+                validation_failures=validation_failures,
+                brief_payload=brief_payload,
+                findings={
+                    "missing": [],
+                    "errors": [],
+                    "findings": evidence_findings,
+                },
+            )
+        temporal_envelope = build_temporal_envelope(
+            evidence_ledger,
+            report_generated_at=report_generated_at,
+        )
+        brief = brief.model_copy(update=temporal_envelope.model_dump(mode="json"))
     _append_event(
         events,
         AgentRuntimeEvent(
@@ -903,6 +889,79 @@ def _handle_finalize_attempt(
         events=events,
         steps=budget.steps_used,
     ), validation_failures
+
+
+def _handle_finalize_validation_failure(
+    *,
+    session_id: str,
+    budget: AgentBudget,
+    warnings: list[AgentRuntimeWarning],
+    events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
+    messages: list[ChatMessage],
+    tool_call: ToolCall,
+    validation_failures: int,
+    brief_payload: Any,
+    findings: dict[str, list[str]],
+) -> tuple[AgentSessionResult | None, int]:
+    _append_event(
+        events,
+        AgentRuntimeEvent(
+            type="macro_brief_validation",
+            step=budget.steps_used,
+            data={"status": "failed", "findings": findings},
+        ),
+        event_callback,
+    )
+    if validation_failures == 0:
+        _append_tool_message(
+            messages,
+            tool_call,
+            ToolResult(
+                status="error",
+                error_code="macro_brief_validation_failed",
+                error_message="MacroBrief validation failed; repair and call finalize again.",
+            ),
+        )
+        warnings.append(
+            AgentRuntimeWarning(
+                code=VALIDATION_RETRY_WARNING,
+                message="MacroBrief validation failed once; runtime requested a corrected finalize call.",
+            )
+        )
+        messages.append(
+            ChatMessage(
+                role="user",
+                content=json.dumps(
+                    {
+                        "macro_brief_validation_error": findings,
+                        "instruction": (
+                            f"Repair the MacroBrief and call {FINALIZE_TOOL_NAME} again. "
+                            "Do not answer in plain text."
+                        ),
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+            )
+        )
+        return None, validation_failures + 1
+
+    warnings.append(
+        AgentRuntimeWarning(
+            code=VALIDATION_FAILED_WARNING,
+            message="MacroBrief validation failed twice; returning partial brief.",
+        )
+    )
+    return AgentSessionResult(
+        session_id=session_id,
+        final_status="validation_failed",
+        partial_brief=brief_payload if isinstance(brief_payload, dict) else None,
+        validation_findings=findings,
+        warnings=warnings,
+        events=events,
+        steps=budget.steps_used,
+    ), validation_failures + 1
 
 
 def _append_event(
