@@ -48,6 +48,7 @@ Tag：`era1-frontend-redesign-complete`。
 - Phase C 在当前 BLS/BEA + FOMC-deferred scope 内已完成
 - D0：RAG evidence governance contracts 已完成（纯内存、metadata-only admission contract；不读 raw text、不 chunk、不 embed、不建 vector store、不 retrieval、不接入 AI context；`historical_data` / `one_shot_news` / stale 文档为固定排除；`eligible` 仅是未来 RAG pipeline 的候选信号，不授权读取内容）
 - Phase D：RAG 知识库已完成（D-1 EmbeddingService lazy-load；D-2 VectorStore Chroma；D-3 文档分块器；D-4 BM25Index 中英双语；D-5 RAGRetrievalService RRF 融合；D-6 ChunkTextStore + seed_knowledge_base 脚本；D-7 RAGContextBuilder 4000 字上限）
+- Phase F remediation checkpoint：RAG doc_type filter 已贯穿 BM25/vector/fusion；agent `current_date` 改为服务端纽约日期；MacroBrief evidence_ids / claim_status / temporal cutoff schema 与 run evidence ledger foundation 已实现；holdings consent token 与 server-side injected snapshot foundation 已实现（默认 snapshot provider 仍 fail-closed）。
 
 ### 进行中
 
@@ -60,7 +61,7 @@ Tag：`era1-frontend-redesign-complete`。
 | C | 搜索分类持久化 + 经济日历 | 已完成（C1–C4e；FOMC exact-time deferred） | — |
 | D | RAG 知识库 | 已完成（D0 governance contracts；D-1~D-7 embedding/vector/BM25/RRF/seed；需安装 sentence-transformers + chromadb + rank-bm25；用户需向 data/knowledge_base/input/ 放置文件） | — |
 | E | 情景化收益区间引擎 | 已暂停于 framework（不阻塞 F） | ✅ E1 |
-| F | Agent + 9 节前端 | 进行中（F0–F2 完成，F3 开始） | Phase F holdings exception 已批准 |
+| F | Agent + 9 节前端 | remediation_and_optimization 进行中；尚未 user_accepted / production_ready | Phase F holdings exception 与 ADR-0001~0006 已批准 |
 | G | 报告归档 + 历史对比 | 1 | — |
 | H | 质量评估闭环 | 1 | — |
 | I | 多 Agent 拆分 | 2 | 条件触发 |

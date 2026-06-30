@@ -10,6 +10,7 @@ docs/
   INDEX.md              一页项目入口
   ROADMAP.md            当前路线（唯一）
   GOVERNANCE.md         治理与约束（本文件）
+  ADR/                  已批准的架构/治理决策
   era2_plan.md          Era 2 完整计划
   era2_codex_brief.md   Era 2 codex 任务书
 
@@ -70,13 +71,16 @@ docs/
 - 仅 BLS 和 BEA；不抓 Fed；不推断 FOMC statement 发布时间。
 - 不新增 API、前端、scheduler、background、自动刷新、RAG、embedding、vector store 或 Agent。
 
-**Phase F MacroBrief Agent + Holdings 例外**：
+**Phase F MacroBrief Agent + Holdings 例外**（见 `docs/ADR/ADR-0002-phase-f-holdings-external-context.md`）：
 
-- 仅 `src/app_backend/services/agent_runtime.py` 可在用户显式 toggle `include_holdings=true` 时把真实持仓快照（ticker / 股数 / 美元金额 / 账户名 / 资产类别比例）注入 DeepSeek system prompt。其他所有 AI / RAG / search / preview / context 路径继续禁止接触 holdings / account / position 数据。
-- transaction history（交易历史）、order book（订单簿）、cost basis（成本）、P&L（盈亏）、raw provider account response 在任何路径上仍然禁止离开本地。
+- 详细 holdings 仅可通过 `POST /api/agent/holdings-consent` 签发一次性本地 token 后，在 `POST /api/agent/run` 且 `include_holdings=true` + `holdings_consent_token` 校验通过时使用。未来 `POST /api/agent/run/stream` 需按 SSE ADR 单独实现与测试。
+- consent token 默认 10 分钟有效，只能被一个 agent session 消费一次；`holdings-consent` endpoint 不得返回 holdings 正文。
+- 持仓快照必须由 server-side 注入的 snapshot provider 提供；默认 provider 未接线时必须 fail-closed。不得由前端 localStorage、请求正文或 debug endpoint 传入详细 holdings。
+- 当前允许进入 MacroBrief prompt 的详细 holdings 范围仅限经 policy 过滤后的账户/证券/资产类别/数量/价格/市值/权重/偏离/组合风险摘要字段。其他所有 AI / RAG / search / preview / context 路径继续禁止接触 holdings / account / position 数据。
+- account number、broker login、手机号、邮箱、证件、银行卡、API key、access token、cookie、密码、验证码、raw provider payload、订单簿、逐笔订单、成交/交易历史、充值提现、设备标识、本地路径、数据库路径、环境变量在任何路径上仍然禁止离开本地。
 - 持仓注入必须 server-side 完成。raw holdings 不得进入 SSE 流、前端 console、前端 state、网络响应正文。
-- 每个 agent session 必须在 `outputs/agent_traces/<session_id>.jsonl` 记录 `holdings_included` 与 `holdings_snapshot_sha256`。raw snapshot 本身不记录。
-- agent endpoint 仅 `POST /api/agent/run` 与只读的 `GET /api/agent/trace/<session_id>`。`/api/chat`、`/api/ai/deepseek`、`/api/ai/external`、`/api/ai/tavily` 继续禁止。
+- 每个 agent session 必须在 trace 中仅记录 `holdings_included` 与 `holdings_snapshot_sha256`。raw snapshot 本身不记录。
+- agent endpoint 仅 `POST /api/agent/holdings-consent`、`POST /api/agent/run` 与只读的 `GET /api/agent/trace/<session_id>`。`/api/chat`、`/api/ai/deepseek`、`/api/ai/external`、`/api/ai/tavily` 继续禁止。
 - agent 仅复用已审计的 `deepseek_real_transport.py`（`deepseek-v4-pro` 加 `tools`/`tool_choice` 扩展）和 `tavily_real_transport.py`（经 `TavilySearchExecutionService` + `confirm_external_search=true`）。不新增 transport、不新增 httpx import。
 - agent 仍走现有 `ExternalAIRuntimePolicy`（22 gates 派生自实状态，fail-closed）+ `SearchRuntimePolicy` + `guard_response`，不弱化 `external_model_called=True` 时的 blocking。
 - agent 工具结果回灌 LLM 前必须 redact API key / 本地路径 / 内部 sha256 / raw provider payload / env 值；单工具结果 8KB 上限。
@@ -117,6 +121,8 @@ docs/
 - § 7 `forward_indicators` 恰好 5 条，每条含 `release_date` (ISO date)
 - § 8 `scenarios` 恰好 4 键：`base` / `bullish` / `bearish` / `systemic`，每键含 `trigger_conditions` + `transmission_path`
 - § 9 `source_list` 强制：brief 内每个数字必须能找到对应 `source_id`（URL 或 RAG doc_id）
+- `confirmed_facts[*]` 必须含当前 run 的 `evidence_ids` 与 `claim_status`（`observed` / `reported` / `unavailable`）；`unavailable` 不得携带数值。
+- MacroBrief 必须能表达 report / market / policy / macro / public-news cutoff；不同日期来源不得被静默拼接成同一“当前”状态。
 - § 10 `boundary_notice` 必须文本中包含 5 关键词：非个股操作 / 非概率胜率 / 非收益预测 / 非动态择时 / 非黑盒最优化
 - 工具结果与 LLM 输出之间的数字一致性必须保留（不得"调和"冲突，必须 flag）
 - 每个 brief session 必须有可查 trace，trace 不含 raw prompt / raw response / raw holdings 金额 / API key / raw search query
