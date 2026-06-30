@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app_backend.main import app, get_agent_run_service
 from app_backend.schemas.agent_api import AgentRunRequest
 from app_backend.services.agent_api_service import AgentRunService
+from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME
 from app_backend.services.agent_tool_registry import ToolSpec
 from app_backend.services.agent_trace_service import AgentTraceService
 from app_backend.services.llm_provider_adapter import ChatResponse
@@ -29,19 +30,20 @@ def _service(tmp_path: Path, provider: MockProvider) -> AgentRunService:
     def registry_factory(confirm_external_search: bool):
         registry = make_registry()
         if confirm_external_search:
-            registry.register(
-                ToolSpec(
-                    name="search_tavily",
-                    description="Fake search tool.",
-                    parameters_schema={
-                        "type": "object",
-                        "properties": {},
-                        "required": [],
-                        "additionalProperties": True,
-                    },
-                    handler=lambda args: {"results": [], "args": args},
+            for name in ["search_tavily", "commodity_quote", "quote_dxy"]:
+                registry.register(
+                    ToolSpec(
+                        name=name,
+                        description=f"Fake {name} tool.",
+                        parameters_schema={
+                            "type": "object",
+                            "properties": {},
+                            "required": [],
+                            "additionalProperties": True,
+                        },
+                        handler=lambda args: {"results": [], "args": args},
+                    )
                 )
-            )
         return registry
 
     return AgentRunService(
@@ -119,6 +121,8 @@ def test_agent_run_without_search_confirmation_does_not_expose_search_tool(tmp_p
         for tool in provider.calls[0]["tools"]
     ]
     assert "search_tavily" not in tool_names
+    assert "commodity_quote" not in tool_names
+    assert "quote_dxy" not in tool_names
     assert "current_public_news" in response.json()["missing_topics"]
 
 
@@ -141,6 +145,8 @@ def test_agent_run_with_search_confirmation_exposes_search_tool_to_runtime(tmp_p
         for tool in provider.calls[0]["tools"]
     ]
     assert "search_tavily" in tool_names
+    assert "commodity_quote" in tool_names
+    assert "quote_dxy" in tool_names
     body = response.json()
     assert body["search_required"] is True
     assert any(
@@ -149,14 +155,21 @@ def test_agent_run_with_search_confirmation_exposes_search_tool_to_runtime(tmp_p
     )
 
 
-def test_agent_run_default_service_fails_closed_without_runtime_dependencies():
-    response = _client().post(
-        "/api/agent/run",
-        json={"user_question": "Build a macro brief."},
-    )
+def test_default_agent_run_service_wires_registry_without_eager_external_calls():
+    service = get_agent_run_service()
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == "agent_runtime_dependencies_not_wired"
+    local_registry = service.registry_factory(False)
+    external_registry = service.registry_factory(True)
+
+    assert FINALIZE_TOOL_NAME in local_registry.names()
+    assert "rag_retrieve" in local_registry.names()
+    assert "search_tavily" not in local_registry.names()
+    assert "commodity_quote" not in local_registry.names()
+    assert "quote_dxy" not in local_registry.names()
+    assert "search_tavily" in external_registry.names()
+    assert "commodity_quote" in external_registry.names()
+    assert "quote_dxy" in external_registry.names()
+    assert service.provider_factory().name == "deepseek"
 
 
 def test_agent_run_rejects_holdings_until_server_side_snapshot_is_wired(tmp_path):

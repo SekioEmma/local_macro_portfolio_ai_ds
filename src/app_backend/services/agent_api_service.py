@@ -39,12 +39,13 @@ _LOCAL_TOOL_NAMES = [
     "treasury_curve",
     "calendar_lookup",
     "rag_retrieve",
-    "commodity_quote",
-    "portfolio_overlay",
-    "quote_dxy",
     "finalize_macro_brief",
 ]
-_SEARCH_TOOL_NAME = "search_tavily"
+_EXTERNAL_TOOL_NAMES = [
+    "search_tavily",
+    "commodity_quote",
+    "quote_dxy",
+]
 
 
 class AgentRunUnavailable(RuntimeError):
@@ -111,7 +112,7 @@ def build_unwired_agent_run_service() -> AgentRunService:
 def _tool_names_for_request(request: AgentRunRequest) -> list[str]:
     names = list(_LOCAL_TOOL_NAMES)
     if request.confirm_external_search:
-        names.insert(-1, _SEARCH_TOOL_NAME)
+        names[-1:-1] = _EXTERNAL_TOOL_NAMES
     return names
 
 
