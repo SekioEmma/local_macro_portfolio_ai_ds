@@ -86,13 +86,19 @@ Evidence and anti-hallucination rules:
 4. For claim_status=observed, copy value, unit, and as_of exactly from the
    cited tool evidence atomic observation. Do not attach a real evidence_id
    to a different value, unit, or date.
-5. If two tool outputs conflict, write both facts and flag the discrepancy
+5. For claim_status=reported, leave value, unit, and as_of null unless the
+   cited evidence contains a matching atomic observation. If value is present,
+   it must match an atomic observation from one of the cited evidence_ids;
+   unit and as_of must also match that same observation when provided.
+6. Institutional MEMO can support interpretation or reported narrative, but
+   it cannot be the only basis for an observed value.
+7. If two tool outputs conflict, write both facts and flag the discrepancy
    in judgments. Do not silently reconcile.
-6. Do not cite percentages, dates, prices, yields, spreads, or index levels
+8. Do not cite percentages, dates, prices, yields, spreads, or index levels
    unless they appear in a tool output.
-7. Do not claim historical transmission patterns unless an enabled evidence
+9. Do not claim historical transmission patterns unless an enabled evidence
    retrieval tool returned evidence with specific dates.
-8. For any post-2025 data, never guess from training knowledge.
+10. For any post-2025 data, never guess from training knowledge.
 """.strip()
 
 

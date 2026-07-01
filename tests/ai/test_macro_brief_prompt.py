@@ -68,6 +68,9 @@ def test_system_prompt_contains_anti_hallucination_rules():
     assert "Every numerical claim must originate from a tool call result" in text
     assert "source_id in source_list" in text
     assert "evidence_ids in the current run evidence ledger" in text
+    assert "For claim_status=reported, leave value, unit, and as_of null" in text
+    assert "it must match an atomic observation from one of the cited evidence_ids" in text
+    assert "Institutional MEMO can support interpretation or reported narrative" in text
     assert "Do not silently reconcile" in text
     assert "For any post-2025 data, never guess" in text
 

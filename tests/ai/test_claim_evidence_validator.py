@@ -152,7 +152,7 @@ def test_observed_fact_rejects_as_of_that_does_not_match_atomic_observation():
     assert findings == ["confirmed_facts[f1].atomic_observation_mismatch"]
 
 
-def test_reported_fact_does_not_require_atomic_observation_binding():
+def test_reported_fact_rejects_value_without_atomic_observation_binding():
     facts = _brief_payload()["confirmed_facts"]
     facts[0]["claim_status"] = "reported"
     facts[0]["value"] = 9.9
@@ -164,6 +164,109 @@ def test_reported_fact_does_not_require_atomic_observation_binding():
                 "ev_observed",
                 source_kind="public_reporting",
                 evidence_tier="public_reporting",
+                temporal_status="reported",
+            ).model_copy(update={"atomic_observations": ()})
+        ),
+    )
+
+    assert findings == ["confirmed_facts[f1].reported_without_atomic_observation"]
+
+
+def test_reported_fact_accepts_value_matching_public_reporting_atomic_observation():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["claim_status"] = "reported"
+    facts[0]["value"] = 4.3
+    facts[0]["unit"] = "%"
+    facts[0]["as_of"] = "2026-06-29"
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(
+            _record(
+                "ev_observed",
+                source_kind="public_reporting",
+                evidence_tier="public_reporting",
+                temporal_status="reported",
+            )
+        ),
+    )
+
+    assert findings == []
+
+
+def test_reported_fact_rejects_value_that_mismatches_atomic_observation():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["claim_status"] = "reported"
+    facts[0]["value"] = 4.9
+    facts[0]["unit"] = "%"
+    facts[0]["as_of"] = "2026-06-29"
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(
+            _record(
+                "ev_observed",
+                source_kind="public_reporting",
+                evidence_tier="public_reporting",
+                temporal_status="reported",
+            )
+        ),
+    )
+
+    assert findings == ["confirmed_facts[f1].reported_atomic_observation_mismatch"]
+
+
+def test_reported_fact_rejects_unit_or_as_of_without_value():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["claim_status"] = "reported"
+    facts[0]["value"] = None
+    facts[0]["unit"] = "%"
+    facts[0]["as_of"] = None
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(
+            _record(
+                "ev_observed",
+                source_kind="public_reporting",
+                evidence_tier="public_reporting",
+                temporal_status="reported",
+            )
+        ),
+    )
+
+    assert findings == ["confirmed_facts[f1].reported_value_missing_with_unit_or_as_of"]
+
+
+def test_unavailable_fact_rejects_structured_value_fields():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["claim_status"] = "unavailable"
+    facts[0]["value"] = None
+    facts[0]["unit"] = "%"
+    facts[0]["as_of"] = None
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(_record("ev_observed")),
+    )
+
+    assert findings == ["confirmed_facts[f1].unavailable_has_structured_value"]
+
+
+def test_reported_narrative_fact_allows_institutional_view_without_value():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["claim_status"] = "reported"
+    facts[0]["value"] = None
+    facts[0]["unit"] = None
+    facts[0]["as_of"] = None
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(
+            _record(
+                "ev_observed",
+                source_kind="institutional_research",
+                evidence_tier="institutional_view",
                 temporal_status="reported",
             ).model_copy(update={"atomic_observations": ()})
         ),

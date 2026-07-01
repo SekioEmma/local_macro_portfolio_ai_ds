@@ -802,8 +802,51 @@ def test_finalize_claim_evidence_gate_retries_when_ledger_ids_are_unknown():
     assert "confirmed_facts[f2].unknown_evidence_ids:ev_credit" in correction_messages[0]
 
 
+def test_finalize_claim_evidence_gate_retries_unbound_reported_number():
+    invalid_payload = brief_payload()
+    invalid_payload["confirmed_facts"][1]["evidence_ids"] = ["ev_known_credit"]
+    invalid_payload["confirmed_facts"][1]["value"] = 9.9
+    fixed_payload = brief_payload()
+    fixed_payload["confirmed_facts"][1]["evidence_ids"] = ["ev_known_credit"]
+    fixed_payload["confirmed_facts"][1]["value"] = None
+    fixed_payload["confirmed_facts"][1]["unit"] = None
+    fixed_payload["confirmed_facts"][1]["as_of"] = None
+    fixed_payload["confirmed_facts"][1]["statement"] = "Credit reporting remained a qualitative watch item."
+    provider = MockProvider(
+        [
+            ChatResponse(tool_calls=[finalize_call("bad-reported-number", invalid_payload)], finish_reason="tool_calls"),
+            ChatResponse(tool_calls=[finalize_call("fixed-reported-number", fixed_payload)], finish_reason="tool_calls"),
+        ]
+    )
+
+    result = run_agent(
+        session_id="reported-number-gate",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        evidence_ledger=_ledger(
+            _evidence_record("ev_dgs10"),
+            _evidence_record("ev_known_credit", tool_name="rag_retrieve", value=3.1),
+        ),
+    )
+
+    assert result.final_status == "ok"
+    assert any(warning.code == "validation_retry" for warning in result.warnings)
+    correction_messages = [
+        message.content
+        for message in provider.calls[1]["messages"]
+        if message.role == "user" and "macro_brief_validation_error" in message.content
+    ]
+    assert correction_messages
+    assert "confirmed_facts[f2].reported_atomic_observation_mismatch" in correction_messages[0]
+
+
 def test_finalize_with_evidence_ledger_adds_temporal_envelope_to_brief():
-    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+    payload = brief_payload()
+    payload["confirmed_facts"][1]["as_of"] = "2026-06-26"
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call(payload=payload)], finish_reason="tool_calls")])
 
     result = run_agent(
         session_id="temporal-envelope",
@@ -836,6 +879,7 @@ def test_finalize_with_evidence_ledger_rebuilds_source_list_server_side():
     payload = brief_payload()
     payload["confirmed_facts"][0]["source_id"] = "fake_llm_source"
     payload["confirmed_facts"][1]["source_id"] = "another_fake_source"
+    payload["confirmed_facts"][1]["as_of"] = "2026-06-26"
     payload["source_list"] = [
         {
             "id": "fake_llm_source",
