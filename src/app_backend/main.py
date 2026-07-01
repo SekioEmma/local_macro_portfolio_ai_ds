@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+from os import environ
 
 import anyio
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -298,7 +298,7 @@ def get_agent_trace_service() -> AgentTraceService:
 
 
 def get_agent_trace_debug_enabled() -> bool:
-    return os.environ.get(TRACE_DEBUG_ENV, "").strip().lower() in TRACE_DEBUG_ENABLED_VALUES
+    return environ.get(TRACE_DEBUG_ENV, "").strip().lower() in TRACE_DEBUG_ENABLED_VALUES
 
 
 def _build_commodity_search_callable(
