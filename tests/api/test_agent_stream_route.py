@@ -512,6 +512,62 @@ def test_agent_stream_service_requests_cancel_when_client_disconnects():
     assert probes >= 2
 
 
+def test_agent_stream_service_rejects_duplicate_active_session_and_releases_lease():
+    registry = AgentRunRegistry()
+    session_id = "stream-lease"
+    first_run_started = threading.Event()
+    first_run_release = threading.Event()
+    calls = 0
+
+    class BlockingService:
+        def run(self, request, *, event_callback=None, cancellation_requested=None):  # noqa: ANN001, ANN201
+            nonlocal calls
+            del request, event_callback, cancellation_requested
+            calls += 1
+            if calls == 1:
+                first_run_started.set()
+                assert first_run_release.wait(timeout=1.0)
+            return _MinimalResponse(final_status="ok")
+
+    service = AgentStreamService(
+        BlockingService(),
+        run_registry=registry,
+        heartbeat_interval_seconds=0.01,
+    )
+    request = AgentRunRequest(
+        session_id=session_id,
+        user_question="Build a macro brief.",
+    )
+    first_stream = service.stream(request)
+
+    next(first_stream)
+    assert first_run_started.wait(timeout=1.0)
+    assert registry.is_active(session_id) is True
+
+    conflict_text = "".join(service.stream(request))
+    conflict_events = _events_from_sse(conflict_text)
+
+    assert len(conflict_events) == 1
+    assert conflict_events[0]["event_id"] == f"{session_id}:1"
+    assert conflict_events[0]["session_id"] == session_id
+    assert conflict_events[0]["sequence"] == 1
+    assert conflict_events[0]["type"] == "error"
+    assert conflict_events[0]["payload"] == {
+        "detail": "agent_stream_session_already_running",
+        "error_type": "AgentStreamSessionConflict",
+    }
+    assert calls == 1
+
+    first_run_release.set()
+    first_events = _events_from_sse("".join(first_stream))
+    assert first_events[-1]["type"] == "complete"
+    assert registry.is_active(session_id) is False
+
+    second_events = _events_from_sse("".join(service.stream(request)))
+    assert second_events[-1]["type"] == "complete"
+    assert calls == 2
+
+
 class _MinimalResponse:
     def __init__(self, *, final_status: str) -> None:
         self._final_status = final_status

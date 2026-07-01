@@ -30,9 +30,9 @@ SSE must mirror the same sanitized event contract and must not introduce a broad
 
 ## Migration
 
-Current implementation has sanitized trace, debug replay, date-partitioned trace paths, `index.jsonl`, per-session summary files, append-only event hash chains, graceful `trace_overflow` summary preservation, a backend `POST /api/agent/run/stream` SSE endpoint, runtime event callback bridging, process-local cancel registry, runtime cancellation checks before each new provider/tool/finalize call, and a frontend `fetch + ReadableStream` POST-SSE UI for progress, explicit cancel, and validated `brief_section` rendering. In-flight blocking provider/tool calls are allowed to return or time out before the next cancellation check.
+Current implementation has sanitized trace, debug replay, date-partitioned trace paths, `index.jsonl`, per-session summary files, append-only event hash chains, graceful `trace_overflow` summary preservation, a backend `POST /api/agent/run/stream` SSE endpoint, runtime event callback bridging, process-local run lease and cancel registry, runtime cancellation checks before each new provider/tool/finalize call, and a frontend `fetch + ReadableStream` POST-SSE UI for progress, explicit cancel, and validated `brief_section` rendering. In-flight blocking provider/tool calls are allowed to return or time out before the next cancellation check.
 
-Runtime and stream safeguards now include wall-clock, provider-call, and tool-call timeout budgets, heartbeat events during idle stream periods, disconnect-triggered cancellation through the process-local run registry, plus a bounded SSE queue that emits a sanitized overflow error instead of retaining unbounded pending events.
+Runtime and stream safeguards now include wall-clock, provider-call, and tool-call timeout budgets, heartbeat events during idle stream periods, duplicate session conflict rejection through a per-session run lease, disconnect-triggered cancellation through the process-local run registry, plus a bounded SSE queue that emits a sanitized overflow error instead of retaining unbounded pending events.
 
 Provider retry trace events may persist only typed retry metadata such as `error_kind`, attempt count, maximum retries, and backoff seconds; they must not persist raw exception text, prompt content, provider request bodies, or provider response bodies.
 
@@ -43,5 +43,5 @@ Provider retry trace events may persist only typed retry metadata such as `error
 - `tests/api/test_agent_trace_route.py`
 - `tests/api/test_agent_stream_route.py`
 - Trace tests verify `schema_version`, `event_sequence`, `previous_event_hash`, `event_hash`, overflow summary behavior, and absence of raw question / holdings details.
-- Stream/runtime tests verify explicit cancellation returns `final_status=cancelled`, emits a sanitized cancelled SSE event, prevents subsequent tool dispatch, emits heartbeat events while a run is still active, requests cancellation when the client disconnects, enforces runtime timeouts, records typed provider retry metadata, and reports SSE queue overflow as a sanitized error.
+- Stream/runtime tests verify explicit cancellation returns `final_status=cancelled`, emits a sanitized cancelled SSE event, prevents subsequent tool dispatch, rejects duplicate active sessions with a sanitized conflict error, releases the run lease in worker cleanup, emits heartbeat events while a run is still active, requests cancellation when the client disconnects, enforces runtime timeouts, records typed provider retry metadata, and reports SSE queue overflow as a sanitized error.
 - Frontend tests verify POST-SSE parsing, sanitized SSE error handling, cancel route calls, validated section rendering, and active-session cancellation.

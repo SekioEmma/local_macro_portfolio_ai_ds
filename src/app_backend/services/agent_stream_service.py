@@ -63,8 +63,22 @@ class AgentStreamService:
             maxsize=self._max_queue_size,
         )
         queue_overflowed = threading.Event()
+        lease_acquired = False
         if self._run_registry is not None:
-            self._run_registry.clear(session_id)
+            lease_acquired = self._run_registry.acquire(session_id)
+            if not lease_acquired:
+                yield encode_sse_event(
+                    _sse_event(
+                        session_id=session_id,
+                        sequence=1,
+                        event_type="error",
+                        payload={
+                            "error_type": "AgentStreamSessionConflict",
+                            "detail": "agent_stream_session_already_running",
+                        },
+                    )
+                )
+                return
 
         def _put_item(item: AgentRuntimeEvent | _ResultItem | _ErrorItem) -> None:
             if queue_overflowed.is_set():
@@ -115,8 +129,8 @@ class AgentStreamService:
                     )
                 )
             finally:
-                if self._run_registry is not None:
-                    self._run_registry.clear(session_id)
+                if self._run_registry is not None and lease_acquired:
+                    self._run_registry.release(session_id)
 
         worker = threading.Thread(target=_run, name=f"agent-stream-{session_id}", daemon=True)
         worker.start()

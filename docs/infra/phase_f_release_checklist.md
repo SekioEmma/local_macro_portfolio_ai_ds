@@ -64,7 +64,7 @@ CI must also run `python scripts/run_phase_f_controlled_agent_smoke.py` and fron
 - Holdings consent token is one-time, session-bound, expires, and never returns holdings content.
 - Server-side holdings injection is fail-closed when the snapshot provider is unwired.
 - Trace records only holdings metadata and sanitized runtime events.
-- SSE events are monotonic, sanitized, cancellable, and emit brief sections only after validation.
+- SSE events are monotonic, sanitized, cancellable, reject duplicate active sessions with a stable conflict event, release the per-session run lease in worker cleanup, and emit brief sections only after validation.
 - Claim-evidence ledger rejects unbound facts, fabricated evidence ids, and incompatible source projection.
 - Temporal alignment exposes asynchronous inputs instead of silently merging dates.
 - RAG runtime refuses incompatible embedding generations and invalidates stale cached generations.
