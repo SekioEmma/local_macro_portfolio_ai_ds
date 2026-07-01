@@ -2677,6 +2677,38 @@ button {
   color: var(--paper-accent);
 }
 
+.agent-product-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 1px solid var(--panel-border);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(99, 83, 63, 0.035) 0,
+      rgba(99, 83, 63, 0.035) 1px,
+      transparent 1px,
+      transparent 7px
+    ),
+    var(--panel-subtle-bg);
+  padding: 10px;
+}
+
+.agent-product-status span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  border: 1px solid var(--paper-rule);
+  border-radius: 3px;
+  background: rgba(255, 253, 248, 0.74);
+  padding: 0 12px;
+  color: var(--ink-strong);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
 .chat-result-content {
   display: grid;
   gap: 18px;

@@ -26,6 +26,15 @@ describe("AIChatPage Agent SSE", () => {
     });
   });
 
+  it("shows fixed MacroBrief product status labels", () => {
+    render(<AIChatPage />);
+
+    expect(screen.getByLabelText("MacroBrief 输出定位")).toBeInTheDocument();
+    expect(screen.getByText("研究辅助输出")).toBeInTheDocument();
+    expect(screen.getByText("非自动投资决策")).toBeInTheDocument();
+    expect(screen.getByText("需要用户审阅")).toBeInTheDocument();
+  });
+
   it("streams validated brief sections into the paper result panel", async () => {
     let emit: ((event: AgentSseEvent) => void) | undefined;
     let resolveRun:

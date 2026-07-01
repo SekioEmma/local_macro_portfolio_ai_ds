@@ -20,6 +20,13 @@ class MacroBriefRenderResult(BaseModel):
     source_markdown: str
 
 
+MACRO_BRIEF_PRODUCT_STATUS_LABELS = (
+    "研究辅助输出",
+    "非自动投资决策",
+    "需要用户审阅",
+)
+
+
 def render_macro_brief_markdown(
     brief: MacroBrief,
     *,
@@ -36,6 +43,7 @@ def render_macro_brief_markdown(
         visibility_mode=visibility_mode,
     )
     sections = [
+        _product_status_notice(),
         _core_conclusion(brief),
         _market_state(brief),
         _confirmed_facts(brief),
@@ -52,6 +60,10 @@ def render_macro_brief_markdown(
         markdown="\n\n".join(sections),
         source_markdown=source_markdown,
     )
+
+
+def _product_status_notice() -> str:
+    return "## 输出定位\n\n" + " / ".join(MACRO_BRIEF_PRODUCT_STATUS_LABELS)
 
 
 def _core_conclusion(brief: MacroBrief) -> str:
@@ -157,6 +169,7 @@ def _scenarios(brief: MacroBrief) -> str:
 
 
 __all__ = [
+    "MACRO_BRIEF_PRODUCT_STATUS_LABELS",
     "MacroBriefRenderResult",
     "render_macro_brief_markdown",
 ]

@@ -29,6 +29,12 @@ type ChatCopyState = "idle" | "copied" | "error";
 
 const MAX_QUESTION_LENGTH = 2000;
 
+const macroBriefProductStatusLabels = [
+  "研究辅助输出",
+  "非自动投资决策",
+  "需要用户审阅"
+];
+
 const briefSectionOrder = [
   "core_conclusion",
   "market_state",
@@ -245,6 +251,8 @@ export function AIChatPage() {
         SSE 只展示清洗后的进度与验证后的 brief section。
       </BoundaryNotice>
 
+      <ProductStatusStrip />
+
       <form className="chat-controls" onSubmit={submitResearch}>
         <label className="chat-question-field" htmlFor="ai-research-question">
           <span>宏观研究问题</span>
@@ -349,6 +357,16 @@ export function AIChatPage() {
         )}
       </section>
     </section>
+  );
+}
+
+function ProductStatusStrip() {
+  return (
+    <div className="agent-product-status" aria-label="MacroBrief 输出定位">
+      {macroBriefProductStatusLabels.map((label) => (
+        <span key={label}>{label}</span>
+      ))}
+    </div>
   );
 }
 

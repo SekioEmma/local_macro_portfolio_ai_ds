@@ -151,6 +151,9 @@ def test_agent_run_endpoint_returns_rendered_public_brief(tmp_path):
     assert "rendered_markdown" in body
     assert body["brief"]["core_conclusion"] == "Macro environment remains balanced."
     assert body["sources"][0]["url"] == "https://fred.stlouisfed.org/series/DGS10"
+    assert "研究辅助输出" in body["rendered_markdown"]
+    assert "非自动投资决策" in body["rendered_markdown"]
+    assert "需要用户审阅" in body["rendered_markdown"]
     assert "credit_snapshot" not in body["rendered_markdown"]
     assert "Build a macro brief." not in response.text
 
