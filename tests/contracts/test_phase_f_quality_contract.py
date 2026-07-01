@@ -46,9 +46,11 @@ def test_phase_f_release_gate_is_documented_and_wired_to_ci():
 
     assert "run_phase_f_controlled_agent_smoke.py" in checklist
     assert "--report-path" in checklist
+    assert "tests/llm" in checklist
     assert "run_phase_f_controlled_agent_smoke.py" in roadmap
     assert "run_phase_f_controlled_agent_smoke.py" in phase_plan
     assert "run_phase_f_controlled_agent_smoke.py" in ci
+    assert "npm run build" in ci
     assert "phase_f_release_checklist.md" in governance
     assert "phase_f_release_checklist.md" in index
     assert "phase_f_release_checklist.md" in phase_plan

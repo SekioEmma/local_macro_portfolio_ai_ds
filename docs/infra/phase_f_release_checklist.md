@@ -17,7 +17,7 @@ Run these before requesting human acceptance:
 
 ```bash
 python -m ruff check src tests scripts
-python -m pytest tests/ai tests/api tests/contracts -q
+python -m pytest tests/ai tests/api tests/contracts tests/llm -q
 python scripts/run_phase_f_controlled_agent_smoke.py --report-path docs/infra/phase_f_controlled_run_fixture_latest.json
 cd app_frontend && npm.cmd run typecheck
 cd app_frontend && npm.cmd test
@@ -47,14 +47,15 @@ validation_record.budget_usage.steps=<count>
 validation_record.elapsed_seconds=<seconds>
 ```
 
-CI must also run `python scripts/run_phase_f_controlled_agent_smoke.py` so the fixture-mode critical path is covered without external API calls, holdings context, `.env`, raw data, or `outputs`.
+CI must also run `python scripts/run_phase_f_controlled_agent_smoke.py` and frontend production build so the fixture-mode critical path is covered without external API calls, holdings context, `.env`, raw data, or `outputs`, and the release UI remains buildable.
 
 ## Dependency And Coverage Strategy
 
 - Python dependency authority remains `requirements.txt` plus `requirements-dev.txt`; CI caches pip from those files.
 - Frontend dependency authority remains `app_frontend/package-lock.json`; CI uses `npm ci`.
 - No new dependency is required for the Phase F controlled smoke or release checklist.
-- Critical path coverage is split across `tests/ai`, `tests/api`, and `tests/contracts`; the release gate treats these as Phase F coverage, not only unit coverage.
+- Critical path coverage is split across `tests/ai`, `tests/api`, `tests/contracts`, and `tests/llm`; the release gate treats these as Phase F coverage, not only unit coverage.
+- CI runs the same Python lint/test critical path, fixture controlled smoke, frontend typecheck, frontend tests, and frontend production build.
 
 ## Manual Acceptance Checklist
 
