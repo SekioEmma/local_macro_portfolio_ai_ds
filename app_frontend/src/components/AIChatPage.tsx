@@ -43,6 +43,7 @@ const macroBriefProductStatusLabels = [
 
 const briefSectionOrder = [
   "core_conclusion",
+  "temporal_envelope",
   "market_state",
   "confirmed_facts",
   "judgments",
@@ -56,6 +57,7 @@ const briefSectionOrder = [
 
 const briefSectionTitles: Record<string, string> = {
   core_conclusion: "核心结论",
+  temporal_envelope: "时间对齐",
   market_state: "市场状态",
   confirmed_facts: "确认事实",
   judgments: "判断链路",
@@ -616,9 +618,41 @@ function AgentBriefSections({ sections }: { sections: AgentBriefSection[] }) {
               <small>{section.section}</small>
             </div>
           </header>
-          <AgentBriefContent content={section.content} />
+          {section.section === "temporal_envelope" && isRecord(section.content) ? (
+            <AgentTemporalEnvelope content={section.content} />
+          ) : (
+            <AgentBriefContent content={section.content} />
+          )}
         </article>
       ))}
+    </div>
+  );
+}
+
+function AgentTemporalEnvelope({ content }: { content: Record<string, unknown> }) {
+  const rows = [
+    ["report_generated_at", "报告生成时间"],
+    ["market_data_cutoff", "市场数据截止"],
+    ["policy_data_cutoff", "政策数据截止"],
+    ["macro_data_cutoff", "宏观数据截止"],
+    ["public_news_cutoff", "公开新闻截止"],
+    ["max_market_data_age_working_days_approx", "市场数据工作日跨度近似值"],
+    ["asynchronous_inputs", "输入时间错配"]
+  ] as const;
+  const note = content.temporal_alignment_note;
+  return (
+    <div className="agent-temporal-envelope">
+      <dl className="agent-temporal-grid">
+        {rows.map(([key, label]) => (
+          <div key={key}>
+            <dt>{label}</dt>
+            <dd>{formatTemporalValue(content[key])}</dd>
+          </div>
+        ))}
+      </dl>
+      {typeof note === "string" && note.trim() ? (
+        <p className="agent-temporal-note">{note}</p>
+      ) : null}
     </div>
   );
 }
@@ -801,6 +835,13 @@ function serializeBriefContent(content: unknown): string {
     return String(content);
   }
   return JSON.stringify(content, null, 2);
+}
+
+function formatTemporalValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "unavailable";
+  if (typeof value === "boolean") return value ? "是" : "否";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  return JSON.stringify(value);
 }
 
 function stringFromPayload(

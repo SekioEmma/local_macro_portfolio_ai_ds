@@ -1,6 +1,8 @@
 """Deterministic Chinese Markdown renderer for validated MacroBrief objects."""
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 from app_backend.schemas.macro_brief import MacroBrief
@@ -45,6 +47,7 @@ def render_macro_brief_markdown(
     sections = [
         _product_status_notice(),
         _core_conclusion(brief),
+        _temporal_envelope(brief),
         _market_state(brief),
         _confirmed_facts(brief),
         _judgments(brief),
@@ -68,6 +71,49 @@ def _product_status_notice() -> str:
 
 def _core_conclusion(brief: MacroBrief) -> str:
     return "## 核心结论\n\n" + brief.core_conclusion
+
+
+def macro_brief_temporal_envelope_payload(brief: MacroBrief) -> dict[str, Any]:
+    return {
+        "report_generated_at": brief.report_generated_at,
+        "market_data_cutoff": brief.market_data_cutoff,
+        "policy_data_cutoff": brief.policy_data_cutoff,
+        "macro_data_cutoff": brief.macro_data_cutoff,
+        "public_news_cutoff": brief.public_news_cutoff,
+        "max_market_data_age_working_days_approx": brief.max_market_data_age_trading_days,
+        "asynchronous_inputs": brief.asynchronous_inputs,
+        "temporal_alignment_note": brief.temporal_alignment_note,
+    }
+
+
+def _temporal_envelope(brief: MacroBrief) -> str:
+    payload = macro_brief_temporal_envelope_payload(brief)
+    labels = {
+        "report_generated_at": "报告生成时间",
+        "market_data_cutoff": "市场数据截止",
+        "policy_data_cutoff": "政策数据截止",
+        "macro_data_cutoff": "宏观数据截止",
+        "public_news_cutoff": "公开新闻截止",
+        "max_market_data_age_working_days_approx": "市场数据工作日跨度近似值",
+        "asynchronous_inputs": "输入时间错配",
+        "temporal_alignment_note": "时间对齐提示",
+    }
+    lines = [
+        "## 时间对齐",
+        "",
+        "| 字段 | 值 |",
+        "| --- | --- |",
+    ]
+    for key, label in labels.items():
+        value = payload[key]
+        if value is None:
+            rendered = "unavailable"
+        elif isinstance(value, bool):
+            rendered = "true" if value else "false"
+        else:
+            rendered = str(value)
+        lines.append(f"| {label} | {rendered} |")
+    return "\n".join(lines)
 
 
 def _market_state(brief: MacroBrief) -> str:
@@ -171,5 +217,6 @@ def _scenarios(brief: MacroBrief) -> str:
 __all__ = [
     "MACRO_BRIEF_PRODUCT_STATUS_LABELS",
     "MacroBriefRenderResult",
+    "macro_brief_temporal_envelope_payload",
     "render_macro_brief_markdown",
 ]

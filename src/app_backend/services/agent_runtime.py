@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
-from datetime import date
+from datetime import UTC, date, datetime
 from time import monotonic, sleep
 from typing import Any, Literal
 
@@ -232,6 +232,7 @@ def run_agent(
     cancellation_requested: CancellationRequested | None = None,
     monotonic_clock: MonotonicClock | None = None,
     sleep_fn: SleepFn | None = None,
+    report_generated_at: str | None = None,
 ) -> AgentSessionResult:
     """Run the internal MacroBrief agent loop against injected dependencies."""
     cfg = config or AgentRuntimeConfig()
@@ -239,6 +240,7 @@ def run_agent(
     clock = monotonic_clock or monotonic
     sleeper = sleep_fn or sleep
     run_started_at = clock()
+    generated_at = report_generated_at or datetime.now(UTC).isoformat()
     warnings: list[AgentRuntimeWarning] = []
     events: list[AgentRuntimeEvent] = []
     validation_failures = 0
@@ -602,7 +604,7 @@ def run_agent(
                     tool_call=tool_call,
                     validation_failures=validation_failures,
                     evidence_ledger=current_evidence_ledger,
-                    report_generated_at=f"{current_date.isoformat()}T00:00:00Z",
+                    report_generated_at=generated_at,
                     holdings_snapshot=holdings_snapshot if include_holdings else None,
                 )
                 if result is not None:

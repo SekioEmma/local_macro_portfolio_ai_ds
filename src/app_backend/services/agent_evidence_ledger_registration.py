@@ -118,11 +118,16 @@ def _records_from_rag(
             evidence_tier=evidence_tier,
             title=_text(chunk.get("title")) or "RAG retrieved chunk",
             rag_doc_id=_text(chunk.get("doc_id")),
+            observation_date=_date_prefix(chunk.get("observation_period")),
+            release_date=_date_prefix(chunk.get("release_date")),
             temporal_status="reported" if evidence_tier == "institutional_view" else "as_released",
             value_summary={
                 "doc_type": _text(chunk.get("doc_type")),
                 "chunk_index": chunk.get("chunk_index"),
                 "source_domain": _text(chunk.get("source_domain")),
+                "observation_period": _text(chunk.get("observation_period")),
+                "release_date": _text(chunk.get("release_date")),
+                "vintage": _text(chunk.get("vintage")),
             },
             payload=chunk,
         )

@@ -56,6 +56,24 @@ def test_renderer_adds_required_product_status_labels():
         assert label in result.markdown
 
 
+def test_renderer_adds_temporal_envelope_section():
+    payload = brief_payload()
+    payload["report_generated_at"] = "2026-06-30T14:00:00+00:00"
+    payload["market_data_cutoff"] = "2026-06-29"
+    payload["policy_data_cutoff"] = "2026-06-18"
+    payload["macro_data_cutoff"] = "2026-06-15"
+    payload["public_news_cutoff"] = "2026-06-30"
+    payload["max_market_data_age_trading_days"] = 2
+    payload["asynchronous_inputs"] = False
+    brief = parse_macro_brief(payload)
+
+    result = render_macro_brief_markdown(brief, visibility_mode="public")
+
+    assert "## 时间对齐" in result.markdown
+    assert "市场数据工作日跨度近似值" in result.markdown
+    assert "2026-06-29" in result.markdown
+
+
 def test_renderer_does_not_create_new_numeric_claims():
     brief = parse_macro_brief(brief_payload())
 

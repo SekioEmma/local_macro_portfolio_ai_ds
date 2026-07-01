@@ -488,7 +488,11 @@ def test_write_missing_offline_embedding_model_writes_bm25_only_chunks(tmp_path,
 
     assert result.mode == "write-bm25-only"
     assert result.written_chunk_count > 0
-    assert ChunkTextStore(vector_root / "chunks.sqlite").list_doc_ids() == ["fomc_statement_2026_06_17"]
+    stored = ChunkTextStore(vector_root / "chunks.sqlite")
+    assert stored.list_doc_ids() == ["fomc_statement_2026_06_17"]
+    first_chunk = stored.get_chunk("fomc_statement_2026_06_17", 0)
+    assert first_chunk is not None
+    assert first_chunk.release_date == "2026-06-17"
     assert not (vector_root / "chroma").exists()
     assert (vector_root / "ingest_audits" / "last_ingest_audit.json").exists()
 

@@ -16,6 +16,8 @@ from app_backend.services.agent_api_service import AgentRunInputError, AgentRunS
 from app_backend.services.agent_run_registry import AgentRunRegistry
 from app_backend.services.agent_runtime import AgentRuntimeEvent
 from app_backend.services.agent_trace_service import sanitize_trace_payload
+from app_backend.services.macro_brief_renderer import macro_brief_temporal_envelope_payload
+from app_backend.schemas.macro_brief import MacroBrief
 
 
 class AgentSseEvent(BaseModel):
@@ -209,6 +211,15 @@ def _brief_section_payloads(response: dict[str, Any]) -> list[tuple[str, dict[st
     brief = response.get("brief")
     if not isinstance(brief, dict):
         return []
+    section_payloads: list[tuple[str, dict[str, Any]]] = []
+    temporal_payload = _temporal_section_payload(brief)
+    if temporal_payload is not None:
+        section_payloads.append(
+            (
+                "brief_section",
+                {"section": "temporal_envelope", "content": temporal_payload},
+            )
+        )
     section_keys = [
         "core_conclusion",
         "market_state",
@@ -221,11 +232,20 @@ def _brief_section_payloads(response: dict[str, Any]) -> list[tuple[str, dict[st
         "source_list",
         "boundary_notice",
     ]
-    return [
+    section_payloads.extend(
         ("brief_section", {"section": key, "content": brief[key]})
         for key in section_keys
         if key in brief
-    ]
+    )
+    return section_payloads
+
+
+def _temporal_section_payload(brief: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        parsed = MacroBrief.model_validate(brief)
+    except Exception:  # noqa: BLE001 - malformed response is handled by missing sections
+        return None
+    return macro_brief_temporal_envelope_payload(parsed)
 
 
 class _ResultItem(BaseModel):

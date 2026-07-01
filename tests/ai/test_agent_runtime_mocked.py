@@ -812,6 +812,7 @@ def test_finalize_with_evidence_ledger_adds_temporal_envelope_to_brief():
         tool_registry=make_registry(),
         current_date=date(2026, 6, 30),
         tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        report_generated_at="2026-06-30T00:00:00Z",
         evidence_ledger=_ledger(
             _evidence_record("ev_dgs10", tool_name="treasury_curve", observation_date="2026-06-27"),
             _evidence_record(

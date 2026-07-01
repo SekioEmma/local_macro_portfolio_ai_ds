@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS chunks (
     external_llm_context_allowed INTEGER NOT NULL DEFAULT 1,
     evidence_tier                TEXT NOT NULL DEFAULT 'unknown',
     is_official_source           INTEGER NOT NULL DEFAULT 0,
+    release_date                 TEXT,
+    observation_period           TEXT,
+    vintage                      TEXT,
     PRIMARY KEY (doc_id, chunk_index)
 );
 """
@@ -33,6 +36,18 @@ _MIGRATION_ADD_IS_OFFICIAL_SOURCE = (
     "ALTER TABLE chunks "
     "ADD COLUMN is_official_source INTEGER NOT NULL DEFAULT 0"
 )
+_MIGRATION_ADD_RELEASE_DATE = (
+    "ALTER TABLE chunks "
+    "ADD COLUMN release_date TEXT"
+)
+_MIGRATION_ADD_OBSERVATION_PERIOD = (
+    "ALTER TABLE chunks "
+    "ADD COLUMN observation_period TEXT"
+)
+_MIGRATION_ADD_VINTAGE = (
+    "ALTER TABLE chunks "
+    "ADD COLUMN vintage TEXT"
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +61,9 @@ class StoredChunk:
     external_llm_context_allowed: bool = True
     evidence_tier: str = "unknown"
     is_official_source: bool = False
+    release_date: str | None = None
+    observation_period: str | None = None
+    vintage: str | None = None
 
 
 class ChunkTextStore:
@@ -70,8 +88,9 @@ class ChunkTextStore:
                 """
                 INSERT OR REPLACE INTO chunks
                     (doc_id, chunk_index, text, title, doc_type, source_domain,
-                     external_llm_context_allowed, evidence_tier, is_official_source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     external_llm_context_allowed, evidence_tier, is_official_source,
+                     release_date, observation_period, vintage)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     chunk.doc_id,
@@ -83,6 +102,9 @@ class ChunkTextStore:
                     int(chunk.external_llm_context_allowed),
                     chunk.evidence_tier,
                     int(chunk.is_official_source),
+                    chunk.release_date,
+                    chunk.observation_period,
+                    chunk.vintage,
                 ),
             )
 
@@ -98,8 +120,9 @@ class ChunkTextStore:
                 """
                 INSERT OR REPLACE INTO chunks
                     (doc_id, chunk_index, text, title, doc_type, source_domain,
-                     external_llm_context_allowed, evidence_tier, is_official_source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     external_llm_context_allowed, evidence_tier, is_official_source,
+                     release_date, observation_period, vintage)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -112,6 +135,9 @@ class ChunkTextStore:
                         int(chunk.external_llm_context_allowed),
                         chunk.evidence_tier,
                         int(chunk.is_official_source),
+                        chunk.release_date,
+                        chunk.observation_period,
+                        chunk.vintage,
                     )
                     for chunk in chunks
                 ],
@@ -121,7 +147,8 @@ class ChunkTextStore:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT doc_id, chunk_index, text, title, doc_type, source_domain, "
-                "external_llm_context_allowed, evidence_tier, is_official_source "
+                "external_llm_context_allowed, evidence_tier, is_official_source, "
+                "release_date, observation_period, vintage "
                 "FROM chunks WHERE doc_id = ? AND chunk_index = ?",
                 (doc_id, chunk_index),
             ).fetchone()
@@ -137,6 +164,9 @@ class ChunkTextStore:
             llm_allowed,
             evidence_tier,
             is_official_source,
+            release_date,
+            observation_period,
+            vintage,
         ) = row
         return StoredChunk(
             doc_id=doc_id_,
@@ -148,6 +178,9 @@ class ChunkTextStore:
             external_llm_context_allowed=bool(llm_allowed),
             evidence_tier=evidence_tier,
             is_official_source=bool(is_official_source),
+            release_date=release_date,
+            observation_period=observation_period,
+            vintage=vintage,
         )
 
     def delete_doc(self, doc_id: str) -> int:
@@ -169,7 +202,8 @@ class ChunkTextStore:
     def list_chunks(self, *, external_llm_context_allowed: bool | None = None) -> list[StoredChunk]:
         query = (
             "SELECT doc_id, chunk_index, text, title, doc_type, source_domain, "
-            "external_llm_context_allowed, evidence_tier, is_official_source FROM chunks"
+            "external_llm_context_allowed, evidence_tier, is_official_source, "
+            "release_date, observation_period, vintage FROM chunks"
         )
         params: tuple[int, ...] = ()
         if external_llm_context_allowed is not None:
@@ -189,6 +223,9 @@ class ChunkTextStore:
                 external_llm_context_allowed=bool(row[6]),
                 evidence_tier=row[7],
                 is_official_source=bool(row[8]),
+                release_date=row[9],
+                observation_period=row[10],
+                vintage=row[11],
             )
             for row in rows
         ]
@@ -207,6 +244,18 @@ class ChunkTextStore:
             pass  # column already exists
         try:
             conn.execute(_MIGRATION_ADD_IS_OFFICIAL_SOURCE)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            conn.execute(_MIGRATION_ADD_RELEASE_DATE)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            conn.execute(_MIGRATION_ADD_OBSERVATION_PERIOD)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            conn.execute(_MIGRATION_ADD_VINTAGE)
         except sqlite3.OperationalError:
             pass  # column already exists
         return conn

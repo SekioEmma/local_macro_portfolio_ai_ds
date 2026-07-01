@@ -120,6 +120,11 @@ def test_agent_stream_route_emits_sanitized_lifecycle_and_sections(tmp_path):
         and event["payload"]["section"] == "core_conclusion"
         for event in events
     )
+    assert any(
+        event["type"] == "brief_section"
+        and event["payload"]["section"] == "temporal_envelope"
+        for event in events
+    )
 
 
 def test_agent_stream_route_converts_input_errors_to_sse_error(tmp_path):

@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -166,6 +166,7 @@ class AgentRunService:
                 else None
             ),
             cancellation_requested=cancellation_requested,
+            report_generated_at=datetime.now(UTC).isoformat(),
         )
         return _response_from_result(
             request=request,

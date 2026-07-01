@@ -96,8 +96,16 @@ describe("AIChatPage Agent SSE", () => {
         agentEvent(
           "brief_section",
           {
-            section: "core_conclusion",
-            content: "Macro environment remains balanced."
+            section: "temporal_envelope",
+            content: {
+              report_generated_at: "2026-06-30T14:00:00+00:00",
+              market_data_cutoff: "2026-06-29",
+              policy_data_cutoff: "2026-06-18",
+              macro_data_cutoff: "2026-06-15",
+              public_news_cutoff: "2026-06-30",
+              max_market_data_age_working_days_approx: 2,
+              asynchronous_inputs: false
+            }
           },
           2,
           capturedSessionId
@@ -105,9 +113,20 @@ describe("AIChatPage Agent SSE", () => {
       );
       emit?.(
         agentEvent(
+          "brief_section",
+          {
+            section: "core_conclusion",
+            content: "Macro environment remains balanced."
+          },
+          3,
+          capturedSessionId
+        )
+      );
+      emit?.(
+        agentEvent(
           "complete",
           { final_status: "ok", trace_session_id: "trace-ui", steps: 2 },
-          3,
+          4,
           capturedSessionId
         )
       );
@@ -121,6 +140,9 @@ describe("AIChatPage Agent SSE", () => {
       );
     });
 
+    expect(await screen.findByText("时间对齐")).toBeInTheDocument();
+    expect(screen.getByText("市场数据截止")).toBeInTheDocument();
+    expect(screen.getByText("2026-06-29")).toBeInTheDocument();
     expect(await screen.findByText("核心结论")).toBeInTheDocument();
     expect(
       screen.getByText("Macro environment remains balanced.")

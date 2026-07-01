@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -67,6 +68,25 @@ def test_upsert_and_get_preserves_evidence_tier(tmp_path):
     assert result is not None
     assert result.evidence_tier == "institutional_view"
     assert result.is_official_source is False
+
+
+def test_upsert_and_get_preserves_temporal_metadata(tmp_path):
+    store = _store(tmp_path)
+    store.upsert_chunk(
+        replace(
+            _chunk(),
+            release_date="2026-06-10",
+            observation_period="2026-05",
+            vintage="as_released",
+        )
+    )
+
+    result = store.get_chunk("doc1", 0)
+
+    assert result is not None
+    assert result.release_date == "2026-06-10"
+    assert result.observation_period == "2026-05"
+    assert result.vintage == "as_released"
 
 
 def test_get_nonexistent_returns_none(tmp_path):

@@ -20,6 +20,9 @@ class RetrievedChunk:
     external_llm_context_allowed: bool = True
     evidence_tier: str = "unknown"
     is_official_source: bool = False
+    release_date: str | None = None
+    observation_period: str | None = None
+    vintage: str | None = None
 
 
 class RAGRetrievalService:
@@ -109,6 +112,9 @@ class RAGRetrievalService:
                 external_llm_context_allowed=raw.external_llm_context_allowed,
                 evidence_tier=raw.evidence_tier,
                 is_official_source=raw.is_official_source,
+                release_date=getattr(raw, "release_date", None),
+                observation_period=getattr(raw, "observation_period", None),
+                vintage=getattr(raw, "vintage", None),
             ))
         return chunks
 

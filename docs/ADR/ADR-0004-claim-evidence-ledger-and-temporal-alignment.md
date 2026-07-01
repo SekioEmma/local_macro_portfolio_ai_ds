@@ -20,6 +20,12 @@ Phase F introduces a run-scoped evidence ledger and temporal envelope:
   ledger `atomic_observations` entry.
 - `judgments[*].evidence_ids` and `judgments[*].temporal_scope` distinguish analysis support from fact ids.
 - MacroBrief may include report and data cutoff fields.
+- Public news cutoffs use published dates when available; access time is
+  only a fallback.
+- RAG release metadata (`release_date`, `observation_period`, `vintage`) is
+  preserved from curated manifest to chunk store, retrieval, and run ledger.
+- Backend Markdown and SSE streams render a server-owned temporal envelope;
+  the model does not author this display block.
 
 ## Allowed Scope
 
@@ -38,7 +44,7 @@ Phase F introduces a run-scoped evidence ledger and temporal envelope:
 
 ## Migration
 
-Current implementation adds schema, prompt, ledger, validator, temporal envelope foundations, server-side source projection, and automatic tool-result ledger registration when an agent run provides a `RunEvidenceLedger`. `AgentRunService` enables the run ledger by default; focused runtime tests may disable it when exercising legacy fixture behavior.
+Current implementation adds schema, prompt, ledger, validator, temporal envelope display, server-side source projection, and automatic tool-result ledger registration when an agent run provides a `RunEvidenceLedger`. `AgentRunService` enables the run ledger by default; focused runtime tests may disable it when exercising legacy fixture behavior.
 
 ## Validation
 

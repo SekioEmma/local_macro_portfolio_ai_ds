@@ -20,6 +20,9 @@ def test_registers_rag_institutional_view_as_reported_evidence():
                     "doc_type": "research_report",
                     "evidence_tier": "institutional_view",
                     "is_official_source": False,
+                    "release_date": "2026-06-10",
+                    "observation_period": "2026-05",
+                    "vintage": "as_released",
                     "text": "reported view",
                 }
             ],
@@ -42,6 +45,9 @@ def test_registers_rag_institutional_view_as_reported_evidence():
     assert record.evidence_tier == "institutional_view"
     assert record.rag_doc_id == "memo_doc"
     assert record.temporal_status == "reported"
+    assert record.release_date == "2026-06-10"
+    assert record.observation_date == "2026-05"
+    assert record.value_summary["vintage"] == "as_released"
 
 
 def test_registers_search_results_as_public_reporting():

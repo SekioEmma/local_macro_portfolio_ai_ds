@@ -586,6 +586,9 @@ def _stored_chunk(doc: CuratedDocument, chunk: Chunk) -> StoredChunk:
         external_llm_context_allowed=doc.external_llm_context_allowed,
         evidence_tier=doc.evidence_tier,
         is_official_source=doc.is_official_source,
+        release_date=_metadata_str(doc.metadata.get("release_date")),
+        observation_period=_metadata_str(doc.metadata.get("observation_period")),
+        vintage=_metadata_str(doc.metadata.get("vintage")),
     )
 
 

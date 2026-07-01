@@ -32,6 +32,9 @@ class _FakeRawChunk:
     external_llm_context_allowed: bool = True
     evidence_tier: str = "official_evidence"
     is_official_source: bool = True
+    release_date: str | None = None
+    observation_period: str | None = None
+    vintage: str | None = None
 
 
 class _StubEmbedding:
@@ -204,6 +207,28 @@ def test_retrieve_result_carries_evidence_tier():
 
     assert result.evidence_tier == "institutional_view"
     assert result.is_official_source is False
+
+
+def test_retrieve_result_carries_temporal_metadata():
+    raw = {
+        ("doc1", 0): _FakeRawChunk(
+            "full text",
+            "BLS release",
+            "official_release",
+            "bls.gov",
+            release_date="2026-06-10",
+            observation_period="2026-05",
+            vintage="as_released",
+        )
+    }
+    vec = [_FakeVecResult("doc1", 0, 0.9)]
+    svc = _make_svc(vec=vec, raw=raw)
+
+    result = svc.retrieve("inflation")[0]
+
+    assert result.release_date == "2026-06-10"
+    assert result.observation_period == "2026-05"
+    assert result.vintage == "as_released"
 
 
 def test_retrieve_skips_missing_raw_chunks():

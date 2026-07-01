@@ -38,7 +38,7 @@ def build_temporal_envelope(
             _append_if_present(policy_dates, record.release_date)
             _append_if_present(macro_dates, record.observation_date)
         elif record.source_kind == "public_reporting":
-            _append_if_present(public_news_dates, record.accessed_at)
+            _append_if_present(public_news_dates, record.observation_date or record.accessed_at)
 
     max_market_data_age = _max_trading_day_span(market_dates)
     asynchronous_inputs = (
@@ -53,7 +53,7 @@ def build_temporal_envelope(
         max_market_data_age_trading_days=max_market_data_age,
         asynchronous_inputs=asynchronous_inputs,
         temporal_alignment_note=(
-            "本次输入存在时间错配，以下判断不构成同一时点市场快照。"
+            "本次输入存在时间错配；市场数据年龄为工作日跨度近似值，以下判断不构成同一时点市场快照。"
             if asynchronous_inputs
             else None
         ),

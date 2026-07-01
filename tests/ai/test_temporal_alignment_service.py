@@ -59,6 +59,7 @@ def test_temporal_envelope_collects_cutoff_dates_by_evidence_family():
             "ev_news",
             tool_name="search_tavily",
             source_kind="public_reporting",
+            observation_date="2026-06-30T12:00:00Z",
             accessed_at="2026-06-30T13:00:00+00:00",
         ),
     )
@@ -72,7 +73,7 @@ def test_temporal_envelope_collects_cutoff_dates_by_evidence_family():
     assert envelope.market_data_cutoff == "2026-06-29"
     assert envelope.policy_data_cutoff == "2026-06-18"
     assert envelope.macro_data_cutoff == "2026-06-15"
-    assert envelope.public_news_cutoff == "2026-06-30T13:00:00+00:00"
+    assert envelope.public_news_cutoff == "2026-06-30T12:00:00Z"
     assert envelope.asynchronous_inputs is False
 
 
@@ -112,3 +113,4 @@ def test_temporal_envelope_flags_market_data_trading_day_mismatch():
     assert envelope.max_market_data_age_trading_days == 3
     assert envelope.asynchronous_inputs is True
     assert "时间错配" in (envelope.temporal_alignment_note or "")
+    assert "工作日跨度近似值" in (envelope.temporal_alignment_note or "")
