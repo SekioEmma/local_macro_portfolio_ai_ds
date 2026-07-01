@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app_backend.main import app, get_agent_trace_service
+from app_backend.main import app, get_agent_trace_debug_enabled, get_agent_trace_service
 from app_backend.services.agent_trace_service import AgentTraceEvent, AgentTraceService
 
 
@@ -35,6 +35,7 @@ def test_agent_trace_endpoint_replays_sanitized_debug_history(tmp_path):
         )
     )
     app.dependency_overrides[get_agent_trace_service] = lambda: service
+    app.dependency_overrides[get_agent_trace_debug_enabled] = lambda: True
 
     try:
         response = _client().get("/api/agent/trace/trace-route-1")
@@ -58,6 +59,7 @@ def test_agent_trace_endpoint_replays_sanitized_debug_history(tmp_path):
 def test_agent_trace_endpoint_returns_empty_replay_for_missing_trace(tmp_path):
     service = AgentTraceService(root_dir=tmp_path)
     app.dependency_overrides[get_agent_trace_service] = lambda: service
+    app.dependency_overrides[get_agent_trace_debug_enabled] = lambda: True
 
     try:
         response = _client().get("/api/agent/trace/missing-session")
@@ -72,6 +74,19 @@ def test_agent_trace_endpoint_returns_empty_replay_for_missing_trace(tmp_path):
         "message_history": [],
         "events": [],
     }
+
+
+def test_agent_trace_endpoint_is_disabled_by_default(tmp_path):
+    service = AgentTraceService(root_dir=tmp_path)
+    app.dependency_overrides[get_agent_trace_service] = lambda: service
+
+    try:
+        response = _client().get("/api/agent/trace/trace-route-disabled")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "agent_trace_debug_disabled"
 
 
 def test_agent_trace_route_registered():

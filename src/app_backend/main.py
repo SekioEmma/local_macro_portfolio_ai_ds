@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -86,6 +88,8 @@ from app_backend.services.status_service import build_status
 
 
 ALLOWED_CORS_ORIGINS = ("http://127.0.0.1:5173", "http://localhost:5173")
+TRACE_DEBUG_ENV = "LOCAL_MACRO_AGENT_TRACE_DEBUG"
+TRACE_DEBUG_ENABLED_VALUES = frozenset({"1", "true", "yes", "local", "debug"})
 
 app = FastAPI(title="Local Macro Portfolio AI DS App Backend")
 app.add_middleware(
@@ -286,6 +290,10 @@ def get_agent_trace_service() -> AgentTraceService:
     return AgentTraceService()
 
 
+def get_agent_trace_debug_enabled() -> bool:
+    return os.environ.get(TRACE_DEBUG_ENV, "").strip().lower() in TRACE_DEBUG_ENABLED_VALUES
+
+
 def _build_commodity_search_callable(
     search_service: TavilySearchExecutionService,
 ):
@@ -389,8 +397,11 @@ def post_agent_run_cancel(
 @app.get("/api/agent/trace/{session_id}", response_model=AgentTraceDebugResponse)
 def get_agent_trace(
     session_id: str,
+    trace_debug_enabled: bool = Depends(get_agent_trace_debug_enabled),
     service: AgentTraceService = Depends(get_agent_trace_service),
 ) -> AgentTraceDebugResponse:
+    if not trace_debug_enabled:
+        raise HTTPException(status_code=404, detail="agent_trace_debug_disabled")
     try:
         replay = service.replay(session_id)
         return AgentTraceDebugResponse(
