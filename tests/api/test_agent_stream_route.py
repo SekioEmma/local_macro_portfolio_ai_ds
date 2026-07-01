@@ -146,6 +146,27 @@ def test_agent_stream_route_converts_input_errors_to_sse_error(tmp_path):
     assert not provider.calls
 
 
+def test_agent_stream_route_rejects_client_supplied_current_date(tmp_path):
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+    _install_service(tmp_path, provider)
+
+    try:
+        response = _client().post(
+            "/api/agent/run/stream",
+            json={
+                "session_id": "agent-stream-current-date",
+                "user_question": "Build a macro brief.",
+                "current_date": "1999-01-01",
+            },
+            headers={"accept": "text/event-stream"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert not provider.calls
+
+
 def test_agent_stream_with_consent_injects_holdings_without_sse_leak(tmp_path):
     provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
     consent_service = HoldingsConsentService()
