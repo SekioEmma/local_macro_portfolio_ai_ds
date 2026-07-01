@@ -639,18 +639,23 @@ class AgentBudget:
 
 ---
 
-## 11. 开发前置 checklist
+## 11. 开发前置 checklist（历史记录，已由 release gate 取代）
 
-进入 F1 编码前，人工确认：
+本节保留原 F1 编码前置项的历史意图，但不再作为当前 Phase F 的发布状态来源。
+当前 authoritative release gate 以
+[`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md)
+和 [`docs/infra/phase_f_dod_audit.md`](infra/phase_f_dod_audit.md) 为准。
 
-- [ ] 本文档已推送到 `app-mvp` 并获用户批准
-- [ ] CLAUDE.md F-Phase Holdings Injection Exception 已写入并通过
-- [ ] GOVERNANCE.md MacroBrief 5 否定 + holdings 审计 + budget 已写入
-- [ ] DeepSeek API key 已配置在 `.env`（用户私有）
-- [ ] Tavily API key 已配置（B4 路径已验）
-- [ ] RAG 4428 chunks 已灌入（已确认，2026-06-29 完成）
-- [ ] FRED `DTWEXBGS` 本地历史确认可用（F1-3 前置）
-- [ ] 用户阅读并理解 holdings 注入风险
+| 原前置项 | 当前处置 |
+|---|---|
+| 本文档推送到 `app-mvp` 并获用户批准 | 已进入实现后 remediation；用户验收仍保持 `not user_accepted`，由 release checklist 人工确认 |
+| CLAUDE.md F-Phase Holdings Injection Exception | 治理权威已迁移到 `GOVERNANCE.md` 与 ADR-0002；`CLAUDE.md` 不再作为新增治理例外的权威来源 |
+| GOVERNANCE.md MacroBrief 5 否定 + holdings 审计 + budget | 由 `GOVERNANCE.md`、ADR-0002、ADR-0004、ADR-0005 与 release checklist 覆盖 |
+| DeepSeek API key 已配置在 `.env` | 私有运行环境事项；fixture release gate 不依赖 `.env`，live controlled smoke 仅在用户批准后手动执行 |
+| Tavily API key 已配置 | 本轮 Phase F release gate 不启用 Tavily、后台搜索或自动搜索 |
+| RAG chunks 已灌入 | 由 RAG generation contract、BM25/vector 一致性测试与 `validate_local_rag.py` 验证取代固定 chunk 数字 |
+| FRED `DTWEXBGS` 本地历史确认可用 | 由当前数据 provider / unavailable 语义与受控 run 证据取代单一前置检查 |
+| 用户阅读并理解 holdings 注入风险 | 保留为 release checklist 的人工验收项；在此之前状态不得提升为 `user_accepted` |
 
 ---
 
@@ -721,4 +726,4 @@ hsliuping/TradingAgents-CN（部分 Apache 2.0）的设计。借鉴方式为
 
 ---
 
-*本文档由 AI 起草，待用户 2026-06-29 之后批准（F0 节点）。F1 编码须用户明确指示后方可开始。*
+*本文档保留 Phase F baseline 设计与历史实施计划。2026-07-01 之后的当前状态、发布门禁与人工验收，以 release checklist、DoD audit、GOVERNANCE 与 ADR 为准；Phase F 仍为 `remediation_and_optimization`，尚未 `user_accepted` / `production_ready`。*

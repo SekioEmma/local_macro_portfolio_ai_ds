@@ -63,6 +63,8 @@ def test_phase_f_release_gate_is_documented_and_wired_to_ci():
     assert "not production_ready" in checklist
     assert "production_ready" in index
     assert "not production_ready" in phase_plan
+    assert "F1 编码须用户明确指示后方可开始" not in phase_plan
+    assert "phase_f_dod_audit.md" in phase_plan
     assert "研究辅助输出" in checklist
     assert "非自动投资决策" in checklist
     assert "需要用户审阅" in checklist

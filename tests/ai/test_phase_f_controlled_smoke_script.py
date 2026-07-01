@@ -25,6 +25,7 @@ def test_controlled_smoke_fixture_passes_without_external_search_or_holdings(tmp
     assert record["evidence_counts"]["local_data_foundation"] == 1
     assert record["asynchronous_inputs"] is False
     assert record["budget_usage"]["warning_count"] == 0
+    assert record["elapsed_seconds"] == 0.0
 
 
 def test_controlled_smoke_cli_outputs_machine_readable_json(tmp_path, capsys):

@@ -459,7 +459,7 @@ def _build_validation_record(
             "include_holdings": False,
             "external_search_confirmed": confirm_external_search,
         },
-        "elapsed_seconds": round(elapsed_seconds, 3),
+        "elapsed_seconds": _elapsed_seconds_for_report(mode, elapsed_seconds),
     }
 
 
@@ -467,6 +467,12 @@ def _current_date_for_mode(mode: Mode) -> str:
     if mode == "fixture":
         return "2026-06-30"
     return datetime.now(_NEW_YORK).date().isoformat()
+
+
+def _elapsed_seconds_for_report(mode: Mode, elapsed_seconds: float) -> float:
+    if mode == "fixture":
+        return 0.0
+    return round(elapsed_seconds, 3)
 
 
 def _cutoffs_from_brief(brief: dict[str, Any]) -> dict[str, Any]:
