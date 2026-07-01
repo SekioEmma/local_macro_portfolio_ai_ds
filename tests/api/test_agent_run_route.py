@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app_backend.main import app, get_agent_run_service, get_holdings_consent_service
 from app_backend.schemas.agent_api import AgentRunRequest
 from app_backend.services.agent_api_service import AgentRunService
-from app_backend.services.agent_runtime import AgentSessionResult
+from app_backend.services.agent_runtime import AgentSessionResult, run_agent
 from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME
 from app_backend.services.agent_tool_registry import ToolSpec
 from app_backend.services.agent_trace_service import AgentTraceService
@@ -102,6 +102,33 @@ def test_agent_run_service_enables_evidence_ledger_by_default(tmp_path):
 
     assert response.session_id == "ledger-default"
     assert captured["evidence_ledger"].run_id == "ledger-default"
+
+
+def test_agent_run_service_can_pin_enabled_tool_names(tmp_path):
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
+    service = AgentRunService(
+        provider_factory=lambda: provider,
+        registry_factory=lambda _confirm_external_search: make_registry(),
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        runtime_fn=run_agent,
+        current_date_provider=lambda: date(2026, 6, 30),
+        enable_evidence_ledger=False,
+        enabled_tool_names=[FINALIZE_TOOL_NAME],
+    )
+
+    response = service.run(
+        AgentRunRequest(
+            session_id="pinned-tools",
+            user_question="Build a macro brief.",
+        )
+    )
+
+    tool_names = [tool["function"]["name"] for tool in provider.calls[0]["tools"]]
+    system_prompt = provider.calls[0]["messages"][0].content
+    assert response.final_status == "ok"
+    assert tool_names == [FINALIZE_TOOL_NAME]
+    assert "dashboard_query" not in system_prompt
+    assert FINALIZE_TOOL_NAME in system_prompt
 
 
 def test_agent_run_endpoint_returns_rendered_public_brief(tmp_path):

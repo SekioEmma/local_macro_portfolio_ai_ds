@@ -24,6 +24,16 @@ from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME
 MACRO_BRIEF_RESPONSE_FORMAT: dict[str, str] = {
     "type": "json_object",
 }
+_LOCAL_TOOL_ORDER = (
+    "dashboard_query",
+    "evidence_lookup",
+    "quote_etf",
+    "treasury_curve",
+    "quote_dxy",
+    "calendar_lookup",
+    "portfolio_overlay",
+    "rag_retrieve",
+)
 
 SECTION_SCHEMA_GUIDE = f"""
 MacroBrief JSON schema summary:
@@ -76,8 +86,8 @@ Evidence and anti-hallucination rules:
    in judgments. Do not silently reconcile.
 5. Do not cite percentages, dates, prices, yields, spreads, or index levels
    unless they appear in a tool output.
-6. Do not claim historical transmission patterns unless rag_retrieve
-   returned evidence with specific dates.
+6. Do not claim historical transmission patterns unless an enabled evidence
+   retrieval tool returned evidence with specific dates.
 7. For any post-2025 data, never guess from training knowledge.
 """.strip()
 
@@ -143,16 +153,17 @@ Reference brief example (format only; do not reuse these synthetic facts):
 
 REACT_GUIDANCE = f"""
 ReAct operating rules:
-1. When information is insufficient, call search_tavily or rag_retrieve;
+1. Use only tools listed in this prompt; never request unavailable tools.
+2. When information is insufficient, call search_tavily or rag_retrieve;
    宁可搜，不要猜.
-2. Prefer local tools first: dashboard_query, evidence_lookup, quote_etf,
+3. Prefer local tools first: dashboard_query, evidence_lookup, quote_etf,
    treasury_curve, quote_dxy, calendar_lookup, portfolio_overlay, and
    rag_retrieve before external search.
-3. Use search_tavily only for current public information not answered by
+4. Use search_tavily only for current public information not answered by
    local data or RAG.
-4. Facts must come before judgments. Every judgment must cite
+5. Facts must come before judgments. Every judgment must cite
    confirmed_facts ids.
-5. When the brief is complete, call {FINALIZE_TOOL_NAME}; do not finish
+6. When the brief is complete, call {FINALIZE_TOOL_NAME}; do not finish
    with plain text.
 """.strip()
 
@@ -218,7 +229,7 @@ def build_macro_brief_prompt(
             ANTI_HALLUCINATION_RULES,
             ANTI_CONSERVATIVE_BIAS_RULES,
             REFERENCE_BRIEF_EXAMPLE,
-            REACT_GUIDANCE,
+            _build_react_guidance(tool_names),
             (
                 f"Your output must be valid JSON matching the MacroBrief schema. "
                 f"You must call {FINALIZE_TOOL_NAME} to terminate; this is the only exit."
@@ -248,6 +259,57 @@ def _normalize_user_question(user_question: str) -> str:
 
 
 def _format_tool_names(tool_names: list[str]) -> str:
+    return ", ".join(sorted(_normalized_tool_names(tool_names)))
+
+
+def _build_react_guidance(tool_names: list[str]) -> str:
+    enabled = set(_normalized_tool_names(tool_names))
+    lines = [
+        "ReAct operating rules:",
+        "1. Use only tools listed in this prompt; never request unavailable tools.",
+    ]
+    index = 2
+    information_tools = [
+        name for name in ("search_tavily", "rag_retrieve") if name in enabled
+    ]
+    if information_tools:
+        lines.append(
+            f"{index}. When information is insufficient, call "
+            f"{_format_english_list(information_tools)}; 宁可搜，不要猜."
+        )
+    else:
+        lines.append(
+            f"{index}. If enabled tools cannot support a value, mark it unavailable; "
+            "do not guess or ask for disabled tools."
+        )
+    index += 1
+
+    local_tools = [name for name in _LOCAL_TOOL_ORDER if name in enabled]
+    if local_tools:
+        lines.append(
+            f"{index}. Prefer enabled local tools first: "
+            f"{_format_english_list(local_tools)}."
+        )
+        index += 1
+    if "search_tavily" in enabled:
+        lines.append(
+            f"{index}. Use search_tavily only for current public information not "
+            "answered by local data or RAG."
+        )
+        index += 1
+    lines.append(
+        f"{index}. Facts must come before judgments. Every judgment must cite "
+        "confirmed_facts ids."
+    )
+    index += 1
+    lines.append(
+        f"{index}. When the brief is complete, call {FINALIZE_TOOL_NAME}; "
+        "do not finish with plain text."
+    )
+    return "\n".join(lines)
+
+
+def _normalized_tool_names(tool_names: list[str]) -> list[str]:
     if not isinstance(tool_names, list) or not tool_names:
         raise ValueError("tool_names must be a non-empty list")
     normalized: list[str] = []
@@ -255,7 +317,15 @@ def _format_tool_names(tool_names: list[str]) -> str:
         if not isinstance(name, str) or not name.strip():
             raise ValueError("tool_names must contain non-empty strings")
         normalized.append(name.strip())
-    return ", ".join(sorted(dict.fromkeys(normalized)))
+    return list(dict.fromkeys(normalized))
+
+
+def _format_english_list(items: list[str]) -> str:
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
 def _format_instrument_context(instrument_context: str | None) -> str:

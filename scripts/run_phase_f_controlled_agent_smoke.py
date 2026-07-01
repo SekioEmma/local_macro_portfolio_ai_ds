@@ -20,7 +20,7 @@ for _path in (_REPO_ROOT, _SRC_ROOT):
 
 from app_backend.schemas.agent_api import AgentRunRequest, AgentRunResponse  # noqa: E402
 from app_backend.schemas.macro_brief import REQUIRED_BOUNDARY_KEYWORDS, REQUIRED_MODULE_KEYS  # noqa: E402
-from app_backend.services.agent_api_service import AgentRunService, build_default_agent_run_service  # noqa: E402
+from app_backend.services.agent_api_service import AgentRunService  # noqa: E402
 from app_backend.services.agent_runtime import AgentRuntimeConfig  # noqa: E402
 from app_backend.services.agent_tool_registry import (  # noqa: E402
     AgentToolRegistry,
@@ -28,13 +28,31 @@ from app_backend.services.agent_tool_registry import (  # noqa: E402
     make_finalize_macro_brief_tool,
 )
 from app_backend.services.agent_trace_service import AgentTraceService  # noqa: E402
-from app_backend.services.llm_provider_adapter import ChatMessage, ChatResponse, ToolCall  # noqa: E402
+from app_backend.services.deepseek_real_transport import DeepSeekRealTransport  # noqa: E402
+from app_backend.services.llm_provider_adapter import (  # noqa: E402
+    ChatMessage,
+    ChatResponse,
+    DeepSeekProviderAdapter,
+    ToolCall,
+)
 
 
 Mode = Literal["fixture", "live"]
 _NEW_YORK = ZoneInfo("America/New_York")
 CONTROLLED_SESSION_ID = "phase-f-controlled-smoke"
-CONTROLLED_QUESTION = "Build a controlled Phase F MacroBrief for release verification."
+CONTROLLED_QUESTION = (
+    "Build a controlled Phase F MacroBrief for release verification. "
+    "First call treasury_curve. Then call finalize_macro_brief. "
+    "For this smoke, use exactly one confirmed_facts item: id=f1, describing "
+    "the 10Y Treasury point returned by treasury_curve. Use the registered "
+    "evidence_id returned by the treasury_curve tool for f1 and for every "
+    "judgment. Every judgment must have evidence_supports=[\"f1\"]. "
+    "Do not add any other confirmed facts. For SPY, QQQ, SHY, and GLD "
+    "market_state cards, set price=null, change_pct=null, as_of=null because "
+    "quote_etf is not enabled. "
+    "The final MacroBrief core_conclusion and boundary_notice must include "
+    "研究辅助输出, 非自动投资决策, and 需要用户审阅."
+)
 FORBIDDEN_RESPONSE_MARKERS = (
     "market_value_usd",
     "cost_basis",
@@ -100,6 +118,34 @@ class ControlledFixtureProvider:
         )
 
 
+class CountingProvider:
+    name = "deepseek"
+
+    def __init__(self, provider: DeepSeekProviderAdapter, counter: dict[str, int]) -> None:
+        self._provider = provider
+        self._counter = counter
+
+    def chat(
+        self,
+        *,
+        model: str,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str = "auto",
+        response_format: dict[str, Any] | None = None,
+        max_tokens: int = 4000,
+    ) -> ChatResponse:
+        self._counter["count"] = self._counter.get("count", 0) + 1
+        return self._provider.chat(
+            model=model,
+            messages=messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
+            max_tokens=max_tokens,
+        )
+
+
 def run_controlled_smoke(
     *,
     mode: Mode = "fixture",
@@ -107,6 +153,7 @@ def run_controlled_smoke(
     confirm_external_search: bool = False,
 ) -> dict[str, Any]:
     provider = ControlledFixtureProvider() if mode == "fixture" else None
+    live_call_counter = {"count": 0}
     resolved_trace_dir = trace_dir
     temp_dir: tempfile.TemporaryDirectory[str] | None = None
     if resolved_trace_dir is None:
@@ -117,6 +164,7 @@ def run_controlled_smoke(
             mode=mode,
             provider=provider,
             trace_dir=resolved_trace_dir,
+            live_call_counter=live_call_counter,
         )
         runtime_events = []
         started_at = perf_counter()
@@ -124,21 +172,21 @@ def run_controlled_smoke(
             AgentRunRequest(
                 session_id=CONTROLLED_SESSION_ID,
                 user_question=CONTROLLED_QUESTION,
-                confirm_external_search=confirm_external_search if mode == "live" else False,
+                confirm_external_search=False,
                 include_holdings=False,
                 source_visibility_mode="public",
             ),
             event_callback=runtime_events.append,
         )
         elapsed_seconds = perf_counter() - started_at
-        provider_call_count = len(provider.calls) if provider is not None else None
+        provider_call_count = len(provider.calls) if provider is not None else live_call_counter["count"]
         checks = _evaluate_response(response, provider_call_count=provider_call_count)
         validation_record = _build_validation_record(
             response=response,
             runtime_events=runtime_events,
             mode=mode,
             provider_call_count=provider_call_count,
-            confirm_external_search=confirm_external_search if mode == "live" else False,
+            confirm_external_search=False,
             elapsed_seconds=elapsed_seconds,
         )
         return {
@@ -151,7 +199,7 @@ def run_controlled_smoke(
             "warning_codes": [warning.code for warning in response.warnings],
             "check_status": "passed" if not checks else "failed",
             "failed_checks": checks,
-            "external_search_confirmed": confirm_external_search if mode == "live" else False,
+            "external_search_confirmed": False,
             "include_holdings": False,
             "validation_record": validation_record,
         }
@@ -165,7 +213,16 @@ def _service_for_mode(
     mode: Mode,
     provider: ControlledFixtureProvider | None,
     trace_dir: Path,
+    live_call_counter: dict[str, int],
 ) -> AgentRunService:
+    runtime_config = AgentRuntimeConfig(
+        research_max_steps=2,
+        writing_max_steps=2,
+        max_wall_clock_seconds=90,
+        max_provider_call_seconds=60,
+        max_tool_call_seconds=5,
+        provider_max_retries=0,
+    )
     if mode == "fixture":
         if provider is None:
             raise ValueError("fixture mode requires a controlled fixture provider")
@@ -174,16 +231,24 @@ def _service_for_mode(
             registry_factory=lambda _confirm_external_search: _controlled_registry(),
             trace_factory=lambda: AgentTraceService(root_dir=trace_dir),
             current_date_provider=lambda: date(2026, 6, 30),
-            runtime_config=AgentRuntimeConfig(
-                research_max_steps=2,
-                writing_max_steps=2,
-                max_wall_clock_seconds=30,
-                max_provider_call_seconds=15,
-                max_tool_call_seconds=5,
-                provider_max_retries=0,
-            ),
+            runtime_config=runtime_config,
+            enabled_tool_names=["treasury_curve", "finalize_macro_brief"],
         )
-    return build_default_agent_run_service()
+    return AgentRunService(
+        provider_factory=lambda: CountingProvider(
+            DeepSeekProviderAdapter(
+                transport=DeepSeekRealTransport(
+                    timeout_seconds=runtime_config.max_provider_call_seconds,
+                )
+            ),
+            live_call_counter,
+        ),
+        registry_factory=lambda _confirm_external_search: _controlled_registry(),
+        trace_factory=lambda: AgentTraceService(root_dir=trace_dir),
+        current_date_provider=lambda: datetime.now(_NEW_YORK).date(),
+        runtime_config=runtime_config,
+        enabled_tool_names=["treasury_curve", "finalize_macro_brief"],
+    )
 
 
 def _controlled_registry() -> AgentToolRegistry:

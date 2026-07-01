@@ -17,7 +17,6 @@ from app_backend.services.macro_brief_prompt import (
     HOLDINGS_NOT_INCLUDED_NOTICE,
     MACRO_BRIEF_RESPONSE_FORMAT,
     REFERENCE_BRIEF_EXAMPLE,
-    REACT_GUIDANCE,
     build_macro_brief_prompt,
 )
 
@@ -143,10 +142,27 @@ def test_system_prompt_contains_react_guidance():
     )
 
     text = prompt.system_prompt
-    assert REACT_GUIDANCE in text
+    assert "ReAct operating rules:" in text
+    assert "Use only tools listed in this prompt" in text
     assert "宁可搜，不要猜" in text
-    assert "Prefer local tools first" in text
+    assert "Prefer enabled local tools first: rag_retrieve" in text
     assert "call finalize_macro_brief" in text
+
+
+def test_system_prompt_does_not_name_disabled_tools_in_react_guidance():
+    prompt = build_macro_brief_prompt(
+        user_question="x",
+        current_date=date(2026, 6, 29),
+        tool_names=["treasury_curve", FINALIZE_TOOL_NAME],
+    )
+
+    text = prompt.system_prompt
+    assert "treasury_curve" in text
+    assert "dashboard_query" not in text
+    assert "quote_etf" not in text
+    assert "search_tavily" not in text
+    assert "rag_retrieve" not in text
+    assert "ask for disabled tools" in text
 
 
 def test_holdings_context_is_not_injected_by_default():

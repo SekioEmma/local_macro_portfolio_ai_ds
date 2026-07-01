@@ -109,6 +109,7 @@ class AgentRunService:
     holdings_context_service: HoldingsExternalContextService | None = None
     enable_evidence_ledger: bool = True
     runtime_config: AgentRuntimeConfig = field(default_factory=AgentRuntimeConfig)
+    enabled_tool_names: list[str] | None = None
 
     def run(
         self,
@@ -118,7 +119,7 @@ class AgentRunService:
         cancellation_requested: CancellationRequested | None = None,
     ) -> AgentRunResponse:
         session_id = request.session_id or uuid.uuid4().hex
-        tool_names = _tool_names_for_request(request)
+        tool_names = self.enabled_tool_names or _tool_names_for_request(request)
         plan = build_agent_information_plan(
             user_question=request.user_question,
             tool_names=tool_names,
