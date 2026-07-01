@@ -1,16 +1,22 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cancelAgentRun, streamAgentRun } from "../api/client";
+import {
+  cancelAgentRun,
+  requestHoldingsConsent,
+  streamAgentRun
+} from "../api/client";
 import type { AgentSseEvent, AgentStreamResult, ApiResult } from "../types";
 import { AIChatPage } from "./AIChatPage";
 
 vi.mock("../api/client", () => ({
   cancelAgentRun: vi.fn(),
+  requestHoldingsConsent: vi.fn(),
   streamAgentRun: vi.fn()
 }));
 
 const mockedCancelAgentRun = vi.mocked(cancelAgentRun);
+const mockedRequestHoldingsConsent = vi.mocked(requestHoldingsConsent);
 const mockedStreamAgentRun = vi.mocked(streamAgentRun);
 
 describe("AIChatPage Agent SSE", () => {
@@ -21,6 +27,15 @@ describe("AIChatPage Agent SSE", () => {
         session_id: "agent-ui-test",
         cancelled: true,
         already_cancelled: false
+      },
+      error: null
+    });
+    mockedRequestHoldingsConsent.mockResolvedValue({
+      data: {
+        session_id: "agent-ui-test",
+        holdings_consent_token: "token_1234567890123456",
+        expires_at: "2026-06-30T00:10:00Z",
+        ttl_seconds: 600
       },
       error: null
     });
@@ -99,7 +114,47 @@ describe("AIChatPage Agent SSE", () => {
       expect.objectContaining({
         user_question: "当前高实际利率对信用风险意味着什么？",
         include_holdings: false,
+        holdings_consent_token: null,
         confirm_external_search: false,
+        source_visibility_mode: "public"
+      }),
+      expect.any(Function),
+      expect.any(AbortSignal)
+    );
+    expect(mockedRequestHoldingsConsent).not.toHaveBeenCalled();
+  });
+
+  it("requests per-run holdings consent before streaming when explicitly enabled", async () => {
+    mockedStreamAgentRun.mockResolvedValue(
+      streamResult({
+        session_id: "agent-holdings-ui",
+        final_status: "ok",
+        trace_session_id: "trace-holdings-ui",
+        steps: 1
+      })
+    );
+
+    const user = userEvent.setup();
+    render(<AIChatPage />);
+
+    await act(async () => {
+      await user.type(screen.getByLabelText("宏观研究问题"), "结合我的组合风险看宏观环境");
+      await user.click(screen.getByLabelText("允许本次详细持仓上下文"));
+      await user.click(screen.getByRole("button", { name: /启动 Agent 调研/ }));
+    });
+
+    expect(mockedRequestHoldingsConsent).toHaveBeenCalledWith(
+      {
+        session_id: expect.stringMatching(/^agent-ui-/),
+        confirm_holdings_external_context: true
+      },
+      expect.any(AbortSignal)
+    );
+    expect(mockedStreamAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_question: "结合我的组合风险看宏观环境",
+        include_holdings: true,
+        holdings_consent_token: "token_1234567890123456",
         source_visibility_mode: "public"
       }),
       expect.any(Function),

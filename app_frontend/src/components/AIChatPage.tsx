@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
-import { cancelAgentRun, streamAgentRun } from "../api/client";
+import {
+  cancelAgentRun,
+  requestHoldingsConsent,
+  streamAgentRun
+} from "../api/client";
 import type {
   AgentBriefSection,
   AgentRunRequest,
@@ -64,6 +68,7 @@ const briefSectionTitles: Record<string, string> = {
 export function AIChatPage() {
   const [question, setQuestion] = useState("");
   const [confirmExternalSearch, setConfirmExternalSearch] = useState(false);
+  const [confirmHoldingsContext, setConfirmHoldingsContext] = useState(false);
   const [streamEvents, setStreamEvents] = useState<AgentSseEvent[]>([]);
   const [briefSections, setBriefSections] = useState<AgentBriefSection[]>([]);
   const [runResult, setRunResult] =
@@ -122,13 +127,6 @@ export function AIChatPage() {
 
     const nextSessionId = createAgentSessionId();
     const controller = new AbortController();
-    const request: AgentRunRequest = {
-      user_question: trimmedQuestion,
-      session_id: nextSessionId,
-      include_holdings: false,
-      confirm_external_search: confirmExternalSearch,
-      source_visibility_mode: "public"
-    };
 
     activeRequest.current?.abort();
     activeRequest.current = controller;
@@ -145,6 +143,35 @@ export function AIChatPage() {
     setIsStreaming(true);
 
     try {
+      let holdingsConsentToken: string | null = null;
+      if (confirmHoldingsContext) {
+        const consent = await requestHoldingsConsent(
+          {
+            session_id: nextSessionId,
+            confirm_holdings_external_context: true
+          },
+          controller.signal
+        );
+        if (controller.signal.aborted) return;
+        if (consent.error || !consent.data) {
+          setRunResult({
+            data: null,
+            error: `持仓授权失败：${consent.error || "未返回 consent token。"}`
+          });
+          setStreamStatus("error");
+          return;
+        }
+        holdingsConsentToken = consent.data.holdings_consent_token;
+      }
+
+      const request: AgentRunRequest = {
+        user_question: trimmedQuestion,
+        session_id: nextSessionId,
+        include_holdings: confirmHoldingsContext,
+        holdings_consent_token: holdingsConsentToken,
+        confirm_external_search: confirmExternalSearch,
+        source_visibility_mode: "public"
+      };
       const response = await streamAgentRun(
         request,
         handleAgentEvent,
@@ -273,8 +300,9 @@ export function AIChatPage() {
           />
         </label>
 
-        <label className="chat-search-toggle">
+        <label className="chat-run-toggle">
           <input
+            aria-label="允许本次外部搜索"
             checked={confirmExternalSearch}
             disabled={isStreaming}
             onChange={(event) => setConfirmExternalSearch(event.target.checked)}
@@ -282,6 +310,21 @@ export function AIChatPage() {
           />
           <span>允许本次外部搜索</span>
           <small>默认关闭；开启后仍由后端工具注册表、预算和审计规则控制。</small>
+        </label>
+
+        <label className="chat-run-toggle chat-holdings-toggle">
+          <input
+            aria-label="允许本次详细持仓上下文"
+            checked={confirmHoldingsContext}
+            disabled={isStreaming}
+            onChange={(event) => setConfirmHoldingsContext(event.target.checked)}
+            type="checkbox"
+          />
+          <span>允许本次详细持仓上下文</span>
+          <small>
+            默认关闭；每次运行都会先请求一次性 consent token。后端只在本 session 内读取快照，
+            trace/SSE/API response 不回显详细持仓正文。
+          </small>
         </label>
 
         <div className="chat-submit-row">

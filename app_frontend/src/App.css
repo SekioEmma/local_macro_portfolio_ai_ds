@@ -2568,7 +2568,7 @@ button {
   background: #60452f;
 }
 
-.chat-search-toggle {
+.chat-run-toggle {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 3px 10px;
@@ -2579,23 +2579,34 @@ button {
   color: var(--ink-strong);
 }
 
-.chat-search-toggle input {
+.chat-run-toggle input {
   width: 18px;
   height: 18px;
   margin: 2px 0 0;
   accent-color: var(--paper-accent);
 }
 
-.chat-search-toggle span {
+.chat-run-toggle span {
   font-size: 13px;
   font-weight: 800;
 }
 
-.chat-search-toggle small {
+.chat-run-toggle small {
   grid-column: 2;
   color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.chat-holdings-toggle {
+  border-color: #9c6a60;
+  background:
+    linear-gradient(rgba(255, 253, 248, 0.78), rgba(255, 253, 248, 0.78)),
+    var(--paper-wash);
+}
+
+.chat-holdings-toggle span {
+  color: #703d35;
 }
 
 .chat-action-row {

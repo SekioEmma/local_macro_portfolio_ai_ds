@@ -4,6 +4,7 @@ import {
   cancelAgentRun,
   fetchDeepSeekResearch,
   fetchStatus,
+  requestHoldingsConsent,
   streamAgentRun
 } from "./client";
 
@@ -185,6 +186,41 @@ describe("api client requestJson branches", () => {
       trace_session_id: "trace-1",
       steps: 3
     });
+  });
+
+  it("requests a one-time holdings consent token without holdings content", async () => {
+    const payload = {
+      session_id: "agent-holdings",
+      holdings_consent_token: "token_1234567890123456",
+      expires_at: "2026-06-30T00:10:00Z",
+      ttl_seconds: 600
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await requestHoldingsConsent({
+      session_id: "agent-holdings",
+      confirm_holdings_external_context: true
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/agent/holdings-consent"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          session_id: "agent-holdings",
+          confirm_holdings_external_context: true
+        })
+      })
+    );
+    expect(fetchMock.mock.calls[0][1].body).not.toContain("positions");
+    expect(fetchMock.mock.calls[0][1].body).not.toContain("market_value");
+    expect(result).toEqual({ data: payload, error: null });
   });
 
   it("returns a sanitized error when the Agent SSE stream emits error", async () => {

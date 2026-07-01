@@ -16,6 +16,8 @@ import type {
   DashboardEvidenceTableResponse,
   DashboardSummaryResponse,
   FavoriteAnswer,
+  HoldingsConsentRequest,
+  HoldingsConsentResponse,
   ProviderHealthResponse,
   RefreshRun,
   StatusResponse,
@@ -102,6 +104,17 @@ export function fetchDeepSeekResearch(
       user_question: userQuestion
     },
     timeoutMs: 180_000,
+    signal
+  });
+}
+
+export function requestHoldingsConsent(
+  request: HoldingsConsentRequest,
+  signal?: AbortSignal
+): Promise<ApiResult<HoldingsConsentResponse>> {
+  return requestJson<HoldingsConsentResponse>("/api/agent/holdings-consent", {
+    method: "POST",
+    body: request,
     signal
   });
 }

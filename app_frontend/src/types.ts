@@ -420,6 +420,18 @@ export type AgentRunRequest = {
   source_visibility_mode?: AgentSourceVisibilityMode;
 };
 
+export type HoldingsConsentRequest = {
+  session_id?: string | null;
+  confirm_holdings_external_context: boolean;
+};
+
+export type HoldingsConsentResponse = {
+  session_id: string | null;
+  holdings_consent_token: string;
+  expires_at: string;
+  ttl_seconds: number;
+};
+
 export type AgentFinalStatus =
   | "ok"
   | "incomplete"
