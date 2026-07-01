@@ -320,3 +320,28 @@ def test_agent_stream_service_enforces_queue_size_limit():
 
     assert events[-1]["type"] == "error"
     assert events[-1]["payload"]["detail"] == "agent_stream_queue_overflow"
+
+
+def test_agent_stream_service_sanitizes_unhandled_exception_detail():
+    class ExplodingService:
+        def run(self, request, *, event_callback=None, cancellation_requested=None):  # noqa: ANN001, ANN201
+            del request, event_callback, cancellation_requested
+            raise RuntimeError(
+                r"raw_prompt=secret question sk-live-secret C:\Users\Alice\holdings.csv"
+            )
+
+    stream = AgentStreamService(ExplodingService()).stream(
+        AgentRunRequest(
+            session_id="stream-explosion",
+            user_question="Build a macro brief.",
+        )
+    )
+    text = "".join(stream)
+    events = _events_from_sse(text)
+
+    assert events[-1]["type"] == "error"
+    assert events[-1]["payload"]["error_type"] == "RuntimeError"
+    assert events[-1]["payload"]["detail"] == "agent_stream_internal_error"
+    assert "raw_prompt" not in text
+    assert "sk-live-secret" not in text
+    assert "holdings.csv" not in text

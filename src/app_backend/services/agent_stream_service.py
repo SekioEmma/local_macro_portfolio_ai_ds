@@ -12,7 +12,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from app_backend.schemas.agent_api import AgentRunRequest
-from app_backend.services.agent_api_service import AgentRunService
+from app_backend.services.agent_api_service import AgentRunInputError, AgentRunService
 from app_backend.services.agent_run_registry import AgentRunRegistry
 from app_backend.services.agent_runtime import AgentRuntimeEvent
 from app_backend.services.agent_trace_service import sanitize_trace_payload
@@ -92,8 +92,15 @@ class AgentStreamService:
                     ),
                 )
                 _put_item(_ResultItem(response=result.model_dump(mode="json")))
-            except Exception as exc:  # noqa: BLE001 - converted into sanitized SSE error
+            except AgentRunInputError as exc:
                 _put_item(_ErrorItem(error_type=type(exc).__name__, detail=str(exc)))
+            except Exception as exc:  # noqa: BLE001 - converted into sanitized SSE error
+                _put_item(
+                    _ErrorItem(
+                        error_type=type(exc).__name__,
+                        detail="agent_stream_internal_error",
+                    )
+                )
             finally:
                 if self._run_registry is not None:
                     self._run_registry.clear(session_id)
