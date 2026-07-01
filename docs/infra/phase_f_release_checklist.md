@@ -9,6 +9,8 @@
 
 This checklist is the release gate for Phase F MacroBrief Agent remediation. It does not approve automatic trading, order placement, background agents, scheduled search, broker sync, raw holdings export, or any frozen capability.
 
+Implementation-side DoD evidence is summarized in `docs/infra/phase_f_dod_audit.md`.
+
 ## Automated Gates
 
 Run these before requesting human acceptance:

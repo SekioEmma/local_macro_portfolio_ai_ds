@@ -132,6 +132,7 @@ cd app_frontend && npx tsc --noEmit
 ### infra/ — 运维、缓存、性能、runbook
 
 - [infra/local_runbook.md](infra/local_runbook.md)
+- [infra/phase_f_dod_audit.md](infra/phase_f_dod_audit.md)
 - [infra/phase_f_release_checklist.md](infra/phase_f_release_checklist.md)
 - [infra/performance_baseline.md](infra/performance_baseline.md)
 - [infra/m11_cache_risk_register.md](infra/m11_cache_risk_register.md)

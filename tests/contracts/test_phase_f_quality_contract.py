@@ -90,3 +90,30 @@ def test_phase_f_controlled_run_reports_are_recorded():
 
     assert live_report["mode"] == "live"
     assert "market_state:SPY" in live_report["validation_record"]["unavailable_modules"]
+
+
+def test_phase_f_dod_audit_covers_required_gates():
+    audit = (_REPO_ROOT / "docs" / "infra" / "phase_f_dod_audit.md").read_text(encoding="utf-8")
+    checklist = (_REPO_ROOT / "docs" / "infra" / "phase_f_release_checklist.md").read_text(encoding="utf-8")
+    index = (_REPO_ROOT / "docs" / "INDEX.md").read_text(encoding="utf-8")
+
+    required_items = [
+        "文档权威层级已生效",
+        "所有 ADR 已 accepted",
+        "详细 holdings consent 已实现并通过安全测试",
+        "Institution MEMO rights gate 已实现",
+        "Claim-Evidence Ledger 已实现",
+        "Temporal Alignment Gate 已实现",
+        "SSE 已实现",
+        "Trace 长期保存已实现",
+        "RAG generation contract 已实现",
+        "所有关键测试通过",
+        "真实受控 Agent run 验收通过",
+        "ROADMAP、Governance、Phase Plan、API、前端行为一致",
+    ]
+    for item in required_items:
+        assert item in audit
+    assert "phase_f_dod_audit.md" in checklist
+    assert "phase_f_dod_audit.md" in index
+    assert "not user_accepted" in audit
+    assert "not production_ready" in audit
