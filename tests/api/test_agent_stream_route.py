@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -436,3 +438,89 @@ def test_agent_stream_service_sanitizes_unhandled_exception_detail():
     assert "raw_prompt" not in text
     assert "sk-live-secret" not in text
     assert "holdings.csv" not in text
+
+
+def test_agent_stream_service_emits_heartbeat_while_worker_is_running():
+    class SlowService:
+        def run(self, request, *, event_callback=None, cancellation_requested=None):  # noqa: ANN001, ANN201
+            del request, event_callback, cancellation_requested
+            time.sleep(0.05)
+            return _MinimalResponse(final_status="ok")
+
+    stream = AgentStreamService(
+        SlowService(),
+        heartbeat_interval_seconds=0.01,
+    ).stream(
+        AgentRunRequest(
+            session_id="stream-heartbeat",
+            user_question="Build a macro brief.",
+        )
+    )
+
+    text = "".join(stream)
+    events = _events_from_sse(text)
+    heartbeats = [event for event in events if event["type"] == "heartbeat"]
+
+    assert heartbeats
+    assert heartbeats[0]["payload"] == {"status": "running"}
+    assert events[-1]["type"] == "complete"
+
+
+def test_agent_stream_service_requests_cancel_when_client_disconnects():
+    registry = AgentRunRegistry()
+    session_id = "stream-disconnect-cancel"
+    cancellation_seen = threading.Event()
+
+    class DisconnectAwareService:
+        def run(self, request, *, event_callback=None, cancellation_requested=None):  # noqa: ANN001, ANN201
+            del request, event_callback
+            assert cancellation_requested is not None
+            deadline = time.monotonic() + 1.0
+            while time.monotonic() < deadline:
+                if cancellation_requested():
+                    cancellation_seen.set()
+                    return _MinimalResponse(final_status="cancelled")
+                time.sleep(0.005)
+            return _MinimalResponse(final_status="ok")
+
+    probes = 0
+
+    def client_disconnected() -> bool:
+        nonlocal probes
+        probes += 1
+        return probes >= 2
+
+    stream = AgentStreamService(
+        DisconnectAwareService(),
+        run_registry=registry,
+        heartbeat_interval_seconds=0.01,
+    ).stream(
+        AgentRunRequest(
+            session_id=session_id,
+            user_question="Build a macro brief.",
+        ),
+        client_disconnected=client_disconnected,
+    )
+
+    first = next(stream)
+    with pytest.raises(StopIteration):
+        next(stream)
+
+    events = _events_from_sse(first)
+    assert events[0]["type"] in {"run_started", "heartbeat"}
+    assert cancellation_seen.wait(timeout=1.0)
+    assert probes >= 2
+
+
+class _MinimalResponse:
+    def __init__(self, *, final_status: str) -> None:
+        self._final_status = final_status
+
+    def model_dump(self, *, mode: str):  # noqa: ANN201
+        del mode
+        return {
+            "final_status": self._final_status,
+            "steps": 0,
+            "trace_session_id": "minimal-stream-response",
+            "brief": None,
+        }

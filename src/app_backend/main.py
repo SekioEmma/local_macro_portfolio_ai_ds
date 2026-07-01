@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+import anyio
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -391,13 +392,20 @@ def post_agent_run(
 
 @app.post("/api/agent/run/stream")
 def post_agent_run_stream(
-    request: AgentRunRequest,
+    agent_request: AgentRunRequest,
+    http_request: Request,
     service: AgentRunService = Depends(get_agent_run_service),
     registry: AgentRunRegistry = Depends(get_agent_run_registry),
 ) -> StreamingResponse:
+    def _client_disconnected() -> bool:
+        try:
+            return bool(anyio.from_thread.run(http_request.is_disconnected))
+        except RuntimeError:
+            return False
+
     stream_service = AgentStreamService(service, run_registry=registry)
     return StreamingResponse(
-        stream_service.stream(request),
+        stream_service.stream(agent_request, client_disconnected=_client_disconnected),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -5,7 +5,7 @@ import json
 import queue
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,6 +18,8 @@ from app_backend.services.agent_runtime import AgentRuntimeEvent
 from app_backend.services.agent_trace_service import sanitize_trace_payload
 from app_backend.services.macro_brief_renderer import macro_brief_temporal_envelope_payload
 from app_backend.schemas.macro_brief import MacroBrief
+
+ClientDisconnected = Callable[[], bool]
 
 
 class AgentSseEvent(BaseModel):
@@ -40,12 +42,21 @@ class AgentStreamService:
         *,
         run_registry: AgentRunRegistry | None = None,
         max_queue_size: int = 256,
+        heartbeat_interval_seconds: float = 15.0,
     ) -> None:
         self._agent_run_service = agent_run_service
         self._run_registry = run_registry
         self._max_queue_size = max(1, max_queue_size)
+        if heartbeat_interval_seconds <= 0:
+            raise ValueError("heartbeat_interval_seconds must be positive")
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
-    def stream(self, request: AgentRunRequest) -> Iterator[str]:
+    def stream(
+        self,
+        request: AgentRunRequest,
+        *,
+        client_disconnected: ClientDisconnected | None = None,
+    ) -> Iterator[str]:
         session_id = request.session_id or uuid.uuid4().hex
         stream_request = request.model_copy(update={"session_id": session_id})
         event_queue: queue.Queue[AgentRuntimeEvent | _ResultItem | _ErrorItem] = queue.Queue(
@@ -112,7 +123,27 @@ class AgentStreamService:
 
         sequence = 0
         while True:
-            item = event_queue.get()
+            if _is_client_disconnected(client_disconnected):
+                if self._run_registry is not None:
+                    self._run_registry.request_cancel(session_id)
+                break
+            try:
+                item = event_queue.get(timeout=self._heartbeat_interval_seconds)
+            except queue.Empty:
+                if _is_client_disconnected(client_disconnected):
+                    if self._run_registry is not None:
+                        self._run_registry.request_cancel(session_id)
+                    break
+                sequence += 1
+                yield encode_sse_event(
+                    _sse_event(
+                        session_id=session_id,
+                        sequence=sequence,
+                        event_type="heartbeat",
+                        payload={"status": "running"},
+                    )
+                )
+                continue
             if isinstance(item, _ResultItem):
                 for event_type, payload in _brief_section_payloads(item.response):
                     sequence += 1
@@ -159,6 +190,15 @@ class AgentStreamService:
                     payload=payload,
                 )
             )
+
+
+def _is_client_disconnected(client_disconnected: ClientDisconnected | None) -> bool:
+    if client_disconnected is None:
+        return False
+    try:
+        return bool(client_disconnected())
+    except Exception:  # noqa: BLE001 - disconnect probes must not leak transport errors into SSE
+        return False
 
 
 def encode_sse_event(event: AgentSseEvent) -> str:
