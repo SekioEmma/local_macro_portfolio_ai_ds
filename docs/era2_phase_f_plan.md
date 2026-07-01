@@ -1,6 +1,8 @@
 # Phase F — Agent + 9 节前端开发计划
 
-> **状态**：已进入开发（2026-06-29 用户确认）；F0–F2 已完成，F3 开始
+> **当前状态（2026-07-01）**：主体实现 `implemented`；当前工作 `remediation_and_optimization`；用户验收 `not user_accepted`；生产可用 `not production_ready`。
+> **Release gate**：以 [`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md) 为准，必须通过 fixture controlled smoke、关键测试、人工 checklist；live controlled smoke 可手动执行 `python scripts/run_phase_f_controlled_agent_smoke.py --mode live`。
+> **说明**：下方 F0–F8 内容保留为原始开发计划与实现追踪；不得再用“F0–F2 已完成，F3 开始”判断当前状态。
 > **前置**：E 阶段暂停于 framework（5 个 commit 已推送，不阻塞 F）
 > **依赖**：现有 `deepseek_real_transport` / `tavily_real_transport` / `RAGRetrievalService` / `dashboard_service` / `realtime_quote_service` / `economic_calendar_service` / `portfolio_engine`
 > **本文档是 CLAUDE.md §Era 2 F-Phase 授权的唯一依据**
