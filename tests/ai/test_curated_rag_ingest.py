@@ -32,6 +32,11 @@ class _FakeVectorStore:
         self.upserts.append((doc_id, chunk_index, metadata))
 
 
+class _FailingVectorStore(_FakeVectorStore):
+    def upsert(self, doc_id: str, chunk_index: int, embedding: list[float], metadata: dict[str, object]) -> None:
+        raise RuntimeError("vector write failed")
+
+
 def _write_doc(root: Path, relpath: str, text: str) -> str:
     path = root / relpath
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -541,6 +546,52 @@ def test_write_records_index_generation_metadata_without_raw_text(tmp_path):
     assert payload["embedding_model"] == "fake-bge"
     assert payload["embedding_dim"] == 2
     assert "Federal funds target range" not in serialized
+
+
+def test_vector_write_failure_does_not_overwrite_active_chunk_store(tmp_path):
+    row = _base_row(tmp_path)
+    row["cleaned_content_sha256"] = _write_doc(
+        tmp_path,
+        "policy_doc/fomc_statement_2026_06_17.md",
+        "# FOMC Statement - 2026-06-17\n\nNew replacement text.",
+    )
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+    chunk_store = ChunkTextStore(vector_root / "chunks.sqlite")
+    chunk_store.upsert_chunk(
+        StoredChunk(
+            doc_id="fomc_statement_2026_06_17",
+            chunk_index=0,
+            text="old active chunk",
+            title="Old active",
+            doc_type="policy_doc",
+            source_domain="www.federalreserve.gov",
+            external_llm_context_allowed=True,
+            evidence_tier="official_evidence",
+            is_official_source=True,
+        )
+    )
+
+    try:
+        ingest_curated_corpus(
+            curated_root=tmp_path,
+            manifest_path=manifest,
+            vector_dir=vector_root,
+            write=True,
+            embedding_service=_FakeEmbedding(),
+            vector_store=_FailingVectorStore(),
+            chunk_store=chunk_store,
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "vector write failed"
+    else:
+        raise AssertionError("expected vector write failure")
+
+    active = chunk_store.get_chunk("fomc_statement_2026_06_17", 0)
+    assert active is not None
+    assert active.text == "old active chunk"
+    assert not (vector_root / "index_generation.json").exists()
+    assert not (vector_root / "ingest_audits").exists()
 
 
 def test_write_replace_existing_prunes_unknown_existing_docs(tmp_path):

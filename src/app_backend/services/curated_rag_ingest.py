@@ -77,6 +77,14 @@ class CuratedIngestResult:
     pruned_document_count: int = 0
 
 
+@dataclass(frozen=True)
+class _PreparedDocument:
+    document: CuratedDocument
+    chunks: list[Chunk]
+    stored_chunks: list[StoredChunk]
+    embeddings: list[list[float]]
+
+
 def build_ingest_plan(curated_root: Path, manifest_path: Path) -> CuratedIngestPlan:
     curated_root = curated_root.resolve()
     manifest_path = manifest_path.resolve()
@@ -171,25 +179,35 @@ def ingest_curated_corpus(
 
         vector_store = VectorStore(vector_root / "chroma")
 
-    for doc_id in sorted(unknown_existing):
-        chunk_store.delete_doc(doc_id)
-        if vector_enabled and vector_store is not None:
-            vector_store.delete(doc_id)
+    prepared_docs = _prepare_documents(plan.accepted, embedding_service)
+    affected_doc_ids = unknown_existing | {doc.document_id for doc in plan.accepted}
+    chunk_snapshot = _snapshot_chunks(chunk_store, affected_doc_ids)
 
-    written = 0
-    for doc in plan.accepted:
-        chunks = chunk_text(doc.verified_text, doc_id=doc.document_id)
-        chunk_store.delete_doc(doc.document_id)
+    try:
         if vector_enabled and vector_store is not None:
-            vector_store.delete(doc.document_id)
-        if not chunks:
-            continue
-        embeddings = embedding_service.encode([chunk.text for chunk in chunks]) if embedding_service is not None else []
-        stored_chunks = [_stored_chunk(doc, chunk) for chunk in chunks]
-        chunk_store.upsert_chunks(stored_chunks)
-        if vector_enabled and vector_store is not None:
-            _upsert_vector_chunks(vector_store, doc, chunks, embeddings)
-        written += len(chunks)
+            for doc_id in sorted(unknown_existing):
+                vector_store.delete(doc_id)
+            for prepared in prepared_docs:
+                vector_store.delete(prepared.document.document_id)
+                if prepared.chunks:
+                    _upsert_vector_chunks(
+                        vector_store,
+                        prepared.document,
+                        prepared.chunks,
+                        prepared.embeddings,
+                    )
+
+        for doc_id in sorted(unknown_existing):
+            chunk_store.delete_doc(doc_id)
+        for prepared in prepared_docs:
+            chunk_store.delete_doc(prepared.document.document_id)
+            if prepared.stored_chunks:
+                chunk_store.upsert_chunks(prepared.stored_chunks)
+    except Exception:
+        _restore_chunks(chunk_store, affected_doc_ids, chunk_snapshot)
+        raise
+
+    written = sum(len(prepared.stored_chunks) for prepared in prepared_docs)
     mode = "write" if vector_enabled else "write-bm25-only"
     result = CuratedIngestResult(
         plan=plan,
@@ -225,6 +243,54 @@ def summarize_result(result: CuratedIngestResult) -> dict[str, Any]:
         "pruned_documents": result.pruned_document_count,
     })
     return payload
+
+
+def _prepare_documents(
+    documents: list[CuratedDocument],
+    embedding_service: Any | None,
+) -> list[_PreparedDocument]:
+    prepared: list[_PreparedDocument] = []
+    for doc in documents:
+        chunks = chunk_text(doc.verified_text, doc_id=doc.document_id)
+        embeddings = (
+            embedding_service.encode([chunk.text for chunk in chunks])
+            if embedding_service is not None and chunks
+            else []
+        )
+        prepared.append(
+            _PreparedDocument(
+                document=doc,
+                chunks=chunks,
+                stored_chunks=[_stored_chunk(doc, chunk) for chunk in chunks],
+                embeddings=embeddings,
+            )
+        )
+    return prepared
+
+
+def _snapshot_chunks(
+    chunk_store: ChunkTextStore,
+    doc_ids: set[str],
+) -> dict[str, list[StoredChunk]]:
+    if not doc_ids:
+        return {}
+    snapshot: dict[str, list[StoredChunk]] = {doc_id: [] for doc_id in doc_ids}
+    for chunk in chunk_store.list_chunks():
+        if chunk.doc_id in snapshot:
+            snapshot[chunk.doc_id].append(chunk)
+    return snapshot
+
+
+def _restore_chunks(
+    chunk_store: ChunkTextStore,
+    doc_ids: set[str],
+    snapshot: dict[str, list[StoredChunk]],
+) -> None:
+    for doc_id in sorted(doc_ids):
+        chunk_store.delete_doc(doc_id)
+        chunks = snapshot.get(doc_id, [])
+        if chunks:
+            chunk_store.upsert_chunks(chunks)
 
 
 def _write_ingest_audit(vector_root: Path, result: CuratedIngestResult) -> None:
