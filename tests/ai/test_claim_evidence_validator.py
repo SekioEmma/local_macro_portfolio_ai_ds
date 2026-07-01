@@ -10,7 +10,11 @@ from app_backend.schemas.macro_brief import (
 from app_backend.services.claim_evidence_validator import (
     validate_macro_brief_claim_evidence,
 )
-from app_backend.services.run_evidence_ledger import EvidenceRecord, RunEvidenceLedger
+from app_backend.services.run_evidence_ledger import (
+    AtomicObservation,
+    EvidenceRecord,
+    RunEvidenceLedger,
+)
 
 
 def _record(
@@ -19,6 +23,9 @@ def _record(
     source_kind: str = "official_primary",
     evidence_tier: str = "official_evidence",
     temporal_status: str = "observed",
+    value: float = 4.3,
+    unit: str | None = "%",
+    as_of: str = "2026-06-29",
 ) -> EvidenceRecord:
     return EvidenceRecord(
         evidence_id=evidence_id,
@@ -27,10 +34,13 @@ def _record(
         source_kind=source_kind,
         evidence_tier=evidence_tier,
         title=f"Evidence {evidence_id}",
-        observation_date="2026-06-29",
-        release_date="2026-06-29",
+        observation_date=as_of,
+        release_date=as_of,
         accessed_at="2026-06-30T12:00:00+00:00",
         temporal_status=temporal_status,
+        atomic_observations=(
+            AtomicObservation(value=value, unit=unit, as_of=as_of, series_id="DGS10"),
+        ),
         public_visible=True,
     )
 
@@ -113,6 +123,50 @@ def test_observed_fact_with_official_observed_evidence_passes():
     findings = validate_macro_brief_claim_evidence(
         _brief(),
         _ledger(_record("ev_observed")),
+    )
+
+    assert findings == []
+
+
+def test_observed_fact_rejects_value_that_does_not_match_atomic_observation():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["value"] = 4.9
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(_record("ev_observed")),
+    )
+
+    assert findings == ["confirmed_facts[f1].atomic_observation_mismatch"]
+
+
+def test_observed_fact_rejects_as_of_that_does_not_match_atomic_observation():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["as_of"] = "2026-06-28"
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(_record("ev_observed")),
+    )
+
+    assert findings == ["confirmed_facts[f1].atomic_observation_mismatch"]
+
+
+def test_reported_fact_does_not_require_atomic_observation_binding():
+    facts = _brief_payload()["confirmed_facts"]
+    facts[0]["claim_status"] = "reported"
+    facts[0]["value"] = 9.9
+
+    findings = validate_macro_brief_claim_evidence(
+        _brief(facts=facts),
+        _ledger(
+            _record(
+                "ev_observed",
+                source_kind="public_reporting",
+                evidence_tier="public_reporting",
+                temporal_status="reported",
+            ).model_copy(update={"atomic_observations": ()})
+        ),
     )
 
     assert findings == []

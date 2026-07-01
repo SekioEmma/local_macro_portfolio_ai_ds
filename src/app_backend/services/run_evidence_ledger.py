@@ -28,6 +28,15 @@ EvidenceTier = Literal[
 TemporalStatus = Literal["observed", "reported", "as_released", "unavailable"]
 
 
+class AtomicObservation(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    value: str | float | int = Field()
+    unit: str | None = Field(default=None, max_length=80)
+    as_of: str | None = Field(default=None, max_length=40)
+    series_id: str | None = Field(default=None, max_length=128)
+
+
 class EvidenceRecord(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -45,6 +54,7 @@ class EvidenceRecord(BaseModel):
     accessed_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat(), max_length=40)
     temporal_status: TemporalStatus = "observed"
     value_summary: dict[str, Any] = Field(default_factory=dict)
+    atomic_observations: tuple[AtomicObservation, ...] = ()
     content_sha256: str | None = Field(default=None, min_length=64, max_length=64)
     public_visible: bool = False
 
@@ -72,6 +82,7 @@ def sha256_json_summary(value: Any) -> str:
 
 
 __all__ = [
+    "AtomicObservation",
     "EvidenceRecord",
     "EvidenceTier",
     "RunEvidenceLedger",

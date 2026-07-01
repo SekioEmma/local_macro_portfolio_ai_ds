@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app_backend.services.run_evidence_ledger import (
+    AtomicObservation,
     EvidenceRecord,
     RunEvidenceLedger,
     sha256_json_summary,
@@ -31,6 +32,19 @@ def test_ledger_add_returns_new_immutable_ledger():
     assert ledger.records == ()
     assert [record.evidence_id for record in updated.records] == ["ev1"]
     assert updated.by_id()["ev1"].tool_name == "quote_etf"
+
+
+def test_evidence_record_can_carry_atomic_observations():
+    record = _record().model_copy(
+        update={
+            "atomic_observations": (
+                AtomicObservation(value=4.3, unit="%", as_of="2026-06-29", series_id="DGS10"),
+            )
+        }
+    )
+
+    assert record.atomic_observations[0].value == 4.3
+    assert record.atomic_observations[0].unit == "%"
 
 
 def test_ledger_rejects_duplicate_evidence_id():

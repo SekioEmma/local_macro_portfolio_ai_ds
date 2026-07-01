@@ -19,7 +19,11 @@ from app_backend.services.llm_provider_adapter import (
     ToolCall,
 )
 from app_backend.services.holdings_output_guard import DISCLOSURE_WARNING_CODE
-from app_backend.services.run_evidence_ledger import EvidenceRecord, RunEvidenceLedger
+from app_backend.services.run_evidence_ledger import (
+    AtomicObservation,
+    EvidenceRecord,
+    RunEvidenceLedger,
+)
 
 
 class MockProvider:
@@ -103,6 +107,8 @@ class EvidenceAwareProvider:
             )
         evidence_id = _registered_evidence_id(messages)
         payload = brief_payload()
+        payload["confirmed_facts"] = payload["confirmed_facts"][:1]
+        payload["confirmed_facts"][0]["as_of"] = "2026-06-29"
         for fact in payload["confirmed_facts"]:
             fact["evidence_ids"] = [evidence_id]
         payload["judgments"][0]["evidence_ids"] = [evidence_id]
@@ -147,6 +153,7 @@ def brief_payload() -> dict[str, Any]:
                 "unit": "%",
                 "source_id": "s2",
                 "evidence_ids": ["ev_credit"],
+                "claim_status": "reported",
                 "as_of": "2026-06-27",
             },
         ],
@@ -274,6 +281,8 @@ def _evidence_record(
     *,
     tool_name: str = "treasury_curve",
     observation_date: str = "2026-06-27",
+    value: float = 4.3,
+    unit: str | None = "%",
 ) -> EvidenceRecord:
     return EvidenceRecord(
         evidence_id=evidence_id,
@@ -286,6 +295,9 @@ def _evidence_record(
         release_date=observation_date,
         accessed_at="2026-06-30T12:00:00+00:00",
         temporal_status="observed",
+        atomic_observations=(
+            AtomicObservation(value=value, unit=unit, as_of=observation_date, series_id=evidence_id),
+        ),
     )
 
 
@@ -775,7 +787,7 @@ def test_finalize_claim_evidence_gate_retries_when_ledger_ids_are_unknown():
         tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
         evidence_ledger=_ledger(
             _evidence_record("ev_dgs10"),
-            _evidence_record("ev_known_credit", tool_name="rag_retrieve"),
+            _evidence_record("ev_known_credit", tool_name="rag_retrieve", value=3.1),
         ),
     )
 
@@ -802,7 +814,12 @@ def test_finalize_with_evidence_ledger_adds_temporal_envelope_to_brief():
         tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
         evidence_ledger=_ledger(
             _evidence_record("ev_dgs10", tool_name="treasury_curve", observation_date="2026-06-27"),
-            _evidence_record("ev_credit", tool_name="rag_retrieve", observation_date="2026-06-26"),
+            _evidence_record(
+                "ev_credit",
+                tool_name="rag_retrieve",
+                observation_date="2026-06-26",
+                value=3.1,
+            ),
         ),
     )
 
@@ -844,6 +861,7 @@ def test_finalize_with_evidence_ledger_rebuilds_source_list_server_side():
                 "ev_credit",
                 tool_name="rag_retrieve",
                 observation_date="2026-06-26",
+                value=3.1,
             ).model_copy(update={"rag_doc_id": "credit_snapshot"}),
         ),
     )

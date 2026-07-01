@@ -16,6 +16,8 @@ Phase F introduces a run-scoped evidence ledger and temporal envelope:
 
 - `confirmed_facts[*].evidence_ids` is required.
 - `confirmed_facts[*].claim_status` is `observed`, `reported`, or `unavailable`.
+- Observed facts must bind `value`, `unit`, and `as_of` to a current-run
+  ledger `atomic_observations` entry.
 - `judgments[*].evidence_ids` and `judgments[*].temporal_scope` distinguish analysis support from fact ids.
 - MacroBrief may include report and data cutoff fields.
 
@@ -24,10 +26,13 @@ Phase F introduces a run-scoped evidence ledger and temporal envelope:
 - Official primary data can support observed facts when the evidence temporal status is observed.
 - Public reporting and institutional research can support reported facts.
 - Missing values must use unavailable status without carrying a numeric value.
+- RAG, MEMO, and news evidence can support reported or interpretive claims;
+  they do not become observed facts unless an atomic observation is present.
 
 ## Prohibited Scope
 
 - Cite a fact without current-run evidence.
+- Attach a valid evidence id to a different observed value, unit, or date.
 - Treat institutional views as observed facts.
 - Merge market, policy, macro, and news dates without displaying or validating cutoff differences.
 

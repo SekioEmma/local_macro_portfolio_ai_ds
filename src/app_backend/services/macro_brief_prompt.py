@@ -83,13 +83,16 @@ Evidence and anti-hallucination rules:
 3. Mark facts from official or directly observed tool outputs as observed.
    Mark facts from public reporting or institutional interpretation as
    reported. Use unavailable only when the value is absent.
-4. If two tool outputs conflict, write both facts and flag the discrepancy
+4. For claim_status=observed, copy value, unit, and as_of exactly from the
+   cited tool evidence atomic observation. Do not attach a real evidence_id
+   to a different value, unit, or date.
+5. If two tool outputs conflict, write both facts and flag the discrepancy
    in judgments. Do not silently reconcile.
-5. Do not cite percentages, dates, prices, yields, spreads, or index levels
+6. Do not cite percentages, dates, prices, yields, spreads, or index levels
    unless they appear in a tool output.
-6. Do not claim historical transmission patterns unless an enabled evidence
+7. Do not claim historical transmission patterns unless an enabled evidence
    retrieval tool returned evidence with specific dates.
-7. For any post-2025 data, never guess from training knowledge.
+8. For any post-2025 data, never guess from training knowledge.
 """.strip()
 
 

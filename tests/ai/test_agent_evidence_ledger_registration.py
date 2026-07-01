@@ -112,6 +112,10 @@ def test_registers_treasury_curve_points_as_observed_local_data():
     assert record.series_id == "DGS10"
     assert record.canonical_url == "https://fred.stlouisfed.org/series/DGS10"
     assert record.temporal_status == "observed"
+    assert record.atomic_observations[0].value == 4.3
+    assert record.atomic_observations[0].unit == "%"
+    assert record.atomic_observations[0].as_of == "2026-06-29"
+    assert record.atomic_observations[0].series_id == "DGS10"
 
 
 def test_error_tool_result_does_not_register_evidence():

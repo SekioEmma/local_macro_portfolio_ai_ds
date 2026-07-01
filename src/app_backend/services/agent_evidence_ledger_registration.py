@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app_backend.services.agent_tool_registry import ToolResult
 from app_backend.services.run_evidence_ledger import (
+    AtomicObservation,
     EvidenceRecord,
     RunEvidenceLedger,
     sha256_json_summary,
@@ -196,8 +197,15 @@ def _records_from_quote_etf(
             value_summary={
                 "symbol": symbol,
                 "value": quote.get("value"),
+                "unit": quote.get("unit"),
                 "status": quote.get("status"),
             },
+            atomic_observation=_atomic_observation(
+                value=quote.get("value"),
+                unit=quote.get("unit"),
+                as_of=_date_prefix(quote.get("observation_date")),
+                series_id=symbol,
+            ),
         )
         if record is None:
             rendered.append(quote)
@@ -234,8 +242,15 @@ def _records_from_treasury_curve(
             value_summary={
                 "tenor": _text(point.get("tenor")),
                 "value": point.get("value"),
+                "unit": point.get("unit") or "%",
                 "status": point.get("status"),
             },
+            atomic_observation=_atomic_observation(
+                value=point.get("value"),
+                unit=point.get("unit") or "%",
+                as_of=_date_prefix(point.get("observation_date")),
+                series_id=series_id,
+            ),
         )
         if record is None:
             rendered.append(point)
@@ -264,8 +279,15 @@ def _records_from_dxy(
         value_summary={
             "series_id": series_id,
             "value": content.get("value"),
+            "unit": content.get("unit"),
             "status": content.get("status"),
         },
+        atomic_observation=_atomic_observation(
+            value=content.get("value"),
+            unit=content.get("unit"),
+            as_of=_date_prefix(content.get("observation_date")),
+            series_id=series_id,
+        ),
     )
     if record is None:
         return [], content
@@ -293,6 +315,12 @@ def _records_from_commodity(
             "value_usd_per_barrel": content.get("value_usd_per_barrel"),
             "unit": content.get("unit"),
         },
+        atomic_observations=_atomic_observations(
+            value=content.get("value_usd_per_barrel"),
+            unit=content.get("unit"),
+            as_of=_date_prefix(content.get("observed_at") or content.get("as_of")),
+            series_id=benchmark,
+        ),
         payload=content,
         public_visible=True,
     )
@@ -327,7 +355,14 @@ def _records_from_evidence_rows(
                 "module_key": _text(row.get("module_key")),
                 "metric_key": _text(row.get("metric_key")),
                 "value": row.get("value"),
+                "unit": row.get("unit"),
             },
+            atomic_observation=_atomic_observation(
+                value=row.get("value"),
+                unit=row.get("unit"),
+                as_of=_date_prefix(row.get("observation_date") or row.get("as_of")),
+                series_id=metric_key,
+            ),
         )
         if record is None:
             rendered.append(row)
@@ -350,6 +385,12 @@ def _record_from_dashboard(
         observation_date=_date_prefix(content.get("observation_date") or content.get("as_of")),
         payload=content,
         value_summary={key: content.get(key) for key in ("series", "value", "overall_status") if key in content},
+        atomic_observation=_atomic_observation(
+            value=content.get("value"),
+            unit=content.get("unit"),
+            as_of=_date_prefix(content.get("observation_date") or content.get("as_of")),
+            series_id=_text(content.get("series")),
+        ),
     )
     if record is None:
         return [], content
@@ -366,6 +407,7 @@ def _local_data_record(
     series_id: str | None = None,
     canonical_url: str | None = None,
     observation_date: str | None = None,
+    atomic_observation: AtomicObservation | None = None,
 ) -> EvidenceRecord | None:
     return _record(
         run_id=run_id,
@@ -380,6 +422,7 @@ def _local_data_record(
         temporal_status="observed",
         value_summary=value_summary,
         payload=payload,
+        atomic_observations=(atomic_observation,) if atomic_observation is not None else (),
     )
 
 
@@ -399,6 +442,7 @@ def _record(
     release_date: str | None = None,
     temporal_status: str = "observed",
     public_visible: bool = False,
+    atomic_observations: tuple[AtomicObservation, ...] = (),
 ) -> EvidenceRecord | None:
     evidence_id = _evidence_id(tool_name, payload)
     try:
@@ -416,6 +460,7 @@ def _record(
             release_date=release_date,
             temporal_status=temporal_status,
             value_summary={key: value for key, value in value_summary.items() if value is not None},
+            atomic_observations=atomic_observations,
             content_sha256=sha256_json_summary(payload),
             public_visible=public_visible,
         )
@@ -426,6 +471,43 @@ def _record(
 def _evidence_id(tool_name: str, payload: dict[str, Any]) -> str:
     digest = sha256_json_summary({"tool_name": tool_name, "payload": payload})[:16]
     return f"ev_{tool_name}_{digest}"[:128]
+
+
+def _atomic_observation(
+    *,
+    value: Any,
+    unit: Any = None,
+    as_of: str | None = None,
+    series_id: str | None = None,
+) -> AtomicObservation | None:
+    if isinstance(value, bool) or not isinstance(value, str | int | float):
+        return None
+    unit_text = _text(unit)
+    try:
+        return AtomicObservation(
+            value=value,
+            unit=unit_text,
+            as_of=as_of,
+            series_id=series_id,
+        )
+    except ValidationError:
+        return None
+
+
+def _atomic_observations(
+    *,
+    value: Any,
+    unit: Any = None,
+    as_of: str | None = None,
+    series_id: str | None = None,
+) -> tuple[AtomicObservation, ...]:
+    observation = _atomic_observation(
+        value=value,
+        unit=unit,
+        as_of=as_of,
+        series_id=series_id,
+    )
+    return (observation,) if observation is not None else ()
 
 
 def _with_registered_ids(content: Any, evidence_ids: list[str]) -> Any:
