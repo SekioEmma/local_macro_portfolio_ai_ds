@@ -14,11 +14,12 @@ Phase F may send detailed holdings context to the external MacroBrief LLM only f
 
 Detailed holdings context is allowed only through:
 
+- `GET /api/agent/capabilities`
 - `POST /api/agent/holdings-consent`
 - `POST /api/agent/run`
 - `POST /api/agent/run/stream`
 
-The consent endpoint issues a process-local one-time token. It does not return holdings content. `AgentRunRequest.include_holdings=true` must include a valid `holdings_consent_token`. The token expires after 10 minutes and is consumed when a run starts with a server-side holdings snapshot.
+The capabilities endpoint must report whether a server-side holdings snapshot provider is wired. When the provider is not wired, the consent endpoint must not issue a token and `AgentRunRequest.include_holdings=true` must fail closed with `holdings_snapshot_backend_not_wired`. The consent endpoint issues a process-local one-time token only when the snapshot provider is wired. It does not return holdings content. `AgentRunRequest.include_holdings=true` must include a valid `holdings_consent_token`. The token expires after 10 minutes and is consumed when a run starts with a server-side holdings snapshot.
 
 ## Allowed Scope
 
@@ -35,7 +36,7 @@ The consent endpoint issues a process-local one-time token. It does not return h
 
 ## Migration
 
-Current implementation is a guarded foundation: consent and injection contracts exist for sync and SSE agent runs, but the default snapshot provider is intentionally unwired.
+Current implementation is a guarded foundation: consent and injection contracts exist for sync and SSE agent runs, but the default snapshot provider is intentionally unwired. Frontend activation remains blocked while `GET /api/agent/capabilities` reports `holdings_snapshot_backend_not_wired`.
 
 ## Validation
 
@@ -44,3 +45,5 @@ Current implementation is a guarded foundation: consent and injection contracts 
 - `tests/api/test_agent_run_route.py`
 - `tests/api/test_agent_stream_route.py`
 - `tests/ai/test_agent_trace_service.py`
+- `app_frontend/src/api/client.test.ts`
+- `app_frontend/src/components/AIChatPage.test.tsx`

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cancelAgentRun,
+  fetchAgentCapabilities,
   requestHoldingsConsent,
   streamAgentRun
 } from "../api/client";
@@ -11,11 +12,13 @@ import { AIChatPage } from "./AIChatPage";
 
 vi.mock("../api/client", () => ({
   cancelAgentRun: vi.fn(),
+  fetchAgentCapabilities: vi.fn(),
   requestHoldingsConsent: vi.fn(),
   streamAgentRun: vi.fn()
 }));
 
 const mockedCancelAgentRun = vi.mocked(cancelAgentRun);
+const mockedFetchAgentCapabilities = vi.mocked(fetchAgentCapabilities);
 const mockedRequestHoldingsConsent = vi.mocked(requestHoldingsConsent);
 const mockedStreamAgentRun = vi.mocked(streamAgentRun);
 
@@ -39,15 +42,27 @@ describe("AIChatPage Agent SSE", () => {
       },
       error: null
     });
+    mockedFetchAgentCapabilities.mockResolvedValue({
+      data: {
+        holdings_external_context: {
+          enabled: false,
+          reason_code: "holdings_snapshot_backend_not_wired"
+        }
+      },
+      error: null
+    });
   });
 
-  it("shows fixed MacroBrief product status labels", () => {
+  it("shows fixed MacroBrief product status labels", async () => {
     render(<AIChatPage />);
 
     expect(screen.getByLabelText("MacroBrief 输出定位")).toBeInTheDocument();
     expect(screen.getByText("研究辅助输出")).toBeInTheDocument();
     expect(screen.getByText("非自动投资决策")).toBeInTheDocument();
     expect(screen.getByText("需要用户审阅")).toBeInTheDocument();
+    expect(
+      await screen.findByText("详细持仓上下文：暂未启用")
+    ).toBeInTheDocument();
   });
 
   it("streams validated brief sections into the paper result panel", async () => {
@@ -124,7 +139,52 @@ describe("AIChatPage Agent SSE", () => {
     expect(mockedRequestHoldingsConsent).not.toHaveBeenCalled();
   });
 
-  it("requests per-run holdings consent before streaming when explicitly enabled", async () => {
+  it("disables detailed holdings activation while the backend snapshot provider is unwired", async () => {
+    mockedStreamAgentRun.mockResolvedValue(
+      streamResult({
+        session_id: "agent-no-holdings-ui",
+        final_status: "ok",
+        trace_session_id: "trace-no-holdings-ui",
+        steps: 1
+      })
+    );
+
+    const user = userEvent.setup();
+    render(<AIChatPage />);
+
+    expect(
+      await screen.findByText("详细持仓上下文：暂未启用")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("允许本次详细持仓上下文")).toBeDisabled();
+
+    await act(async () => {
+      await user.type(screen.getByLabelText("宏观研究问题"), "结合我的组合风险看宏观环境");
+      await user.click(screen.getByRole("button", { name: /启动 Agent 调研/ }));
+    });
+
+    expect(mockedRequestHoldingsConsent).not.toHaveBeenCalled();
+    expect(mockedStreamAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_question: "结合我的组合风险看宏观环境",
+        include_holdings: false,
+        holdings_consent_token: null,
+        source_visibility_mode: "public"
+      }),
+      expect.any(Function),
+      expect.any(AbortSignal)
+    );
+  });
+
+  it("requests per-run holdings consent before streaming when capability is wired and explicitly enabled", async () => {
+    mockedFetchAgentCapabilities.mockResolvedValue({
+      data: {
+        holdings_external_context: {
+          enabled: true,
+          reason_code: null
+        }
+      },
+      error: null
+    });
     mockedStreamAgentRun.mockResolvedValue(
       streamResult({
         session_id: "agent-holdings-ui",
@@ -136,6 +196,10 @@ describe("AIChatPage Agent SSE", () => {
 
     const user = userEvent.setup();
     render(<AIChatPage />);
+
+    expect(
+      await screen.findByLabelText("允许本次详细持仓上下文")
+    ).not.toBeDisabled();
 
     await act(async () => {
       await user.type(screen.getByLabelText("宏观研究问题"), "结合我的组合风险看宏观环境");

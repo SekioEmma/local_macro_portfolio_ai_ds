@@ -432,6 +432,15 @@ export type HoldingsConsentResponse = {
   ttl_seconds: number;
 };
 
+export type AgentHoldingsCapability = {
+  enabled: boolean;
+  reason_code: string | null;
+};
+
+export type AgentCapabilitiesResponse = {
+  holdings_external_context: AgentHoldingsCapability;
+};
+
 export type AgentFinalStatus =
   | "ok"
   | "incomplete"

@@ -167,6 +167,26 @@ def test_agent_stream_route_rejects_client_supplied_current_date(tmp_path):
     assert not provider.calls
 
 
+def test_default_agent_stream_rejects_holdings_activation_when_snapshot_provider_is_unwired():
+    try:
+        response = _client().post(
+            "/api/agent/run/stream",
+            json={
+                "session_id": "agent-stream-default-unwired",
+                "user_question": "Build a macro brief.",
+                "include_holdings": True,
+            },
+            headers={"accept": "text/event-stream"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    events = _events_from_sse(response.text)
+    assert events[-1]["type"] == "error"
+    assert events[-1]["payload"]["detail"] == "holdings_snapshot_backend_not_wired"
+
+
 def test_agent_stream_with_consent_injects_holdings_without_sse_leak(tmp_path):
     provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
     consent_service = HoldingsConsentService()

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSseEvent } from "../types";
 import {
   cancelAgentRun,
+  fetchAgentCapabilities,
   fetchDeepSeekResearch,
   fetchStatus,
   requestHoldingsConsent,
@@ -220,6 +221,30 @@ describe("api client requestJson branches", () => {
     );
     expect(fetchMock.mock.calls[0][1].body).not.toContain("positions");
     expect(fetchMock.mock.calls[0][1].body).not.toContain("market_value");
+    expect(result).toEqual({ data: payload, error: null });
+  });
+
+  it("fetches Agent capabilities including holdings activation state", async () => {
+    const payload = {
+      holdings_external_context: {
+        enabled: false,
+        reason_code: "holdings_snapshot_backend_not_wired"
+      }
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fetchAgentCapabilities();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/agent/capabilities"),
+      expect.objectContaining({ method: "GET" })
+    );
     expect(result).toEqual({ data: payload, error: null });
   });
 

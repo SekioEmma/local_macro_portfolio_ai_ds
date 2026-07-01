@@ -104,7 +104,7 @@ def test_phase_f_dod_audit_covers_required_gates():
     required_items = [
         "文档权威层级已生效",
         "所有 ADR 已 accepted",
-        "详细 holdings consent 已实现并通过安全测试",
+        "详细 holdings consent / injection contract 已实现，production snapshot provider 未接线时 activation fail-closed",
         "Institution MEMO rights gate 已实现",
         "Claim-Evidence Ledger 已实现",
         "Temporal Alignment Gate 已实现",

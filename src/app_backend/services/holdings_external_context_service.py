@@ -48,6 +48,10 @@ class HoldingsExternalContextService:
     def __init__(self, snapshot_provider: HoldingsSnapshotProvider | None = None) -> None:
         self._snapshot_provider = snapshot_provider
 
+    @property
+    def is_wired(self) -> bool:
+        return self._snapshot_provider is not None
+
     def load_snapshot(self, *, session_id: str) -> dict[str, Any]:
         if self._snapshot_provider is None:
             raise HoldingsContextError("holdings_snapshot_backend_not_wired")

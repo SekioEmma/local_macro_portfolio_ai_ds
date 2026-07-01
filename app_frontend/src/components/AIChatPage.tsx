@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent } from "react";
 import {
   cancelAgentRun,
+  fetchAgentCapabilities,
   requestHoldingsConsent,
   streamAgentRun
 } from "../api/client";
 import type {
+  AgentCapabilitiesResponse,
   AgentBriefSection,
   AgentRunRequest,
   AgentSseEvent,
@@ -69,6 +71,9 @@ export function AIChatPage() {
   const [question, setQuestion] = useState("");
   const [confirmExternalSearch, setConfirmExternalSearch] = useState(false);
   const [confirmHoldingsContext, setConfirmHoldingsContext] = useState(false);
+  const [agentCapabilities, setAgentCapabilities] =
+    useState<AgentCapabilitiesResponse | null>(null);
+  const [agentCapabilitiesError, setAgentCapabilitiesError] = useState<string | null>(null);
   const [streamEvents, setStreamEvents] = useState<AgentSseEvent[]>([]);
   const [briefSections, setBriefSections] = useState<AgentBriefSection[]>([]);
   const [runResult, setRunResult] =
@@ -94,6 +99,11 @@ export function AIChatPage() {
     streamEvents.length > 0 ||
     briefSections.length > 0 ||
     runResult !== null;
+  const holdingsCapability = agentCapabilities?.holdings_external_context;
+  const holdingsContextEnabled = holdingsCapability?.enabled === true;
+  const holdingsDisabledReason =
+    holdingsCapability?.reason_code ||
+    (agentCapabilitiesError ? "agent_capabilities_unavailable" : "holdings_snapshot_backend_not_wired");
 
   useEffect(() => {
     if (!isStreaming) return;
@@ -104,6 +114,27 @@ export function AIChatPage() {
     }, 1000);
     return () => window.clearInterval(intervalId);
   }, [isStreaming]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAgentCapabilities().then((response) => {
+      if (cancelled) return;
+      if (response.error || !response.data) {
+        setAgentCapabilities(null);
+        setAgentCapabilitiesError(response.error || "agent_capabilities_unavailable");
+        setConfirmHoldingsContext(false);
+        return;
+      }
+      setAgentCapabilities(response.data);
+      setAgentCapabilitiesError(null);
+      if (!response.data.holdings_external_context.enabled) {
+        setConfirmHoldingsContext(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -144,7 +175,7 @@ export function AIChatPage() {
 
     try {
       let holdingsConsentToken: string | null = null;
-      if (confirmHoldingsContext) {
+      if (confirmHoldingsContext && holdingsContextEnabled) {
         const consent = await requestHoldingsConsent(
           {
             session_id: nextSessionId,
@@ -167,7 +198,7 @@ export function AIChatPage() {
       const request: AgentRunRequest = {
         user_question: trimmedQuestion,
         session_id: nextSessionId,
-        include_holdings: confirmHoldingsContext,
+        include_holdings: confirmHoldingsContext && holdingsContextEnabled,
         holdings_consent_token: holdingsConsentToken,
         confirm_external_search: confirmExternalSearch,
         source_visibility_mode: "public"
@@ -314,16 +345,22 @@ export function AIChatPage() {
 
         <label className="chat-run-toggle chat-holdings-toggle">
           <input
+            aria-describedby="chat-holdings-capability"
             aria-label="允许本次详细持仓上下文"
             checked={confirmHoldingsContext}
-            disabled={isStreaming}
+            disabled={isStreaming || !holdingsContextEnabled}
             onChange={(event) => setConfirmHoldingsContext(event.target.checked)}
             type="checkbox"
           />
-          <span>允许本次详细持仓上下文</span>
-          <small>
-            默认关闭；每次运行都会先请求一次性 consent token。后端只在本 session 内读取快照，
-            trace/SSE/API response 不回显详细持仓正文。
+          <span>
+            {holdingsContextEnabled
+              ? "允许本次详细持仓上下文"
+              : "详细持仓上下文：暂未启用"}
+          </span>
+          <small id="chat-holdings-capability">
+            {holdingsContextEnabled
+              ? "默认关闭；每次运行都会先请求一次性 consent token。后端只在本 session 内读取快照，trace/SSE/API response 不回显详细持仓正文。"
+              : `默认关闭且不可开启；当前后端未接线只读持仓快照 provider（${holdingsDisabledReason}）。`}
           </small>
         </label>
 

@@ -1,5 +1,6 @@
 import type {
   ApiResult,
+  AgentCapabilitiesResponse,
   AgentCancelResponse,
   AgentRunRequest,
   AgentSseEvent,
@@ -117,6 +118,10 @@ export function requestHoldingsConsent(
     body: request,
     signal
   });
+}
+
+export function fetchAgentCapabilities(): Promise<ApiResult<AgentCapabilitiesResponse>> {
+  return requestJson<AgentCapabilitiesResponse>("/api/agent/capabilities");
 }
 
 export async function streamAgentRun(

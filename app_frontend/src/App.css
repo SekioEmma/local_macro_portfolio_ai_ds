@@ -2586,6 +2586,11 @@ button {
   accent-color: var(--paper-accent);
 }
 
+.chat-run-toggle input:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
 .chat-run-toggle span {
   font-size: 13px;
   font-weight: 800;
@@ -2607,6 +2612,16 @@ button {
 
 .chat-holdings-toggle span {
   color: #703d35;
+}
+
+.chat-holdings-toggle:has(input:disabled) {
+  border-color: var(--panel-border-soft);
+  background: rgba(255, 253, 248, 0.5);
+  color: var(--ink-muted);
+}
+
+.chat-holdings-toggle:has(input:disabled) span {
+  color: var(--ink-muted);
 }
 
 .chat-action-row {

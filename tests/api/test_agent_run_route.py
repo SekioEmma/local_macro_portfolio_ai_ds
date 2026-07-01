@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app_backend.main import app, get_agent_run_service, get_holdings_consent_service
+from app_backend.main import (
+    app,
+    get_agent_run_service,
+    get_holdings_consent_service,
+    get_holdings_context_service,
+)
 from app_backend.schemas.agent_api import AgentRunRequest
 from app_backend.services.agent_api_service import AgentRunService
 from app_backend.services.agent_runtime import AgentSessionResult, run_agent
@@ -72,6 +77,10 @@ def _install_service(service: AgentRunService) -> None:
 
 def _install_consent_service(service: HoldingsConsentService) -> None:
     app.dependency_overrides[get_holdings_consent_service] = lambda: service
+
+
+def _install_holdings_context_service(service: HoldingsExternalContextService) -> None:
+    app.dependency_overrides[get_holdings_context_service] = lambda: service
 
 
 def test_agent_run_service_enables_evidence_ledger_by_default(tmp_path):
@@ -272,6 +281,42 @@ def test_agent_run_rejects_holdings_without_consent_token(tmp_path):
     assert response.json()["detail"] == "holdings_consent_token_required"
 
 
+def test_agent_capabilities_report_unwired_holdings_by_default():
+    response = _client().get("/api/agent/capabilities")
+
+    assert response.status_code == 200
+    assert response.json()["holdings_external_context"] == {
+        "enabled": False,
+        "reason_code": "holdings_snapshot_backend_not_wired",
+    }
+
+
+def test_agent_capabilities_report_wired_holdings_when_provider_exists():
+    _install_holdings_context_service(HoldingsExternalContextService(lambda _session_id: {"positions": []}))
+
+    response = _client().get("/api/agent/capabilities")
+
+    assert response.status_code == 200
+    assert response.json()["holdings_external_context"] == {
+        "enabled": True,
+        "reason_code": None,
+    }
+
+
+def test_default_agent_run_rejects_holdings_activation_when_snapshot_provider_is_unwired():
+    response = _client().post(
+        "/api/agent/run",
+        json={
+            "session_id": "agent-session-default-unwired",
+            "user_question": "Build a macro brief.",
+            "include_holdings": True,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "holdings_snapshot_backend_not_wired"
+
+
 def test_agent_run_rejects_holdings_when_snapshot_provider_is_unwired(tmp_path):
     provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
     consent_service = HoldingsConsentService()
@@ -376,9 +421,28 @@ def test_holdings_consent_endpoint_requires_explicit_confirmation():
     assert response.json()["detail"] == "holdings_consent_confirmation_required"
 
 
+def test_holdings_consent_endpoint_rejects_when_snapshot_provider_is_unwired():
+    consent_service = HoldingsConsentService(token_factory=lambda: "token_1234567890123456")
+    _install_consent_service(consent_service)
+
+    response = _client().post(
+        "/api/agent/holdings-consent",
+        json={
+            "session_id": "agent-session-consent",
+            "confirm_holdings_external_context": True,
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "holdings_snapshot_backend_not_wired"
+    with pytest.raises(Exception):
+        consent_service.validate("token_1234567890123456", session_id="agent-session-consent")
+
+
 def test_holdings_consent_endpoint_issues_token_without_holdings_body():
     consent_service = HoldingsConsentService(token_factory=lambda: "token_1234567890123456")
     _install_consent_service(consent_service)
+    _install_holdings_context_service(HoldingsExternalContextService(lambda _session_id: {"positions": []}))
 
     response = _client().post(
         "/api/agent/holdings-consent",

@@ -188,6 +188,8 @@ class AgentRunService:
             raise AgentRunInputError("holdings_consent_service_not_wired")
         if self.holdings_context_service is None:
             raise AgentRunInputError("holdings_snapshot_backend_not_wired")
+        if not self.holdings_context_service.is_wired:
+            raise AgentRunInputError("holdings_snapshot_backend_not_wired")
         try:
             self.holdings_consent_service.validate(
                 request.holdings_consent_token,

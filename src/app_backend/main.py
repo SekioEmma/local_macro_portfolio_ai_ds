@@ -8,6 +8,8 @@ from fastapi.responses import StreamingResponse
 
 from app_backend.schemas.agent_api import (
     AgentCancelResponse,
+    AgentCapabilitiesResponse,
+    AgentHoldingsCapability,
     AgentRunRequest,
     AgentRunResponse,
     AgentTraceDebugResponse,
@@ -286,6 +288,10 @@ def get_holdings_consent_service() -> HoldingsConsentService:
     return _HOLDINGS_CONSENT_SERVICE
 
 
+def get_holdings_context_service() -> HoldingsExternalContextService:
+    return _HOLDINGS_CONTEXT_SERVICE
+
+
 def get_agent_trace_service() -> AgentTraceService:
     return AgentTraceService()
 
@@ -318,6 +324,19 @@ def _build_commodity_search_callable(
     return _search
 
 
+@app.get("/api/agent/capabilities", response_model=AgentCapabilitiesResponse)
+def get_agent_capabilities(
+    holdings_context_service: HoldingsExternalContextService = Depends(get_holdings_context_service),
+) -> AgentCapabilitiesResponse:
+    holdings_enabled = holdings_context_service.is_wired
+    return AgentCapabilitiesResponse(
+        holdings_external_context=AgentHoldingsCapability(
+            enabled=holdings_enabled,
+            reason_code=None if holdings_enabled else "holdings_snapshot_backend_not_wired",
+        )
+    )
+
+
 @app.post("/api/search/tavily", response_model=SearchResponse)
 def post_search_tavily(
     request: TavilySearchApiRequest,
@@ -337,9 +356,12 @@ def post_search_tavily(
 def post_agent_holdings_consent(
     request: HoldingsConsentRequest,
     service: HoldingsConsentService = Depends(get_holdings_consent_service),
+    holdings_context_service: HoldingsExternalContextService = Depends(get_holdings_context_service),
 ) -> HoldingsConsentResponse:
     if not request.confirm_holdings_external_context:
         raise HTTPException(status_code=400, detail="holdings_consent_confirmation_required")
+    if not holdings_context_service.is_wired:
+        raise HTTPException(status_code=503, detail="holdings_snapshot_backend_not_wired")
     try:
         grant = service.issue(session_id=request.session_id)
         return HoldingsConsentResponse(

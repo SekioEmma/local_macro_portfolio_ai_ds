@@ -43,6 +43,19 @@ class HoldingsConsentResponse(BaseModel):
     ttl_seconds: int
 
 
+class AgentHoldingsCapability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+    reason_code: str | None = None
+
+
+class AgentCapabilitiesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    holdings_external_context: AgentHoldingsCapability
+
+
 class AgentApiWarning(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -89,7 +102,9 @@ class AgentCancelResponse(BaseModel):
 
 __all__ = [
     "AgentCancelResponse",
+    "AgentCapabilitiesResponse",
     "AgentApiStatus",
+    "AgentHoldingsCapability",
     "AgentApiWarning",
     "AgentRunRequest",
     "AgentRunResponse",
