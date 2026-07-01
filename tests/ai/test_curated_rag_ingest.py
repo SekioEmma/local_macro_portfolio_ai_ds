@@ -6,7 +6,14 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from app_backend.services.curated_rag_ingest import build_ingest_plan, ingest_curated_corpus
+from app_backend.services.rag_index_generation import (
+    CHUNKING_VERSION,
+    INDEX_GENERATION_SCHEMA_VERSION,
+    write_index_generation_metadata,
+)
 from llm.chunk_text_store import ChunkTextStore, StoredChunk
 
 
@@ -53,6 +60,9 @@ class _FakeVectorStore:
             for (item_doc_id, chunk_index), (embedding, metadata) in sorted(self.items.items())
             if item_doc_id == doc_id
         ]
+
+    def count(self) -> int:
+        return len(self.items)
 
 
 class _FailingVectorStore(_FakeVectorStore):
@@ -108,6 +118,72 @@ def _manifest(root: Path, rows: list[dict[str, object]], name: str = "rag_manife
     path = metadata / name
     path.write_text("\n".join(json.dumps(row, sort_keys=True) for row in rows), encoding="utf-8")
     return path
+
+
+def _write_generation(
+    vector_root: Path,
+    *,
+    embedding_model: str = "fake-bge",
+    embedding_dim: int = 2,
+    chunking_version: str = CHUNKING_VERSION,
+    vector_enabled: bool = True,
+) -> None:
+    write_index_generation_metadata(
+        vector_root,
+        {
+            "schema_version": INDEX_GENERATION_SCHEMA_VERSION,
+            "generation_id": "existing-generation",
+            "chunking_version": chunking_version,
+            "vector_enabled": vector_enabled,
+            "embedding_model": embedding_model,
+            "embedding_dim": embedding_dim,
+        },
+    )
+
+
+def _seed_existing_index(
+    vector_root: Path,
+    vector_store: _FakeVectorStore,
+    *,
+    generation: dict[str, object] | None = None,
+) -> ChunkTextStore:
+    chunk_store = ChunkTextStore(vector_root / "chunks.sqlite")
+    chunk_store.upsert_chunk(
+        StoredChunk(
+            doc_id="fomc_statement_2026_06_17",
+            chunk_index=0,
+            text="old active chunk",
+            title="Old active",
+            doc_type="policy_doc",
+            source_domain="www.federalreserve.gov",
+            external_llm_context_allowed=True,
+            evidence_tier="official_evidence",
+            is_official_source=True,
+        )
+    )
+    vector_store.upsert(
+        "fomc_statement_2026_06_17",
+        0,
+        [1.0, 0.0],
+        {"doc_id": "fomc_statement_2026_06_17", "chunk_index": 0, "doc_type": "policy_doc"},
+    )
+    if generation is not None:
+        _write_generation(vector_root, **generation)
+    return chunk_store
+
+
+def _assert_existing_index_unchanged(chunk_store: ChunkTextStore, vector_store: _FakeVectorStore) -> None:
+    active = chunk_store.get_chunk("fomc_statement_2026_06_17", 0)
+    assert active is not None
+    assert active.text == "old active chunk"
+    assert vector_store.deleted == []
+    assert vector_store.upserts == [
+        (
+            "fomc_statement_2026_06_17",
+            0,
+            {"doc_id": "fomc_statement_2026_06_17", "chunk_index": 0, "doc_type": "policy_doc"},
+        )
+    ]
 
 
 def test_eligible_manifest_document_can_be_planned(tmp_path):
@@ -617,6 +693,8 @@ def test_vector_write_failure_does_not_overwrite_active_chunk_store(tmp_path):
             "doc_type": "policy_doc",
         },
     )
+    _write_generation(vector_root)
+    generation_before = (vector_root / "index_generation.json").read_text(encoding="utf-8")
     vector_store.fail_next_upsert = True
 
     try:
@@ -640,7 +718,7 @@ def test_vector_write_failure_does_not_overwrite_active_chunk_store(tmp_path):
     restored_vector = vector_store.items[("fomc_statement_2026_06_17", 0)]
     assert restored_vector[0] == [1.0, 0.0]
     assert restored_vector[1]["doc_type"] == "policy_doc"
-    assert not (vector_root / "index_generation.json").exists()
+    assert (vector_root / "index_generation.json").read_text(encoding="utf-8") == generation_before
     assert not (vector_root / "ingest_audits").exists()
 
 
@@ -659,6 +737,7 @@ def test_write_replace_existing_prunes_unknown_existing_docs(tmp_path):
             source_domain="local",
         )
     )
+    _write_generation(tmp_path / "vector_store")
 
     result = ingest_curated_corpus(
         curated_root=tmp_path,
@@ -675,3 +754,170 @@ def test_write_replace_existing_prunes_unknown_existing_docs(tmp_path):
     assert result.pruned_document_count == 1
     assert chunk_store.list_doc_ids() == ["fomc_statement_2026_06_17"]
     assert "old_hash_suffix_doc" in vector.deleted
+
+
+@pytest.mark.parametrize(
+    ("generation", "expected_reason"),
+    [
+        ({"embedding_model": "other-model"}, "embedding_model_mismatch"),
+        ({"embedding_dim": 3}, "embedding_dim_mismatch"),
+        ({"chunking_version": "old_chunker"}, "chunking_version_mismatch"),
+    ],
+)
+def test_write_preflight_rejects_existing_incompatible_index_before_any_write(
+    tmp_path,
+    generation,
+    expected_reason,
+):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+    vector_store = _FakeVectorStore()
+    chunk_store = _seed_existing_index(vector_root, vector_store, generation=generation)
+
+    with pytest.raises(
+        RuntimeError,
+        match=f"index_compatibility_error:{expected_reason}",
+    ):
+        ingest_curated_corpus(
+            curated_root=tmp_path,
+            manifest_path=manifest,
+            vector_dir=vector_root,
+            write=True,
+            embedding_service=_FakeEmbedding(),
+            vector_store=vector_store,
+            chunk_store=chunk_store,
+        )
+
+    _assert_existing_index_unchanged(chunk_store, vector_store)
+
+
+def test_write_preflight_rejects_existing_index_with_missing_generation_before_any_write(tmp_path):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+    vector_store = _FakeVectorStore()
+    chunk_store = _seed_existing_index(vector_root, vector_store)
+
+    with pytest.raises(
+        RuntimeError,
+        match="index_compatibility_error:index_generation_missing_or_invalid",
+    ):
+        ingest_curated_corpus(
+            curated_root=tmp_path,
+            manifest_path=manifest,
+            vector_dir=vector_root,
+            write=True,
+            embedding_service=_FakeEmbedding(),
+            vector_store=vector_store,
+            chunk_store=chunk_store,
+        )
+
+    _assert_existing_index_unchanged(chunk_store, vector_store)
+
+
+def test_write_preflight_rejects_existing_index_with_corrupt_generation_before_any_write(tmp_path):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+    vector_store = _FakeVectorStore()
+    chunk_store = _seed_existing_index(vector_root, vector_store)
+    (vector_root / "index_generation.json").write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(
+        RuntimeError,
+        match="index_compatibility_error:index_generation_missing_or_invalid",
+    ):
+        ingest_curated_corpus(
+            curated_root=tmp_path,
+            manifest_path=manifest,
+            vector_dir=vector_root,
+            write=True,
+            embedding_service=_FakeEmbedding(),
+            vector_store=vector_store,
+            chunk_store=chunk_store,
+        )
+
+    _assert_existing_index_unchanged(chunk_store, vector_store)
+
+
+def test_write_preflight_replace_existing_does_not_bypass_incompatibility(tmp_path):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+    vector_store = _FakeVectorStore()
+    chunk_store = _seed_existing_index(
+        vector_root,
+        vector_store,
+        generation={"embedding_model": "other-model"},
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="index_compatibility_error:embedding_model_mismatch",
+    ):
+        ingest_curated_corpus(
+            curated_root=tmp_path,
+            manifest_path=manifest,
+            vector_dir=vector_root,
+            write=True,
+            replace_existing=True,
+            embedding_service=_FakeEmbedding(),
+            vector_store=vector_store,
+            chunk_store=chunk_store,
+        )
+
+    _assert_existing_index_unchanged(chunk_store, vector_store)
+
+
+def test_write_preflight_allows_first_ingest_into_empty_root(tmp_path):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+    vector_store = _FakeVectorStore()
+    chunk_store = ChunkTextStore(vector_root / "chunks.sqlite")
+
+    result = ingest_curated_corpus(
+        curated_root=tmp_path,
+        manifest_path=manifest,
+        vector_dir=vector_root,
+        write=True,
+        embedding_service=_FakeEmbedding(),
+        vector_store=vector_store,
+        chunk_store=chunk_store,
+    )
+
+    assert result.mode == "write"
+    assert result.written_chunk_count == chunk_store.count()
+    assert vector_store.count() == result.written_chunk_count
+
+
+def test_write_preflight_rejects_vector_enabled_index_when_embedding_runtime_unavailable(
+    tmp_path,
+    monkeypatch,
+):
+    row = _base_row(tmp_path)
+    manifest = _manifest(tmp_path, [row])
+    vector_root = tmp_path / "vector_store"
+    vector_store = _FakeVectorStore()
+    chunk_store = _seed_existing_index(
+        vector_root,
+        vector_store,
+        generation={"embedding_model": "fake-bge"},
+    )
+    monkeypatch.setitem(sys.modules, "llm.embedding_service", None)
+
+    with pytest.raises(
+        RuntimeError,
+        match="index_compatibility_error:embedding_runtime_unavailable",
+    ):
+        ingest_curated_corpus(
+            curated_root=tmp_path,
+            manifest_path=manifest,
+            vector_dir=vector_root,
+            write=True,
+            vector_store=vector_store,
+            chunk_store=chunk_store,
+        )
+
+    _assert_existing_index_unchanged(chunk_store, vector_store)

@@ -13,7 +13,11 @@ from llm.chunk_text_store import ChunkTextStore, StoredChunk
 from llm.document_chunker import Chunk, chunk_text
 
 from app_backend.services.rag_index_generation import (
+    RAGIndexCompatibilityError,
     build_index_generation_metadata,
+    index_generation_path,
+    read_index_generation_metadata,
+    validate_index_generation_compatibility,
     write_index_generation_metadata,
 )
 
@@ -177,7 +181,17 @@ def ingest_curated_corpus(
     if vector_enabled and vector_store is None:
         from llm.vector_store import VectorStore
 
-        vector_store = VectorStore(vector_root / "chroma")
+        vector_store = VectorStore(
+            vector_root / "chroma",
+            expected_embedding_dim=getattr(embedding_service, "dim", None),
+        )
+
+    _preflight_existing_index_compatibility(
+        vector_root=vector_root,
+        chunk_store=chunk_store,
+        vector_store=vector_store,
+        embedding_service=embedding_service,
+    )
 
     prepared_docs = _prepare_documents(plan.accepted, embedding_service)
     affected_doc_ids = unknown_existing | {doc.document_id for doc in plan.accepted}
@@ -363,6 +377,58 @@ def _write_index_generation(
         embedding_service=embedding_service,
     )
     write_index_generation_metadata(vector_root, payload)
+
+
+def _preflight_existing_index_compatibility(
+    *,
+    vector_root: Path,
+    chunk_store: ChunkTextStore,
+    vector_store: Any | None,
+    embedding_service: Any | None,
+) -> None:
+    index_generation = read_index_generation_metadata(vector_root)
+    if not _has_existing_index(
+        vector_root=vector_root,
+        chunk_store=chunk_store,
+        vector_store=vector_store,
+        index_generation=index_generation,
+    ):
+        return
+    if index_generation is not None and index_generation.get("vector_enabled") and embedding_service is None:
+        raise CuratedRAGIngestError("index_compatibility_error:embedding_runtime_unavailable")
+    try:
+        validate_index_generation_compatibility(
+            index_generation,
+            embedding_service=embedding_service,
+        )
+    except RAGIndexCompatibilityError as exc:
+        raise CuratedRAGIngestError(f"index_compatibility_error:{exc.reason}") from exc
+
+
+def _has_existing_index(
+    *,
+    vector_root: Path,
+    chunk_store: ChunkTextStore,
+    vector_store: Any | None,
+    index_generation: dict[str, Any] | None,
+) -> bool:
+    if index_generation is not None or index_generation_path(vector_root).exists():
+        return True
+    if chunk_store.count() > 0:
+        return True
+    return _vector_store_count(vector_store) > 0
+
+
+def _vector_store_count(vector_store: Any | None) -> int:
+    if vector_store is None or not hasattr(vector_store, "count"):
+        return 0
+    try:
+        value = vector_store.count()
+    except Exception:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, int):
+        return 0
+    return max(0, value)
 
 
 def _invalidate_runtime_cache(vector_root: Path) -> None:

@@ -36,6 +36,8 @@ RAG index generation and retrieval must preserve:
 - Querying or ingesting a nonempty active index when generation metadata is
   missing, corrupt, or incompatible with the runtime embedding model,
   dimension, or chunking version.
+- Deleting, replacing, or upserting Chroma vectors or chunk-store rows before
+  the active index generation compatibility preflight has passed.
 - Returning local-only/private documents unless explicitly allowed by the retrieval request and governance.
 - Allowing BM25 results to bypass document type filters.
 
