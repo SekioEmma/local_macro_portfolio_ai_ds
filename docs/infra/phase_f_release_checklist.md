@@ -16,7 +16,7 @@ Run these before requesting human acceptance:
 ```bash
 python -m ruff check src tests scripts
 python -m pytest tests/ai tests/api tests/contracts -q
-python scripts/run_phase_f_controlled_agent_smoke.py
+python scripts/run_phase_f_controlled_agent_smoke.py --report-path docs/infra/phase_f_controlled_run_fixture_latest.json
 cd app_frontend && npm.cmd run typecheck
 cd app_frontend && npm.cmd test
 cd app_frontend && npm.cmd run build
@@ -32,6 +32,7 @@ include_holdings=false
 external_search_confirmed=false
 validation_record.run_id=<session id>
 validation_record.current_date=<NY/server date>
+validation_record.acceptance_questions=[...]
 validation_record.cutoffs.market_data_cutoff=<date or null>
 validation_record.tool_call_sequence=[...]
 validation_record.evidence_counts.official=<count>
@@ -73,7 +74,7 @@ CI must also run `python scripts/run_phase_f_controlled_agent_smoke.py` so the f
 Fixture mode is the CI gate. A live provider run is optional and manual only:
 
 ```bash
-python scripts/run_phase_f_controlled_agent_smoke.py --mode live
+python scripts/run_phase_f_controlled_agent_smoke.py --mode live --report-path docs/infra/phase_f_controlled_run_live_latest.json
 ```
 
 Run live mode only after the user approves use of configured external APIs for this release check. Live mode uses the real DeepSeek provider with the same controlled `treasury_curve` + `finalize_macro_brief` tool registry; it does not enable Tavily, RAG, holdings, background jobs, or raw data reads. If the live provider lacks credentials or fails a guard, the result remains a failed release check, not an exception to the gate.

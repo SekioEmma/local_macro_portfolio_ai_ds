@@ -1,0 +1,58 @@
+{
+  "check_status": "passed",
+  "external_search_confirmed": false,
+  "failed_checks": [],
+  "final_status": "ok",
+  "include_holdings": false,
+  "mode": "fixture",
+  "provider_call_count": 2,
+  "session_id": "phase-f-controlled-smoke",
+  "steps": 2,
+  "trace_session_id": "phase-f-controlled-smoke",
+  "validation_record": {
+    "acceptance_questions": [
+      "当前美国宏观环境综合评估",
+      "未来三个月组合风险暴露如何理解",
+      "长端利率、美元、信用利差与风险资产的当前关系",
+      "Fed、通胀、就业与能源风险的传导路径"
+    ],
+    "asynchronous_inputs": false,
+    "budget_usage": {
+      "external_search_confirmed": false,
+      "include_holdings": false,
+      "provider_calls": 2,
+      "steps": 2,
+      "tool_calls": 2,
+      "warning_count": 0
+    },
+    "current_date": "2026-06-30",
+    "cutoffs": {
+      "macro_data_cutoff": null,
+      "market_data_cutoff": "2026-06-29",
+      "max_market_data_age_trading_days": 0,
+      "policy_data_cutoff": null,
+      "public_news_cutoff": null,
+      "report_generated_at": "2026-06-30T00:00:00Z"
+    },
+    "elapsed_seconds": 0.101,
+    "evidence_count": 1,
+    "evidence_counts": {
+      "institutional": 0,
+      "licensed_manual_data": 0,
+      "local_data_foundation": 1,
+      "official": 0,
+      "public": 0,
+      "total": 1,
+      "unavailable": 0,
+      "unknown": 0
+    },
+    "final_status": "ok",
+    "run_id": "phase-f-controlled-smoke",
+    "tool_call_sequence": [
+      "treasury_curve",
+      "finalize_macro_brief"
+    ],
+    "unavailable_modules": []
+  },
+  "warning_codes": []
+}

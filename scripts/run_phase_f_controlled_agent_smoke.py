@@ -40,8 +40,18 @@ from app_backend.services.llm_provider_adapter import (  # noqa: E402
 Mode = Literal["fixture", "live"]
 _NEW_YORK = ZoneInfo("America/New_York")
 CONTROLLED_SESSION_ID = "phase-f-controlled-smoke"
+ACCEPTANCE_QUESTIONS = (
+    "当前美国宏观环境综合评估",
+    "未来三个月组合风险暴露如何理解",
+    "长端利率、美元、信用利差与风险资产的当前关系",
+    "Fed、通胀、就业与能源风险的传导路径",
+)
 CONTROLLED_QUESTION = (
     "Build a controlled Phase F MacroBrief for release verification. "
+    "The acceptance question set is: 当前美国宏观环境综合评估; "
+    "未来三个月组合风险暴露如何理解; "
+    "长端利率、美元、信用利差与风险资产的当前关系; "
+    "Fed、通胀、就业与能源风险的传导路径. "
     "First call treasury_curve. Then call finalize_macro_brief. "
     "For this smoke, use exactly one confirmed_facts item: id=f1, describing "
     "the 10Y Treasury point returned by treasury_curve. Use the registered "
@@ -433,6 +443,7 @@ def _build_validation_record(
     return {
         "run_id": response.session_id,
         "current_date": _current_date_for_mode(mode),
+        "acceptance_questions": list(ACCEPTANCE_QUESTIONS),
         "cutoffs": _cutoffs_from_brief(brief),
         "tool_call_sequence": tool_call_sequence,
         "evidence_count": _evidence_counts_from_events(runtime_events)["total"],
@@ -542,6 +553,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--mode", choices=("fixture", "live"), default="fixture")
     parser.add_argument("--trace-dir", type=Path, default=None)
     parser.add_argument("--confirm-external-search", action="store_true")
+    parser.add_argument("--report-path", type=Path, default=None)
     return parser.parse_args(argv)
 
 
@@ -552,8 +564,18 @@ def main(argv: list[str] | None = None) -> int:
         trace_dir=args.trace_dir,
         confirm_external_search=args.confirm_external_search,
     )
+    if args.report_path is not None:
+        _write_report(args.report_path, result)
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if result["check_status"] == "passed" else 1
+
+
+def _write_report(path: Path, result: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":

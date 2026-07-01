@@ -18,6 +18,7 @@ def test_controlled_smoke_fixture_passes_without_external_search_or_holdings(tmp
     record = result["validation_record"]
     assert record["run_id"] == smoke.CONTROLLED_SESSION_ID
     assert record["current_date"] == "2026-06-30"
+    assert record["acceptance_questions"] == list(smoke.ACCEPTANCE_QUESTIONS)
     assert record["cutoffs"]["market_data_cutoff"] == "2026-06-29"
     assert record["tool_call_sequence"] == ["treasury_curve", "finalize_macro_brief"]
     assert record["evidence_count"] == 1
@@ -35,3 +36,16 @@ def test_controlled_smoke_cli_outputs_machine_readable_json(tmp_path, capsys):
     assert payload["session_id"] == smoke.CONTROLLED_SESSION_ID
     assert payload["warning_codes"] == []
     assert payload["validation_record"]["final_status"] == "ok"
+
+
+def test_controlled_smoke_cli_writes_report_path(tmp_path, capsys):
+    report_path = tmp_path / "phase_f_controlled_report.json"
+
+    exit_code = smoke.main(["--trace-dir", str(tmp_path), "--report-path", str(report_path)])
+
+    assert exit_code == 0
+    assert report_path.exists()
+    stdout_payload = json.loads(capsys.readouterr().out)
+    report_payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report_payload == stdout_payload
+    assert report_payload["validation_record"]["acceptance_questions"] == list(smoke.ACCEPTANCE_QUESTIONS)

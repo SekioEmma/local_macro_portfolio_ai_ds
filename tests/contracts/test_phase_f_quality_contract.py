@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from scripts import run_phase_f_controlled_agent_smoke as smoke
@@ -18,6 +19,7 @@ def test_phase_f_critical_path_controlled_agent_smoke_passes(tmp_path):
     assert result["include_holdings"] is False
     assert result["external_search_confirmed"] is False
     record = result["validation_record"]
+    assert record["acceptance_questions"] == list(smoke.ACCEPTANCE_QUESTIONS)
     assert record["tool_call_sequence"] == ["treasury_curve", "finalize_macro_brief"]
     assert record["cutoffs"]["market_data_cutoff"] == "2026-06-29"
     assert record["evidence_counts"] == {
@@ -42,6 +44,7 @@ def test_phase_f_release_gate_is_documented_and_wired_to_ci():
     ci = (_REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
     assert "run_phase_f_controlled_agent_smoke.py" in checklist
+    assert "--report-path" in checklist
     assert "run_phase_f_controlled_agent_smoke.py" in roadmap
     assert "run_phase_f_controlled_agent_smoke.py" in phase_plan
     assert "run_phase_f_controlled_agent_smoke.py" in ci
@@ -56,3 +59,29 @@ def test_phase_f_release_gate_is_documented_and_wired_to_ci():
     assert "研究辅助输出" in checklist
     assert "非自动投资决策" in checklist
     assert "需要用户审阅" in checklist
+
+
+def test_phase_f_controlled_run_reports_are_recorded():
+    fixture_report = json.loads(
+        (_REPO_ROOT / "docs" / "infra" / "phase_f_controlled_run_fixture_latest.json").read_text(encoding="utf-8")
+    )
+    live_report = json.loads(
+        (_REPO_ROOT / "docs" / "infra" / "phase_f_controlled_run_live_latest.json").read_text(encoding="utf-8")
+    )
+
+    for report in (fixture_report, live_report):
+        record = report["validation_record"]
+        assert report["check_status"] == "passed"
+        assert report["final_status"] == "ok"
+        assert report["warning_codes"] == []
+        assert report["include_holdings"] is False
+        assert report["external_search_confirmed"] is False
+        assert record["acceptance_questions"] == list(smoke.ACCEPTANCE_QUESTIONS)
+        assert record["tool_call_sequence"] == ["treasury_curve", "finalize_macro_brief"]
+        assert record["evidence_count"] == 1
+        assert record["evidence_counts"]["total"] == 1
+        assert record["evidence_counts"]["local_data_foundation"] == 1
+        assert record["budget_usage"]["warning_count"] == 0
+
+    assert live_report["mode"] == "live"
+    assert "market_state:SPY" in live_report["validation_record"]["unavailable_modules"]
