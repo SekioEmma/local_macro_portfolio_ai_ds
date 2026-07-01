@@ -40,7 +40,12 @@ class _StubCollection:
     def get(self, *, where, include):
         items = self._store
         matched_ids = [k for k, v in items.items() if all(v["metadata"].get(k2) == v2 for k2, v2 in where.items())]
-        return {"ids": matched_ids}
+        payload: dict[str, Any] = {"ids": matched_ids}
+        if "embeddings" in include:
+            payload["embeddings"] = [items[id_]["embedding"] for id_ in matched_ids]
+        if "metadatas" in include:
+            payload["metadatas"] = [items[id_]["metadata"] for id_ in matched_ids]
+        return payload
 
     def count(self):
         return len(self._store)
@@ -120,6 +125,23 @@ def test_upsert_stores_metadata(tmp_path):
     vs.upsert("doc1", 0, FAKE_EMB, metadata={"title": "Test Doc"})
     results = vs.query(FAKE_EMB, top_k=1)
     assert results[0].metadata.get("title") == "Test Doc"
+
+
+def test_list_doc_items_exports_vectors_for_rollback(tmp_path):
+    vs = _store(tmp_path)
+    vs.upsert_many([
+        ("doc1", 0, [0.1, 0.2], {"doc_type": "policy_doc"}),
+        ("doc1", 1, [0.3, 0.4], {"doc_type": "policy_doc"}),
+        ("doc2", 0, [0.5, 0.6], {"doc_type": "research_report"}),
+    ])
+
+    items = vs.list_doc_items("doc1")
+
+    assert [(item.doc_id, item.chunk_index, item.embedding) for item in items] == [
+        ("doc1", 0, [0.1, 0.2]),
+        ("doc1", 1, [0.3, 0.4]),
+    ]
+    assert all(item.metadata["doc_type"] == "policy_doc" for item in items)
 
 
 # ---- validation in upsert ----

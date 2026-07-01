@@ -182,6 +182,7 @@ def ingest_curated_corpus(
     prepared_docs = _prepare_documents(plan.accepted, embedding_service)
     affected_doc_ids = unknown_existing | {doc.document_id for doc in plan.accepted}
     chunk_snapshot = _snapshot_chunks(chunk_store, affected_doc_ids)
+    vector_snapshot = _snapshot_vectors(vector_store, affected_doc_ids) if vector_enabled else None
 
     try:
         if vector_enabled and vector_store is not None:
@@ -205,6 +206,8 @@ def ingest_curated_corpus(
                 chunk_store.upsert_chunks(prepared.stored_chunks)
     except Exception:
         _restore_chunks(chunk_store, affected_doc_ids, chunk_snapshot)
+        if vector_enabled and vector_snapshot is not None:
+            _restore_vectors(vector_store, affected_doc_ids, vector_snapshot)
         raise
 
     written = sum(len(prepared.stored_chunks) for prepared in prepared_docs)
@@ -291,6 +294,46 @@ def _restore_chunks(
         chunks = snapshot.get(doc_id, [])
         if chunks:
             chunk_store.upsert_chunks(chunks)
+
+
+def _snapshot_vectors(
+    vector_store: Any | None,
+    doc_ids: set[str],
+) -> dict[str, list[Any]] | None:
+    if vector_store is None or not doc_ids or not hasattr(vector_store, "list_doc_items"):
+        return None
+    return {
+        doc_id: list(vector_store.list_doc_items(doc_id))
+        for doc_id in sorted(doc_ids)
+    }
+
+
+def _restore_vectors(
+    vector_store: Any | None,
+    doc_ids: set[str],
+    snapshot: dict[str, list[Any]],
+) -> None:
+    if vector_store is None:
+        return
+    for doc_id in sorted(doc_ids):
+        vector_store.delete(doc_id)
+        items = snapshot.get(doc_id, [])
+        if not items:
+            continue
+        tuples = [
+            (
+                item.doc_id,
+                item.chunk_index,
+                item.embedding,
+                item.metadata,
+            )
+            for item in items
+        ]
+        if hasattr(vector_store, "upsert_many"):
+            vector_store.upsert_many(tuples)
+            continue
+        for doc_id_, chunk_index, embedding, metadata in tuples:
+            vector_store.upsert(doc_id_, chunk_index, embedding, metadata)
 
 
 def _write_ingest_audit(vector_root: Path, result: CuratedIngestResult) -> None:

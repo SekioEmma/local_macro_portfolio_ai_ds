@@ -21,20 +21,50 @@ class _FakeEmbedding:
 class _FakeVectorStore:
     def __init__(self) -> None:
         self.upserts: list[tuple[str, int, dict[str, object]]] = []
+        self.items: dict[tuple[str, int], tuple[list[float], dict[str, object]]] = {}
         self.deleted: list[str] = []
 
     def delete(self, doc_id: str) -> int:
         self.deleted.append(doc_id)
         self.upserts = [item for item in self.upserts if item[0] != doc_id]
-        return 0
+        deleted = 0
+        for key in list(self.items):
+            if key[0] == doc_id:
+                deleted += 1
+                del self.items[key]
+        return deleted
 
     def upsert(self, doc_id: str, chunk_index: int, embedding: list[float], metadata: dict[str, object]) -> None:
         self.upserts.append((doc_id, chunk_index, metadata))
+        self.items[(doc_id, chunk_index)] = (embedding, metadata)
+
+    def upsert_many(self, items: list[tuple[str, int, list[float], dict[str, object]]]) -> None:
+        for doc_id, chunk_index, embedding, metadata in items:
+            self.upsert(doc_id, chunk_index, embedding, metadata)
+
+    def list_doc_items(self, doc_id: str) -> list[object]:
+        return [
+            types.SimpleNamespace(
+                doc_id=item_doc_id,
+                chunk_index=chunk_index,
+                embedding=embedding,
+                metadata=metadata,
+            )
+            for (item_doc_id, chunk_index), (embedding, metadata) in sorted(self.items.items())
+            if item_doc_id == doc_id
+        ]
 
 
 class _FailingVectorStore(_FakeVectorStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_next_upsert = False
+
     def upsert(self, doc_id: str, chunk_index: int, embedding: list[float], metadata: dict[str, object]) -> None:
-        raise RuntimeError("vector write failed")
+        if self.fail_next_upsert:
+            self.fail_next_upsert = False
+            raise RuntimeError("vector write failed")
+        super().upsert(doc_id, chunk_index, embedding, metadata)
 
 
 def _write_doc(root: Path, relpath: str, text: str) -> str:
@@ -558,6 +588,7 @@ def test_vector_write_failure_does_not_overwrite_active_chunk_store(tmp_path):
     manifest = _manifest(tmp_path, [row])
     vector_root = tmp_path / "vector_store"
     chunk_store = ChunkTextStore(vector_root / "chunks.sqlite")
+    vector_store = _FailingVectorStore()
     chunk_store.upsert_chunk(
         StoredChunk(
             doc_id="fomc_statement_2026_06_17",
@@ -571,6 +602,17 @@ def test_vector_write_failure_does_not_overwrite_active_chunk_store(tmp_path):
             is_official_source=True,
         )
     )
+    vector_store.upsert(
+        "fomc_statement_2026_06_17",
+        0,
+        [1.0, 0.0],
+        {
+            "doc_id": "fomc_statement_2026_06_17",
+            "chunk_index": 0,
+            "doc_type": "policy_doc",
+        },
+    )
+    vector_store.fail_next_upsert = True
 
     try:
         ingest_curated_corpus(
@@ -579,7 +621,7 @@ def test_vector_write_failure_does_not_overwrite_active_chunk_store(tmp_path):
             vector_dir=vector_root,
             write=True,
             embedding_service=_FakeEmbedding(),
-            vector_store=_FailingVectorStore(),
+            vector_store=vector_store,
             chunk_store=chunk_store,
         )
     except RuntimeError as exc:
@@ -590,6 +632,9 @@ def test_vector_write_failure_does_not_overwrite_active_chunk_store(tmp_path):
     active = chunk_store.get_chunk("fomc_statement_2026_06_17", 0)
     assert active is not None
     assert active.text == "old active chunk"
+    restored_vector = vector_store.items[("fomc_statement_2026_06_17", 0)]
+    assert restored_vector[0] == [1.0, 0.0]
+    assert restored_vector[1]["doc_type"] == "policy_doc"
     assert not (vector_root / "index_generation.json").exists()
     assert not (vector_root / "ingest_audits").exists()
 

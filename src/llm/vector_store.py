@@ -17,6 +17,14 @@ class VectorSearchResult:
     metadata: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class VectorStoredItem:
+    doc_id: str
+    chunk_index: int
+    embedding: list[float]
+    metadata: dict[str, Any]
+
+
 class VectorStore:
     """Persistent local vector store backed by Chroma.
 
@@ -120,6 +128,15 @@ class VectorStore:
             col.delete(ids=ids)
         return len(ids)
 
+    def list_doc_items(self, doc_id: str) -> list[VectorStoredItem]:
+        """Return stored vectors for a document for ingest rollback."""
+        _validate_doc_id(doc_id)
+        raw = self._get_collection().get(
+            where={"doc_id": doc_id},
+            include=["embeddings", "metadatas"],
+        )
+        return _parse_stored_items(raw)
+
     def count(self) -> int:
         return self._get_collection().count()
 
@@ -195,3 +212,34 @@ def _parse_query_results(raw: dict[str, Any]) -> list[VectorSearchResult]:
             metadata={k: v for k, v in meta.items() if k not in ("doc_id", "chunk_index")},
         ))
     return results
+
+
+def _parse_stored_items(raw: dict[str, Any]) -> list[VectorStoredItem]:
+    ids = raw.get("ids") or []
+    embeddings = raw.get("embeddings") or []
+    metadatas = raw.get("metadatas") or []
+    items: list[VectorStoredItem] = []
+    for index, item_id in enumerate(ids):
+        meta = metadatas[index] if index < len(metadatas) and isinstance(metadatas[index], dict) else {}
+        doc_id = meta.get("doc_id")
+        chunk_index = meta.get("chunk_index")
+        if not isinstance(doc_id, str):
+            doc_id = str(item_id).split("::", 1)[0]
+        if isinstance(chunk_index, bool) or not isinstance(chunk_index, int):
+            try:
+                chunk_index = int(str(item_id).rsplit("::", 1)[1])
+            except (IndexError, ValueError):
+                continue
+        embedding_raw = embeddings[index] if index < len(embeddings) else None
+        if embedding_raw is None:
+            continue
+        embedding = [float(value) for value in embedding_raw]
+        items.append(
+            VectorStoredItem(
+                doc_id=doc_id,
+                chunk_index=chunk_index,
+                embedding=embedding,
+                metadata=dict(meta),
+            )
+        )
+    return items
