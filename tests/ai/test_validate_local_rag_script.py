@@ -35,3 +35,20 @@ def test_validate_local_rag_requires_index_generation_for_nonempty_index():
 
     payload["consistency"]["index_generation_present"] = True
     assert module._is_valid(payload) is True
+
+
+def test_validate_local_rag_rejects_embedding_incompatibility():
+    module = _load_module()
+    payload = {
+        "manifest_audit": {"accepted_documents": 1},
+        "consistency": {
+            "eligible_manifest_documents": 1,
+            "bm25_matches_searchable_chunks": True,
+            "local_only_chunks": 0,
+            "context_non_empty_under_4000_chars": True,
+            "index_generation_present": True,
+            "embedding_model_compatible": False,
+        },
+    }
+
+    assert module._is_valid(payload) is False

@@ -10,6 +10,13 @@ from typing import Any
 
 INDEX_GENERATION_FILENAME = "index_generation.json"
 INDEX_GENERATION_SCHEMA_VERSION = 1
+CHUNKING_VERSION = "document_chunker_v1"
+
+
+class RAGIndexCompatibilityError(RuntimeError):
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
 
 
 def build_index_generation_metadata(
@@ -51,6 +58,7 @@ def build_index_generation_metadata(
         "vector_enabled": vector_enabled,
         "embedding_model": embedding_model,
         "embedding_dim": embedding_dim,
+        "chunking_version": CHUNKING_VERSION,
         "document_count": len(document_rows),
     }
     generation_id = _sha256_json(basis)
@@ -80,6 +88,29 @@ def read_index_generation_metadata(vector_root: Path) -> dict[str, Any] | None:
     if not isinstance(payload.get("generation_id"), str) or not payload["generation_id"]:
         return None
     return payload
+
+
+def validate_index_generation_compatibility(
+    index_generation: dict[str, Any] | None,
+    *,
+    embedding_service: Any,
+) -> None:
+    if index_generation is None:
+        raise RAGIndexCompatibilityError("index_generation_missing_or_invalid")
+    if index_generation.get("chunking_version") != CHUNKING_VERSION:
+        raise RAGIndexCompatibilityError("chunking_version_mismatch")
+    if not index_generation.get("vector_enabled"):
+        return
+    expected_model = index_generation.get("embedding_model")
+    if not isinstance(expected_model, str) or not expected_model.strip():
+        raise RAGIndexCompatibilityError("embedding_model_missing")
+    if expected_model != getattr(embedding_service, "model_name", None):
+        raise RAGIndexCompatibilityError("embedding_model_mismatch")
+    expected_dim = index_generation.get("embedding_dim")
+    if isinstance(expected_dim, bool) or not isinstance(expected_dim, int) or expected_dim <= 0:
+        raise RAGIndexCompatibilityError("embedding_dim_missing")
+    if expected_dim != getattr(embedding_service, "dim", None):
+        raise RAGIndexCompatibilityError("embedding_dim_mismatch")
 
 
 def write_index_generation_metadata(vector_root: Path, payload: dict[str, Any]) -> None:
@@ -114,10 +145,13 @@ def _sha256_json(payload: Any) -> str:
 
 
 __all__ = [
+    "CHUNKING_VERSION",
     "INDEX_GENERATION_FILENAME",
     "INDEX_GENERATION_SCHEMA_VERSION",
+    "RAGIndexCompatibilityError",
     "build_index_generation_metadata",
     "index_generation_path",
     "read_index_generation_metadata",
+    "validate_index_generation_compatibility",
     "write_index_generation_metadata",
 ]

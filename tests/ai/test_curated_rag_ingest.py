@@ -579,6 +579,7 @@ def test_write_records_index_generation_metadata_without_raw_text(tmp_path):
     assert payload["written_chunk_count"] == result.written_chunk_count
     assert payload["embedding_model"] == "fake-bge"
     assert payload["embedding_dim"] == 2
+    assert payload["chunking_version"] == "document_chunker_v1"
     assert "Federal funds target range" not in serialized
 
 

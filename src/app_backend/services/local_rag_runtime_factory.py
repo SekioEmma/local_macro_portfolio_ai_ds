@@ -5,7 +5,10 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from app_backend.services.rag_index_generation import read_index_generation_metadata
+from app_backend.services.rag_index_generation import (
+    read_index_generation_metadata,
+    validate_index_generation_compatibility,
+)
 from app_backend.services.rag_retrieval_service import RAGRetrievalService
 from llm.bm25_index import BM25Index
 from llm.chunk_text_store import ChunkTextStore
@@ -105,7 +108,15 @@ def _build_runtime_uncached(
     bm25_index.build([(chunk.doc_id, chunk.chunk_index, chunk.text) for chunk in chunks])
 
     embedding_service = EmbeddingService(offline_only=offline_only)
-    vector_store = VectorStore(vector_root / "chroma")
+    if chunks:
+        validate_index_generation_compatibility(
+            index_generation,
+            embedding_service=embedding_service,
+        )
+    vector_store = VectorStore(
+        vector_root / "chroma",
+        expected_embedding_dim=embedding_service.dim,
+    )
     retrieval_service = RAGRetrievalService(
         embedding_service=embedding_service,
         vector_store=vector_store,

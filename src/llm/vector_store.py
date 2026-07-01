@@ -42,12 +42,20 @@ class VectorStore:
         collection_name: str = DEFAULT_COLLECTION,
         *,
         _client: Any = None,
+        expected_embedding_dim: int | None = None,
     ) -> None:
         if not isinstance(persist_dir, Path):
             raise TypeError("persist_dir must be a Path")
+        if expected_embedding_dim is not None and (
+            isinstance(expected_embedding_dim, bool)
+            or not isinstance(expected_embedding_dim, int)
+            or expected_embedding_dim <= 0
+        ):
+            raise ValueError("expected_embedding_dim must be a positive int")
         self._persist_dir = persist_dir
         self._collection_name = collection_name
         self._client_override = _client
+        self._expected_embedding_dim = expected_embedding_dim
         self._client: Any = None
         self._collection: Any = None
 
@@ -66,6 +74,7 @@ class VectorStore:
         _validate_doc_id(doc_id)
         _validate_chunk_index(chunk_index)
         _validate_embedding(embedding)
+        _validate_embedding_dim(embedding, self._expected_embedding_dim)
         col = self._get_collection()
         item_id = _item_id(doc_id, chunk_index)
         meta = dict(metadata or {})
@@ -85,6 +94,7 @@ class VectorStore:
             _validate_doc_id(doc_id)
             _validate_chunk_index(chunk_index)
             _validate_embedding(embedding)
+            _validate_embedding_dim(embedding, self._expected_embedding_dim)
             meta = dict(metadata or {})
             meta["doc_id"] = doc_id
             meta["chunk_index"] = chunk_index
@@ -102,6 +112,7 @@ class VectorStore:
     ) -> list[VectorSearchResult]:
         """Return up to top_k nearest neighbours."""
         _validate_embedding(embedding)
+        _validate_embedding_dim(embedding, self._expected_embedding_dim)
         if top_k < 1:
             raise ValueError("top_k must be >= 1")
         if top_k > _MAX_QUERY_RESULTS:
@@ -189,6 +200,11 @@ def _validate_embedding(embedding: list[float]) -> None:
         raise TypeError("embedding must be a list of float")
     if not embedding:
         raise ValueError("embedding must not be empty")
+
+
+def _validate_embedding_dim(embedding: list[float], expected_dim: int | None) -> None:
+    if expected_dim is not None and len(embedding) != expected_dim:
+        raise ValueError("embedding dimension mismatch")
 
 
 def _parse_query_results(raw: dict[str, Any]) -> list[VectorSearchResult]:

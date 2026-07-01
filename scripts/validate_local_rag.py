@@ -17,7 +17,11 @@ from app_backend.services.curated_rag_ingest import (  # noqa: E402
     summarize_plan,
 )
 from app_backend.services.local_rag_runtime_factory import build_local_rag_runtime  # noqa: E402
-from app_backend.services.rag_index_generation import read_index_generation_metadata  # noqa: E402
+from app_backend.services.rag_index_generation import (  # noqa: E402
+    RAGIndexCompatibilityError,
+    read_index_generation_metadata,
+    validate_index_generation_compatibility,
+)
 from app_backend.services.rag_context_builder import build_rag_context  # noqa: E402
 from llm.chunk_text_store import ChunkTextStore  # noqa: E402
 from llm.embedding_service import OfflineEmbeddingModelNotAvailable  # noqa: E402
@@ -57,16 +61,29 @@ def main() -> int:
     context_ok = False
     embedding_status = "not_loaded"
     embedding_model_compatible = False
+    compatibility_error: str | None = None
     if plan.accepted_document_count and chunk_count:
         try:
             runtime = build_local_rag_runtime(vector_root, offline_only=True)
             bm25_size = runtime.bm25_index.size
-            embedding_model_compatible = _embedding_metadata_compatible(index_generation, runtime)
+            try:
+                validate_index_generation_compatibility(
+                    index_generation,
+                    embedding_service=runtime.embedding_service,
+                )
+                embedding_model_compatible = True
+            except RAGIndexCompatibilityError as exc:
+                compatibility_error = exc.reason
+                embedding_model_compatible = False
             smoke = _run_smoke(runtime)
             context_ok = any(item["pass_fail"] == "pass" and item["retrieval_mode"] == "context" for item in smoke)
             embedding_status = "offline_model_loaded" if any(
                 item["retrieval_mode"] == "vector" and item["pass_fail"] != "skipped" for item in smoke
             ) else "bm25_only_embedding_unavailable"
+        except RAGIndexCompatibilityError as exc:
+            compatibility_error = exc.reason
+            smoke = _skipped_smoke()
+            embedding_status = exc.reason
         except OfflineEmbeddingModelNotAvailable as exc:
             smoke = _skipped_smoke()
             embedding_status = str(exc)
@@ -87,6 +104,7 @@ def main() -> int:
         "chroma_chunk_count": chroma_count,
         "bm25_size": bm25_size,
         "index_generation": _index_generation_summary(index_generation),
+        "index_compatibility_error": compatibility_error,
         "consistency": {
             "eligible_manifest_documents": plan.accepted_document_count,
             "chunk_store_matches_chroma": chunk_count == chroma_count,
@@ -238,26 +256,11 @@ def _index_generation_summary(index_generation: dict[str, Any] | None) -> dict[s
         "vector_enabled": index_generation.get("vector_enabled"),
         "embedding_model": index_generation.get("embedding_model"),
         "embedding_dim": index_generation.get("embedding_dim"),
+        "chunking_version": index_generation.get("chunking_version"),
         "chunk_count": index_generation.get("chunk_count"),
         "written_chunk_count": index_generation.get("written_chunk_count"),
         "document_count": index_generation.get("document_count"),
     }
-
-
-def _embedding_metadata_compatible(index_generation: dict[str, Any] | None, runtime: Any) -> bool:
-    if index_generation is None:
-        return False
-    if not index_generation.get("vector_enabled"):
-        return True
-    expected_model = index_generation.get("embedding_model")
-    expected_dim = index_generation.get("embedding_dim")
-    if isinstance(expected_model, str) and expected_model:
-        if expected_model != runtime.embedding_service.model_name:
-            return False
-    if isinstance(expected_dim, int):
-        if expected_dim != runtime.embedding_service.dim:
-            return False
-    return True
 
 
 def _matches(doc_id: str, expected: str | None) -> bool:

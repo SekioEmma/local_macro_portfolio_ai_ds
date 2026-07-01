@@ -176,6 +176,21 @@ def test_upsert_non_list_embedding_raises(tmp_path):
         vs.upsert("doc1", 0, (0.1, 0.2))  # type: ignore[arg-type]
 
 
+def test_upsert_rejects_embedding_dimension_mismatch(tmp_path):
+    vs = VectorStore(tmp_path, _client=_StubClient(), expected_embedding_dim=3)
+
+    with pytest.raises(ValueError, match="embedding dimension mismatch"):
+        vs.upsert("doc1", 0, [0.1, 0.2])
+
+
+def test_query_rejects_embedding_dimension_mismatch(tmp_path):
+    vs = VectorStore(tmp_path, _client=_StubClient(), expected_embedding_dim=3)
+    vs.upsert("doc1", 0, FAKE_EMB)
+
+    with pytest.raises(ValueError, match="embedding dimension mismatch"):
+        vs.query([0.1, 0.2], top_k=1)
+
+
 # ---- query ----
 
 def test_query_returns_results(tmp_path):
