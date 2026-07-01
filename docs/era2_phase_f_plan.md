@@ -1,8 +1,8 @@
 # Phase F — Agent + 9 节前端开发计划
 
-> **当前状态（2026-07-01）**：主体实现 `implemented`；当前工作 `remediation_and_optimization`；用户验收 `not user_accepted`；生产可用 `not production_ready`。
+> **当前状态（2026-07-01）**：主体实现 `implemented`；工程收口 `implementation complete pending live evidence and user acceptance`；用户验收 `not user_accepted`；生产可用 `not production_ready`。
 > **Release gate**：以 [`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md) 为准，必须通过 fixture controlled smoke、关键测试、人工 checklist；live controlled smoke 可手动执行 `python scripts/run_phase_f_controlled_agent_smoke.py --mode live`。
-> **说明**：下方 F0–F8 内容保留为原始开发计划与实现追踪；不得再用“F0–F2 已完成，F3 开始”判断当前状态。
+> **Historical implementation log - non-authoritative**：下方 F0–F8 内容保留为原始开发计划与实现追踪；不得再用“F0–F2 已完成，F3 开始”判断当前状态。
 > **前置**：E 阶段暂停于 framework（5 个 commit 已推送，不阻塞 F）
 > **依赖**：现有 `deepseek_real_transport` / `tavily_real_transport` / `RAGRetrievalService` / `dashboard_service` / `realtime_quote_service` / `economic_calendar_service` / `portfolio_engine`
 > **本文档是 CLAUDE.md §Era 2 F-Phase 授权的唯一依据**
@@ -641,7 +641,8 @@ class AgentBudget:
 
 ## 11. 开发前置 checklist（历史记录，已由 release gate 取代）
 
-本节保留原 F1 编码前置项的历史意图，但不再作为当前 Phase F 的发布状态来源。
+本节及上方 F0-F8 开发计划均为 Historical implementation log - non-authoritative。
+它们保留原 F1 编码前置项的历史意图，但不再作为当前 Phase F 的发布状态来源。
 当前 authoritative release gate 以
 [`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md)
 和 [`docs/infra/phase_f_dod_audit.md`](infra/phase_f_dod_audit.md) 为准。
@@ -726,4 +727,4 @@ hsliuping/TradingAgents-CN（部分 Apache 2.0）的设计。借鉴方式为
 
 ---
 
-*本文档保留 Phase F baseline 设计与历史实施计划。2026-07-01 之后的当前状态、发布门禁与人工验收，以 release checklist、DoD audit、GOVERNANCE 与 ADR 为准；Phase F 仍为 `remediation_and_optimization`，尚未 `user_accepted` / `production_ready`。*
+*本文档保留 Phase F baseline 设计与历史实施计划。2026-07-01 之后的当前状态、发布门禁与人工验收，以 release checklist、DoD audit、GOVERNANCE 与 ADR 为准；Phase F 工程收口为 `implementation complete pending live evidence and user acceptance`，尚未 `user_accepted` / `production_ready`。*

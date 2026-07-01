@@ -52,7 +52,8 @@ Tag：`era1-frontend-redesign-complete`。
 - Phase F holdings stream checkpoint：`POST /api/agent/run/stream` 已复用一次性 holdings consent token 与 server-side snapshot injection，并验证 SSE response 不泄露详细 holdings 正文；默认 snapshot provider 仍保持 fail-closed。
 - Phase F runtime timeout checkpoint：agent runtime 已加入 wall-clock / provider-call / tool-call timeout budget；默认 DeepSeek transport 复用 provider-call timeout；SSE bridge 已加入 bounded queue 与 sanitized queue-overflow error，避免慢客户端或事件洪峰造成无界内存增长；provider typed retry 已按 timeout / connection_failed / rate_limited / server_error 分类重试，并对 client_error / malformed_response / provider_refusal / missing_key fail-closed；provider call 已按剩余 token 与 phase cap 做 preflight；writing phase 已追加专用系统指令；mixed finalize call 已 fail-closed 且不执行同轮其他工具。
 - Phase F RAG generation checkpoint：curated RAG ingest 已写入 `index_generation.json`（generation_id、source hash、chunk/document counts、embedding model/dim）；local RAG runtime cache 已纳入 generation_id；`scripts/validate_local_rag.py` 已将 generation metadata 与 embedding compatibility 纳入一致性 gate。
-- Phase F quality checkpoint：已新增 `scripts/run_phase_f_controlled_agent_smoke.py` fixture-mode 受控 agent run（无外部 API、无 holdings、无 `.env`、无 `outputs`），并以 [`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md) 作为 release gate；Phase F 仍保持 `remediation_and_optimization`，尚未 `user_accepted` / `production_ready`。
+- Phase F quality checkpoint：已新增 `scripts/run_phase_f_controlled_agent_smoke.py` fixture-mode 受控 agent run（无外部 API、无 holdings、无 `.env`、无 `outputs`），并以 [`docs/infra/phase_f_release_checklist.md`](infra/phase_f_release_checklist.md) 作为 release gate；Phase F 工程收口为 `implementation complete pending live evidence and user acceptance`，尚未 `user_accepted` / `production_ready`。
+- Phase F hardening closeout：curated RAG ingest 写入前已 fail-closed 校验既有 index generation / chunk store / vector store compatibility；reported numeric claims 已要求绑定同一条 ledger atomic observation 的 value/unit/as_of。详细 holdings UI/API 仍保持 disabled/fail-closed，等待 Phase G+ 的真实 holdings snapshot provider 与披露策略。
 
 ### 进行中
 
@@ -65,7 +66,7 @@ Tag：`era1-frontend-redesign-complete`。
 | C | 搜索分类持久化 + 经济日历 | 已完成（C1–C4e；FOMC exact-time deferred） | — |
 | D | RAG 知识库 | 已完成（D0 governance contracts；D-1~D-7 embedding/vector/BM25/RRF/seed；需安装 sentence-transformers + chromadb + rank-bm25；用户需向 data/knowledge_base/input/ 放置文件） | — |
 | E | 情景化收益区间引擎 | 已暂停于 framework（不阻塞 F） | ✅ E1 |
-| F | Agent + 9 节前端 | remediation_and_optimization 进行中；尚未 user_accepted / production_ready | Phase F holdings exception 与 ADR-0001~0006 已批准 |
+| F | Agent + 9 节前端 | implementation complete pending live evidence and user acceptance；尚未 user_accepted / production_ready | Phase F holdings exception 与 ADR-0001~0006 已批准 |
 | G | 报告归档 + 历史对比 | 1 | — |
 | H | 质量评估闭环 | 1 | — |
 | I | 多 Agent 拆分 | 2 | 条件触发 |
@@ -89,6 +90,14 @@ Tag：`era1-frontend-redesign-complete`。
 - 移动端 + 远程访问
 - 自动化推送 / 定时 brief
 - 多 Agent 协作（若 Era 2 Phase I 触发条件满足，提前到 Era 2 末）
+
+## Phase G/H Backlog
+
+- 接入真实 holdings snapshot provider 前，详细 holdings UI/API 保持 disabled/fail-closed；同时完成披露策略、用户确认文案与不外泄测试。
+- 加强 holdings 自然语言数字泄露检测，覆盖模型把数量、市值、成本、盈亏改写成自然语言的输出路径。
+- 增加 trace hash-chain integrity verifier，用于审计长期 trace 是否缺行、乱序或被篡改。
+- 评估 generation-scoped Chroma collection 与 atomic active-generation pointer 迁移，降低 collection-per-generation 与缓存切换风险。
+- 将市场日历升级为 exchange-holiday-grade calendar，避免交易日年龄与节假日边界误判。
 
 ## 持续保留的冻结边界
 

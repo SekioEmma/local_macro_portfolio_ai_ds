@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase state: `remediation_and_optimization`.
+- Current phase state: `implementation complete pending live evidence and user acceptance`.
 - User acceptance: `not user_accepted`.
 - Production readiness: `not production_ready`.
 - MacroBrief output label: `研究辅助输出` / `非自动投资决策` / `需要用户审阅`.
@@ -17,6 +17,7 @@ Run these before requesting human acceptance:
 
 ```bash
 python -m ruff check src tests scripts
+python -m pytest tests/ -x -q
 python -m pytest tests/ai tests/api tests/contracts tests/llm -q
 python scripts/run_phase_f_controlled_agent_smoke.py --report-path docs/infra/phase_f_controlled_run_fixture_latest.json
 cd app_frontend && npm.cmd run typecheck
@@ -66,18 +67,20 @@ CI must also run `python scripts/run_phase_f_controlled_agent_smoke.py` and fron
 - Trace records only holdings metadata and sanitized runtime events.
 - SSE events are monotonic, sanitized, cancellable, reject duplicate active sessions with a stable conflict event, release the per-session run lease in worker cleanup, and emit brief sections only after validation.
 - Claim-evidence ledger rejects unbound facts, fabricated evidence ids, and incompatible source projection.
+- Reported numeric facts either bind `value` / `unit` / `as_of` to one cited atomic observation or remain structured-null narrative.
 - Temporal alignment exposes asynchronous inputs instead of silently merging dates.
 - RAG runtime refuses incompatible embedding generations and invalidates stale cached generations.
+- Curated RAG ingest refuses existing incompatible or corrupt index generations before chunk/vector writes, even when `replace_existing` is requested.
 - Institutional MEMO material remains institutional view, not official evidence.
 - MacroBrief rendered output contains research auxiliary / non-automatic-decision / user-review status language.
 - ROADMAP, Governance, frontend behavior, API behavior, and this checklist agree on `not user_accepted` until a human explicitly accepts the release.
 
 ## Controlled Live Run
 
-Fixture mode is the CI gate. A live provider run is optional and manual only:
+Fixture mode is the CI gate. A live provider run is optional and manual only; Phase F remains pending live evidence until this command is refreshed successfully in an approved environment:
 
 ```bash
 python scripts/run_phase_f_controlled_agent_smoke.py --mode live --report-path docs/infra/phase_f_controlled_run_live_latest.json
 ```
 
-Run live mode only after the user approves use of configured external APIs for this release check. Live mode uses the real DeepSeek provider with the same controlled `treasury_curve` + `finalize_macro_brief` tool registry; it does not enable Tavily, RAG, holdings, background jobs, or raw data reads. If the live provider lacks credentials or fails a guard, the result remains a failed release check, not an exception to the gate.
+Run live mode only after the user approves use of configured external APIs for this release check. Live mode uses the real DeepSeek provider with the same controlled `treasury_curve` + `finalize_macro_brief` tool registry; it does not enable Tavily, RAG, holdings, background jobs, or raw data reads. If the live provider lacks credentials or fails a guard, the result remains a failed release check, not an exception to the gate. Do not claim `user_accepted` or `production_ready` from fixture or stale live evidence.
