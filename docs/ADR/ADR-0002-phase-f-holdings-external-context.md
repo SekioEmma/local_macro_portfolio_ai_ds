@@ -21,17 +21,21 @@ Detailed holdings context is allowed only through:
 
 The capabilities endpoint must report whether a server-side holdings snapshot provider is wired. When the provider is not wired, the consent endpoint must not issue a token and `AgentRunRequest.include_holdings=true` must fail closed with `holdings_snapshot_backend_not_wired`. The consent endpoint issues a process-local one-time token only when the snapshot provider is wired. It does not return holdings content. `AgentRunRequest.include_holdings=true` must include a valid `holdings_consent_token`. The token expires after 10 minutes and is consumed when a run starts with a server-side holdings snapshot.
 
+Holdings snapshots must satisfy the typed `HoldingsSnapshot` contract. The only supported cost field is `average_cost`; legacy or raw fields such as `cost_basis`, transaction history, raw provider payloads, account numbers, credentials, local paths, and environment variables are rejected. After MacroBrief validation and before rendering/API/SSE section output, `HoldingsOutputGuard` must fail closed if a model attempts to disclose account names, position quantities, costs, market values, or P&L values from the consented snapshot.
+
 ## Allowed Scope
 
 - Server-side injection into the MacroBrief system prompt after consent.
 - Synthetic or injected snapshot providers in tests.
 - Trace metadata containing only `holdings_included=true` and `holdings_snapshot_sha256`.
+- Aggregate macro-risk interpretation that does not disclose account names or position-level quantities/costs/market values/P&L.
 
 ## Prohibited Scope
 
 - Reading, printing, committing, or manually inspecting `data/holdings/`.
 - Sending holdings through `research-deepseek`, `preview-*`, `context-preview`, normal RAG, normal search, background jobs, schedulers, or automatic refresh.
 - Returning detailed holdings in API/SSE/debug response bodies.
+- Returning a partial MacroBrief after `HoldingsOutputGuard` detects detailed holdings disclosure.
 - Sending account numbers, broker login identifiers, credentials, raw provider payloads, order history, transaction history, local paths, database paths, or environment variables.
 
 ## Migration
@@ -41,7 +45,10 @@ Current implementation is a guarded foundation: consent and injection contracts 
 ## Validation
 
 - `tests/ai/test_holdings_consent_service.py`
+- `tests/ai/test_holdings_snapshot.py`
 - `tests/ai/test_holdings_external_context_service.py`
+- `tests/ai/test_holdings_output_guard.py`
+- `tests/ai/test_agent_runtime_mocked.py`
 - `tests/api/test_agent_run_route.py`
 - `tests/api/test_agent_stream_route.py`
 - `tests/ai/test_agent_trace_service.py`

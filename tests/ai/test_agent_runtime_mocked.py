@@ -18,6 +18,7 @@ from app_backend.services.llm_provider_adapter import (
     ProviderChatError,
     ToolCall,
 )
+from app_backend.services.holdings_output_guard import DISCLOSURE_WARNING_CODE
 from app_backend.services.run_evidence_ledger import EvidenceRecord, RunEvidenceLedger
 
 
@@ -715,6 +716,43 @@ def test_finalize_validation_failure_twice_returns_partial_brief():
     assert result.validation_findings is not None
     assert any("forward_indicators" in finding for finding in result.validation_findings["findings"])
     assert any(warning.code == "validation_failed" for warning in result.warnings)
+
+
+def test_finalize_blocks_holdings_output_disclosure_without_partial_brief():
+    leaking_payload = brief_payload()
+    leaking_payload["core_conclusion"] = "Macro Sleeve has SPY market value 182247."
+    provider = MockProvider(
+        [ChatResponse(tool_calls=[finalize_call("leaking-final", leaking_payload)], finish_reason="tool_calls")]
+    )
+
+    result = run_agent(
+        session_id="holdings-disclosure",
+        user_question="Build a macro brief.",
+        provider=provider,
+        tool_registry=make_registry(),
+        current_date=date(2026, 6, 30),
+        tool_names=["dashboard_query", FINALIZE_TOOL_NAME],
+        include_holdings=True,
+        holdings_snapshot={
+            "account_name": "Macro Sleeve",
+            "positions": [
+                {
+                    "ticker": "SPY",
+                    "quantity": 250,
+                    "average_cost": 420.5,
+                    "market_value": 182247,
+                }
+            ],
+        },
+    )
+
+    assert result.final_status == "validation_failed"
+    assert result.brief is None
+    assert result.partial_brief is None
+    assert result.validation_findings is not None
+    assert "account_name" in result.validation_findings["findings"]
+    assert "positions[0].market_value" in result.validation_findings["findings"]
+    assert any(warning.code == DISCLOSURE_WARNING_CODE for warning in result.warnings)
 
 
 def test_finalize_claim_evidence_gate_retries_when_ledger_ids_are_unknown():

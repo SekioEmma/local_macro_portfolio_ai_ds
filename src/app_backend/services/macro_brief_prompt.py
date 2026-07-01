@@ -7,7 +7,7 @@ provider adapter in F5.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -18,6 +18,7 @@ from app_backend.schemas.macro_brief import (
     REQUIRED_MODULE_KEYS,
     REQUIRED_SCENARIO_KEYS,
 )
+from app_backend.schemas.holdings_snapshot import holdings_snapshot_payload
 from app_backend.services.agent_tool_registry import FINALIZE_TOOL_NAME
 
 
@@ -172,16 +173,6 @@ HOLDINGS_NOT_INCLUDED_NOTICE = (
     "User holdings context: not included for this run. Do not infer "
     "account, position, transaction, or amount details."
 )
-
-_FORBIDDEN_HOLDINGS_KEYS = (
-    "transaction",
-    "order_book",
-    "cost_basis",
-    "p&l",
-    "profit_loss",
-    "raw_provider",
-)
-
 
 @dataclass(frozen=True)
 class MacroBriefPrompt:
@@ -343,26 +334,16 @@ def _format_holdings_context(
         return HOLDINGS_NOT_INCLUDED_NOTICE
     if not isinstance(holdings_snapshot, Mapping) or not holdings_snapshot:
         raise ValueError("holdings_snapshot is required when include_holdings is true")
-    _reject_forbidden_holdings_keys(holdings_snapshot)
-    serialized = json.dumps(holdings_snapshot, ensure_ascii=False, sort_keys=True)
+    try:
+        payload = holdings_snapshot_payload(holdings_snapshot)
+    except Exception as exc:
+        raise ValueError("invalid holdings snapshot") from exc
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return (
         "User holdings context (explicitly approved for this run only; "
         "server-side injection channel):\n"
         f"{serialized}"
     )
-
-
-def _reject_forbidden_holdings_keys(value: Any) -> None:
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            lowered = str(key).lower()
-            if any(forbidden in lowered for forbidden in _FORBIDDEN_HOLDINGS_KEYS):
-                raise ValueError(f"forbidden holdings field: {key}")
-            _reject_forbidden_holdings_keys(item)
-    elif isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        for item in value:
-            _reject_forbidden_holdings_keys(item)
-
 
 __all__ = [
     "ABSOLUTE_PROHIBITIONS",

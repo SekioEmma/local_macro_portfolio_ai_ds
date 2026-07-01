@@ -21,7 +21,7 @@ from app_backend.services.holdings_external_context_service import (
     HoldingsExternalContextService,
 )
 from app_backend.services.llm_provider_adapter import ChatResponse, ToolCall
-from tests.ai.test_agent_runtime_mocked import MockProvider, finalize_call, make_registry
+from tests.ai.test_agent_runtime_mocked import MockProvider, brief_payload, finalize_call, make_registry
 
 
 def _client() -> TestClient:
@@ -193,7 +193,7 @@ def test_agent_stream_with_consent_injects_holdings_without_sse_leak(tmp_path):
     token = consent_service.issue(session_id="agent-stream-holdings").token
     context_service = HoldingsExternalContextService(
         lambda _session_id: {
-            "positions": [{"ticker": "SPY", "shares": 10, "market_value_usd": 5000}],
+            "positions": [{"ticker": "SPY", "quantity": 10, "market_value": 5000}],
             "asset_class_breakdown": {"equity": 1.0},
         }
     )
@@ -226,10 +226,55 @@ def test_agent_stream_with_consent_injects_holdings_without_sse_leak(tmp_path):
     system_prompt = provider.calls[0]["messages"][0].content
     assert "explicitly approved for this run only" in system_prompt
     assert '"ticker": "SPY"' in system_prompt
-    assert "market_value_usd" not in response.text
+    assert "market_value" not in response.text
     assert "5000" not in response.text
     with pytest.raises(Exception):
         consent_service.validate(token, session_id="agent-stream-holdings")
+
+
+def test_agent_stream_blocks_model_holdings_output_disclosure(tmp_path):
+    leaking_payload = brief_payload()
+    leaking_payload["core_conclusion"] = "SPY market value is 5000."
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call("stream-leak-final", leaking_payload)], finish_reason="tool_calls")])
+    consent_service = HoldingsConsentService()
+    token = consent_service.issue(session_id="agent-stream-holdings-leak").token
+    context_service = HoldingsExternalContextService(
+        lambda _session_id: {
+            "positions": [{"ticker": "SPY", "quantity": 10, "market_value": 5000}],
+            "asset_class_breakdown": {"equity": 1.0},
+        }
+    )
+    service = AgentRunService(
+        provider_factory=lambda: provider,
+        registry_factory=lambda _confirm_external_search: make_registry(),
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        current_date_provider=lambda: date(2026, 6, 30),
+        holdings_consent_service=consent_service,
+        holdings_context_service=context_service,
+        enable_evidence_ledger=False,
+    )
+    app.dependency_overrides[get_agent_run_service] = lambda: service
+
+    try:
+        response = _client().post(
+            "/api/agent/run/stream",
+            json={
+                "session_id": "agent-stream-holdings-leak",
+                "user_question": "Build a macro brief.",
+                "include_holdings": True,
+                "holdings_consent_token": token,
+            },
+            headers={"accept": "text/event-stream"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    events = _events_from_sse(response.text)
+    assert not any(event["type"] == "brief_section" for event in events)
+    assert events[-1]["type"] == "complete"
+    assert events[-1]["payload"]["final_status"] == "validation_failed"
+    assert "5000" not in response.text
 
 
 def test_agent_stream_route_propagates_cancel_before_tool_dispatch(tmp_path):

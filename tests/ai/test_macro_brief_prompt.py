@@ -170,12 +170,12 @@ def test_holdings_context_is_not_injected_by_default():
         user_question="x",
         current_date=date(2026, 6, 29),
         tool_names=[FINALIZE_TOOL_NAME],
-        holdings_snapshot={"SPY": {"shares": 250, "market_value_usd": 182247}},
+        holdings_snapshot={"positions": [{"ticker": "SPY", "quantity": 250, "market_value": 182247}]},
     )
 
     assert HOLDINGS_NOT_INCLUDED_NOTICE in prompt.system_prompt
     assert "182247" not in prompt.system_prompt
-    assert "market_value_usd" not in prompt.system_prompt
+    assert "market_value" not in prompt.system_prompt
 
 
 def test_holdings_context_injected_only_when_explicitly_enabled():
@@ -186,15 +186,16 @@ def test_holdings_context_injected_only_when_explicitly_enabled():
         include_holdings=True,
         holdings_snapshot={
             "positions": [
-                {"ticker": "SPY", "shares": 250, "market_value_usd": 182247},
-                {"ticker": "QQQ", "shares": 100, "market_value_usd": 70652},
+                {"ticker": "SPY", "quantity": 250, "average_cost": 420.5, "market_value": 182247},
+                {"ticker": "QQQ", "quantity": 100, "average_cost": 500.25, "market_value": 70652},
             ],
-            "asset_class_breakdown": {"SPY": 0.514, "QQQ": 0.199},
+            "asset_class_breakdown": {"equity": 0.713},
         },
     )
 
     assert "explicitly approved for this run only" in prompt.system_prompt
-    assert '"market_value_usd": 182247' in prompt.system_prompt
+    assert '"average_cost": 420.5' in prompt.system_prompt
+    assert '"market_value": 182247.0' in prompt.system_prompt
     assert '"ticker": "SPY"' in prompt.system_prompt
 
 
@@ -217,7 +218,7 @@ def test_holdings_context_requires_snapshot_when_enabled():
     ],
 )
 def test_holdings_context_rejects_forbidden_fields(snapshot):
-    with pytest.raises(ValueError, match="forbidden holdings field"):
+    with pytest.raises(ValueError, match="invalid holdings snapshot"):
         build_macro_brief_prompt(
             user_question="x",
             current_date=date(2026, 6, 29),

@@ -4,6 +4,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from pydantic import ValidationError
+
+from app_backend.schemas.holdings_snapshot import holdings_snapshot_payload
+
 
 HoldingsSnapshotProvider = Callable[[str], Mapping[str, Any] | None]
 
@@ -61,7 +65,10 @@ class HoldingsExternalContextService:
         sanitized = _sanitize(snapshot)
         if not isinstance(sanitized, dict) or not sanitized:
             raise HoldingsContextError("holdings_snapshot_unavailable")
-        return sanitized
+        try:
+            return holdings_snapshot_payload(sanitized)
+        except ValidationError as exc:
+            raise HoldingsContextError("invalid_holdings_snapshot") from exc
 
 
 def _sanitize(value: Any) -> Any:

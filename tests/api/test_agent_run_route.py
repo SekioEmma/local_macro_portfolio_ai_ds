@@ -21,7 +21,7 @@ from app_backend.services.agent_trace_service import AgentTraceService
 from app_backend.services.holdings_consent_service import HoldingsConsentService
 from app_backend.services.holdings_external_context_service import HoldingsExternalContextService
 from app_backend.services.llm_provider_adapter import ChatResponse
-from tests.ai.test_agent_runtime_mocked import MockProvider, finalize_call, make_registry
+from tests.ai.test_agent_runtime_mocked import MockProvider, brief_payload, finalize_call, make_registry
 
 
 @pytest.fixture(autouse=True)
@@ -351,7 +351,7 @@ def test_agent_run_with_consent_injects_holdings_server_side_without_response_le
     token = consent_service.issue(session_id="agent-session-holdings").token
     context_service = HoldingsExternalContextService(
         lambda _session_id: {
-            "positions": [{"ticker": "SPY", "shares": 10, "market_value_usd": 5000}],
+            "positions": [{"ticker": "SPY", "quantity": 10, "market_value": 5000}],
             "asset_class_breakdown": {"equity": 1.0},
         }
     )
@@ -378,10 +378,50 @@ def test_agent_run_with_consent_injects_holdings_server_side_without_response_le
     system_prompt = provider.calls[0]["messages"][0].content
     assert "explicitly approved for this run only" in system_prompt
     assert '"ticker": "SPY"' in system_prompt
-    assert "market_value_usd" not in response.text
+    assert "market_value" not in response.text
     assert "5000" not in response.text
     with pytest.raises(Exception):
         consent_service.validate(token, session_id="agent-session-holdings")
+
+
+def test_agent_run_blocks_model_holdings_output_disclosure(tmp_path):
+    leaking_payload = brief_payload()
+    leaking_payload["core_conclusion"] = "SPY market value is 5000."
+    provider = MockProvider([ChatResponse(tool_calls=[finalize_call("leak-final", leaking_payload)], finish_reason="tool_calls")])
+    consent_service = HoldingsConsentService()
+    token = consent_service.issue(session_id="agent-session-holdings-leak").token
+    context_service = HoldingsExternalContextService(
+        lambda _session_id: {
+            "positions": [{"ticker": "SPY", "quantity": 10, "market_value": 5000}],
+            "asset_class_breakdown": {"equity": 1.0},
+        }
+    )
+    _install_service(
+        _service(
+            tmp_path,
+            provider,
+            holdings_consent_service=consent_service,
+            holdings_context_service=context_service,
+        )
+    )
+
+    response = _client().post(
+        "/api/agent/run",
+        json={
+            "session_id": "agent-session-holdings-leak",
+            "user_question": "Build a macro brief.",
+            "include_holdings": True,
+            "holdings_consent_token": token,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["final_status"] == "validation_failed"
+    assert body["brief"] is None
+    assert body["partial_brief"] is None
+    assert body["warnings"][0]["code"] == "holdings_output_disclosure_blocked"
+    assert "5000" not in response.text
 
 
 def test_agent_run_rejects_consent_token_when_holdings_disabled(tmp_path):

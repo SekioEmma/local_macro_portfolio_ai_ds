@@ -39,6 +39,10 @@ from app_backend.services.macro_brief_evidence_projection import (
 from app_backend.services.macro_brief_prompt import build_macro_brief_prompt
 from app_backend.services.agent_trace_service import AgentTraceService, sha256_json
 from app_backend.services.claim_evidence_validator import validate_macro_brief_claim_evidence
+from app_backend.services.holdings_output_guard import (
+    DISCLOSURE_WARNING_CODE,
+    find_holdings_output_disclosures,
+)
 from app_backend.services.agent_evidence_ledger_registration import (
     register_tool_result_evidence,
 )
@@ -599,6 +603,7 @@ def run_agent(
                     validation_failures=validation_failures,
                     evidence_ledger=current_evidence_ledger,
                     report_generated_at=f"{current_date.isoformat()}T00:00:00Z",
+                    holdings_snapshot=holdings_snapshot if include_holdings else None,
                 )
                 if result is not None:
                     return _finish_with_trace(result, trace_service)
@@ -1374,6 +1379,7 @@ def _handle_finalize_attempt(
     validation_failures: int,
     evidence_ledger: RunEvidenceLedger | None,
     report_generated_at: str,
+    holdings_snapshot: Mapping[str, Any] | None,
 ) -> tuple[AgentSessionResult | None, int]:
     brief_payload = tool_call.arguments.get("brief")
     projected_payload = (
@@ -1421,6 +1427,19 @@ def _handle_finalize_attempt(
             report_generated_at=report_generated_at,
         )
         brief = brief.model_copy(update=temporal_envelope.model_dump(mode="json"))
+    holdings_findings = find_holdings_output_disclosures(
+        brief=brief,
+        holdings_snapshot=dict(holdings_snapshot) if holdings_snapshot is not None else None,
+    )
+    if holdings_findings:
+        return _holdings_output_disclosure_failure(
+            session_id=session_id,
+            budget=budget,
+            warnings=warnings,
+            events=events,
+            event_callback=event_callback,
+            findings=holdings_findings,
+        ), validation_failures
     _append_event(
         events,
         AgentRuntimeEvent(
@@ -1438,6 +1457,49 @@ def _handle_finalize_attempt(
         events=events,
         steps=budget.steps_used,
     ), validation_failures
+
+
+def _holdings_output_disclosure_failure(
+    *,
+    session_id: str,
+    budget: AgentBudget,
+    warnings: list[AgentRuntimeWarning],
+    events: list[AgentRuntimeEvent],
+    event_callback: RuntimeEventCallback | None,
+    findings: list[str],
+) -> AgentSessionResult:
+    payload = {
+        "missing": [],
+        "errors": [],
+        "findings": findings,
+    }
+    _append_event(
+        events,
+        AgentRuntimeEvent(
+            type="macro_brief_validation",
+            step=budget.steps_used,
+            data={
+                "status": "failed",
+                "kind": DISCLOSURE_WARNING_CODE,
+                "findings": payload,
+            },
+        ),
+        event_callback,
+    )
+    warnings.append(
+        AgentRuntimeWarning(
+            code=DISCLOSURE_WARNING_CODE,
+            message="MacroBrief output attempted to disclose detailed holdings context.",
+        )
+    )
+    return AgentSessionResult(
+        session_id=session_id,
+        final_status="validation_failed",
+        validation_findings=payload,
+        warnings=warnings,
+        events=events,
+        steps=budget.steps_used,
+    )
 
 
 def _handle_finalize_validation_failure(

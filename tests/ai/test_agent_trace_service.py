@@ -95,7 +95,7 @@ def test_trace_service_overflow_writes_summary_without_raising(tmp_path):
 def test_run_agent_can_persist_trace_when_service_is_injected(tmp_path):
     provider = MockProvider([ChatResponse(tool_calls=[finalize_call()], finish_reason="tool_calls")])
     service = AgentTraceService(root_dir=tmp_path)
-    holdings_snapshot = {"ticker": "SPY", "amount": 100}
+    holdings_snapshot = {"positions": [{"ticker": "SPY", "quantity": 100}]}
 
     result = run_agent(
         session_id="session-3",
@@ -121,7 +121,7 @@ def test_run_agent_can_persist_trace_when_service_is_injected(tmp_path):
     assert events[0].data["holdings_snapshot_sha256"] == sha256_json(holdings_snapshot)
     trace_text = service.trace_path("session-3").read_text(encoding="utf-8")
     assert "Build a macro brief." not in trace_text
-    assert "amount" not in trace_text
+    assert "quantity" not in trace_text
 
 
 def test_trace_sanitizes_sensitive_payload_fields(tmp_path):
