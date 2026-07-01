@@ -54,7 +54,7 @@ def test_phase_f_release_gate_is_documented_and_wired_to_ci():
     assert "phase_f_release_checklist.md" in governance
     assert "phase_f_release_checklist.md" in index
     assert "phase_f_release_checklist.md" in phase_plan
-    expected_status = "implementation complete pending live evidence and user acceptance"
+    expected_status = "implementation complete; controlled live verification passed; awaiting explicit user acceptance"
     assert expected_status in checklist
     assert expected_status in index
     assert expected_status in phase_plan
@@ -114,13 +114,13 @@ def test_phase_f_dod_audit_covers_required_gates():
         "Trace 长期保存已实现",
         "RAG generation contract 已实现",
         "所有关键测试通过",
-        "真实受控 Agent run 待本轮刷新",
+        "真实受控 Agent run 本轮刷新通过",
         "ROADMAP、Governance、Phase Plan、API、前端行为一致",
     ]
     for item in required_items:
         assert item in audit
     assert "phase_f_dod_audit.md" in checklist
     assert "phase_f_dod_audit.md" in index
-    assert "Do not claim `user_accepted` or `production_ready` from fixture or stale live evidence." in checklist
+    assert "Do not claim `user_accepted` or `production_ready` from fixture or live evidence" in checklist
     assert "not user_accepted" in audit
     assert "not production_ready" in audit

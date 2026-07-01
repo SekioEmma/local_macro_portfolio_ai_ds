@@ -2,7 +2,7 @@
 
 Status date: 2026-07-01
 
-This audit maps the Phase F remediation Definition of Done to current repository evidence. It does not mark Phase F as `user_accepted`; human acceptance remains the final release gate. Current engineering status is `implementation complete pending live evidence and user acceptance`.
+This audit maps the Phase F remediation Definition of Done to current repository evidence. It does not mark Phase F as `user_accepted`; human acceptance remains the final release gate. Current engineering status is `implementation complete; controlled live verification passed; awaiting explicit user acceptance`.
 
 ## Summary
 
@@ -18,7 +18,7 @@ This audit maps the Phase F remediation Definition of Done to current repository
 | Trace 长期保存已实现 | `src/app_backend/services/agent_trace_service.py`; `src/app_backend/main.py`; `tests/ai/test_agent_trace_service.py`; `tests/api/test_agent_trace_route.py`; `docs/ADR/ADR-0005-phase-f-sse-and-trace-retention.md` | implemented |
 | RAG generation contract 已实现 | `src/app_backend/services/rag_index_generation.py` records and validates generation, embedding model, embedding dimension, and chunking version compatibility; `src/app_backend/services/local_rag_runtime_factory.py` fail-closes nonempty runtime builds with missing or incompatible generation metadata; `src/app_backend/services/curated_rag_ingest.py` preflights existing generation/chunk/vector compatibility before document preparation or writes; `src/llm/vector_store.py` rejects configured embedding dimension mismatches; `scripts/validate_local_rag.py`; `tests/ai/test_validate_local_rag_script.py`; `tests/ai/test_curated_rag_ingest.py`; `tests/ai/test_local_rag_runtime_factory.py`; `tests/llm/test_vector_store.py`; `docs/ADR/ADR-0006-rag-index-generation-and-embedding-compatibility.md` | implemented |
 | 所有关键测试通过 | Latest local gates: `python -m pytest tests/ -x -q` = `3594 passed, 14 skipped`; `python -m pytest -q tests/ai tests/api tests/contracts tests/llm` = `2903 passed, 14 skipped`; `python -m ruff check src tests scripts` passed; fixture controlled smoke passed; frontend typecheck/test/build = `21 passed` and build passed | verified locally |
-| 真实受控 Agent run 待本轮刷新 | Fixture report passed. Live report is conditional and must be refreshed with `python scripts/run_phase_f_controlled_agent_smoke.py --mode live --report-path docs/infra/phase_f_controlled_run_live_latest.json` only when configured provider access is available and explicitly approved; do not reuse old live evidence to mark this round accepted | pending live evidence |
+| 真实受控 Agent run 本轮刷新通过 | `docs/infra/phase_f_controlled_run_live_latest.json` has `mode=live`, `check_status=passed`, `final_status=ok`, `include_holdings=false`, `external_search_confirmed=false`, `warning_codes=[]`, and tool sequence `treasury_curve` -> `finalize_macro_brief`; this still does not mark user acceptance | verified locally |
 | ROADMAP、Governance、Phase Plan、API、前端行为一致 | `docs/ROADMAP.md`; `docs/GOVERNANCE.md`; `docs/era2_phase_f_plan.md`; `docs/infra/phase_f_release_checklist.md`; `tests/contracts/test_phase_f_quality_contract.py` | implemented |
 | MacroBrief 产品边界标签固定呈现 | `src/app_backend/services/macro_brief_renderer.py`; `tests/ai/test_macro_brief_renderer.py`; `tests/api/test_agent_run_route.py`; `app_frontend/src/components/AIChatPage.tsx`; `app_frontend/src/components/AIChatPage.test.tsx` | implemented |
 
@@ -47,7 +47,7 @@ This audit maps the Phase F remediation Definition of Done to current repository
 
 ## Release State
 
-- Current phase state: `implementation complete pending live evidence and user acceptance`.
+- Current phase state: `implementation complete; controlled live verification passed; awaiting explicit user acceptance`.
 - User acceptance: `not user_accepted`.
 - Production readiness: `not production_ready`.
 - Required MacroBrief product label is rendered deterministically in backend Markdown and frontend UI: `研究辅助输出` / `非自动投资决策` / `需要用户审阅`.
@@ -56,7 +56,7 @@ This audit maps the Phase F remediation Definition of Done to current repository
 ## Controlled Run Evidence
 
 - Fixture report: `docs/infra/phase_f_controlled_run_fixture_latest.json`
-- Live report: `docs/infra/phase_f_controlled_run_live_latest.json` (conditional; refresh required before release acceptance)
+- Live report: `docs/infra/phase_f_controlled_run_live_latest.json`
 
 Both reports record:
 
@@ -75,4 +75,4 @@ Both reports record:
 
 ## Remaining Gate
 
-The implementation-side DoD evidence is present for the fixture-gated path. The status must remain `not user_accepted` until live evidence is refreshed when provider access is available and the user explicitly accepts the Phase F release after reviewing the release checklist and controlled run reports.
+The implementation-side DoD evidence is present for the fixture-gated path, and the controlled live report has been refreshed successfully. The status must remain `not user_accepted` until the user explicitly accepts the Phase F release after reviewing the release checklist and controlled run reports.

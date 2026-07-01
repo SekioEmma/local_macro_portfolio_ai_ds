@@ -147,6 +147,6 @@ cd app_frontend && npx tsc --noEmit
 - 分支：`app-mvp`
 - 阶段：Era 2 进行中
 - 当前里程碑：Phase F MacroBrief Agent remediation / release gate
-- 当前状态：`implementation complete pending live evidence and user acceptance`；尚未 `user_accepted` / `production_ready`
+- 当前状态：`implementation complete; controlled live verification passed; awaiting explicit user acceptance`；尚未 `user_accepted` / `production_ready`
 - Release gate：[infra/phase_f_release_checklist.md](infra/phase_f_release_checklist.md)
 - 详见 [ROADMAP.md](ROADMAP.md)

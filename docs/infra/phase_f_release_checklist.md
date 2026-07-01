@@ -2,7 +2,7 @@
 
 ## Status
 
-- Current phase state: `implementation complete pending live evidence and user acceptance`.
+- Current phase state: `implementation complete; controlled live verification passed; awaiting explicit user acceptance`.
 - User acceptance: `not user_accepted`.
 - Production readiness: `not production_ready`.
 - MacroBrief output label: `研究辅助输出` / `非自动投资决策` / `需要用户审阅`.
@@ -77,10 +77,10 @@ CI must also run `python scripts/run_phase_f_controlled_agent_smoke.py` and fron
 
 ## Controlled Live Run
 
-Fixture mode is the CI gate. A live provider run is optional and manual only; Phase F remains pending live evidence until this command is refreshed successfully in an approved environment:
+Fixture mode is the CI gate. A live provider run is optional and manual only. The latest controlled live report was refreshed successfully for this release check:
 
 ```bash
 python scripts/run_phase_f_controlled_agent_smoke.py --mode live --report-path docs/infra/phase_f_controlled_run_live_latest.json
 ```
 
-Run live mode only after the user approves use of configured external APIs for this release check. Live mode uses the real DeepSeek provider with the same controlled `treasury_curve` + `finalize_macro_brief` tool registry; it does not enable Tavily, RAG, holdings, background jobs, or raw data reads. If the live provider lacks credentials or fails a guard, the result remains a failed release check, not an exception to the gate. Do not claim `user_accepted` or `production_ready` from fixture or stale live evidence.
+Run live mode only after the user approves use of configured external APIs for this release check. Live mode uses the real DeepSeek provider with the same controlled `treasury_curve` + `finalize_macro_brief` tool registry; it does not enable Tavily, RAG, holdings, background jobs, or raw data reads. If the live provider lacks credentials or fails a guard, the result remains a failed release check, not an exception to the gate. Do not claim `user_accepted` or `production_ready` from fixture or live evidence without explicit human acceptance.

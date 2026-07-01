@@ -25,16 +25,16 @@
       "tool_calls": 2,
       "warning_count": 0
     },
-    "current_date": "2026-06-30",
+    "current_date": "2026-07-01",
     "cutoffs": {
       "macro_data_cutoff": null,
       "market_data_cutoff": "2026-06-29",
       "max_market_data_age_trading_days": 0,
       "policy_data_cutoff": null,
       "public_news_cutoff": null,
-      "report_generated_at": "2026-06-30T00:00:00Z"
+      "report_generated_at": "2026-07-01T07:24:13.720574+00:00"
     },
-    "elapsed_seconds": 31.302,
+    "elapsed_seconds": 33.629,
     "evidence_count": 1,
     "evidence_counts": {
       "institutional": 0,
