@@ -38,6 +38,7 @@ def test_phase_f_critical_path_controlled_agent_smoke_passes(tmp_path):
 
 def test_phase_f_release_gate_is_documented_and_wired_to_ci():
     checklist = (_REPO_ROOT / "docs" / "infra" / "phase_f_release_checklist.md").read_text(encoding="utf-8")
+    index = (_REPO_ROOT / "docs" / "INDEX.md").read_text(encoding="utf-8")
     roadmap = (_REPO_ROOT / "docs" / "ROADMAP.md").read_text(encoding="utf-8")
     governance = (_REPO_ROOT / "docs" / "GOVERNANCE.md").read_text(encoding="utf-8")
     phase_plan = (_REPO_ROOT / "docs" / "era2_phase_f_plan.md").read_text(encoding="utf-8")
@@ -49,12 +50,16 @@ def test_phase_f_release_gate_is_documented_and_wired_to_ci():
     assert "run_phase_f_controlled_agent_smoke.py" in phase_plan
     assert "run_phase_f_controlled_agent_smoke.py" in ci
     assert "phase_f_release_checklist.md" in governance
+    assert "phase_f_release_checklist.md" in index
     assert "phase_f_release_checklist.md" in phase_plan
     assert "remediation_and_optimization" in checklist
+    assert "remediation_and_optimization" in index
     assert "remediation_and_optimization" in phase_plan
     assert "not user_accepted" in checklist
+    assert "user_accepted" in index
     assert "not user_accepted" in phase_plan
     assert "not production_ready" in checklist
+    assert "production_ready" in index
     assert "not production_ready" in phase_plan
     assert "研究辅助输出" in checklist
     assert "非自动投资决策" in checklist

@@ -145,6 +145,7 @@ cd app_frontend && npx tsc --noEmit
 
 - 分支：`app-mvp`
 - 阶段：Era 2 进行中
-- 上一里程碑：AI-2 单轮 DeepSeek V4 Pro 研究端点完成
-- 下一里程碑：Era 2 Phase A（治理与边界）
+- 当前里程碑：Phase F MacroBrief Agent remediation / release gate
+- 当前状态：`remediation_and_optimization`；尚未 `user_accepted` / `production_ready`
+- Release gate：[infra/phase_f_release_checklist.md](infra/phase_f_release_checklist.md)
 - 详见 [ROADMAP.md](ROADMAP.md)
