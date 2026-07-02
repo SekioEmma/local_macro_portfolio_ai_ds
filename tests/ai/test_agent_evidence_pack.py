@@ -94,3 +94,30 @@ def test_evidence_pack_tracks_unavailable_tool_topics_without_raw_content():
             "evidence_ids": [],
         }
     ]
+
+
+def test_evidence_pack_tracks_ok_but_unavailable_tool_topics():
+    outcomes = [
+        PlannedToolOutcome(
+            topic="local_rag_context",
+            tool_name="rag_retrieve",
+            status="ok",
+            content={
+                "chunks": [],
+                "chunk_count": 0,
+                "status": "unavailable",
+                "reason_code": "index_generation_missing_or_invalid",
+            },
+        ),
+        PlannedToolOutcome(
+            topic="current_public_news",
+            tool_name="search_tavily",
+            status="ok",
+            content={"results": [], "result_count": 0},
+            required=False,
+        ),
+    ]
+
+    pack = build_evidence_pack(ledger=RunEvidenceLedger(run_id="run-1"), outcomes=outcomes)
+
+    assert pack.unavailable_topics == ["local_rag_context", "current_public_news"]

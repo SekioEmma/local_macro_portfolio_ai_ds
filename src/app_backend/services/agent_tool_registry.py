@@ -755,12 +755,24 @@ def make_rag_retrieve_tool(retrieve_fn: RagRetrieveFn) -> ToolSpec:
         if doc_type is not None and not isinstance(doc_type, str):
             raise _ToolValidationError("invalid_doc_type", "doc_type must be str or null")
 
-        chunks = retrieve_fn(
-            query,
-            top_k=top_k,
-            doc_type_filter=doc_type or None,
-            include_local_only=False,
-        )
+        try:
+            chunks = retrieve_fn(
+                query,
+                top_k=top_k,
+                doc_type_filter=doc_type or None,
+                include_local_only=False,
+            )
+        except Exception as exc:
+            from app_backend.services.rag_index_generation import RAGIndexCompatibilityError
+
+            if isinstance(exc, RAGIndexCompatibilityError):
+                return {
+                    "chunks": [],
+                    "chunk_count": 0,
+                    "status": "unavailable",
+                    "reason_code": exc.reason,
+                }
+            raise
         rendered: list[dict[str, Any]] = []
         for chunk in chunks or []:
             item = _to_jsonable(chunk)

@@ -607,6 +607,27 @@ def test_rag_retrieve_empty_results_returns_empty_chunk_list():
     assert result.content == {"chunks": [], "chunk_count": 0}
 
 
+def test_rag_retrieve_reports_index_generation_error_as_unavailable():
+    from app_backend.services.rag_index_generation import RAGIndexCompatibilityError
+
+    def fake_retrieve(_query, **_kwargs):
+        raise RAGIndexCompatibilityError("index_generation_missing_or_invalid")
+
+    spec = make_rag_retrieve_tool(fake_retrieve)
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("rag_retrieve", {"query": "fomc"})
+
+    assert result.status == "ok"
+    assert result.content == {
+        "chunks": [],
+        "chunk_count": 0,
+        "status": "unavailable",
+        "reason_code": "index_generation_missing_or_invalid",
+    }
+
+
 @pytest.mark.parametrize(
     "args, expected_code",
     [

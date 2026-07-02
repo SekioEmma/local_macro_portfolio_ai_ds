@@ -69,7 +69,7 @@ def build_evidence_pack(
     unavailable_topics = [
         outcome.topic
         for outcome in outcomes
-        if outcome.status != "ok" and outcome.topic not in {"finalize"}
+        if _outcome_unavailable(outcome) and outcome.topic not in {"finalize"}
     ]
     return EvidencePack(
         cards=cards,
@@ -162,6 +162,21 @@ def _summarize_outcome(outcome: PlannedToolOutcome) -> dict[str, Any]:
         "error_code": outcome.error_code,
         "evidence_ids": list(outcome.evidence_ids),
     }
+
+
+def _outcome_unavailable(outcome: PlannedToolOutcome) -> bool:
+    if outcome.status != "ok":
+        return True
+    content = outcome.content
+    if not isinstance(content, dict):
+        return False
+    if content.get("status") == "unavailable":
+        return True
+    if outcome.tool_name == "rag_retrieve" and content.get("chunk_count") == 0:
+        return True
+    if outcome.tool_name == "search_tavily" and content.get("result_count") == 0:
+        return True
+    return False
 
 
 __all__ = [
