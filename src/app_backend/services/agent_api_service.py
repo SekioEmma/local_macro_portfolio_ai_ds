@@ -211,9 +211,9 @@ class AgentRunService:
             ledger=RunEvidenceLedger(run_id=session_id) if self.enable_evidence_ledger else None,
             budget=AgentBudget(
                 max_steps=max(len(plan.tool_plan.steps) + 2, 4),
-                max_search_calls=3 if request.confirm_external_search else 0,
-                max_rag_calls=5,
-                max_external_quote_calls=5,
+                max_search_calls=5 if request.confirm_external_search else 0,
+                max_rag_calls=8,
+                max_external_quote_calls=10,
                 max_tokens_total=40000,
             ),
         )

@@ -515,6 +515,104 @@ def test_agent_run_natural_answer_uses_planned_tools_before_writer(tmp_path):
     assert "ETF quote SPY" in writer_call["messages"][1].content
 
 
+def test_agent_run_natural_answer_budget_allows_full_quote_mix(tmp_path):
+    provider = MockProvider(
+        [
+            ChatResponse(
+                content=(
+                    "结论：完整报价组合已执行。"
+                    "非个股操作 非概率胜率 非收益预测 非动态择时 非黑盒最优化"
+                )
+            )
+        ]
+    )
+    tool_calls: list[str] = []
+
+    def registry_factory(_confirm_external_search: bool):
+        registry = make_registry()
+        registry.register(
+            ToolSpec(
+                name="quote_etf",
+                description="Fake ETF quote.",
+                parameters_schema={"type": "object"},
+                handler=lambda args: tool_calls.append(f"quote_etf:{args['symbols'][0]}") or {
+                    "quotes": [
+                        {
+                            "symbol": args["symbols"][0],
+                            "value": 100.0,
+                            "unit": "USD",
+                            "status": "ok",
+                            "observation_date": "2026-07-01",
+                        }
+                    ]
+                },
+            )
+        )
+        registry.register(
+            ToolSpec(
+                name="treasury_curve",
+                description="Fake curve.",
+                parameters_schema={"type": "object"},
+                handler=lambda _args: tool_calls.append("treasury_curve") or {
+                    "points": [
+                        {
+                            "tenor": "10Y",
+                            "source_series": "DGS10",
+                            "value": 4.3,
+                            "unit": "%",
+                            "observation_date": "2026-07-01",
+                            "status": "ok",
+                        }
+                    ]
+                },
+            )
+        )
+        registry.register(
+            ToolSpec(
+                name="quote_dxy",
+                description="Fake DXY.",
+                parameters_schema={"type": "object"},
+                handler=lambda _args: tool_calls.append("quote_dxy") or {
+                    "status": "ok",
+                    "series_id": "DTWEXBGS",
+                    "value": 120.0,
+                    "unit": "index",
+                    "observation_date": "2026-07-01",
+                    "source": "FRED",
+                    "name": "broad trade-weighted USD index",
+                },
+            )
+        )
+        return registry
+
+    service = AgentRunService(
+        provider_factory=lambda: provider,
+        registry_factory=registry_factory,
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        current_date_provider=lambda: date(2026, 7, 2),
+    )
+
+    response = service.run(
+        AgentRunRequest(
+            session_id="natural-answer-budget",
+            user_question="请结合 SPY/QQQ/SHY/GLD、长端利率和美元指数做自然回答。",
+            confirm_external_search=True,
+            output_mode="natural_answer",
+        )
+    )
+
+    assert response.final_status == "ok"
+    assert response.warnings == []
+    assert tool_calls == [
+        "quote_etf:SPY",
+        "quote_etf:QQQ",
+        "quote_etf:SHY",
+        "quote_etf:GLD",
+        "treasury_curve",
+        "quote_dxy",
+    ]
+
+
 def test_agent_run_natural_answer_blocks_holdings_text_leak(tmp_path):
     provider = MockProvider([ChatResponse(content="账户持仓市值是 5000。")])
     consent_service = HoldingsConsentService()
