@@ -106,6 +106,19 @@ def run_agent_tool_plan(
                 outcomes.append(_outcome_from_result(step=step, args=normalized_args, result=result))
                 continue
 
+            if current_ledger is None:
+                outcomes.append(
+                    PlannedToolOutcome(
+                        topic=step.topic,
+                        tool_name=step.tool_name,
+                        args=normalized_args,
+                        status=result.status,
+                        required=step.required,
+                        content=result.content,
+                    )
+                )
+                continue
+
             registration = register_tool_result_evidence(
                 ledger=current_ledger,
                 tool_name=step.tool_name,

@@ -26,6 +26,18 @@ def find_holdings_output_disclosures(
     brief: MacroBrief,
     holdings_snapshot: HoldingsSnapshot | dict[str, Any] | None,
 ) -> list[str]:
+    output_text = json.dumps(brief.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
+    return find_holdings_text_disclosures(
+        output_text=output_text,
+        holdings_snapshot=holdings_snapshot,
+    )
+
+
+def find_holdings_text_disclosures(
+    *,
+    output_text: str,
+    holdings_snapshot: HoldingsSnapshot | dict[str, Any] | None,
+) -> list[str]:
     if holdings_snapshot is None:
         return []
     snapshot = (
@@ -33,7 +45,6 @@ def find_holdings_output_disclosures(
         if isinstance(holdings_snapshot, HoldingsSnapshot)
         else normalize_holdings_snapshot(holdings_snapshot)
     )
-    output_text = json.dumps(brief.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
     findings: list[str] = []
 
     if snapshot.account_name and snapshot.account_name in output_text:
@@ -77,4 +88,5 @@ def _numeric_variants(value: float) -> set[str]:
 __all__ = [
     "DISCLOSURE_WARNING_CODE",
     "find_holdings_output_disclosures",
+    "find_holdings_text_disclosures",
 ]

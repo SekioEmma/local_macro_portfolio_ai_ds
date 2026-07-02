@@ -14,6 +14,7 @@ from app_backend.services.macro_brief_sources import (
 
 
 AgentApiStatus = FinalStatus | Literal["unavailable"]
+AgentOutputMode = Literal["macro_brief_strict", "natural_answer"]
 
 
 class AgentRunRequest(BaseModel):
@@ -25,6 +26,7 @@ class AgentRunRequest(BaseModel):
     holdings_consent_token: str | None = Field(default=None, min_length=16, max_length=256)
     confirm_external_search: bool = False
     source_visibility_mode: SourceVisibilityMode = "public"
+    output_mode: AgentOutputMode = "macro_brief_strict"
 
 
 class HoldingsConsentRequest(BaseModel):
@@ -74,6 +76,8 @@ class AgentRunResponse(BaseModel):
     partial_brief: dict[str, Any] | None = None
     rendered_markdown: str = ""
     source_markdown: str = ""
+    natural_answer: str = ""
+    output_mode: AgentOutputMode = "macro_brief_strict"
     sources: list[MacroBriefSourceReference] = Field(default_factory=list)
     information_plan: AgentInformationPlan
     warnings: list[AgentApiWarning] = Field(default_factory=list)
@@ -104,6 +108,7 @@ __all__ = [
     "AgentCancelResponse",
     "AgentCapabilitiesResponse",
     "AgentApiStatus",
+    "AgentOutputMode",
     "AgentHoldingsCapability",
     "AgentApiWarning",
     "AgentRunRequest",

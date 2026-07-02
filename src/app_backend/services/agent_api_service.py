@@ -13,11 +13,14 @@ from app_backend.schemas.agent_api import (
     AgentRunRequest,
     AgentRunResponse,
 )
+from app_backend.services.agent_evidence_pack import EvidencePack, build_evidence_pack
+from app_backend.services.agent_evidence_writer import build_evidence_writer_prompt
 from app_backend.services.agent_information_plan import (
     build_agent_information_plan,
     information_plan_trace_event,
 )
 from app_backend.services.agent_runtime import (
+    AgentBudget,
     AgentRuntimeConfig,
     AgentRuntimeEvent,
     AgentSessionResult,
@@ -25,6 +28,7 @@ from app_backend.services.agent_runtime import (
     RuntimeEventCallback,
     run_agent,
 )
+from app_backend.services.agent_tool_plan_runner import PlannedToolRunResult, run_agent_tool_plan
 from app_backend.services.agent_tool_registry import (
     AgentToolRegistry,
     build_f1_read_only_tools,
@@ -50,6 +54,11 @@ from app_backend.services.holdings_external_context_service import (
     HoldingsContextError,
     HoldingsExternalContextService,
 )
+from app_backend.services.holdings_output_guard import (
+    DISCLOSURE_WARNING_CODE,
+    find_holdings_text_disclosures,
+)
+from app_backend.services.llm_provider_adapter import ProviderChatError
 from app_backend.services.local_rag_runtime_factory import build_local_rag_runtime
 from app_backend.services.macro_brief_renderer import render_macro_brief_markdown
 from app_backend.services.macro_brief_sources import (
@@ -148,6 +157,16 @@ class AgentRunService:
             )
         )
 
+        if request.output_mode == "natural_answer":
+            return self._run_planned_natural_answer(
+                request=request,
+                session_id=session_id,
+                tool_names=tool_names,
+                plan=plan,
+                holdings_snapshot=holdings_snapshot,
+                trace_session_id=session_id,
+            )
+
         result = self.runtime_fn(
             session_id=session_id,
             user_question=request.user_question,
@@ -173,6 +192,102 @@ class AgentRunService:
             result=result,
             plan=plan,
             trace_session_id=session_id,
+        )
+
+    def _run_planned_natural_answer(
+        self,
+        *,
+        request: AgentRunRequest,
+        session_id: str,
+        tool_names: list[str],
+        plan: Any,
+        holdings_snapshot: dict[str, Any] | None,
+        trace_session_id: str,
+    ) -> AgentRunResponse:
+        del tool_names
+        tool_result = run_agent_tool_plan(
+            plan=plan.tool_plan,
+            tool_registry=self.registry_factory(request.confirm_external_search),
+            ledger=RunEvidenceLedger(run_id=session_id) if self.enable_evidence_ledger else None,
+            budget=AgentBudget(
+                max_steps=max(len(plan.tool_plan.steps) + 2, 4),
+                max_search_calls=3 if request.confirm_external_search else 0,
+                max_rag_calls=5,
+                max_external_quote_calls=5,
+                max_tokens_total=40000,
+            ),
+        )
+        evidence_pack = build_evidence_pack(
+            ledger=tool_result.ledger,
+            outcomes=tool_result.outcomes,
+        )
+        writer_prompt = build_evidence_writer_prompt(
+            user_question=request.user_question,
+            current_date=self.current_date_provider(),
+            evidence_pack=evidence_pack,
+            output_mode="natural_answer",
+        )
+
+        warnings = _warnings_from_planned_run(tool_result, evidence_pack)
+        final_status = "ok"
+        natural_answer = ""
+        try:
+            writer_response = self.provider_factory().chat(
+                model=self.runtime_config.model_name,
+                messages=writer_prompt.messages,
+                tools=None,
+                tool_choice="none",
+                response_format=writer_prompt.response_format,
+                max_tokens=self.runtime_config.writing_max_tokens_per_call,
+            )
+            natural_answer = (writer_response.content or "").strip()
+        except ProviderChatError as exc:
+            final_status = "incomplete"
+            warnings.append(
+                AgentApiWarning(
+                    code=f"provider_error:{exc.kind}",
+                    message="自然回答写作调用失败，已保留工具执行状态。",
+                )
+            )
+
+        if not natural_answer and final_status == "ok":
+            final_status = "incomplete"
+            warnings.append(
+                AgentApiWarning(
+                    code="natural_answer_empty",
+                    message="写作阶段没有返回可展示回答。",
+                )
+            )
+
+        findings = find_holdings_text_disclosures(
+            output_text=natural_answer,
+            holdings_snapshot=holdings_snapshot,
+        )
+        if findings:
+            final_status = "validation_failed"
+            natural_answer = ""
+            warnings.insert(
+                0,
+                AgentApiWarning(
+                    code=DISCLOSURE_WARNING_CODE,
+                    message="自然回答包含持仓明细输出，已阻断。",
+                ),
+            )
+
+        return AgentRunResponse(
+            session_id=session_id,
+            final_status=final_status,
+            trace_session_id=trace_session_id,
+            source_visibility_mode=request.source_visibility_mode,
+            rendered_markdown=natural_answer,
+            source_markdown=_source_markdown_from_evidence_pack(evidence_pack),
+            natural_answer=natural_answer,
+            output_mode="natural_answer",
+            information_plan=plan,
+            warnings=warnings,
+            search_required=bool(plan.search_topics),
+            missing_topics=plan.missing_topics,
+            steps=len(tool_result.outcomes) + (1 if natural_answer else 0),
         )
 
     def _resolve_holdings_snapshot(
@@ -336,6 +451,7 @@ def _response_from_result(
         partial_brief=result.partial_brief,
         rendered_markdown=rendered_markdown,
         source_markdown=source_markdown,
+        output_mode=request.output_mode,
         sources=sources,
         information_plan=plan,
         warnings=[
@@ -346,6 +462,42 @@ def _response_from_result(
         missing_topics=plan.missing_topics,
         steps=result.steps,
     )
+
+
+def _warnings_from_planned_run(
+    tool_result: PlannedToolRunResult,
+    evidence_pack: EvidencePack,
+) -> list[AgentApiWarning]:
+    warnings: list[AgentApiWarning] = []
+    for topic in tool_result.failed_required_topics:
+        warnings.append(
+            AgentApiWarning(
+                code=f"planned_tool_failed:{topic}",
+                message="计划工具调用未取得可用结果。",
+            )
+        )
+    for topic in evidence_pack.unavailable_topics:
+        if topic not in tool_result.failed_required_topics:
+            warnings.append(
+                AgentApiWarning(
+                    code=f"topic_unavailable:{topic}",
+                    message="该主题缺少可用证据。",
+                )
+            )
+    return warnings
+
+
+def _source_markdown_from_evidence_pack(evidence_pack: EvidencePack) -> str:
+    lines: list[str] = []
+    for card in evidence_pack.cards:
+        if not card.public_visible and card.canonical_url is None:
+            continue
+        label = card.title
+        if card.canonical_url:
+            lines.append(f"- [{label}]({card.canonical_url})")
+        else:
+            lines.append(f"- {label}")
+    return "\n".join(lines)
 
 
 __all__ = [

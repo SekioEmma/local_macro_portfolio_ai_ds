@@ -92,6 +92,38 @@ def test_planned_tool_runner_degrades_tool_errors_without_aborting():
     assert result.failed_required_topics == ["dashboard_overview"]
 
 
+def test_planned_tool_runner_allows_success_without_evidence_ledger():
+    registry = AgentToolRegistry()
+    registry.register(
+        ToolSpec(
+            name="dashboard_query",
+            description="fake dashboard",
+            parameters_schema={"type": "object"},
+            handler=lambda _args: {"series": "DGS10", "value": 4.3},
+        )
+    )
+    plan = AgentToolPlan(
+        steps=[
+            AgentToolPlanStep(
+                topic="dashboard_overview",
+                tool_name="dashboard_query",
+                reason="need dashboard",
+            )
+        ]
+    )
+
+    result = run_agent_tool_plan(
+        plan=plan,
+        tool_registry=registry,
+        ledger=None,
+    )
+
+    assert result.ledger is None
+    assert result.evidence_count == 0
+    assert result.outcomes[0].status == "ok"
+    assert result.outcomes[0].content["series"] == "DGS10"
+
+
 def test_planned_tool_runner_dedupes_and_respects_budget():
     calls: list[dict] = []
     registry = AgentToolRegistry()

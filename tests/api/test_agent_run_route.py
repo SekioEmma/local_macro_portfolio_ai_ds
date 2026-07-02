@@ -449,6 +449,108 @@ def test_agent_run_request_schema_defaults_are_public_and_local_first():
     assert request.confirm_external_search is False
     assert request.include_holdings is False
     assert request.holdings_consent_token is None
+    assert request.output_mode == "macro_brief_strict"
+
+
+def test_agent_run_natural_answer_uses_planned_tools_before_writer(tmp_path):
+    provider = MockProvider(
+        [
+            ChatResponse(
+                content=(
+                    "结论：SPY 的本地报价证据已经可用 [ev_quote_etf_demo]。"
+                    "边界：非个股操作 非概率胜率 非收益预测 非动态择时 非黑盒最优化"
+                )
+            )
+        ]
+    )
+    tool_calls: list[dict] = []
+
+    def registry_factory(_confirm_external_search: bool):
+        registry = make_registry()
+        registry.register(
+            ToolSpec(
+                name="quote_etf",
+                description="Fake ETF quote.",
+                parameters_schema={"type": "object"},
+                handler=lambda args: tool_calls.append(args) or {
+                    "quotes": [
+                        {
+                            "symbol": args["symbols"][0],
+                            "value": 640.5,
+                            "unit": "USD",
+                            "status": "ok",
+                            "observation_date": "2026-07-01",
+                        }
+                    ]
+                },
+            )
+        )
+        return registry
+
+    service = AgentRunService(
+        provider_factory=lambda: provider,
+        registry_factory=registry_factory,
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        current_date_provider=lambda: date(2026, 7, 2),
+    )
+
+    response = service.run(
+        AgentRunRequest(
+            session_id="natural-answer",
+            user_question="请结合 SPY/QQQ 看当前 equity market。",
+            output_mode="natural_answer",
+        )
+    )
+
+    assert response.final_status == "ok"
+    assert response.output_mode == "natural_answer"
+    assert response.natural_answer == response.rendered_markdown
+    assert response.brief is None
+    assert response.partial_brief is None
+    assert tool_calls[0] == {"symbols": ["SPY"]}
+    writer_call = provider.calls[0]
+    assert writer_call["tools"] == []
+    assert writer_call["response_format"] is None
+    assert "Evidence pack JSON" in writer_call["messages"][1].content
+    assert "ETF quote SPY" in writer_call["messages"][1].content
+
+
+def test_agent_run_natural_answer_blocks_holdings_text_leak(tmp_path):
+    provider = MockProvider([ChatResponse(content="账户持仓市值是 5000。")])
+    consent_service = HoldingsConsentService()
+    token = consent_service.issue(session_id="natural-answer-leak").token
+    context_service = HoldingsExternalContextService(
+        lambda _session_id: {
+            "positions": [{"ticker": "SPY", "quantity": 10, "market_value": 5000}],
+            "asset_class_breakdown": {"equity": 1.0},
+        }
+    )
+    _install_service(
+        _service(
+            tmp_path,
+            provider,
+            holdings_consent_service=consent_service,
+            holdings_context_service=context_service,
+        )
+    )
+
+    response = _client().post(
+        "/api/agent/run",
+        json={
+            "session_id": "natural-answer-leak",
+            "user_question": "请自然回答 portfolio 风险。",
+            "include_holdings": True,
+            "holdings_consent_token": token,
+            "output_mode": "natural_answer",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["final_status"] == "validation_failed"
+    assert body["natural_answer"] == ""
+    assert body["warnings"][0]["code"] == "holdings_output_disclosure_blocked"
+    assert "5000" not in response.text
 
 
 def test_holdings_consent_endpoint_requires_explicit_confirmation():

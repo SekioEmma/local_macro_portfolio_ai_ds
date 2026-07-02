@@ -84,11 +84,14 @@ def test_tool_plan_maps_macro_question_to_bounded_tools():
     assert by_topic["current_public_news"].tool_name == "search_tavily"
     assert by_topic["current_public_news"].max_calls == 3
     assert by_topic["equity_market"].args == [
-        {"symbol": "SPY"},
-        {"symbol": "QQQ"},
-        {"symbol": "SHY"},
-        {"symbol": "GLD"},
+        {"symbols": ["SPY"]},
+        {"symbols": ["QQQ"]},
+        {"symbols": ["SHY"]},
+        {"symbols": ["GLD"]},
     ]
+    assert by_topic["credit"].args == [{"module_key": "credit_stress"}]
+    assert by_topic["inflation"].args == [{"module_key": "inflation_energy_pressure"}]
+    assert by_topic["energy"].args == [{"benchmark": "brent"}]
 
 
 def test_tool_plan_respects_enabled_tools_and_search_confirmation_boundary():

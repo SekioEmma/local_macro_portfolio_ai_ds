@@ -150,7 +150,7 @@ def build_agent_tool_plan(
             topic="equity_market",
             tool_name="quote_etf",
             reason="Question asks about equity or portfolio market exposure.",
-            args=[{"symbol": symbol} for symbol in ("SPY", "QQQ", "SHY", "GLD")],
+            args=[{"symbols": [symbol]} for symbol in ("SPY", "QQQ", "SHY", "GLD")],
         )
     if _matches_any(lowered, _RATE_MARKERS):
         add(
@@ -163,14 +163,14 @@ def build_agent_tool_plan(
             topic="credit",
             tool_name="evidence_lookup",
             reason="Question asks about credit stress or spreads.",
-            args=[{"module": "credit_stress"}],
+            args=[{"module_key": "credit_stress"}],
         )
     if _matches_any(lowered, _INFLATION_MARKERS):
         add(
             topic="inflation",
             tool_name="evidence_lookup",
             reason="Question asks about CPI, PCE, inflation, or real-rate pressure.",
-            args=[{"module": "inflation_energy"}],
+            args=[{"module_key": "inflation_energy_pressure"}],
         )
     if _matches_any(lowered, _LABOR_MARKERS):
         add(
@@ -185,7 +185,7 @@ def build_agent_tool_plan(
             tool_name="commodity_quote",
             reason="Question asks about oil, commodities, or energy risk.",
             required=False,
-            args=[{"commodity": "brent"}],
+            args=[{"benchmark": "brent"}],
         )
     if _matches_any(lowered, _DOLLAR_MARKERS):
         add(
