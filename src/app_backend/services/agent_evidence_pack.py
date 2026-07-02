@@ -178,7 +178,18 @@ def _outcome_unavailable(outcome: PlannedToolOutcome) -> bool:
         return True
     if outcome.tool_name == "calendar_lookup" and content.get("events") == []:
         return True
+    if outcome.tool_name == "quote_etf" and _all_quotes_unavailable(content.get("quotes")):
+        return True
     return False
+
+
+def _all_quotes_unavailable(quotes: object) -> bool:
+    if not isinstance(quotes, list) or not quotes:
+        return False
+    quote_dicts = [quote for quote in quotes if isinstance(quote, dict)]
+    if not quote_dicts:
+        return False
+    return all(quote.get("value") is None for quote in quote_dicts)
 
 
 __all__ = [

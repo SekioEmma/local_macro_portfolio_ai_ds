@@ -122,6 +122,17 @@ def test_evidence_pack_tracks_ok_but_unavailable_tool_topics():
             status="ok",
             content={"events": [], "mode": "by_name"},
         ),
+        PlannedToolOutcome(
+            topic="equity_market",
+            tool_name="quote_etf",
+            status="ok",
+            content={
+                "quotes": [
+                    {"symbol": "SPY", "value": None, "status": "unavailable"},
+                    {"symbol": "QQQ", "value": None, "status": "unavailable"},
+                ]
+            },
+        ),
     ]
 
     pack = build_evidence_pack(ledger=RunEvidenceLedger(run_id="run-1"), outcomes=outcomes)
@@ -130,4 +141,5 @@ def test_evidence_pack_tracks_ok_but_unavailable_tool_topics():
         "local_rag_context",
         "current_public_news",
         "policy",
+        "equity_market",
     ]
