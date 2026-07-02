@@ -108,6 +108,40 @@ def test_tool_plan_uses_calendar_catalog_event_names():
     assert by_topic["policy"].args == [{"event_name": "FOMC Statement"}]
 
 
+def test_tool_plan_maps_normal_chinese_full_audit_question():
+    plan = build_agent_tool_plan(
+        user_question=(
+            "请结合 SPY/QQQ/SHY/GLD、10Y 美债、美元指数、信用利差与金融压力、"
+            "CPI/PCE 通胀、就业和未来三个月经济日历、WTI/Brent 油价、"
+            "FOMC 政策路径、本地 RAG 历史/机构背景，以及近期公开市场和地缘政治石油新闻。"
+        ),
+        tool_names=[
+            "dashboard_query",
+            "evidence_lookup",
+            "quote_etf",
+            "treasury_curve",
+            "calendar_lookup",
+            "rag_retrieve",
+            "search_tavily",
+            "commodity_quote",
+            "quote_dxy",
+            "finalize_macro_brief",
+        ],
+    )
+
+    by_topic = {step.topic: step for step in plan.steps}
+
+    assert by_topic["credit"].tool_name == "evidence_lookup"
+    assert by_topic["labor"].tool_name == "calendar_lookup"
+    assert by_topic["calendar"].tool_name == "calendar_lookup"
+    assert by_topic["dollar"].tool_name == "quote_dxy"
+    assert by_topic["local_rag_context"].tool_name == "rag_retrieve"
+    assert by_topic["current_public_news"].tool_name == "search_tavily"
+    assert by_topic["policy"].args == [{"event_name": "FOMC Statement"}]
+    assert by_topic["local_rag_context"].args[0]["top_k"] == 5
+    assert by_topic["current_public_news"].args[0]["max_results"] == 5
+
+
 def test_tool_plan_respects_enabled_tools_and_search_confirmation_boundary():
     plan = build_agent_tool_plan(
         user_question="最新地缘和油价如何影响美元与利率？",
