@@ -92,7 +92,20 @@ def test_tool_plan_maps_macro_question_to_bounded_tools():
     ]
     assert by_topic["credit"].args == [{"module_key": "credit_stress"}]
     assert by_topic["inflation"].args == [{"module_key": "inflation_energy_pressure"}]
+    assert by_topic["labor"].args == [{"event_name": "Employment Situation"}]
     assert by_topic["energy"].args == [{"benchmark": "brent"}]
+
+
+def test_tool_plan_uses_calendar_catalog_event_names():
+    plan = build_agent_tool_plan(
+        user_question="Fed FOMC policy timing and employment payrolls calendar",
+        tool_names=["calendar_lookup"],
+    )
+
+    by_topic = {step.topic: step for step in plan.steps}
+
+    assert by_topic["labor"].args == [{"event_name": "Employment Situation"}]
+    assert by_topic["policy"].args == [{"event_name": "FOMC Statement"}]
 
 
 def test_tool_plan_respects_enabled_tools_and_search_confirmation_boundary():

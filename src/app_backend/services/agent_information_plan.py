@@ -178,7 +178,7 @@ def build_agent_tool_plan(
             topic="labor",
             tool_name="calendar_lookup",
             reason="Question asks about employment or labor-market releases.",
-            args=[{"event_name": "Nonfarm Payrolls"}],
+            args=[{"event_name": "Employment Situation"}],
         )
     if _matches_any(lowered, _ENERGY_MARKERS):
         add(
@@ -199,7 +199,7 @@ def build_agent_tool_plan(
             topic="policy",
             tool_name="calendar_lookup",
             reason="Question asks about Fed, FOMC, or policy timing.",
-            args=[{"event_name": "FOMC"}],
+            args=[{"event_name": "FOMC Statement"}],
         )
     if _matches_any(lowered, _CALENDAR_MARKERS):
         add(
