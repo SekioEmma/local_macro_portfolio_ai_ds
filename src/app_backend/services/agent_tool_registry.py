@@ -326,7 +326,11 @@ def make_evidence_lookup_tool(evidence_fn: DashboardEvidenceFn) -> ToolSpec:
         evidence = _to_jsonable(evidence_fn())
         rows = _extract_evidence_rows(evidence)
         if module_key:
-            rows = [row for row in rows if row.get("module_key") == module_key]
+            rows = [
+                row
+                for row in rows
+                if row.get("module_key") == module_key or row.get("module") == module_key
+            ]
         if metric_key:
             rows = [row for row in rows if row.get("metric_key") == metric_key]
         return {"rows": rows, "row_count": len(rows)}
@@ -371,11 +375,44 @@ def _extract_evidence_rows(evidence_payload: Any) -> list[dict[str, Any]]:
                     if isinstance(row, dict):
                         merged = dict(row)
                         merged.setdefault("module_key", module_key)
-                        rows.append(merged)
-            return rows
+                        rows.append(_compact_evidence_row(merged))
+            if rows:
+                return rows
         if "rows" in evidence_payload and isinstance(evidence_payload["rows"], list):
-            return [row for row in evidence_payload["rows"] if isinstance(row, dict)]
+            rows = []
+            for row in evidence_payload["rows"]:
+                if not isinstance(row, dict):
+                    continue
+                merged = dict(row)
+                if "module_key" not in merged and isinstance(merged.get("module"), str):
+                    merged["module_key"] = merged["module"]
+                rows.append(_compact_evidence_row(merged))
+            return rows
     return []
+
+
+_EVIDENCE_ROW_FIELDS = (
+    "row_id",
+    "module",
+    "module_key",
+    "metric_key",
+    "display_name",
+    "value",
+    "value_text",
+    "unit",
+    "status",
+    "source",
+    "source_badge",
+    "source_series",
+    "observation_date",
+    "freshness_status",
+    "missing_reason",
+    "interpretation_hint",
+)
+
+
+def _compact_evidence_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: row[key] for key in _EVIDENCE_ROW_FIELDS if key in row}
 
 
 _VALID_ETF_SYMBOLS = frozenset({"SPY", "QQQ", "SHY", "TLT", "GLD", "USO", "DXY"})

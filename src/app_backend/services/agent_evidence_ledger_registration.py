@@ -348,7 +348,8 @@ def _records_from_evidence_rows(
         if not isinstance(row, dict):
             rendered.append(row)
             continue
-        metric_key = _text(row.get("metric_key")) or _text(row.get("module_key"))
+        module_key = _text(row.get("module_key")) or _text(row.get("module"))
+        metric_key = _text(row.get("metric_key")) or module_key
         record = _local_data_record(
             run_id=run_id,
             tool_name=tool_name,
@@ -357,7 +358,7 @@ def _records_from_evidence_rows(
             observation_date=_date_prefix(row.get("observation_date") or row.get("as_of")),
             payload=row,
             value_summary={
-                "module_key": _text(row.get("module_key")),
+                "module_key": module_key,
                 "metric_key": _text(row.get("metric_key")),
                 "value": row.get("value"),
                 "unit": row.get("unit"),

@@ -124,6 +124,38 @@ def test_registers_treasury_curve_points_as_observed_local_data():
     assert record.atomic_observations[0].series_id == "DGS10"
 
 
+def test_registers_dashboard_evidence_rows_with_module_field():
+    ledger = RunEvidenceLedger(run_id="run1")
+    result = ToolResult(
+        status="ok",
+        content={
+            "rows": [
+                {
+                    "module": "credit_stress",
+                    "metric_key": "high_yield_spread",
+                    "value": 2.74,
+                    "unit": "percent",
+                    "observation_date": "2026-06-04",
+                    "status": "ok",
+                }
+            ],
+            "row_count": 1,
+        },
+    )
+
+    registered = register_tool_result_evidence(
+        ledger,
+        tool_name="evidence_lookup",
+        result=result,
+    )
+
+    assert len(registered.evidence_ids) == 1
+    record = registered.ledger.by_id()[registered.evidence_ids[0]]
+    assert record.value_summary["module_key"] == "credit_stress"
+    assert record.value_summary["metric_key"] == "high_yield_spread"
+    assert record.atomic_observations[0].value == 2.74
+
+
 def test_error_tool_result_does_not_register_evidence():
     ledger = RunEvidenceLedger(run_id="run1")
 

@@ -222,6 +222,37 @@ def test_evidence_lookup_filters_by_module_key():
     assert all(row["module_key"] == "rate_pressure" for row in result.content["rows"])
 
 
+def test_evidence_lookup_normalizes_top_level_module_field():
+    spec = make_evidence_lookup_tool(
+        lambda: {
+            "modules": ["credit_stress", "rate_pressure"],
+            "rows": [
+                {
+                    "module": "credit_stress",
+                    "metric_key": "hy_oas",
+                    "value": 2.74,
+                    "input_evidence": "x" * 10000,
+                },
+                {
+                    "module": "rate_pressure",
+                    "metric_key": "dgs10",
+                    "value": 4.3,
+                },
+            ]
+        }
+    )
+    registry = AgentToolRegistry()
+    registry.register(spec)
+
+    result = registry.dispatch("evidence_lookup", {"module_key": "credit_stress"})
+
+    assert result.status == "ok"
+    assert result.content["row_count"] == 1
+    assert result.content["rows"][0]["module"] == "credit_stress"
+    assert result.content["rows"][0]["module_key"] == "credit_stress"
+    assert "input_evidence" not in result.content["rows"][0]
+
+
 def test_evidence_lookup_filters_by_metric_key():
     spec = make_evidence_lookup_tool(_build_fake_evidence)
     registry = AgentToolRegistry()
