@@ -176,6 +176,8 @@ def _outcome_unavailable(outcome: PlannedToolOutcome) -> bool:
         return True
     if outcome.tool_name == "search_tavily" and content.get("result_count") == 0:
         return True
+    if outcome.tool_name == "calendar_lookup" and content.get("events") == []:
+        return True
     return False
 
 

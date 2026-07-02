@@ -116,8 +116,18 @@ def test_evidence_pack_tracks_ok_but_unavailable_tool_topics():
             content={"results": [], "result_count": 0},
             required=False,
         ),
+        PlannedToolOutcome(
+            topic="policy",
+            tool_name="calendar_lookup",
+            status="ok",
+            content={"events": [], "mode": "by_name"},
+        ),
     ]
 
     pack = build_evidence_pack(ledger=RunEvidenceLedger(run_id="run-1"), outcomes=outcomes)
 
-    assert pack.unavailable_topics == ["local_rag_context", "current_public_news"]
+    assert pack.unavailable_topics == [
+        "local_rag_context",
+        "current_public_news",
+        "policy",
+    ]
