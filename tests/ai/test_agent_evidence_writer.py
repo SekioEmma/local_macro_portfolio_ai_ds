@@ -70,6 +70,7 @@ def test_natural_writer_prompt_is_not_schema_bound_but_keeps_boundaries():
 
     assert prompt.response_format is None
     assert "Write in natural, readable Chinese" in text
-    assert "Use evidence ids inline" in text
+    assert "Use exact evidence_id strings copied from evidence_cards" in text
+    assert "Never invent aliases" in text
     assert "非个股操作" in text
     assert "ev_spy" in text

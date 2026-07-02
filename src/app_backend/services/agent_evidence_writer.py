@@ -155,7 +155,9 @@ Strict writing rules:
 _NATURAL_RULES = f"""
 Natural-answer rules:
 1. Write in natural, readable Chinese with conclusion first.
-2. Use evidence ids inline like [ev_x] for important claims.
+2. Use exact evidence_id strings copied from evidence_cards, wrapped in
+   brackets, for important claims. Never invent aliases such as [ev_1],
+   [ev_2], or [ev_x].
 3. It is acceptable to discuss numbers in prose when they appear in evidence
    cards or candidate facts; do not invent values.
 4. Mention unavailable topics honestly.

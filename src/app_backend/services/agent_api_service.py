@@ -1,6 +1,7 @@
 """Phase F7 backend service for MacroBrief agent API endpoints."""
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -274,6 +275,25 @@ class AgentRunService:
                 ),
             )
 
+        if not findings and natural_answer:
+            unknown_evidence_ids = _unknown_natural_answer_evidence_ids(
+                natural_answer,
+                evidence_pack,
+            )
+            if unknown_evidence_ids:
+                final_status = "validation_failed"
+                natural_answer = ""
+                warnings.insert(
+                    0,
+                    AgentApiWarning(
+                        code="natural_answer_unknown_evidence_ids",
+                        message=(
+                            "Natural answer cited evidence ids that were not produced "
+                            f"in this run: {', '.join(unknown_evidence_ids)}"
+                        ),
+                    ),
+                )
+
         return AgentRunResponse(
             session_id=session_id,
             final_status=final_status,
@@ -485,6 +505,20 @@ def _warnings_from_planned_run(
                 )
             )
     return warnings
+
+
+_NATURAL_EVIDENCE_ID_RE = re.compile(r"\[(ev_[A-Za-z0-9_.:-]+)\]")
+
+
+def _unknown_natural_answer_evidence_ids(
+    natural_answer: str,
+    evidence_pack: EvidencePack,
+) -> list[str]:
+    cited = list(dict.fromkeys(_NATURAL_EVIDENCE_ID_RE.findall(natural_answer)))
+    if not cited:
+        return []
+    known = {card.evidence_id for card in evidence_pack.cards}
+    return [evidence_id for evidence_id in cited if evidence_id not in known]
 
 
 def _source_markdown_from_evidence_pack(evidence_pack: EvidencePack) -> str:

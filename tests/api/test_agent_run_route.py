@@ -457,7 +457,7 @@ def test_agent_run_natural_answer_uses_planned_tools_before_writer(tmp_path):
         [
             ChatResponse(
                 content=(
-                    "结论：SPY 的本地报价证据已经可用 [ev_quote_etf_demo]。"
+                    "结论：SPY 的本地报价证据已经可用 。"
                     "边界：非个股操作 非概率胜率 非收益预测 非动态择时 非黑盒最优化"
                 )
             )
@@ -513,6 +513,63 @@ def test_agent_run_natural_answer_uses_planned_tools_before_writer(tmp_path):
     assert writer_call["response_format"] is None
     assert "Evidence pack JSON" in writer_call["messages"][1].content
     assert "ETF quote SPY" in writer_call["messages"][1].content
+
+
+def test_agent_run_natural_answer_blocks_unknown_evidence_ids(tmp_path):
+    provider = MockProvider(
+        [
+            ChatResponse(
+                content=(
+                    "Conclusion: unsupported citation [ev_2]. "
+                    "non-stock-action non-probability-win non-return-forecast "
+                    "non-dynamic-timing non-black-box-optimization"
+                )
+            )
+        ]
+    )
+
+    def registry_factory(_confirm_external_search: bool):
+        registry = make_registry()
+        registry.register(
+            ToolSpec(
+                name="quote_etf",
+                description="Fake ETF quote.",
+                parameters_schema={"type": "object"},
+                handler=lambda args: {
+                    "quotes": [
+                        {
+                            "symbol": args["symbols"][0],
+                            "value": 640.5,
+                            "unit": "USD",
+                            "status": "ok",
+                            "observation_date": "2026-07-01",
+                        }
+                    ]
+                },
+            )
+        )
+        return registry
+
+    service = AgentRunService(
+        provider_factory=lambda: provider,
+        registry_factory=registry_factory,
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        current_date_provider=lambda: date(2026, 7, 2),
+    )
+
+    response = service.run(
+        AgentRunRequest(
+            session_id="natural-answer-unknown-evidence-id",
+            user_question="Please discuss SPY.",
+            output_mode="natural_answer",
+        )
+    )
+
+    assert response.final_status == "validation_failed"
+    assert response.natural_answer == ""
+    assert response.rendered_markdown == ""
+    assert response.warnings[0].code == "natural_answer_unknown_evidence_ids"
+    assert "ev_2" in response.warnings[0].message
 
 
 def test_agent_run_natural_answer_budget_allows_full_quote_mix(tmp_path):
