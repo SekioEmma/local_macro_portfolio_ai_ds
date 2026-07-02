@@ -300,6 +300,19 @@ def _record_call(tool_calls: list[dict[str, Any]], tool_name: str, args: dict[st
 
 
 def _first_evidence_id(messages: list[ChatMessage]) -> str:
+    for message in messages:
+        marker = "Evidence pack JSON:"
+        if marker not in message.content:
+            continue
+        context = message.content.split(marker, 1)[1].split("\n\nWrite the final answer now.", 1)[0]
+        try:
+            payload = json.loads(context)
+        except json.JSONDecodeError:
+            continue
+        for card in payload.get("evidence_cards") or []:
+            evidence_id = card.get("evidence_id") if isinstance(card, dict) else None
+            if evidence_id:
+                return str(evidence_id)
     text = "\n".join(message.content for message in messages)
     matches = re.findall(r"\bev_[A-Za-z0-9_]+", text)
     for item in matches:
