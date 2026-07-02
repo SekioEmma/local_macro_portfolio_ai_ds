@@ -160,10 +160,14 @@ Natural-answer rules:
    [ev_2], or [ev_x].
 3. It is acceptable to discuss numbers in prose when they appear in evidence
    cards or candidate facts; do not invent values.
-4. Mention unavailable topics honestly.
+4. Mention unavailable topics honestly, but treat unavailable_topics as the
+   closed and exhaustive list of unavailable topics for this run.
 5. End with the boundary language: {", ".join(REQUIRED_BOUNDARY_KEYWORDS)}.
 6. Do not produce portfolio orders, probability-win claims, return forecasts,
    dynamic timing, or black-box optimization.
+7. Never say a tool, topic, ETF symbol, indicator, or evidence card is missing
+   when it appears in evidence_cards or candidate_facts; either cite it with
+   the exact evidence_id or omit it.
 """.strip()
 
 

@@ -72,5 +72,7 @@ def test_natural_writer_prompt_is_not_schema_bound_but_keeps_boundaries():
     assert "Write in natural, readable Chinese" in text
     assert "Use exact evidence_id strings copied from evidence_cards" in text
     assert "Never invent aliases" in text
+    assert "closed and exhaustive list of unavailable topics" in text
+    assert "Never say a tool, topic, ETF symbol, indicator, or evidence card is missing" in text
     assert "非个股操作" in text
     assert "ev_spy" in text
