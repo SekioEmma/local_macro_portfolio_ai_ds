@@ -14,6 +14,7 @@ from app_backend.schemas.agent_api import (
     AgentRunRequest,
     AgentRunResponse,
 )
+from app_backend.schemas.macro_brief import REQUIRED_BOUNDARY_KEYWORDS
 from app_backend.services.agent_evidence_pack import EvidencePack, build_evidence_pack
 from app_backend.services.agent_evidence_writer import build_evidence_writer_prompt
 from app_backend.services.agent_information_plan import (
@@ -293,6 +294,23 @@ class AgentRunService:
                         ),
                     ),
                 )
+            else:
+                false_unavailable = _natural_answer_false_unavailable_claims(
+                    natural_answer,
+                    evidence_pack,
+                )
+                if false_unavailable:
+                    natural_answer = _fallback_natural_answer_from_evidence_pack(evidence_pack)
+                    warnings.insert(
+                        0,
+                        AgentApiWarning(
+                            code="natural_answer_corrected_available_evidence",
+                            message=(
+                                "Natural answer incorrectly described available evidence as "
+                                f"unavailable: {', '.join(false_unavailable)}"
+                            ),
+                        ),
+                    )
 
         return AgentRunResponse(
             session_id=session_id,
@@ -519,6 +537,122 @@ def _unknown_natural_answer_evidence_ids(
         return []
     known = {card.evidence_id for card in evidence_pack.cards}
     return [evidence_id for evidence_id in cited if evidence_id not in known]
+
+
+_UNAVAILABLE_CLAIM_MARKERS = (
+    "无可用",
+    "未返回",
+    "缺失",
+    "没有可用",
+    "无法直接评估",
+    "unavailable",
+    "missing",
+    "no usable",
+    "no available",
+)
+
+
+def _natural_answer_false_unavailable_claims(
+    natural_answer: str,
+    evidence_pack: EvidencePack,
+) -> list[str]:
+    available = _available_claim_labels(evidence_pack)
+    if not available:
+        return []
+    findings: list[str] = []
+    for line in natural_answer.splitlines():
+        lowered = line.lower()
+        if not any(marker in lowered or marker in line for marker in _UNAVAILABLE_CLAIM_MARKERS):
+            continue
+        upper = line.upper()
+        for topic, labels in available.items():
+            if any(label in line or label.upper() in upper for label in labels):
+                findings.append(topic)
+    return list(dict.fromkeys(findings))
+
+
+def _available_claim_labels(evidence_pack: EvidencePack) -> dict[str, list[str]]:
+    labels: dict[str, list[str]] = {}
+    quote_symbols = [
+        str(card.value_summary.get("symbol") or card.title.rsplit(" ", 1)[-1]).upper()
+        for card in evidence_pack.cards
+        if card.tool_name == "quote_etf"
+    ]
+    if quote_symbols:
+        labels["equity_market"] = ["ETF", *quote_symbols]
+    if any(card.tool_name == "treasury_curve" for card in evidence_pack.cards):
+        labels["rates"] = ["Treasury", "yield", "rate", "美债", "收益率", "利率"]
+    if any(card.tool_name == "quote_dxy" for card in evidence_pack.cards):
+        labels["dollar"] = ["DXY", "dollar", "美元", "美元指数"]
+    if any(
+        card.tool_name == "evidence_lookup" and "credit" in card.title.lower()
+        for card in evidence_pack.cards
+    ):
+        labels["credit"] = ["credit", "spread", "信用", "利差", "金融压力"]
+    if any(
+        card.tool_name == "evidence_lookup"
+        and any(marker in card.title.lower() for marker in ("cpi", "pce", "ppi"))
+        for card in evidence_pack.cards
+    ):
+        labels["inflation"] = ["CPI", "PCE", "PPI", "通胀"]
+    return labels
+
+
+def _fallback_natural_answer_from_evidence_pack(evidence_pack: EvidencePack) -> str:
+    lines = [
+        "结论：本轮模型回答触发了可用证据一致性修正；以下仅依据本轮已登记证据和不可用主题保守汇总。",
+        "",
+        "可用证据：",
+    ]
+    evidence_lines = [_evidence_card_line(card) for card in evidence_pack.cards]
+    evidence_lines = [line for line in evidence_lines if line]
+    if evidence_lines:
+        lines.extend(f"- {line}" for line in evidence_lines)
+    else:
+        lines.append("- 本轮没有可展示的证据卡。")
+    lines.append("")
+    if evidence_pack.unavailable_topics:
+        lines.append("不可用主题：")
+        lines.extend(f"- {topic}" for topic in evidence_pack.unavailable_topics)
+        lines.append("")
+    lines.append(f"边界：{', '.join(REQUIRED_BOUNDARY_KEYWORDS)}.")
+    return "\n".join(lines)
+
+
+def _evidence_card_line(card: Any) -> str:
+    value_summary = card.value_summary
+    value = value_summary.get("value")
+    unit = value_summary.get("unit")
+    as_of = card.as_of or value_summary.get("as_of")
+    if card.tool_name == "quote_etf":
+        symbol = value_summary.get("symbol") or card.title.rsplit(" ", 1)[-1]
+        return _format_evidence_line(symbol, value, unit, as_of, card.evidence_id)
+    if card.tool_name == "treasury_curve":
+        tenor = value_summary.get("tenor") or card.title.rsplit(" ", 1)[-1]
+        return _format_evidence_line(f"Treasury {tenor}", value, unit or "%", as_of, card.evidence_id)
+    if card.tool_name == "quote_dxy":
+        return _format_evidence_line("DXY", value, unit, as_of, card.evidence_id)
+    if value is not None:
+        return _format_evidence_line(card.title, value, unit, as_of, card.evidence_id)
+    return f"{card.title} [{card.evidence_id}]"
+
+
+def _format_evidence_line(
+    label: Any,
+    value: Any,
+    unit: Any,
+    as_of: Any,
+    evidence_id: str,
+) -> str:
+    pieces = [str(label)]
+    if value is not None:
+        value_text = str(value)
+        if unit:
+            value_text = f"{value_text} {unit}"
+        pieces.append(value_text)
+    if as_of:
+        pieces.append(f"as of {as_of}")
+    return f"{'; '.join(pieces)} [{evidence_id}]"
 
 
 def _source_markdown_from_evidence_pack(evidence_pack: EvidencePack) -> str:

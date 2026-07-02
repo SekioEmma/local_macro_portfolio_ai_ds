@@ -572,6 +572,64 @@ def test_agent_run_natural_answer_blocks_unknown_evidence_ids(tmp_path):
     assert "ev_2" in response.warnings[0].message
 
 
+def test_agent_run_natural_answer_corrects_false_unavailable_quote_claim(tmp_path):
+    provider = MockProvider(
+        [
+            ChatResponse(
+                content=(
+                    "ETF market data unavailable: SPY and QQQ missing. "
+                    "non-stock-action non-probability-win non-return-forecast "
+                    "non-dynamic-timing non-black-box-optimization"
+                )
+            )
+        ]
+    )
+
+    def registry_factory(_confirm_external_search: bool):
+        registry = make_registry()
+        registry.register(
+            ToolSpec(
+                name="quote_etf",
+                description="Fake ETF quote.",
+                parameters_schema={"type": "object"},
+                handler=lambda args: {
+                    "quotes": [
+                        {
+                            "symbol": args["symbols"][0],
+                            "value": 640.5,
+                            "unit": "USD",
+                            "status": "ok",
+                            "observation_date": "2026-07-01",
+                        }
+                    ]
+                },
+            )
+        )
+        return registry
+
+    service = AgentRunService(
+        provider_factory=lambda: provider,
+        registry_factory=registry_factory,
+        trace_factory=lambda: AgentTraceService(root_dir=tmp_path),
+        current_date_provider=lambda: date(2026, 7, 2),
+    )
+
+    response = service.run(
+        AgentRunRequest(
+            session_id="natural-answer-false-unavailable",
+            user_question="Please discuss SPY.",
+            output_mode="natural_answer",
+        )
+    )
+
+    assert response.final_status == "ok"
+    assert response.warnings[0].code == "natural_answer_corrected_available_evidence"
+    assert response.natural_answer == response.rendered_markdown
+    assert "ETF market data unavailable" not in response.natural_answer
+    assert "SPY" in response.natural_answer
+    assert "ev_quote_etf_" in response.natural_answer
+
+
 def test_agent_run_natural_answer_budget_allows_full_quote_mix(tmp_path):
     provider = MockProvider(
         [
