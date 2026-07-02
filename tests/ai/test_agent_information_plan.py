@@ -75,6 +75,7 @@ def test_tool_plan_maps_macro_question_to_bounded_tools():
 
     assert by_topic["dashboard_overview"].tool_name == "dashboard_query"
     assert by_topic["equity_market"].tool_name == "quote_etf"
+    assert by_topic["equity_market"].max_calls == 4
     assert by_topic["rates"].tool_name == "treasury_curve"
     assert by_topic["credit"].tool_name == "evidence_lookup"
     assert by_topic["inflation"].tool_name == "evidence_lookup"

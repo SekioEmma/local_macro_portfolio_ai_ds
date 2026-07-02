@@ -1,0 +1,82 @@
+{
+  "check_status": "passed",
+  "external_search_confirmed": false,
+  "failed_checks": [],
+  "final_status": "ok",
+  "include_holdings": false,
+  "mode": "fixture",
+  "natural_answer": "结论：当前更适合按观察状态处理，而不是直接给出仓位或交易动作。 本地证据显示 SPY 报价、QQQ 报价和 10Y 利率点已经进入证据包 [ev_dashboard_query_4789ca62f2fdcb47]；仪表盘信息用于约束解释范围。若后续利率继续上行，成长资产的估值压力会更敏感；若利率回落且风险资产保持韧性，宏观压力会边际缓和。 本轮没有读取或输出任何持仓明细。 边界：非个股操作 非概率胜率 非收益预测 非动态择时 非黑盒最优化。",
+  "natural_answer_preview": "结论：当前更适合按观察状态处理，而不是直接给出仓位或交易动作。 本地证据显示 SPY 报价、QQQ 报价和 10Y 利率点已经进入证据包 [ev_dashboard_query_4789ca62f2fdcb47]；仪表盘信息用于约束解释范围。若后续利率继续上行，成长资产的估值压力会更敏感；若利率回落且风险资产保持韧性，宏观压力会边际缓和。 本轮没有读取或输出任何持仓明细。 边界：非个股操作 非概率胜率 非收益预测 非动态择时 非黑盒最优化。",
+  "output_mode": "natural_answer",
+  "provider_call_count": 1,
+  "session_id": "phase-f-auto-agent-smoke",
+  "source_markdown": "- [Treasury curve 10Y](https://fred.stlouisfed.org/series/DGS10)",
+  "steps": 7,
+  "trace_session_id": "phase-f-auto-agent-smoke",
+  "validation_record": {
+    "current_date": "2026-07-02",
+    "elapsed_seconds": 0.0,
+    "evidence_id_count": 1,
+    "executed_tool_sequence": [
+      "dashboard_query",
+      "quote_etf",
+      "quote_etf",
+      "quote_etf",
+      "quote_etf",
+      "treasury_curve"
+    ],
+    "external_search_confirmed": false,
+    "include_holdings": false,
+    "planned_tool_sequence": [
+      "dashboard_query",
+      "quote_etf",
+      "treasury_curve"
+    ],
+    "provider_calls": 1,
+    "run_id": "phase-f-auto-agent-smoke",
+    "tool_args": [
+      {
+        "args": {},
+        "tool_name": "dashboard_query"
+      },
+      {
+        "args": {
+          "symbols": [
+            "SPY"
+          ]
+        },
+        "tool_name": "quote_etf"
+      },
+      {
+        "args": {
+          "symbols": [
+            "QQQ"
+          ]
+        },
+        "tool_name": "quote_etf"
+      },
+      {
+        "args": {
+          "symbols": [
+            "SHY"
+          ]
+        },
+        "tool_name": "quote_etf"
+      },
+      {
+        "args": {
+          "symbols": [
+            "GLD"
+          ]
+        },
+        "tool_name": "quote_etf"
+      },
+      {
+        "args": {},
+        "tool_name": "treasury_curve"
+      }
+    ],
+    "warning_count": 0
+  },
+  "warning_codes": []
+}

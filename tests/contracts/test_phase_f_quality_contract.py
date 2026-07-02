@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from scripts import run_phase_f_controlled_agent_smoke as smoke
+from scripts import run_phase_f_auto_agent_smoke as auto_smoke
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +35,32 @@ def test_phase_f_critical_path_controlled_agent_smoke_passes(tmp_path):
     }
     assert record["unavailable_modules"] == []
     assert record["asynchronous_inputs"] is False
+
+
+def test_phase_f_auto_natural_answer_smoke_passes(tmp_path):
+    result = auto_smoke.run_auto_smoke(trace_dir=tmp_path)
+
+    assert result["check_status"] == "passed"
+    assert result["final_status"] == "ok"
+    assert result["output_mode"] == "natural_answer"
+    assert result["provider_call_count"] == 1
+    assert result["warning_codes"] == []
+    record = result["validation_record"]
+    assert record["planned_tool_sequence"] == [
+        "dashboard_query",
+        "quote_etf",
+        "treasury_curve",
+    ]
+    assert record["executed_tool_sequence"] == [
+        "dashboard_query",
+        "quote_etf",
+        "quote_etf",
+        "quote_etf",
+        "quote_etf",
+        "treasury_curve",
+    ]
+    assert record["include_holdings"] is False
+    assert record["external_search_confirmed"] is False
 
 
 def test_phase_f_release_gate_is_documented_and_wired_to_ci():
@@ -96,6 +123,26 @@ def test_phase_f_controlled_run_reports_are_recorded():
     assert live_report["include_holdings"] is False
     assert live_report["external_search_confirmed"] is False
     assert live_report["validation_record"]["tool_call_sequence"] == ["treasury_curve", "finalize_macro_brief"]
+
+    auto_fixture_report = json.loads(
+        (_REPO_ROOT / "docs" / "infra" / "phase_f_auto_run_fixture_latest.json").read_text(encoding="utf-8")
+    )
+    assert auto_fixture_report["mode"] == "fixture"
+    assert auto_fixture_report["check_status"] == "passed"
+    assert auto_fixture_report["output_mode"] == "natural_answer"
+    assert auto_fixture_report["provider_call_count"] == 1
+    assert auto_fixture_report["include_holdings"] is False
+    assert auto_fixture_report["external_search_confirmed"] is False
+
+    auto_live_report = json.loads(
+        (_REPO_ROOT / "docs" / "infra" / "phase_f_auto_run_live_latest.json").read_text(encoding="utf-8")
+    )
+    assert auto_live_report["mode"] == "live"
+    assert auto_live_report["check_status"] == "passed"
+    assert auto_live_report["output_mode"] == "natural_answer"
+    assert auto_live_report["provider_call_count"] == 1
+    assert auto_live_report["include_holdings"] is False
+    assert auto_live_report["external_search_confirmed"] is False
 
 
 def test_phase_f_dod_audit_covers_required_gates():

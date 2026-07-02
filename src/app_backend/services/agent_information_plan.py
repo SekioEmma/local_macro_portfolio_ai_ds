@@ -150,6 +150,7 @@ def build_agent_tool_plan(
             topic="equity_market",
             tool_name="quote_etf",
             reason="Question asks about equity or portfolio market exposure.",
+            max_calls=4,
             args=[{"symbols": [symbol]} for symbol in ("SPY", "QQQ", "SHY", "GLD")],
         )
     if _matches_any(lowered, _RATE_MARKERS):
